@@ -22,9 +22,11 @@
     const dark = preference === 'dark' || (preference !== 'light' && system.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     document.querySelectorAll('[data-theme-toggle]').forEach(button => {
-      button.setAttribute('aria-label', dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối');
+      button.setAttribute('aria-label', dark ? 'Tắt giao diện tối' : 'Bật giao diện tối');
       button.title = button.getAttribute('aria-label');
       button.setAttribute('aria-pressed', String(dark));
+      const label = button.querySelector('[data-theme-label]');
+      if (label) label.textContent = 'Giao diện tối';
     });
     updateCharts(dark);
   }

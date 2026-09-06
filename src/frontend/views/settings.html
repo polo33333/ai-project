@@ -1,0 +1,31 @@
+<section id="view-settings" class="system-tools-page" data-display="grid" style="display:none">
+  <header class="system-tools-hero">
+    <div class="system-tools-hero-icon"><i class="fa-solid fa-sliders"></i></div>
+    <div><div class="card-title">Cài đặt hệ thống</div><p>Quản lý cấu hình máy chủ, AI và kho tri thức.</p></div>
+    <span class="metric-tag purple">Chỉ dành cho admin</span>
+  </header>
+  <div class="settings-notice"><i class="fa-solid fa-shield-halved"></i><div><strong>Chế độ chỉ xem</strong><span>Trang này hiển thị cấu hình đang lưu trong <code>.env</code>. Để thay đổi, chỉnh file trên máy chủ và khởi động lại ứng dụng.</span></div></div>
+  <section class="settings-qdrant-card" aria-labelledby="settings-qdrant-title">
+    <div class="settings-qdrant-icon" id="settings-qdrant-icon"><i class="fa-solid fa-database"></i></div>
+    <div class="settings-qdrant-main"><span>VECTOR DATABASE</span><h3 id="settings-qdrant-title">Trạng thái Qdrant</h3><p id="settings-qdrant-message" role="status" aria-live="polite">Nhấn kiểm tra để xem trạng thái dịch vụ đang chạy.</p></div>
+    <div class="settings-qdrant-metrics">
+      <div><span>Kết nối</span><strong id="settings-qdrant-state">Chưa kiểm tra</strong></div>
+      <div><span>Collection</span><strong id="settings-qdrant-collection">—</strong></div>
+      <div><span>Vectors</span><strong id="settings-qdrant-points">—</strong></div>
+    </div>
+    <div class="settings-qdrant-action"><button type="button" class="btn-primary" id="settings-check" onclick="checkSettingsConnection()"><i class="fa-solid fa-rotate"></i><span>Kiểm tra lại</span></button><small id="settings-qdrant-checked-at">Chưa kiểm tra</small></div>
+  </section>
+  <div id="settings-form">
+    <div class="settings-layout">
+      <div class="settings-panel">
+        <div class="settings-toolbar">
+          <div class="settings-toolbar-title"><i class="fa-solid fa-list-check"></i><strong>Thuộc tính hệ thống</strong></div>
+          <div class="settings-search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="settings-search" class="form-control" type="search" placeholder="Tìm theo tên hoặc biến .env…" aria-label="Tìm cấu hình" oninput="filterSettings(this.value)"></div>
+          <div class="settings-toolbar-actions"><span id="settings-total"></span><button type="button" class="btn-secondary-sm" onclick="reloadSettings()"><i class="fa-solid fa-rotate"></i> Tải lại</button></div>
+        </div>
+        <p id="settings-message" role="status" aria-live="polite"></p>
+        <div id="settings-fields"></div><p id="settings-empty" hidden>Không có cấu hình phù hợp. Thử tên tiếng Việt hoặc tên biến .env.</p>
+      </div>
+    </div>
+  </div>
+</section>

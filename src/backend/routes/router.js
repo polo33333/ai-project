@@ -15,11 +15,13 @@ const mcpService = require('../services/mcp_service');
 const apiKeyService = require('../services/api_key_service');
 const qdrantService = require('../services/qdrant_service');
 const authService = require('../services/auth_service');
+const settingsService = require('../services/settings_service').createSettingsService();
 const embedChatService = require('../services/embed_chat_service');
 const { memoryService: conversationMemoryService } = require('../memory_core');
 const knowledgeCore = require('../knowledge_core');
 const { selectUserFacingSqlExecutions } = require('../utils/chat_result_selector');
 const { buildTrainingReport } = require('../training_core');
+const trainingResolutionService = require('../training_core/resolution_service');
 
 // ── Intelligent Core (src/backend/intelligent_core/) ──────────────────────────
 const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } = require('../intelligent_core');
@@ -47,6 +49,7 @@ const FRONTEND_ROUTES = new Set([
   '/workflows',
   '/mcp-sources',
   '/system-tools',
+  '/settings',
   '/api-docs'
 ]);
 
@@ -55,6 +58,7 @@ const MIME_TYPES = {
   '.css': 'text/css; charset=UTF-8',
   '.js': 'application/javascript; charset=UTF-8',
   '.json': 'application/json; charset=UTF-8',
+  '.webmanifest': 'application/manifest+json; charset=UTF-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
@@ -177,6 +181,9 @@ function clearSessionCookie(res) {
 
 function isPublicPath(pathname) {
   return pathname === '/login.html'
+    || pathname === '/manifest.webmanifest'
+    || pathname === '/service-worker.js'
+    || pathname === '/favicon.svg'
     || pathname === '/embed/knowledgehub-chat.js'
     || pathname === '/api/embed/chat'
     || pathname === '/api/auth/login'
@@ -187,6 +194,7 @@ function isPublicPath(pathname) {
     || pathname === '/js/theme.js'
     || pathname.startsWith('/js/login')
     || pathname.startsWith('/assets/')
+    || pathname.startsWith('/icons/')
     || pathname === '/favicon.ico';
 }
 
@@ -270,6 +278,22 @@ async function handleRequest(req, res) {
   if (currentAccount && pathname === '/login.html') {
     res.writeHead(302, { Location: '/' });
     res.end();
+    return;
+  }
+
+  if (pathname === '/api/settings') {
+    res.setHeader('Content-Type', 'application/json; charset=UTF-8');
+    res.setHeader('Cache-Control', 'no-store');
+    if (currentAccount?.role !== 'admin') {
+      res.writeHead(403); res.end(JSON.stringify({ message: 'Chỉ quản trị viên được quản lý cấu hình.' })); return;
+    }
+    try {
+      if (req.method === 'GET') { res.end(JSON.stringify(settingsService.get())); return; }
+      res.writeHead(405, { Allow: 'GET' }); res.end(JSON.stringify({ message: 'Trang cấu hình chỉ hỗ trợ xem.' }));
+    } catch (error) {
+      res.writeHead(error.statusCode || 500);
+      res.end(JSON.stringify({ message: error.statusCode ? error.message : 'Không thể lưu cấu hình. Kiểm tra quyền ghi file trên máy chủ.' }));
+    }
     return;
   }
 
@@ -962,6 +986,21 @@ async function handleRequest(req, res) {
     const report = buildTrainingReport(path.join(__dirname, '../../..'));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(report));
+    return;
+  }
+
+  if (pathname === '/api/training-report/resolve' && req.method === 'POST') {
+    try {
+      if (currentAccount?.role !== 'admin') throw Object.assign(new Error('Chỉ admin được cập nhật trạng thái xử lý.'), { statusCode: 403 });
+      const { caseId, resolved } = await readJsonBody(req);
+      if (typeof resolved !== 'boolean') throw new Error('Trạng thái xử lý không hợp lệ.');
+      const resolution = trainingResolutionService.set(caseId, resolved, currentAccount.username || currentAccount.id);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', resolution }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
     return;
   }
 

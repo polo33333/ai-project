@@ -167,12 +167,14 @@ aside.sidebar {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--primary-gradient);
+  background: linear-gradient(110deg, #6156df 0%, #7861e8 28%, #a96bea 58%, #c36ee7 78%, #6156df 100%);
+  background-size: 260% 100%;
+  animation: copilot-gradient-flow 6s ease-in-out infinite alternate;
   border: none;
   padding: 10px 14px;
   box-sizing: border-box;
   height: 56px;
-  border-radius: 14px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -204,6 +206,31 @@ aside.sidebar {
   display: none;
 }
 
+/* The light sidebar needs a stronger cue than the subtle bottom-edge glint. */
+:root:not([data-theme="dark"]) .btn-copilot {
+  border: 1px solid rgba(79, 70, 229, .22);
+  box-shadow: 0 5px 14px rgba(79, 70, 229, .28), 0 0 0 1px rgba(255, 255, 255, .42) inset;
+}
+
+:root:not([data-theme="dark"]) .btn-copilot::before {
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #fff, rgba(224, 231, 255, .95), transparent);
+  box-shadow: 0 -1px 8px rgba(255, 255, 255, .8);
+}
+
+:root:not([data-theme="dark"]) .btn-copilot::after {
+  display: block;
+  top: -55%;
+  bottom: -55%;
+  left: -42%;
+  width: 25%;
+  opacity: 0;
+  transform: skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .34), rgba(255, 255, 255, .7), rgba(255, 255, 255, .34), transparent);
+  filter: blur(.4px);
+  animation: copilot-surface-shine 4.2s ease-in-out infinite;
+}
+
 .btn-copilot > * { position: relative; z-index: 1; }
 
 @keyframes copilot-edge-glint {
@@ -212,11 +239,30 @@ aside.sidebar {
   70%, 100% { transform: translateX(325%); opacity: 0; }
 }
 
+@keyframes copilot-gradient-flow {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+
+@keyframes copilot-surface-shine {
+  0%, 18% { left: -42%; opacity: 0; }
+  27% { opacity: .85; }
+  52% { left: 118%; opacity: 0; }
+  100% { left: 118%; opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .btn-copilot,
   .btn-copilot::before,
   .btn-copilot::after { animation: none; }
   .copilot-btn-icon { animation: none; }
   .copilot-subtitle { transition: none; }
+}
+
+/* Keep the moving gradient clean: no diagonal shine overlay. */
+:root:not([data-theme="dark"]) .btn-copilot::after {
+  display: none;
+  animation: none;
 }
 
 .btn-copilot:hover {
@@ -588,6 +634,9 @@ header.top-bar {
 .top-bar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 16px;
 }
 
@@ -675,6 +724,12 @@ header.top-bar {
   z-index: 40;
 }
 
+#global-feature-search {
+  width: clamp(320px, 38vw, 620px);
+  max-width: 100%;
+  margin-left: auto;
+}
+
 .search-input-wrapper input {
   width: 100%;
   background: var(--bg-card);
@@ -703,7 +758,8 @@ header.top-bar {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 340px;
+  width: 100%;
+  min-width: 340px;
   max-height: 390px;
   padding: 6px;
   overflow-y: auto;
@@ -814,6 +870,368 @@ header.top-bar {
   font-size: 13px;
   font-weight: 600;
 }
+
+.account-settings-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  border: 0;
+  border-left: 1px solid var(--border-color);
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.account-settings-btn:hover { color: var(--primary); }
+.account-settings-btn[hidden] { display: none; }
+
+.sidebar-account-area {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 15px;
+  background: linear-gradient(135deg, #ffffff, #f6f7fc);
+  box-shadow: 0 5px 16px rgba(35, 48, 80, 0.06);
+}
+
+.sidebar-account-area .user-profile {
+  min-width: 0;
+  flex: 1;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sidebar-account-area .avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  background: linear-gradient(135deg, #ede9fe, #eef2ff);
+  box-shadow: inset 0 0 0 1px #ddd6fe;
+}
+
+.sidebar-account-area .user-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-account-area .account-settings-btn,
+.sidebar-account-area .theme-toggle,
+.sidebar-account-area .topbar-logout-btn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 9px;
+  color: #75819a;
+  background: transparent;
+  transition: color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.sidebar-account-area .account-settings-btn {
+  margin-left: auto;
+  border-left: 0;
+}
+
+.sidebar-account-area .account-settings-btn:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.sidebar-account-area .theme-toggle {
+  padding: 0;
+}
+
+.sidebar-account-area .theme-toggle:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.sidebar-account-area .theme-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sidebar-account-area .topbar-logout-btn {
+  position: relative;
+  margin-left: 3px;
+  color: #8a94a8;
+}
+
+.sidebar-account-area .topbar-logout-btn::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: -4px;
+  width: 1px;
+  background: var(--border-color);
+}
+
+.sidebar-account-area .topbar-logout-btn:hover {
+  color: #dc4c64;
+  background: #fff0f2;
+  transform: translateY(-1px);
+}
+
+aside.sidebar.collapsed .sidebar-account-area {
+  flex-direction: column;
+  width: 40px;
+  gap: 4px;
+  padding: 4px 3px;
+  border-radius: 13px;
+}
+
+aside.sidebar.collapsed .sidebar-account-area .user-profile {
+  width: 34px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+}
+
+aside.sidebar.collapsed .sidebar-account-area .user-name { display: none; }
+aside.sidebar.collapsed .sidebar-account-area .avatar { width: 32px; height: 32px; }
+aside.sidebar.collapsed .sidebar-account-area .account-settings-btn {
+  width: 32px;
+  height: 30px;
+  margin: 0;
+}
+aside.sidebar.collapsed .sidebar-account-area .theme-toggle { width: 32px; height: 30px; }
+aside.sidebar.collapsed .sidebar-account-area .topbar-logout-btn { width: 32px; height: 30px; margin: 0; }
+aside.sidebar.collapsed .sidebar-account-area .topbar-logout-btn::before { top: -3px; right: 6px; bottom: auto; left: 6px; width: auto; height: 1px; }
+
+:root[data-theme="dark"] .sidebar-account-area {
+  background: var(--dark-raised);
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .sidebar-account-area .avatar { background: #30294f; box-shadow: inset 0 0 0 1px #514579; }
+:root[data-theme="dark"] .sidebar-account-area .theme-toggle { background: transparent; border-color: transparent; }
+:root[data-theme="dark"] .sidebar-account-area .theme-toggle:hover { background: #30294f; color: #c4b5fd; }
+:root[data-theme="dark"] .sidebar-account-area .topbar-logout-btn:hover { background: #402633; }
+
+/* Compact account trigger and popover */
+.sidebar-account-area {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.account-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 9px 6px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 13px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 4px 14px rgba(35, 48, 80, .05);
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.account-menu-trigger:hover,
+.account-menu-trigger[aria-expanded="true"] {
+  border-color: #c7c3f4;
+  box-shadow: 0 7px 18px rgba(76, 70, 180, .11);
+}
+
+.account-menu-trigger .avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.account-trigger-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-trigger-copy .user-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-trigger-copy small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.account-trigger-chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: transform .18s ease;
+}
+
+.account-menu-trigger[aria-expanded="true"] .account-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.account-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 9px);
+  left: 0;
+  z-index: 220;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .2);
+}
+
+.account-menu[hidden] { display: none; }
+
+.account-menu-item,
+.sidebar-account-area .account-menu-item.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 48px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  transform: none;
+}
+
+.account-menu-item[hidden] { display:none !important; }
+
+.account-menu-item:hover,
+.sidebar-account-area .account-menu-item.theme-toggle:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+  transform: none;
+}
+
+.account-menu-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.account-menu-icon svg,
+.sidebar-account-area .account-menu-item.theme-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+
+.account-menu-divider {
+  height: 1px;
+  margin: 0;
+  background: var(--border-color);
+}
+
+.account-theme-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #d7dae1;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08);
+  transition: background .2s ease;
+}
+
+.account-theme-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .28);
+  transition: transform .2s ease;
+}
+
+.account-menu-item[aria-pressed="true"] .account-theme-switch { background: #7367e8; }
+.account-menu-item[aria-pressed="true"] .account-theme-switch::after { transform: translateX(14px); }
+
+.account-menu-logout,
+.account-menu-logout .account-menu-icon { color: #dc4c64; }
+
+.account-menu-logout:hover {
+  color: #dc4c64;
+  background: #fff0f2;
+}
+
+aside.sidebar.collapsed { overflow: visible; }
+aside.sidebar.collapsed .sidebar-account-area { width: 40px; padding: 0; }
+aside.sidebar.collapsed .account-menu-trigger { width: 40px; min-height: 40px; padding: 3px; justify-content: center; }
+aside.sidebar.collapsed .account-trigger-copy,
+aside.sidebar.collapsed .account-trigger-chevron { display: none; }
+aside.sidebar.collapsed .account-menu { right: auto; bottom: 0; left: calc(100% + 10px); width: 230px; }
+aside.sidebar.collapsed .account-menu .account-menu-item,
+aside.sidebar.collapsed .account-menu .account-menu-item.theme-toggle,
+aside.sidebar.collapsed .account-menu .account-settings-btn {
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  padding: 0 13px;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+aside.sidebar.collapsed .account-menu .account-theme-switch { margin-left: auto; }
+
+:root[data-theme="dark"] .sidebar-account-area,
+:root[data-theme="dark"] .account-menu-trigger { background: transparent; box-shadow: none; }
+:root[data-theme="dark"] .account-menu-trigger,
+:root[data-theme="dark"] .account-menu { border-color: #343434; background: #191919; }
+:root[data-theme="dark"] .sidebar-account-area .account-menu-item.theme-toggle { background: transparent; }
+:root[data-theme="dark"] .account-menu-item:hover,
+:root[data-theme="dark"] .sidebar-account-area .account-menu-item.theme-toggle:hover { background: #242424; color: #fff; }
+:root[data-theme="dark"] .account-menu-icon { color: #d6d6d6; }
+:root[data-theme="dark"] .account-menu-divider { background: #343434; }
+:root[data-theme="dark"] .account-theme-switch { background: #3d3d3d; box-shadow: none; }
+:root[data-theme="dark"] .account-menu-item[aria-pressed="true"] .account-theme-switch { background: #7367e8; }
+:root[data-theme="dark"] .account-menu-logout,
+:root[data-theme="dark"] .account-menu-logout .account-menu-icon { color: #ff626d; }
+:root[data-theme="dark"] .account-menu-logout:hover { color: #fda4af; background: #402633; }
 
 /* AI Banner */
 .ai-suggestion-banner {

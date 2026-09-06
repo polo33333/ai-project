@@ -1,6 +1,7 @@
 'use strict';
 
 window.trainingReportData = null;
+window.trainingStatusTab = 'pending';
 
 function escapeTrainingHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -38,8 +39,6 @@ window.renderTrainingReport = function renderTrainingReport() {
   ].map(([icon, value, label, tone]) => `<article class="training-stat ${tone}"><i class="fa-solid ${icon}"></i><div><strong>${value}</strong><span>${label}</span></div></article>`).join('');
 
   const counts = Object.entries(report.failureCounts || {}).sort((a, b) => b[1] - a[1]);
-  const max = Math.max(1, ...counts.map(([, count]) => count));
-  document.getElementById('training-failure-counts').innerHTML = counts.map(([failure, count]) => `<button type="button" class="training-issue-row" onclick="filterTrainingFailure('${escapeTrainingHtml(failure)}')"><span><b>${escapeTrainingHtml(trainingFailureLabel(failure))}</b><em>${count}</em></span><i style="width:${Math.max(5, count / max * 100)}%"></i></button>`).join('') || '<div class="training-empty">Chưa có lỗi.</div>';
   const select = document.getElementById('training-failure-filter');
   const current = select.value;
   select.innerHTML = '<option value="">Tất cả lỗi</option>' + counts.map(([failure]) => `<option value="${escapeTrainingHtml(failure)}">${escapeTrainingHtml(trainingFailureLabel(failure))}</option>`).join('');
@@ -52,28 +51,76 @@ window.filterTrainingFailure = function filterTrainingFailure(failure) {
   renderTrainingCases();
 };
 
+window.setTrainingStatusTab = function setTrainingStatusTab(tab) {
+  window.trainingStatusTab = tab === 'resolved' ? 'resolved' : 'pending';
+  renderTrainingCases();
+};
+
+function formatTrainingTime(value) {
+  if (!value) return 'Không có thời gian';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+window.setTrainingCaseResolved = async function setTrainingCaseResolved(caseId, resolved, button) {
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch('/api/training-report/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId, resolved }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+    const item = window.trainingReportData?.cases?.find(entry => entry.id === caseId);
+    if (item) Object.assign(item, data.resolution);
+    renderTrainingCases();
+    if (typeof showToast === 'function') showToast(resolved ? 'Đã chuyển case sang Đã xử lý.' : 'Đã chuyển case về Cần xử lý.', 'success');
+  } catch (error) {
+    if (button) button.disabled = false;
+    if (typeof showToast === 'function') showToast(error.message, 'error');
+  }
+};
+
 window.renderTrainingCases = function renderTrainingCases() {
   const report = window.trainingReportData;
   if (!report) return;
   const query = (document.getElementById('training-search')?.value || '').toLowerCase();
   const failure = document.getElementById('training-failure-filter')?.value || '';
   const rating = document.getElementById('training-rating-filter')?.value || '';
+  const resolvedTab = window.trainingStatusTab === 'resolved';
+  const allCases = report.cases || [];
+  const pendingCount = allCases.filter(item => !item.resolved).length;
+  const resolvedCount = allCases.filter(item => item.resolved).length;
+  const pendingTab = document.getElementById('training-tab-pending');
+  const completedTab = document.getElementById('training-tab-resolved');
+  pendingTab?.classList.toggle('active', !resolvedTab); completedTab?.classList.toggle('active', resolvedTab);
+  if (pendingTab) pendingTab.querySelector('b').textContent = pendingCount;
+  if (completedTab) completedTab.querySelector('b').textContent = resolvedCount;
   const cases = (report.cases || []).filter(item => {
     if (!item.failures?.length) return false;
+    if (!!item.resolved !== resolvedTab) return false;
     if (failure && !item.failures.includes(failure)) return false;
     if (rating === 'none' && item.rating) return false;
     if (rating && rating !== 'none' && item.rating !== rating) return false;
     return !query || `${item.id} ${item.question} ${item.reply}`.toLowerCase().includes(query);
   });
   document.getElementById('training-case-count').textContent = `${cases.length} case`;
-  document.getElementById('training-cases').innerHTML = cases.slice(0, 100).map(item => `
+  const groupedCases = new Map();
+  cases.slice(0, 100).forEach(item => {
+    const groupCode = failure || item.failures[0] || 'REVIEW_REQUESTED';
+    if (!groupedCases.has(groupCode)) groupedCases.set(groupCode, []);
+    groupedCases.get(groupCode).push(item);
+  });
+  const caseMarkup = item => `
     <details class="training-case">
-      <summary><div class="training-case-main"><span class="training-case-id">${escapeTrainingHtml(item.id)}</span><strong>${escapeTrainingHtml(item.question)}</strong><div>${item.failures.map(code => `<span class="training-failure-chip">${escapeTrainingHtml(trainingFailureLabel(code))}</span>`).join('')}</div></div><div class="training-case-meta"><span class="training-status ${String(item.rating || 'none')}">${escapeTrainingHtml(item.rating || 'chưa đánh giá')}</span><i class="fa-solid fa-chevron-down"></i></div></summary>
+      <summary><div class="training-case-main"><div class="training-case-identity"><time><i class="fa-regular fa-calendar"></i>${escapeTrainingHtml(formatTrainingTime(item.timestamp))}</time><span class="training-case-meta-separator" aria-hidden="true"></span><span class="training-case-id"><i class="fa-solid fa-hashtag" aria-hidden="true"></i>${escapeTrainingHtml(item.id)}</span></div><strong>${escapeTrainingHtml(item.question)}</strong><div>${item.failures.map(code => `<span class="training-failure-chip">${escapeTrainingHtml(trainingFailureLabel(code))}</span>`).join('')}</div></div><div class="training-case-meta"><span class="training-status ${String(item.rating || 'none')}">${escapeTrainingHtml(item.rating || 'chưa đánh giá')}</span><button class="training-resolve-btn ${item.resolved ? 'is-resolved' : ''}" type="button" onclick="event.preventDefault();event.stopPropagation();setTrainingCaseResolved(decodeURIComponent('${encodeURIComponent(item.id)}'),${!item.resolved},this)"><i class="fa-solid ${item.resolved ? 'fa-rotate-left' : 'fa-check'}"></i>${item.resolved ? 'Mở lại' : 'Đã xử lý'}</button><i class="fa-solid fa-chevron-down"></i></div></summary>
       <div class="training-case-body">
         <section><h4>Câu trả lời hiện tại</h4><pre>${escapeTrainingHtml(item.reply || '—')}</pre></section>
         <section><h4>SQL</h4><pre>${escapeTrainingHtml(item.sql || 'Chưa có SQL')}</pre></section>
         <section><h4>Memory decision</h4><pre>${escapeTrainingHtml(item.memoryDecision ? JSON.stringify(item.memoryDecision, null, 2) : 'Không có trace memory')}</pre></section>
         <section class="training-suggestions"><h4>Đề xuất cải tiến</h4>${(item.suggestions || []).map(suggestion => `<article><span class="training-target">${escapeTrainingHtml(suggestion.target)}</span><div><strong>${escapeTrainingHtml(suggestion.title)}</strong><p>${escapeTrainingHtml(suggestion.message)}</p><code>${escapeTrainingHtml(suggestion.action)}</code></div></article>`).join('')}</section>
       </div>
-    </details>`).join('') || '<div class="training-empty"><i class="fa-solid fa-circle-check"></i> Không có case phù hợp bộ lọc.</div>';
+    </details>`;
+  document.getElementById('training-cases').innerHTML = [...groupedCases.entries()].map(([code, items]) => `
+    <section class="training-case-group">
+      <header><span><i class="fa-solid fa-triangle-exclamation"></i>${escapeTrainingHtml(trainingFailureLabel(code))}</span><strong>${items.length} case</strong></header>
+      <div>${items.map(caseMarkup).join('')}</div>
+    </section>`).join('') || '<div class="training-empty"><i class="fa-solid fa-circle-check"></i> Không có case phù hợp bộ lọc.</div>';
 };

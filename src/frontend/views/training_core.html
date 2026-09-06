@@ -6,10 +6,10 @@
   </div>
   <div id="training-summary" class="training-summary"></div>
   <div class="training-layout audit-data-panel">
-    <aside class="training-issues"><div class="training-panel-title"><span><i class="fa-solid fa-chart-column"></i> Nhóm lỗi</span></div><div id="training-failure-counts"></div></aside>
     <main class="training-cases-panel">
       <div class="training-toolbar">
-        <div class="training-panel-title"><span><i class="fa-solid fa-list-check"></i> Case cần cải tiến</span><small id="training-case-count"></small></div>
+        <div class="training-panel-title"><span><i class="fa-solid fa-list-check"></i> Case cải tiến</span><small id="training-case-count"></small></div>
+        <div class="training-status-tabs" role="tablist"><button id="training-tab-pending" class="active" type="button" role="tab" onclick="setTrainingStatusTab('pending')"><i class="fa-regular fa-clock"></i> Cần xử lý <b>0</b></button><button id="training-tab-resolved" type="button" role="tab" onclick="setTrainingStatusTab('resolved')"><i class="fa-solid fa-circle-check"></i> Đã xử lý <b>0</b></button></div>
         <div class="training-filters">
           <label><i class="fa-solid fa-magnifying-glass"></i><input id="training-search" placeholder="Tìm câu hỏi, ID..." oninput="renderTrainingCases()"></label>
           <select id="training-failure-filter" onchange="renderTrainingCases()"><option value="">Tất cả lỗi</option></select>

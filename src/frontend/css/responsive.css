@@ -90,6 +90,10 @@ img {
   .search-input-wrapper {
     width: min(220px, 34vw);
   }
+
+  #global-feature-search {
+    width: clamp(240px, 42vw, 420px);
+  }
 }
 
 @media (max-width: 1100px) {

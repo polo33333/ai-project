@@ -4,6 +4,7 @@ const path = require('path');
 const { collectCases } = require('./case_collector');
 const { classifyCase } = require('./failure_classifier');
 const { suggestForCase } = require('./suggestion_engine');
+const resolutionService = require('./resolution_service');
 
 function buildTrainingReport(rootDir = path.join(__dirname, '../../..')) {
   const cases = collectCases({
@@ -13,7 +14,8 @@ function buildTrainingReport(rootDir = path.join(__dirname, '../../..')) {
   }).map(item => {
     const detectedFailures = classifyCase(item);
     const failures = detectedFailures.length ? detectedFailures : ['REVIEW_REQUESTED'];
-    return { ...item, failures, suggestions: suggestForCase({ ...item, failures }) };
+    const resolution = resolutionService.get(item.id);
+    return { ...item, failures, suggestions: suggestForCase({ ...item, failures }), resolved: resolution?.resolved === true, resolvedAt: resolution?.resolvedAt || null, resolvedBy: resolution?.resolvedBy || null };
   });
   const failureCounts = cases.flatMap(item => item.failures).reduce((result, failure) => {
     result[failure] = (result[failure] || 0) + 1;

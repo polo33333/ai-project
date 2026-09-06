@@ -322,6 +322,7 @@ main.main-content.training-workspace { overflow-y: hidden; }
 .training-workspace #main-view-container { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .training-workspace #view-training-core { flex: 1; min-height: 0; padding: 0; grid-template-rows: auto auto minmax(0,1fr); gap: 16px; overflow: hidden; }
 .training-workspace .training-layout.audit-data-panel { min-height: 0; overflow: hidden; }
+.training-workspace .training-layout { grid-template-columns: minmax(0,1fr); }
 .training-workspace .training-cases-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .training-workspace .training-toolbar { flex-shrink: 0; }
 .training-workspace .training-cases { flex: 1; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
@@ -329,11 +330,11 @@ main.main-content.training-workspace { overflow-y: hidden; }
 .training-workspace .training-issues > .training-panel-title { flex-shrink: 0; }
 .training-workspace #training-failure-counts { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 @container main-content (max-width: 1050px) {
-  .training-workspace .training-layout { grid-template-columns: 210px minmax(0,1fr); }
+  .training-workspace .training-layout { grid-template-columns: minmax(0,1fr); }
   .training-workspace .training-summary { grid-template-columns: repeat(5,minmax(130px,1fr)); overflow-x: auto; padding-bottom: 4px; }
 }
 @container main-content (max-width: 760px) {
-  .training-workspace .training-layout { grid-template-columns: minmax(0,1fr); grid-template-rows: 90px minmax(0,1fr); }
+  .training-workspace .training-layout { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
   .training-workspace .training-issues { flex-direction: row; }
   .training-workspace .training-issues > .training-panel-title { padding: 12px; font-size: 12px; }
   .training-workspace #training-failure-counts { flex: 1; min-width: 0; }
@@ -347,3 +348,49 @@ main.main-content.training-workspace { overflow-y: hidden; }
   .training-workspace .training-filters { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; margin-top: 8px; }
   .training-workspace .training-filters label { grid-column: 1/-1; }
 }
+
+.training-case-group { margin: 12px; overflow: hidden; border: 1px solid #dce3ee; border-radius: 12px; background: #fff; }
+.training-case-group > header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 0 15px; border-bottom: 1px solid #e2e8f1; color: #334155; background: #f8fafd; }
+.training-case-group > header span { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.training-case-group > header span i { color: #d97706; }
+.training-case-group > header strong { padding: 3px 8px; border-radius: 999px; color: #5b50bb; background: #eeecfc; font-size: 10px; }
+.training-case-group .training-case { margin: 10px; }
+:root[data-theme="dark"] .training-case-group, :root[data-theme="dark"] .training-case-group > header { background: var(--dark-surface); border-color: var(--border-color); }
+.training-status-tabs { display:flex; gap:6px; margin-top:12px; padding:4px; width:max-content; border:1px solid #dce3ee; border-radius:10px; background:#f4f6fa; }
+.training-status-tabs button { display:flex; align-items:center; gap:7px; min-height:32px; padding:6px 11px; border:0; border-radius:7px; color:#64748b; background:transparent; font-size:11px; font-weight:650; cursor:pointer; }
+.training-status-tabs button b { min-width:20px; padding:2px 5px; border-radius:999px; background:#e5e9f1; font-size:9px; }
+.training-status-tabs button.active { color:#4f46e5; background:#fff; box-shadow:0 2px 6px #26385912; }
+.training-case-identity { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:2px; }
+.training-case-identity time { display:inline-flex; align-items:center; gap:6px; min-height:24px; padding:3px 8px; border:1px solid #dfe5ee; border-radius:7px; color:#536178; background:#f7f9fc; font-size:10px; font-weight:650; white-space:nowrap; }
+.training-case-identity time i { color:#655bd7; font-size:10px; }
+.training-case-meta-separator { width:3px; height:3px; border-radius:50%; background:#aab4c4; }
+.training-case-identity .training-case-id { display:inline-flex; align-items:center; gap:4px; color:#78859a; font-size:10px; font-weight:550; }
+.training-case-identity .training-case-id i { color:#9aa6b8; font-size:8px; }
+.training-resolve-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid #a9d9c8; border-radius:7px; color:#08785a; background:#eaf8f3; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.training-resolve-btn:hover { background:#d8f2e8; }
+.training-resolve-btn.is-resolved { color:#5f55bd; border-color:#cdc6ef; background:#f0edff; }
+.training-resolve-btn:disabled { opacity:.55; }
+:root[data-theme="dark"] .training-layout.audit-data-panel { background:#111b2b !important; border-color:#35445d !important; }
+:root[data-theme="dark"] .training-cases-panel { background:#121d2e !important; }
+:root[data-theme="dark"] .training-toolbar { background:#172337 !important; border-color:#35445d !important; }
+:root[data-theme="dark"] .training-filters label, :root[data-theme="dark"] .training-filters input, :root[data-theme="dark"] .training-filters select { color:#dbe5f4; background:#101a2a; border-color:#40516d; }
+:root[data-theme="dark"] .training-case-group { background:#121d2e; border-color:#35445d; }
+:root[data-theme="dark"] .training-case-group > header { color:#dce6f5; background:#1a273b; border-color:#35445d; }
+:root[data-theme="dark"] .training-case { background:#142033; border-color:#35445d; }
+:root[data-theme="dark"] .training-case > summary { color:#dce6f5; }
+:root[data-theme="dark"] .training-case[open] > summary, :root[data-theme="dark"] .training-case-body { background:#18263a; }
+:root[data-theme="dark"] .training-case-main > strong { color:#eef3fb; }
+:root[data-theme="dark"] .training-case-id { color:#a9a0ff; }
+:root[data-theme="dark"] .training-case-identity time { color:#c4cee0; background:#1a273b; border-color:#40516d; }
+:root[data-theme="dark"] .training-case-identity time i { color:#b7adff; }
+:root[data-theme="dark"] .training-case-meta-separator { background:#5f6f88; }
+:root[data-theme="dark"] .training-case-identity .training-case-id { color:#9eabc0; }
+:root[data-theme="dark"] .training-failure-chip { color:#f3c066; background:#493819; }
+:root[data-theme="dark"] .training-status.dislike { color:#ff9caf; background:#472432; }
+:root[data-theme="dark"] .training-status.like { color:#77ddb7; background:#153b30; }
+:root[data-theme="dark"] .training-status-tabs { background:#101a2a; border-color:#35445d; }
+:root[data-theme="dark"] .training-status-tabs button { color:#a8b6cd; }
+:root[data-theme="dark"] .training-status-tabs button b { background:#26354b; }
+:root[data-theme="dark"] .training-status-tabs button.active { color:#c2b8ff; background:#30294f; box-shadow:none; }
+:root[data-theme="dark"] .training-resolve-btn { color:#7de0ba; border-color:#356b5a; background:#173b31; }
+:root[data-theme="dark"] .training-resolve-btn.is-resolved { color:#c5baff; border-color:#514579; background:#30294f; }

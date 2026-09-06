@@ -34,8 +34,10 @@
     const paths = iconPaths[item.id.replace('nav-', '')];
     if (paths) item.querySelector('.nav-icon').innerHTML = outlineIcon(paths);
   });
-  sidebar.querySelector('.copilot-btn-icon').innerHTML = outlineIcon(iconPaths.sparkles);
-  sidebar.querySelector('.card-icon-badge').innerHTML = outlineIcon(iconPaths.database);
+  const copilotIcon = sidebar.querySelector('.copilot-btn-icon');
+  if (copilotIcon) copilotIcon.innerHTML = outlineIcon(iconPaths.sparkles);
+  const databaseIcon = sidebar.querySelector('.card-icon-badge');
+  if (databaseIcon) databaseIcon.innerHTML = outlineIcon(iconPaths.database);
   let desktopCollapsed = false;
   try { desktopCollapsed = localStorage.getItem(storageKey) === 'true'; } catch { /* Storage can be unavailable. */ }
   const tooltip = document.createElement('div');
@@ -83,7 +85,7 @@
     }
   };
 
-  sidebar.querySelectorAll('.nav-item a, .btn-copilot, .sidebar-toggle-btn').forEach(el => {
+  sidebar.querySelectorAll('.nav-item a, .btn-copilot, .sidebar-toggle-btn, #user-profile-btn').forEach(el => {
     const label = el.getAttribute('title') || el.textContent.trim();
     el.dataset.tooltip = label;
     el.setAttribute('aria-label', label);
@@ -91,16 +93,18 @@
   });
   sidebar.querySelector('.nav-item.active a')?.setAttribute('aria-current', 'page');
   const status = document.getElementById('sidebar-footer-card');
-  status.tabIndex = 0;
-  status.dataset.tooltip = 'Qdrant DB';
-  function syncStatus() {
-    const label = `Qdrant DB · ${status.classList.contains('status-online') ? 'Đã kết nối' : 'Chưa kết nối'}`;
-    status.dataset.tooltip = label;
-    status.setAttribute('aria-label', label);
-    if (tooltipTarget === status) tooltip.textContent = label;
+  if (status) {
+    status.tabIndex = 0;
+    status.dataset.tooltip = 'Qdrant DB';
+    function syncStatus() {
+      const label = `Qdrant DB · ${status.classList.contains('status-online') ? 'Đã kết nối' : 'Chưa kết nối'}`;
+      status.dataset.tooltip = label;
+      status.setAttribute('aria-label', label);
+      if (tooltipTarget === status) tooltip.textContent = label;
+    }
+    new MutationObserver(syncStatus).observe(status, { attributes: true, attributeFilter: ['class'] });
+    syncStatus();
   }
-  new MutationObserver(syncStatus).observe(status, { attributes: true, attributeFilter: ['class'] });
-  syncStatus();
 
   function showTooltip(target) {
     hideTooltip();

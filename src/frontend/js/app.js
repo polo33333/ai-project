@@ -180,6 +180,66 @@ function toggleSidebarCollapse() {
   window.workspaceSidebar?.toggle();
 }
 
+function initAccountMenu() {
+  const trigger = document.getElementById('user-profile-btn');
+  const menu = document.getElementById('account-menu');
+  if (!trigger || !menu || trigger.dataset.initialized === 'true') return;
+  trigger.dataset.initialized = 'true';
+
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+  };
+
+  trigger.addEventListener('click', event => {
+    event.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  menu.addEventListener('click', event => {
+    const item = event.target.closest('.account-menu-item');
+    if (item && !item.matches('[data-theme-toggle]')) setOpen(false);
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.sidebar-account-area')) setOpen(false);
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || menu.hidden) return;
+    setOpen(false);
+    trigger.focus();
+  });
+}
+
+let deferredInstallPrompt = null;
+
+function initPwaInstall() {
+  const installButton = document.getElementById('install-app-btn');
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (standalone && installButton) installButton.hidden = true;
+
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    if (installButton) installButton.hidden = false;
+  });
+
+  installButton?.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installButton.hidden = true;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    if (installButton) installButton.hidden = true;
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js').catch(() => undefined));
+  }
+}
+
 async function loadCurrentAccount() {
   try {
     const res = await fetch('/api/auth/me');
@@ -189,7 +249,12 @@ async function loadCurrentAccount() {
       return;
     }
     const nameEl = document.getElementById('account-display-name');
+    const roleEl = document.getElementById('account-role-label');
+    const settingsButton = document.getElementById('account-settings-btn');
+    window.currentAccountRole = data.account?.role || 'user';
+    if (settingsButton) settingsButton.hidden = data.account?.role !== 'admin';
     if (nameEl) nameEl.textContent = data.account?.displayName || data.account?.username || 'Admin AI';
+    if (roleEl) roleEl.textContent = data.account?.role === 'admin' ? 'Quản trị viên' : 'Thành viên';
   } catch {
     window.location.href = '/login.html';
   }
@@ -246,9 +311,11 @@ const featureSearchItems = [
   { key: 'chat-history', title: 'Lịch sử trò chuyện', group: 'Giám sát & Audit', icon: 'fa-clock-rotate-left', keywords: 'history gọi ai prompt json' },
   { key: 'chat-feedback', title: 'Đánh giá AI', group: 'Giám sát & Audit', icon: 'fa-thumbs-up', keywords: 'feedback chất lượng thích không thích kiểm duyệt ai' },
   { key: 'training-core', title: 'Training Core', group: 'Giám sát & Audit', icon: 'fa-graduation-cap', keywords: 'training report đề xuất cải tiến harness regression lỗi ai' },
+  { key: 'workflows', title: 'Quy trình tự động', group: 'Tích hợp & Phát triển', icon: 'fa-diagram-project', keywords: 'workflow automation quy trình luồng tự động hóa tác vụ' },
   { key: 'mcp-sources', title: 'Nguồn MCP Server', group: 'Tích hợp & Phát triển', icon: 'fa-cube', keywords: 'mcp tools server integration' },
   { key: 'system-tools', title: 'Công cụ hệ thống', group: 'Tích hợp & Phát triển', icon: 'fa-screwdriver-wrench', keywords: 'tool function calling schema công cụ hệ thống' },
-  { key: 'api-docs', title: 'API tích hợp & Embed Chat', group: 'Tích hợp & Phát triển', icon: 'fa-code-branch', keywords: 'api key developer embed website widget' }
+  { key: 'api-docs', title: 'API tích hợp & Embed Chat', group: 'Tích hợp & Phát triển', icon: 'fa-code-branch', keywords: 'api key developer embed website widget tài liệu lập trình' },
+  { key: 'settings', title: 'Cài đặt hệ thống', group: 'Tài khoản & Hệ thống', icon: 'fa-sliders', keywords: 'setting settings cấu hình env môi trường qdrant local model máy chủ', adminOnly: true }
 ];
 
 function normalizeFeatureSearch(value) {
@@ -265,7 +332,12 @@ function initGlobalFeatureSearch() {
   let filteredItems = [];
   const render = () => {
     const query = normalizeFeatureSearch(input.value);
-    filteredItems = featureSearchItems.filter(item => normalizeFeatureSearch(`${item.title} ${item.group} ${item.keywords}`).includes(query)).slice(0, 8);
+    const queryTokens = query.split(/\s+/).filter(Boolean);
+    filteredItems = featureSearchItems.filter(item => {
+      if (item.adminOnly && window.currentAccountRole !== 'admin') return false;
+      const searchable = normalizeFeatureSearch(`${item.title} ${item.group} ${item.keywords}`);
+      return queryTokens.every(token => searchable.includes(token));
+    }).slice(0, 20);
     activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, filteredItems.length - 1)));
     results.innerHTML = filteredItems.length ? filteredItems.map((item, index) => `<button type="button" class="feature-search-item ${index === activeIndex ? 'active' : ''}" data-key="${item.key}"><span class="feature-result-icon"><i class="fa-solid ${item.icon}"></i></span><span><strong>${item.title}</strong><small>${item.group}</small></span><i class="fa-solid fa-arrow-turn-down feature-enter-icon"></i></button>`).join('') : '<div class="feature-search-empty"><i class="fa-solid fa-magnifying-glass"></i> Không tìm thấy chức năng phù hợp</div>';
     results.hidden = false;
@@ -293,6 +365,13 @@ function initGlobalFeatureSearch() {
     select(featureSearchItems.find(item => item.key === button?.dataset.key));
   });
   document.addEventListener('mousedown', event => { if (!wrapper.contains(event.target)) { results.hidden = true; input.setAttribute('aria-expanded', 'false'); } });
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      input.focus();
+      input.select();
+    }
+  });
 }
 
 window.architectureSuggestionAction = null;
@@ -392,6 +471,7 @@ const MAIN_TAB_KEYS = new Set([
   'workflows',
   'mcp-sources',
   'system-tools',
+  'settings',
   'api-docs'
 ]);
 
@@ -443,6 +523,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   const mainContent = document.querySelector('main.main-content');
   mainContent?.classList.toggle('training-workspace', cleanKey === 'training_core');
   mainContent?.classList.toggle('dictionary-workspace', cleanKey === 'dictionary');
+  mainContent?.classList.toggle('settings-workspace', cleanKey === 'settings');
 
   if (isDashboard) refreshArchitectureSuggestion();
 
@@ -463,6 +544,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
 
   const pageHeading = document.getElementById('page-heading');
   const titles = {
+    settings: 'Cài đặt hệ thống',
     overview: 'Tổng quan hệ thống',
     dashboard: 'Tổng quan hệ thống',
     page_chat: 'Trò chuyện AI',
@@ -490,6 +572,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   }
 
   const viewMap = {
+    settings: 'view-settings',
     page_chat: 'view-page_chat',
     dictionary: 'view-dictionary',
     glossary: 'view-glossary',
@@ -554,6 +637,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   }
 
   // Trigger Data Fetchers from Modules
+  if (typeof fetchSettings === 'function' && cleanKey === 'settings') fetchSettings();
   if (typeof fetchAiProviders === 'function' && cleanKey.includes('provider')) fetchAiProviders();
   if (typeof fetchDataDictionary === 'function' && cleanKey === 'dictionary') fetchDataDictionary();
   if (typeof fetchGlossaryData === 'function' && cleanKey === 'glossary') fetchGlossaryData();
@@ -601,6 +685,7 @@ async function loadViewComponents() {
     'training_core.html',
     'mcp_sources.html',
     'system_tools.html',
+    'settings.html',
     'api_docs.html'
   ];
 
@@ -1335,11 +1420,12 @@ function initCopilotSloganRotation() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
   initCopilotSloganRotation();
+  initAccountMenu();
+  initPwaInstall();
   await loadCurrentAccount();
   await loadViewComponents();
   initGlobalFeatureSearch();
   await switchMainTab(getRememberedMainTab());
-  fetchQdrantStatus();
   populateCopilotModelSelector();
 
   // Khởi chạy vòng lặp hiệu ứng 3D Orb cho tất cả canvas.chat-thinking-spinner

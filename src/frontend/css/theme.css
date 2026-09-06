@@ -8,6 +8,9 @@
 html[data-theme="dark"] .theme-toggle .theme-sun { display: block; }
 html[data-theme="dark"] .theme-toggle .theme-moon { display: none; }
 
+/* The account menu describes the active dark-mode setting with a fixed moon icon. */
+html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block; }
+
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg-app: #0d1422;
@@ -57,7 +60,8 @@ html[data-theme="dark"] .theme-toggle .theme-moon { display: none; }
 :root[data-theme="dark"] .logout-cancel-btn:hover { background: #26344a; border-color: #52627d; color: #fff !important; }
 :root[data-theme="dark"] :is(.nav-icon,.sidebar-toggle-btn) { color: #9eacc5; }
 :root[data-theme="dark"] .nav-item a:hover { background: var(--bg-hover); }
-:root[data-theme="dark"] .nav-item.active a { background: #30294f !important; color: #c0b5ff; box-shadow: inset 0 0 0 1px #514579 !important; }
+:root[data-theme="dark"] .nav-item.active a { background: #24174f !important; color: #b9a7ff; box-shadow: none !important; }
+:root[data-theme="dark"] .nav-item.active a::before { background: #815cf5; }
 :root[data-theme="dark"] .nav-item.active .nav-icon { color: #c0b5ff; }
 :root[data-theme="dark"] .nav-section + .nav-section::before { background: #2c3950 !important; }
 :root[data-theme="dark"] :is(.avatar,.sidebar-footer-card,.sidebar-footer-card.status-online,.sidebar-footer-card.status-offline) { background: var(--dark-raised); border-color: var(--border-color); }
