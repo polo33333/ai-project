@@ -1,0 +1,161 @@
+<!-- PAGE VIEW 11: Dedicated 3rd-Party API Integration & Secret Key Management Page View -->
+<div class="content-card api-page-card" style="grid-column:span 2;display:none;" id="view-api-docs">
+  <section class="api-hero">
+    <div class="api-hero-icon"><i class="fa-solid fa-code-branch"></i></div>
+    <div class="api-hero-content">
+      <span class="api-eyebrow">DEVELOPER PLATFORM</span>
+      <h2>API tích hợp & Embed Chat</h2>
+      <p>Kết nối KnowledgeHub AI với ERP, CRM, ứng dụng nội bộ hoặc nhúng trợ lý AI trực tiếp vào website.</p>
+      <div class="api-hero-badges">
+        <span><i class="fa-solid fa-circle-check"></i> OpenAI Compatible</span>
+        <span><i class="fa-solid fa-shield-halved"></i> API Key Authentication</span>
+        <span><i class="fa-solid fa-bolt"></i> Active Provider Routing</span>
+      </div>
+    </div>
+    <button class="api-create-key-btn" onclick="generateNewApiKey()"><i class="fa-solid fa-plus"></i><span>Tạo API Key</span></button>
+  </section>
+
+  <section class="api-keys-section">
+    <div class="api-section-heading">
+      <div><span class="api-section-icon"><i class="fa-solid fa-key"></i></span><div><h3>Secret Keys</h3><p>Quản lý quyền truy cập của các ứng dụng bên thứ ba.</p></div></div>
+      <span class="api-key-count"><strong id="api-key-count">0</strong> keys</span>
+    </div>
+    <div class="data-table-container api-keys-table-wrap">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th style="width: 21%;">Ứng dụng</th>
+            <th style="width: 34%;">API Secret Key</th>
+            <th style="width: 11%;">Ngày tạo</th>
+            <th style="width: 13%;">Dùng gần nhất</th>
+            <th style="width: 10%;">Rate Limit</th>
+            <th style="width: 11%;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="api-keys-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="api-embed-admin-section">
+    <div class="api-section-heading">
+      <div><span class="api-section-icon violet"><i class="fa-solid fa-window-restore"></i></span><div><h3>Cấu hình Embed Chat</h3><p>Mỗi Embed ID chỉ hoạt động trên các domain được cho phép.</p></div></div>
+      <div class="embed-section-actions"><span class="api-key-count"><strong id="embed-config-count">0</strong> embeds</span><button class="btn-primary" onclick="openEmbedConfigModal()"><i class="fa-solid fa-plus"></i> Tạo Embed</button></div>
+    </div>
+    <div class="embed-config-layout">
+      <div id="embed-config-list" class="embed-config-list"><div class="embed-config-empty">Chưa có cấu hình Embed.</div></div>
+    </div>
+  </section>
+
+  <section class="api-integration-section">
+    <div class="api-section-heading api-integration-heading">
+      <div><span class="api-section-icon violet"><i class="fa-solid fa-plug"></i></span><div><h3>Chọn cách tích hợp</h3><p>Sử dụng REST API cho ứng dụng hoặc Embed Chat cho website.</p></div></div>
+    </div>
+    <div class="api-integration-grid">
+      <article class="api-integration-card">
+        <header class="api-integration-card-head">
+          <span class="api-product-icon rest"><i class="fa-solid fa-terminal"></i></span>
+          <div><span class="api-card-kicker">BACKEND INTEGRATION</span><h4>REST API</h4></div>
+          <span class="api-ready-badge">Ready</span>
+        </header>
+        <p class="api-card-description">Endpoint tương thích OpenAI cho ERP, CRM, mobile app và backend service.</p>
+        <div class="api-endpoint-row"><span class="api-method">POST</span><code>/api/v1/chat/completions</code></div>
+        <div class="api-code-shell">
+          <div class="api-code-head"><span><i class="fa-solid fa-terminal"></i> cURL</span><button onclick="copyApiDocCode(this)"><i class="fa-regular fa-copy"></i> Sao chép</button></div>
+          <pre><code>curl -X POST http://localhost:3000/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer kh_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "Thống kê tổng doanh thu theo tháng" }
+    ]
+  }'</code></pre>
+        </div>
+        <div class="api-card-note"><i class="fa-solid fa-lock"></i><span>Dùng header <code>Authorization: Bearer</code> cho mọi request.</span></div>
+      </article>
+
+      <article class="api-integration-card featured">
+        <header class="api-integration-card-head">
+          <span class="api-product-icon embed"><i class="fa-solid fa-comments"></i></span>
+          <div><span class="api-card-kicker">FRONTEND INTEGRATION</span><h4>Embed Chat Widget</h4></div>
+          <span class="api-ready-badge new">New</span>
+        </header>
+        <p class="api-card-description">Gắn trợ lý AI vào website bằng một đoạn script, tự động dùng Provider đang Active.</p>
+        <div class="api-embed-rules"><span><i class="fa-solid fa-check"></i> Không chọn model</span><span><i class="fa-solid fa-check"></i> Không hiện pipeline</span></div>
+        <div class="api-code-shell">
+          <div class="api-code-head"><span><i class="fa-solid fa-code"></i> HTML</span><button onclick="copyApiDocCode(this)"><i class="fa-regular fa-copy"></i> Sao chép</button></div>
+          <pre><code>&lt;script
+  src="http://localhost:3000/embed/knowledgehub-chat.js"
+   data-embed-id="emb_your_public_id"
+  data-title="Trợ lý AI"
+  data-greeting="Xin chào! Tôi có thể giúp gì cho bạn?"
+  data-color="#4f46e5"
+  data-position="right"&gt;
+&lt;/script&gt;</code></pre>
+        </div>
+        <div class="api-option-grid">
+          <span><code>data-title</code><small>Tên trợ lý</small></span><span><code>data-color</code><small>Màu chủ đạo</small></span><span><code>data-position</code><small>left / right</small></span><span><code>data-api-base</code><small>Backend URL</small></span>
+        </div>
+      </article>
+    </div>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="embed-config-modal">
+  <div class="copilot-modal-dialog embed-config-modal-dialog">
+    <div class="copilot-modal-header">
+      <div class="copilot-modal-title"><span class="modal-title-icon"><i class="fa-solid fa-comments"></i></span><span id="embed-config-modal-title">Tạo Embed Chat</span></div>
+      <button class="modal-close-btn" onclick="closeEmbedConfigModal()" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="embed-config-modal-form" onsubmit="saveEmbedConfig(event)">
+      <input type="hidden" id="embed-config-id">
+      <div class="embed-config-modal-body">
+        <label class="form-label">Tên cấu hình<input id="embed-config-name" class="form-control" placeholder="Ví dụ: Website ERP" required></label>
+        <label class="form-label">Domain được phép<textarea id="embed-config-origins" class="form-control" rows="4" placeholder="https://erp.example.com&#10;https://portal.example.com" required></textarea><small>Mỗi dòng một domain, bao gồm giao thức https://.</small></label>
+        <div class="embed-modal-grid"><label class="form-label">Request/phút<input id="embed-config-rate" class="form-control" type="number" min="1" max="300" value="30"></label><label class="form-label">Số dòng tối đa<input id="embed-config-rows" class="form-control" type="number" min="1" max="100" value="20"></label></div>
+      </div>
+      <div class="api-key-modal-actions"><button type="button" class="btn-secondary-sm" onclick="closeEmbedConfigModal()">Hủy</button><button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="embed-delete-modal">
+  <div class="copilot-modal-dialog embed-delete-dialog">
+    <div class="embed-delete-icon"><i class="fa-solid fa-trash-can"></i></div>
+    <h3>Xóa cấu hình Embed?</h3>
+    <p>Cấu hình <strong id="embed-delete-name"></strong> sẽ ngừng hoạt động ngay lập tức. Website đang sử dụng Embed ID này sẽ không thể gọi AI.</p>
+    <input type="hidden" id="embed-delete-id">
+    <div class="embed-delete-actions"><button class="btn-secondary-sm" onclick="closeEmbedDeleteModal()">Hủy</button><button class="btn-danger-sm" onclick="confirmDeleteEmbedConfig()"><i class="fa-solid fa-trash-can"></i> Xóa cấu hình</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="api-key-modal">
+  <div class="copilot-modal-dialog api-key-modal-dialog">
+    <div class="copilot-modal-header">
+      <div class="copilot-modal-title">
+        <span class="modal-title-icon"><i class="fa-solid fa-key"></i></span>
+        <span>Tạo API Key mới</span>
+      </div>
+      <button class="modal-close-btn" onclick="closeApiKeyModal()" title="Đóng cửa sổ">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="api-key-modal-body">
+      <label class="form-label" for="api-key-app-name">Tên ứng dụng / bên thứ 3</label>
+      <input class="form-control" id="api-key-app-name" type="text" placeholder="Ví dụ: External Client">
+      <p class="form-helper-text">Tên này giúp nhận biết key đang cấp cho hệ thống hoặc ứng dụng nào.</p>
+      <label class="form-label api-key-rate-label" for="api-key-rate-limit">Rate Limit</label>
+      <div class="api-key-rate-row">
+        <input class="form-control" id="api-key-rate-limit" type="number" min="1" step="50" value="500">
+        <span class="api-key-rate-unit">req/min</span>
+      </div>
+      <p class="form-helper-text">Giới hạn số request mỗi phút cho key này.</p>
+    </div>
+    <div class="api-key-modal-actions">
+      <button class="btn-secondary-sm" onclick="closeApiKeyModal()">Hủy</button>
+      <button class="btn-primary" onclick="submitNewApiKeyFromModal()">
+        <i class="fa-solid fa-plus"></i> Tạo key
+      </button>
+    </div>
+  </div>
+</div>

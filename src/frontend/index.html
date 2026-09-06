@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KnowledgeHub AI</title>
+  <script src="js/theme.js?v=1"></script>
+
+  <!-- Google Fonts: Inter UTF-8 Vietnamese Standard -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Font Awesome 6 Pro Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Toastify JS Notification CDN -->
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+  <link rel="stylesheet" href="css/styles.css?v=20260906-feedback-donut-labels">
+  <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
+  <link rel="stylesheet" href="css/audit-logs.css">
+  <link rel="stylesheet" href="css/provider-management.css">
+  <link rel="stylesheet" href="css/knowledge-library.css?v=20260905-tab-actions-centered">
+  <link rel="stylesheet" href="css/relationship-diagram.css">
+  <link rel="stylesheet" href="css/api-docs.css?v=20260904-left-align-api-keys">
+  <link rel="stylesheet" href="css/system-tools.css?v=20260906-hero-glow">
+  <link rel="stylesheet" href="css/responsive.css?v=20260906-feedback-donut-labels">
+  <link rel="stylesheet" href="css/workspace.css?v=20260905-active-tile">
+  <link rel="stylesheet" href="css/module-workspaces.css?v=20260906-dictionary-search">
+  <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
+  <link rel="stylesheet" href="css/theme.css?v=20260906-log-stat-icons">
+</head>
+
+<body>
+
+  <div class="app-layout">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar" id="app-sidebar" aria-label="Điều hướng chính">
+      <div class="sidebar-brand">
+        <div class="brand-title-wrapper">
+          <div class="brand-logo" aria-label="KnowledgeHub AI"><i class="fa-solid fa-brain" aria-hidden="true"></i></div>
+          <div class="brand-name">KnowledgeHub AI</div>
+        </div>
+        <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-controls="app-sidebar" aria-expanded="true" onclick="toggleSidebarCollapse()"
+          title="Thu gọn Sidebar">
+          <i class="fa-solid fa-bars-staggered"></i>
+        </button>
+      </div>
+
+      <!-- Redesigned Copilot CTA Button -->
+      <button class="btn-copilot" id="btn-open-copilot" onclick="openCopilotPopup()" title="Mở Trợ lý AI">
+        <div class="copilot-btn-icon">
+          <svg class="copilot-sparkle-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z" />
+            <path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z" />
+            <path d="M5.25 2.5c.15 1.34.62 1.81 1.96 1.96-1.34.15-1.81.62-1.96 1.96-.15-1.34-.62-1.81-1.96-1.96 1.34-.15 1.81-.62 1.96-1.96Z" />
+          </svg>
+        </div>
+        <div class="copilot-btn-text">
+          <span class="copilot-title">Trợ lý AI</span>
+          <span class="copilot-subtitle" id="copilot-rotating-slogan">Text-to-SQL Playground</span>
+        </div>
+      </button>
+
+      <nav class="sidebar-nav" aria-label="Chức năng">
+        <!-- Navigation Section 1: Overview & Core Services -->
+        <div class="nav-section">
+          <div class="nav-section-title">TỔNG QUAN</div>
+          <ul class="nav-list">
+            <li class="nav-item active" id="nav-dashboard">
+              <a href="#" onclick="switchMainTab('overview'); return false;" title="Tổng quan">
+                <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span> <span class="nav-label">Tổng quan</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-page-chat">
+              <a href="#" onclick="switchMainTab('page-chat'); return false;" title="Trò chuyện AI">
+                <span class="nav-icon"><i class="fa-solid fa-comments"></i></span> <span class="nav-label">Trò chuyện AI</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-library">
+              <a href="#" onclick="switchMainTab('library'); return false;" title="Thư viện tri thức">
+                <span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span> <span class="nav-label">Thư viện tri thức</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-watchfolder">
+              <a href="#" onclick="switchMainTab('watchfolder'); return false;" title="Thư mục giám sát">
+                <span class="nav-icon"><i class="fa-solid fa-folder-tree"></i></span> <span class="nav-label">Thư mục giám sát</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Navigation Section 2: SQL Server Connector & Schema -->
+        <div class="nav-section">
+          <div class="nav-section-title">KẾT NỐI DỮ LIỆU</div>
+          <ul class="nav-list">
+            <li class="nav-item" id="nav-sql-connector">
+              <a href="#" onclick="switchMainTab('sql'); return false;" title="Kết nối CSDL">
+                <span class="nav-icon"><i class="fa-solid fa-plug"></i></span> <span class="nav-label">Kết nối CSDL</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-data-dictionary">
+              <a href="#" onclick="switchMainTab('dictionary'); return false;" title="Lược đồ CSDL">
+                <span class="nav-icon"><i class="fa-solid fa-table-list"></i></span> <span class="nav-label">Lược đồ CSDL</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-glossary">
+              <a href="#" onclick="switchMainTab('glossary'); return false;" title="Thuật ngữ nghiệp vụ">
+                <span class="nav-icon"><i class="fa-solid fa-spell-check"></i></span> <span class="nav-label">Thuật ngữ nghiệp vụ</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Navigation Section 3: AI Manager -->
+        <div class="nav-section">
+          <div class="nav-section-title">AI & BÁO CÁO</div>
+          <ul class="nav-list">
+            <li class="nav-item" id="nav-ai-providers">
+              <a href="#" onclick="switchMainTab('ai-providers'); return false;" title="Nhà cung cấp AI">
+                <span class="nav-icon"><i class="fa-solid fa-network-wired"></i></span> <span class="nav-label">Nhà cung cấp AI</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-cost-tracker">
+              <a href="#" onclick="switchMainTab('analytics'); return false;" title="Báo cáo & Metrics">
+                <span class="nav-icon"><i class="fa-solid fa-chart-pie"></i></span> <span class="nav-label">Báo cáo & Metrics</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Navigation Section 4: Audit & System Logs -->
+        <div class="nav-section">
+          <div class="nav-section-title">GIÁM SÁT & AUDIT</div>
+          <ul class="nav-list">
+            <li class="nav-item" id="nav-system-logs">
+              <a href="#" onclick="switchMainTab('system-logs'); return false;" title="Nhật ký hệ thống">
+                <span class="nav-icon"><i class="fa-solid fa-terminal"></i></span> <span class="nav-label">Nhật ký hệ thống</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-chat-history">
+              <a href="#" onclick="switchMainTab('chat-history'); return false;" title="Lịch sử trò chuyện">
+                <span class="nav-icon"><i class="fa-solid fa-clock-rotate-left"></i></span> <span class="nav-label">Lịch sử trò chuyện</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-chat-feedback">
+              <a href="#" onclick="switchMainTab('chat-feedback'); return false;" title="Đánh giá chất lượng AI">
+                <span class="nav-icon"><i class="fa-solid fa-thumbs-up"></i></span> <span class="nav-label">Đánh giá AI</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-training-core">
+              <a href="#" onclick="switchMainTab('training-core'); return false;" title="Báo cáo cải tiến Local Model">
+                <span class="nav-icon"><i class="fa-solid fa-graduation-cap"></i></span> <span class="nav-label">Training Core</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        <!-- Navigation Section 5: Integration & Developers -->
+        <div class="nav-section">
+          <div class="nav-section-title">TÍCH HỢP & PHÁT TRIỂN</div>
+          <ul class="nav-list">
+            <li class="nav-item" id="nav-workflows">
+              <a href="#" onclick="switchMainTab('workflows'); return false;" title="Quy trình tự động">
+                <span class="nav-icon"><i class="fa-solid fa-diagram-project"></i></span> <span class="nav-label">Quy trình tự động</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-mcp-sources">
+              <a href="#" onclick="switchMainTab('mcp-sources'); return false;" title="Nguồn MCP Server">
+                <span class="nav-icon"><i class="fa-solid fa-cube"></i></span> <span class="nav-label">Nguồn MCP Server</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-system-tools">
+              <a href="#" onclick="switchMainTab('system-tools'); return false;" title="Công cụ hệ thống">
+                <span class="nav-icon"><i class="fa-solid fa-screwdriver-wrench"></i></span> <span class="nav-label">Công cụ hệ thống</span>
+              </a>
+            </li>
+            <li class="nav-item" id="nav-api-docs">
+              <a href="#" onclick="switchMainTab('api-docs'); return false;" title="API tích hợp">
+                <span class="nav-icon"><i class="fa-solid fa-code-branch"></i></span> <span class="nav-label">API tích hợp</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Sidebar Footer Health Widget -->
+      <div class="sidebar-footer-card status-offline" id="sidebar-footer-card">
+        <div class="card-header-row">
+          <div class="card-title-group">
+            <div class="card-icon-badge"><i class="fa-solid fa-database"></i></div>
+            <div class="card-title-text">
+              <span class="card-main-title">Qdrant DB</span>
+              <span class="card-sub-title" id="sidebar-qdrant-desc" style="display: none;"></span>
+            </div>
+          </div>
+          <span class="health-status-tag offline" id="sidebar-qdrant-status">
+            <i class="fa-solid fa-circle-xmark"></i> Offline
+          </span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="sidebar-qdrant-progress" style="width: 100%;"></div>
+        </div>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" id="sidebar-backdrop" tabindex="-1" aria-label="Đóng thanh điều hướng" hidden></button>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+
+      <!-- Top Header Bar -->
+      <header class="top-bar">
+        <div class="page-title-group">
+          <h1 id="page-heading">Tổng quan hệ thống</h1>
+        </div>
+
+        <!-- Top Actions -->
+        <div class="top-bar-actions">
+          <div class="search-input-wrapper" id="global-feature-search">
+            <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+            <input type="text" id="global-search-input" placeholder="Tìm chức năng..." autocomplete="off" aria-label="Tìm chức năng" aria-expanded="false">
+            <div class="feature-search-results" id="feature-search-results" hidden></div>
+          </div>
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="Chuyển sang giao diện tối" aria-pressed="false"><svg class="theme-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14A8 8 0 0 1 10 4a8.5 8.5 0 1 0 10 10Z"/></svg><svg class="theme-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
+          <button class="header-notification-btn" id="header-notification-btn" type="button" aria-label="Thông báo, 1 chưa đọc" aria-expanded="false" aria-controls="header-notification-panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4M12 2V1"/></svg>
+            <span class="header-notification-count" id="header-notification-count" aria-hidden="true">1</span>
+          </button>
+          <section class="header-notification-panel" id="header-notification-panel" aria-labelledby="notification-heading" hidden>
+            <div class="notification-panel-heading"><h2 id="notification-heading">Thông báo</h2><button type="button" id="notification-close" aria-label="Đóng thông báo"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
+            <article class="notification-item is-unread" id="beta-notification">
+              <span class="notification-item-icon"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i></span>
+              <div><span class="notification-category">CẬP NHẬT HỆ THỐNG</span><h3>Phiên bản Beta 1.0.1</h3><p>KnowledgeHub AI hiện đang ở phiên bản thử nghiệm Beta 1.0.1.</p><span class="notification-read-status" id="notification-read-status">Chưa đọc</span></div>
+            </article>
+            <div class="notification-panel-footer"><button type="button" id="notification-mark-read">Đánh dấu đã đọc</button><span>Beta · v1.0.1</span></div>
+          </section>
+          <div class="user-profile" id="user-profile-btn">
+            <div class="avatar"><i class="fa-solid fa-user-gear"></i></div>
+            <span class="user-name" id="account-display-name">Admin AI</span>
+          </div>
+          <button class="topbar-logout-btn" onclick="logoutAccount()" title="Đăng xuất">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- Priority Suggestion AI Banner -->
+      <div class="ai-suggestion-banner" id="ai-suggestion-banner" hidden>
+        <div class="banner-sparkle" id="banner-icon"><i class="fa-solid fa-lightbulb"></i></div>
+        <div class="banner-content">
+          <h4 id="banner-title">Kiểm tra trạng thái hệ thống</h4>
+          <p id="banner-text"></p>
+        </div>
+        <div class="banner-actions"><button class="banner-primary-action" id="banner-action-btn" onclick="runArchitectureSuggestionAction()"></button><button class="banner-dismiss-btn" onclick="dismissArchitectureSuggestion()" title="Ẩn gợi ý"><i class="fa-solid fa-xmark"></i></button></div>
+      </div>
+
+      <!-- Top Metric Cards Grid (4 Column) -->
+      <section class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">SQL Connectors</span>
+            <span class="metric-icon blue"><i class="fa-solid fa-plug"></i></span>
+          </div>
+          <div class="metric-val" id="val-connectors">00</div>
+          <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> Live Read-Only DB</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Schema đã nạp</span>
+            <span class="metric-icon purple"><i class="fa-solid fa-database"></i></span>
+          </div>
+          <div class="metric-val" id="val-tables">0</div>
+          <div class="metric-sub text-purple"><i class="fa-solid fa-circle-check"></i> Indexed Qdrant DB</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Text-to-SQL AI Queries</span>
+            <span class="metric-icon green"><i class="fa-solid fa-brain"></i></span>
+          </div>
+          <div class="metric-val" id="val-queries">0</div>
+          <div class="metric-sub text-green"><i class="fa-solid fa-shield-halved"></i> 100% SELECT ONLY</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Token Usage Cost</span>
+            <span class="metric-icon orange"><i class="fa-solid fa-coins"></i></span>
+          </div>
+          <div class="metric-val" id="val-cost">$0.00</div>
+          <div class="metric-sub text-muted">Ước tính theo provider</div>
+        </div>
+      </section>
+
+      <!-- Middle Section: Chart & AI Recommendation -->
+      <section class="middle-grid">
+        <div class="content-card">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tần suất gọi AI & Text-to-SQL</div>
+            <select id="dashboard-analytics-range" class="dashboard-chart-range" onchange="changeDashboardAnalyticsRange(this.value)" aria-label="Khoảng thời gian thống kê">
+              <option value="today">Hôm nay</option>
+              <option value="7d" selected>7 ngày</option>
+              <option value="30d">30 ngày</option>
+              <option value="12m">12 tháng</option>
+            </select>
+          </div>
+          <div class="chart-container" style="height: 220px; position: relative;">
+            <canvas id="analyticsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="content-card dashboard-feedback-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title"><i class="fa-solid fa-thumbs-up"></i> Đánh giá câu trả lời AI</div>
+              <div class="dashboard-feedback-summary" id="dashboard-feedback-summary">Chưa có đánh giá</div>
+            </div>
+            <select id="dashboard-feedback-range" class="dashboard-chart-range" onchange="changeDashboardFeedbackRange(this.value)" aria-label="Khoảng thời gian đánh giá">
+              <option value="today">Hôm nay</option>
+              <option value="7d" selected>7 ngày</option>
+              <option value="30d">30 ngày</option>
+              <option value="12m">12 tháng</option>
+            </select>
+          </div>
+          <div class="dashboard-feedback-chart">
+            <canvas id="dashboardFeedbackChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <div class="dashboard-activity-row">
+      <section class="content-card dashboard-activity-card" id="dashboard-activity-card" aria-labelledby="dashboard-activity-title">
+        <div class="dashboard-activity-header">
+          <div>
+            <div class="card-title" id="dashboard-activity-title"><i class="fa-solid fa-calendar-days"></i> Bản đồ nhiệt</div>
+            <div class="dashboard-activity-peak" id="dashboard-activity-peak">Chưa có dữ liệu hoạt động</div>
+          </div>
+          <span class="dashboard-activity-period" id="dashboard-activity-period">Năm hiện tại</span>
+        </div>
+        <div class="dashboard-activity-body">
+          <div class="dashboard-activity-scroll">
+            <div class="dashboard-activity-chart" id="dashboard-activity-chart" role="img" aria-label="Biểu đồ mức sử dụng AI theo ngày"></div>
+          </div>
+          <aside class="dashboard-activity-summary" aria-label="Thống kê hoạt động trong năm">
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-coins"></i> Tổng token</span><strong id="dashboard-activity-total-tokens">0</strong></div>
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-bolt"></i> Lượt gọi AI</span><strong id="dashboard-activity-total-queries">0</strong></div>
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-calendar-check"></i> Ngày hoạt động</span><strong id="dashboard-activity-active-days">0</strong></div>
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-circle-check"></i> Thành công</span><strong id="dashboard-activity-success-rate">0%</strong></div>
+            <div class="dashboard-activity-best-month"><i class="fa-solid fa-chart-column"></i><span>Tháng nổi bật<strong id="dashboard-activity-best-month">Chưa có dữ liệu</strong></span></div>
+          </aside>
+        </div>
+        <div class="dashboard-activity-legend" aria-hidden="true">
+          <span>Ít</span><i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i><span>Nhiều</span>
+        </div>
+      </section>
+
+      <section class="dashboard-router-section">
+        <div class="content-card router-status-card">
+          <div class="card-header"><div class="card-title"><span class="router-title-icon"><i class="fa-solid fa-route"></i></span><span>Multi-LLM Router Status</span></div></div>
+          <div style="font-size: 13px; line-height: 1.8; color: var(--text-secondary);">
+            <div><span><i class="fa-solid fa-robot" style="color: #4f46e5;"></i> Primary LLM:</span><strong style="color: var(--primary);" id="dash-router-primary">Đang tải...</strong></div>
+            <div><span><i class="fa-solid fa-network-wired"></i> Fallback LLM:</span><strong id="dash-router-fallback">Chưa kích hoạt</strong></div>
+            <div><span><i class="fa-solid fa-bolt" style="color: #059669;"></i> Active Vector DB:</span><strong style="color: #059669;" id="dash-router-vector">Qdrant (6333)</strong></div>
+          </div>
+        </div>
+      </section>
+      </div>
+
+      <div class="dashboard-overview-lower">
+      <!-- Bottom Section: Dynamic View Component Containers Container -->
+      <section class="bottom-grid" id="main-view-container">
+        <!-- Modular HTML Component Templates will be loaded dynamically here -->
+      </section>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- AI COPILOT TEXT-TO-SQL MODAL -->
+  <div class="modal-backdrop" id="copilot-modal">
+    <div class="copilot-modal-dialog">
+      <div class="copilot-modal-header">
+        <div class="copilot-modal-title">
+          <svg class="chat-ai-sparkle copilot-title-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
+          <span>Trợ lý AI</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <!-- Model Selector Dropdown for Chat -->
+          <div class="page-chat-model-picker copilot-model-picker">
+            <button id="copilot-model-trigger" class="page-chat-model-trigger" type="button"
+              onclick="toggleCopilotModelMenu(event)" aria-haspopup="listbox" aria-expanded="false">
+              <span id="copilot-model-label">Đang tải...</span><i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div id="copilot-model-menu" class="page-chat-model-menu" role="listbox"></div>
+            <select id="chat-model-selector" hidden aria-hidden="true" tabindex="-1"></select>
+          </div>
+
+          <button class="modal-close-btn" onclick="closeCopilotPopup()" title="Đóng cửa sổ"><i
+              class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+
+      <div class="copilot-chat-messages" id="chat-messages-container">
+        <div class="chat-bubble ai">
+          <i class="fa-solid fa-robot" style="color: #6366f1; margin-right: 6px;"></i>
+          Xin chào! Tôi là <strong>KAI</strong> - Trợ lý AI chuyên nghiệp của bạn. Tôi có thể trả lời câu hỏi, truy vấn
+          SQL, vẽ biểu đồ và tính toán dữ liệu. Bạn cần hỗ trợ gì hôm nay?
+        </div>
+      </div>
+
+      <div class="copilot-chat-input-area">
+        <div id="copilot-attachment-preview" class="page-chat-attachment-preview"></div>
+        <div class="chat-input-wrapper">
+          <div class="page-chat-add-wrap">
+          <button id="copilot-add-trigger" class="btn-input-new-chat" onclick="toggleCopilotAddMenu(event)" title="Thêm nội dung" aria-haspopup="menu" aria-expanded="false">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+          <div id="copilot-add-menu" class="page-chat-add-menu" role="menu">
+            <button class="is-disabled" type="button" disabled aria-disabled="true" title="Tính năng đang tạm khóa"><i class="fa-solid fa-paperclip"></i><span>Thêm tệp hoặc ảnh</span><kbd>Ctrl+U</kbd></button>
+            <button type="button" onclick="toggleCopilotKnowledgePanel(event)"><i class="fa-solid fa-book-open"></i><span>Thêm từ thư viện tri thức</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+            <div id="copilot-knowledge-panel" class="page-chat-knowledge-panel" hidden onclick="event.stopPropagation()"><div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="copilot-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderCopilotKnowledgeOptions()"></div><div id="copilot-knowledge-options" class="page-chat-knowledge-options"></div></div>
+            <div class="page-chat-menu-divider"></div>
+            <button id="copilot-web-toggle" type="button" onclick="toggleCopilotWebSearch(event)"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><i class="fa-solid fa-check menu-check"></i></button>
+          </div>
+          <input id="copilot-file-input" type="file" multiple hidden onchange="handleCopilotFiles(event)">
+          <input id="copilot-camera-input" type="file" accept="image/*" capture="environment" hidden onchange="handleCopilotFiles(event)">
+          <select id="copilot-knowledge-source" hidden><option value="auto">Tự động</option><option value="none">Không dùng</option></select>
+          </div>
+          <div id="copilot-knowledge-inline" class="page-chat-knowledge-inline"></div>
+          <input type="text" class="chat-input" id="chat-user-input"
+            placeholder="Đặt câu hỏi hoặc yêu cầu sinh SQL (VD: Liệt kê 5 nhân viên có doanh số cao nhất)..."
+            onkeypress="handleChatKeyPress(event)">
+          <button id="copilot-send-button" class="chat-send-btn copilot-send-icon-btn" type="button" onclick="handleCopilotSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUSINESS GLOSSARY MODAL POPUP -->
+  <div class="modal-backdrop" id="glossary-modal">
+    <div class="copilot-modal-dialog"
+      style="max-width: 500px; height: auto !important; min-height: unset !important; align-self: center;">
+      <div class="copilot-modal-header">
+        <div class="copilot-modal-title">
+          <i class="fa-solid fa-book-bookmark" style="color: #6366f1;"></i>
+          <span id="glossary-modal-title">Thêm Thuật ngữ Nghiệp vụ Mới</span>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('glossary-modal')" title="Đóng cửa sổ"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="glossary-edit-index" value="-1">
+        <div>
+          <label
+            style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: block; margin-bottom: 6px;">Thuật
+            ngữ / Từ viết tắt (Term)</label>
+          <input type="text" id="glossary-term-input" class="form-control" placeholder="VD: NV, HD_VAT, KH_VIP, SP..."
+            style="width: 100%; padding: 10px 12px; font-size: 13px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;">
+        </div>
+        <div>
+          <label
+            style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: block; margin-bottom: 6px;">Ý
+            nghĩa đầy đủ (Full Meaning)</label>
+          <input type="text" id="glossary-meaning-input" class="form-control"
+            placeholder="VD: Nhân viên chính thức, Hóa đơn GTGT..."
+            style="width: 100%; padding: 10px 12px; font-size: 13px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;">
+        </div>
+        <div>
+          <label
+            style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: block; margin-bottom: 6px;">Phân
+            loại Nghiệp vụ (Category)</label>
+          <select id="glossary-category-select" class="form-control"
+            style="width: 100%; padding: 10px 12px; font-size: 13px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;">
+            <option value="Nghiệp vụ">Nghiệp vụ Chung</option>
+            <option value="Bán hàng">Bán hàng & Doanh thu</option>
+            <option value="Nhân sự">Nhân sự & Tổ chức</option>
+            <option value="Kinh doanh">Kinh doanh & Khách hàng</option>
+            <option value="Tài chính">Tài chính & Thuế</option>
+            <option value="Kho hàng">Kho hàng & Sản phẩm</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+          <button class="btn-secondary-sm" onclick="closeModal('glossary-modal')"
+            style="padding: 8px 16px; font-size: 12.5px;">Hủy bỏ</button>
+          <button class="btn-primary" onclick="saveGlossaryTermFromModal()"
+            style="padding: 8px 20px; font-size: 12.5px;"><i class="fa-solid fa-floppy-disk"></i> Lưu Thuật ngữ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WORKFLOW EXECUTE MODAL POPUP -->
+  <div class="modal-backdrop" id="run-workflow-modal">
+    <div class="copilot-modal-dialog" style="max-width: 600px; height: auto !important; min-height: unset !important; align-self: center;">
+      <div class="copilot-modal-header">
+        <div class="copilot-modal-title">
+          <i class="fa-solid fa-bolt" style="color: #6366f1;"></i>
+          <span>Thực Thi Pipeline Tự Động</span>
+        </div>
+        <button class="modal-close-btn" onclick="closeRunWorkflowModal()" title="Đóng cửa sổ"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 12px; color: var(--text-primary);">Chọn Workflow:</label>
+          <select id="wf-select-id" class="form-control" style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Inter', sans-serif;">
+            <option value="data_export_pipeline">Data Export Pipeline (SQL -> Auto Export)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 12px; color: var(--text-primary);">Câu lệnh SQL SELECT:</label>
+          <textarea id="wf-sql-input" rows="4" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 13px; box-sizing: border-box;" placeholder="SELECT TOP 5 * FROM M_Employee"></textarea>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div>
+            <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 12px; color: var(--text-primary);">Định dạng File xuất:</label>
+            <select id="wf-format-input" class="form-control" style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
+              <option value="xlsx">Excel (.xlsx)</option>
+              <option value="csv">CSV (.csv)</option>
+              <option value="pdf">PDF / In (.html)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 12px; color: var(--text-primary);">Tên file xuất:</label>
+            <input type="text" id="wf-filename-input" class="form-control" value="Bao_Cao_Nhan_Vien" style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box;">
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+          <button class="btn-secondary-sm" onclick="closeRunWorkflowModal()" style="padding: 8px 16px; font-size: 12.5px;">Hủy bỏ</button>
+          <button id="wf-submit-btn" class="btn-primary" onclick="executeSelectedWorkflow()" style="padding: 8px 20px; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-play"></i> Bắt đầu chạy
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGOUT CONFIRMATION -->
+  <div class="modal-backdrop logout-confirm-backdrop" id="logout-confirm-modal" aria-hidden="true"
+    onclick="if (event.target === this) closeLogoutConfirmation()">
+    <div class="logout-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title"
+      aria-describedby="logout-confirm-description">
+      <button type="button" class="logout-confirm-close" onclick="closeLogoutConfirmation()" aria-label="Đóng popup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="logout-confirm-icon"><i class="fa-solid fa-arrow-right-from-bracket"></i></div>
+      <h3 id="logout-confirm-title">Xác nhận đăng xuất</h3>
+      <p id="logout-confirm-description">Bạn có chắc muốn đăng xuất khỏi KnowledgeHub AI?</p>
+      <div class="logout-confirm-actions">
+        <button id="logout-cancel-btn" type="button" class="logout-cancel-btn" onclick="closeLogoutConfirmation()">Hủy</button>
+        <button id="logout-confirm-btn" type="button" class="logout-submit-btn" onclick="performLogout()">
+          <i class="fa-solid fa-check"></i> Xác nhận
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side Right Drawer Panel Component -->
+  <div id="side-drawer-backdrop" class="drawer-backdrop" onclick="closeSideDrawer()"></div>
+  <div id="side-drawer-panel" class="side-drawer-panel">
+    <div class="drawer-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div id="drawer-icon-box"
+          style="width: 34px; height: 34px; border-radius: 8px; background: #eef2ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+          <i class="fa-solid fa-table-columns"></i>
+        </div>
+        <div>
+          <h3 id="drawer-title" style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Chi
+            tiết Dữ liệu</h3>
+          <span id="drawer-subtitle" style="font-size: 11.5px; color: var(--text-muted);">Thông tin thuộc tính & từ
+            điển</span>
+        </div>
+      </div>
+      <button class="modal-close-btn" onclick="closeSideDrawer()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="drawer-body" id="drawer-body-content">
+      <!-- Content injected dynamically -->
+    </div>
+  </div>
+
+  <!-- Modular JavaScript Engine Files -->
+  <script src="js/modules/ai_providers.js"></script>
+  <script src="js/modules/dictionary.js"></script>
+  <script src="js/modules/glossary.js"></script>
+  <script src="js/modules/page_chat.js?v=20260905-chat-persona-inline"></script>
+  <script src="js/modules/sql_connector.js"></script>
+  <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
+  <script src="js/modules/chat_history.js"></script>
+  <script src="js/modules/chat_feedback.js"></script>
+  <script src="js/modules/training_core.js"></script>
+  <script src="js/modules/mcp_api.js"></script>
+  <script src="js/modules/analytics.js?v=20260906-visible-chart-animation"></script>
+  <script src="js/modules/library.js?v=20260905-tab-actions"></script>
+  <script src="js/modules/watchfolder.js"></script>
+  <script src="js/modules/system_tools.js"></script>
+  <script src="js/modules/workflows.js"></script>
+  <!-- Main App Router Script -->
+  <script src="js/sidebar.js?v=20260905-brain-logo"></script>
+  <script src="js/notifications.js?v=1.0.1"></script>
+  <script src="js/app.js?v=20260905-chat-ai-sparkle"></script>
+</body>
+
+</html>

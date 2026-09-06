@@ -1,0 +1,31 @@
+<div class="system-tools-page audit-page chat-history-card" data-display="grid" style="display: none;" id="view-chat-feedback">
+  <section class="system-tools-hero audit-page-hero">
+    <div class="system-tools-hero-icon audit-chat-feedback-icon"><i class="fa-solid fa-thumbs-up"></i></div>
+    <div>
+      <div class="card-title" style="font-size:19px;"><i class="fa-solid fa-thumbs-up" style="color:#4f46e5;"></i> Đánh giá chất lượng AI</div>
+      <p class="chat-history-subtitle">Xem phản hồi người dùng và kiểm duyệt câu trả lời của từng model.</p>
+    </div>
+    <button class="btn-secondary-sm" onclick="fetchChatFeedback()"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+  </section>
+  <div class="log-summary-grid chat-history-summary-grid">
+    <div class="log-stat-card total"><div><span>Tổng đánh giá</span><div id="feedback-stat-total">0</div></div><i class="fa-solid fa-message"></i></div>
+    <div class="log-stat-card success"><div><span>Thích</span><div id="feedback-stat-like">0</div></div><i class="fa-solid fa-thumbs-up"></i></div>
+    <div class="log-stat-card error"><div><span>Không thích</span><div id="feedback-stat-dislike">0</div></div><i class="fa-solid fa-thumbs-down"></i></div>
+    <div class="log-stat-card warn"><div><span>Chờ xem xét</span><div id="feedback-stat-pending">0</div></div><i class="fa-solid fa-hourglass-half"></i></div>
+  </div>
+  <section class="audit-data-panel" aria-label="Hàng đợi kiểm duyệt">
+  <div class="module-section-heading"><div><h3>Hàng đợi kiểm duyệt</h3><p>Đọc phản hồi và cập nhật trạng thái chất lượng câu trả lời.</p></div></div>
+  <div class="system-tools-toolbar feedback-toolbar">
+    <input id="feedback-search" type="search" aria-label="Tìm kiếm phản hồi" placeholder="Tìm câu hỏi, câu trả lời hoặc model..." oninput="renderChatFeedbackTable()">
+    <select id="feedback-rating-filter" aria-label="Lọc theo đánh giá" onchange="renderChatFeedbackTable()"><option value="all">Tất cả phản hồi</option><option value="like">Thích</option><option value="dislike">Không thích</option></select>
+    <select id="feedback-review-filter" aria-label="Lọc theo kiểm duyệt" onchange="renderChatFeedbackTable()"><option value="all">Tất cả trạng thái</option><option value="pending">Chờ xem xét</option><option value="approved">Đạt</option><option value="needs_review">Cần xem lại</option></select>
+  </div>
+  <div class="system-tools-card data-table-container chat-history-table-wrap feedback-table-wrap">
+    <table class="custom-table chat-history-table feedback-table">
+      <thead><tr><th>Thời gian</th><th>Phản hồi</th><th>Câu hỏi & câu trả lời</th><th>Model / Token</th><th>Kiểm duyệt</th></tr></thead>
+      <tbody id="chat-feedback-tbody"></tbody>
+    </table>
+  </div>
+  <div class="pagination-wrapper" id="feedback-pagination"></div>
+  </section>
+</div>

@@ -1,0 +1,21 @@
+<div id="view-workflows" class="system-tools-page workflow-manager" data-display="grid" style="display:none;">
+  <section class="system-tools-hero">
+    <div class="system-tools-hero-icon workflow-hero-icon"><i class="fa-solid fa-diagram-project"></i></div>
+    <div><span class="system-tools-eyebrow">AUTOMATION ENGINE</span><h2>Workflow Automation</h2><p>Tạo quy trình độc lập với Chat: nhận webhook, gọi API, xử lý điều kiện, truy vấn dữ liệu và xuất file.</p></div>
+    <button class="btn-primary" type="button" onclick="openWorkflowEditor()"><i class="fa-solid fa-plus"></i> Tạo workflow</button>
+  </section>
+  <section class="system-tools-summary">
+    <div><span>Tổng workflow</span><strong id="wf-total-count">0</strong></div><div><span>Đang hoạt động</span><strong class="available" id="wf-active-count">0</strong></div><div><span>Lượt chạy gần đây</span><strong id="wf-run-count">0</strong></div>
+  </section>
+  <section class="workflow-manager-layout">
+    <div class="system-tools-card workflow-list-card">
+      <div class="module-section-heading"><div><span class="module-section-kicker">Quy trình</span><h3>Workflow của bạn</h3><p>Tìm kiếm, chỉnh sửa và chạy các quy trình tự động.</p></div></div>
+      <div class="system-tools-toolbar"><div class="system-tools-search"><i class="fa-solid fa-magnifying-glass"></i><input id="wf-search" placeholder="Tìm workflow..." oninput="renderWorkflowManager()"></div><button class="btn-secondary-sm" onclick="refreshWorkflowManager()"><i class="fa-solid fa-rotate"></i> Làm mới</button></div>
+      <div id="workflow-cards" class="workflow-manager-grid"><div class="system-tools-loading"><i class="fa-solid fa-spinner fa-spin"></i>Đang tải workflow...</div></div>
+    </div>
+    <div class="system-tools-card workflow-runs-card">
+      <div class="workflow-section-title"><div><i class="fa-solid fa-clock-rotate-left"></i><span>Lịch sử thực thi</span></div><select id="wf-history-filter" onchange="loadWorkflowRuns()"><option value="">Tất cả workflow</option></select></div>
+      <div id="workflow-run-results-container" class="workflow-run-list"><div class="system-tools-loading"><i class="fa-solid fa-spinner fa-spin"></i>Đang tải lịch sử...</div></div>
+    </div>
+  </section>
+</div>

@@ -1,0 +1,66 @@
+<!-- PAGE VIEW 10: Dedicated MCP Server Data Sources Page View -->
+<div class="mcp-sources-page" style="display: none;" id="view-mcp-sources">
+  <section class="system-tools-hero" style="margin-bottom: 20px;">
+    <div class="system-tools-hero-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); box-shadow: 0 9px 20px rgba(29, 78, 216, 0.22);"><i class="fa-solid fa-cube"></i></div>
+    <div>
+      <span class="system-tools-eyebrow" style="color: #2563eb; font-size: 11px; font-weight: 700; letter-spacing: 1px;">MODEL CONTEXT PROTOCOL</span>
+      <h2 style="margin: 4px 0 5px; color: #172033; font-size: 22px; line-height: 1.25;">Nguồn MCP Server</h2>
+      <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.5;">Quản lý MCP Server dạng SSE hoặc stdio để cấp Tools và Resources cho LLM Agent.</p>
+    </div>
+    <button class="btn-secondary-sm" type="button" onclick="fetchMcpServers()">
+      <i class="fa-solid fa-rotate"></i> Tải lại
+    </button>
+  </section>
+
+  <div class="content-card mcp-page-card" style="grid-column: span 2; margin-bottom: 20px;">
+    <div class="module-section-heading"><div><span class="module-section-kicker">Kết nối đã khai báo</span><h3>Danh sách MCP Server</h3><p>Theo dõi giao thức, công cụ được cung cấp và trạng thái từng nguồn.</p></div></div>
+    <div class="data-table-container">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th style="width: 18%;">Tên MCP Server</th>
+            <th style="width: 10%;">Protocol</th>
+            <th style="width: 28%;">Endpoint / Command</th>
+            <th style="width: 12%;">Tools</th>
+            <th>Data Scope</th>
+            <th style="width: 10%;">Trạng thái</th>
+            <th style="width: 9%;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="mcp-servers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="content-card mcp-form-card" id="add-mcp-card">
+    <div class="module-section-heading">
+      <div><span class="module-section-kicker">Thêm nguồn công cụ</span><h3>Kết nối MCP Server mới</h3><p>Chọn giao thức và nhập địa chỉ hoặc lệnh khởi chạy để quét công cụ.</p></div>
+    </div>
+    <form onsubmit="submitNewMcpServer(); return false;">
+      <div class="mcp-form-grid">
+        <div>
+          <label class="form-label">Tên MCP Server</label>
+          <input type="text" class="form-control" id="mcp-new-name" placeholder="VD: Oracle DB MCP Server">
+        </div>
+        <div>
+          <label class="form-label">Giao thức MCP</label>
+          <select class="form-control" id="mcp-new-protocol">
+            <option value="sse">SSE HTTP Endpoint</option>
+            <option value="stdio">stdio Local Command</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label class="form-label">Endpoint URL hoặc Command Line</label>
+        <input type="text" class="form-control" id="mcp-new-endpoint" placeholder="http://localhost:8080/mcp/sse hoặc npx -y @modelcontextprotocol/server-postgres ...">
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label class="form-label">Phạm vi dữ liệu & công cụ</label>
+        <input type="text" class="form-control" id="mcp-new-scope" placeholder="VD: Bảng doanh số bán hàng và công cụ tạo báo cáo">
+      </div>
+      <div class="mcp-form-actions">
+        <button class="btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Kết nối & quét Tools</button>
+      </div>
+    </form>
+  </div>
+</div>

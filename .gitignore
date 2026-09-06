@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Secrets and local environment (keep the example template)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local application data, generated artifacts and backup archives
+/data/
+/artifacts/
+/ver/
+
+# Build, test and runtime output
+/dist/
+/build/
+/coverage/
+*.log
+*.tsbuildinfo
+
+# Machine-specific files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo

@@ -1,0 +1,39 @@
+<div class="content-card dashboard-logs-card" style="grid-column: span 2; display: none;" id="view-dashboard-logs">
+  <div class="card-header">
+    <div>
+      <div class="card-title">
+        <i class="fa-solid fa-square-poll-vertical"></i>
+        Nhật ký hệ thống gần đây
+      </div>
+      <p class="card-subtitle">
+        Tóm tắt hoạt động mới nhất của AI Assistant, SQL Connector, Qdrant và các tác vụ đồng bộ hệ thống.
+      </p>
+    </div>
+    <button class="btn-secondary-sm" onclick="switchMainTab('system-logs')">
+      <i class="fa-solid fa-arrow-up-right-from-square"></i> Xem toàn bộ logs
+    </button>
+  </div>
+
+  <div class="dashboard-log-stats">
+    <div class="dashboard-log-stat">
+      <span>Tổng logs</span>
+      <strong id="dash-log-total">0</strong>
+      <i class="fa-solid fa-list"></i>
+    </div>
+    <div class="dashboard-log-stat success">
+      <span>Thành công</span>
+      <strong id="dash-log-success">0</strong>
+      <i class="fa-solid fa-circle-check"></i>
+    </div>
+    <div class="dashboard-log-stat warn">
+      <span>Cảnh báo</span>
+      <strong id="dash-log-warn">0</strong>
+      <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+    <div class="dashboard-log-stat error">
+      <span>Lỗi hệ thống</span>
+      <strong id="dash-log-error">0</strong>
+      <i class="fa-solid fa-bug"></i>
+    </div>
+  </div>
+</div>

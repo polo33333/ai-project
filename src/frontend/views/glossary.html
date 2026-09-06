@@ -1,0 +1,45 @@
+<div class="system-tools-page data-connect-page glossary-page-card" data-display="grid" style="display: none;" id="view-glossary">
+  <section class="system-tools-hero data-connect-hero glossary-page-hero">
+    <div class="system-tools-hero-icon glossary-hero-icon"><i class="fa-solid fa-spell-check"></i></div>
+    <div>
+      <div class="card-title">
+        <i class="fa-solid fa-spell-check"></i>
+        Business Glossary - Từ điển Thuật ngữ
+      </div>
+      <p class="card-subtitle">
+        Chuẩn hóa thuật ngữ, từ viết tắt và nhóm nghiệp vụ để AI hiểu đúng ngữ cảnh tiếng Việt khi truy vấn dữ liệu.
+      </p>
+    </div>
+    <button class="btn-primary" onclick="openAddGlossaryModal()">
+      <i class="fa-solid fa-plus"></i> Thêm thuật ngữ
+    </button>
+  </section>
+
+  <section class="system-tools-card glossary-content-card">
+  <div class="glossary-toolbar">
+    <div class="glossary-search-box">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input id="glossary-search-input" type="text" placeholder="Tìm theo thuật ngữ, ý nghĩa hoặc nhóm..." oninput="renderGlossaryTable()">
+    </div>
+    <div class="glossary-hint">
+      <i class="fa-solid fa-circle-info"></i>
+      Dữ liệu được đồng bộ vào Qdrant sau khi thêm, sửa hoặc xóa.
+    </div>
+  </div>
+
+  <div class="data-table-container glossary-table-wrap">
+    <table class="custom-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width: 18%;">Thuật ngữ</th>
+          <th style="width: 42%;">Ý nghĩa đầy đủ</th>
+          <th style="width: 22%;">Nhóm nghiệp vụ</th>
+          <th style="width: 18%;">Hành động</th>
+        </tr>
+      </thead>
+      <tbody id="glossary-tbody"></tbody>
+    </table>
+  </div>
+  <div id="glossary-pagination"></div>
+  </section>
+</div>

@@ -1,0 +1,6 @@
+[
+  {
+    "query": "Thay câu hỏi mẫu này bằng câu hỏi nghiệm thu",
+    "expectedDocumentIds": ["replace-with-library-document-id"]
+  }
+]

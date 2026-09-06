@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập - KnowledgeHub AI</title>
+  <script src="js/theme.js?v=1"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/login.css?v=20260905">
+  <link rel="stylesheet" href="css/theme.css?v=2">
+</head>
+<body class="login-page">
+  <button class="theme-toggle login-theme-toggle" type="button" data-theme-toggle aria-label="Chuyển sang giao diện tối" aria-pressed="false"><span class="theme-moon" aria-hidden="true">☾</span><span class="theme-sun" aria-hidden="true">☀</span></button>
+  <main class="login-shell">
+    <section class="login-brand-panel" aria-labelledby="brand-title">
+      <div class="login-logo"><i class="fa-solid fa-brain"></i></div>
+      <h1 id="brand-title">KnowledgeHub AI</h1>
+      <p>Không gian làm việc cho dữ liệu và AI. Kết nối tri thức, khám phá dữ liệu và quản lý mọi hoạt động tại một nơi.</p>
+      <div class="login-feature-list">
+        <span><i class="fa-solid fa-database"></i> Kết nối nguồn dữ liệu tập trung</span>
+        <span><i class="fa-solid fa-comments"></i> Khám phá tri thức cùng trợ lý AI</span>
+        <span><i class="fa-solid fa-chart-line"></i> Theo dõi chất lượng và hiệu suất</span>
+      </div>
+    </section>
+
+    <section class="login-card">
+      <div class="login-card-head">
+        <h2>Đăng nhập</h2>
+        <p>Sử dụng tài khoản hệ thống để tiếp tục.</p>
+      </div>
+      <form id="login-form">
+        <div class="login-field">
+          <label class="form-label" for="login-username">Tài khoản</label>
+          <div class="login-input-wrap">
+            <i class="fa-regular fa-user"></i>
+            <input class="form-control" id="login-username" name="username" autocomplete="username" placeholder="Nhập tài khoản" required autofocus>
+          </div>
+        </div>
+        <div class="login-field">
+          <label class="form-label" for="login-password">Mật khẩu</label>
+          <div class="login-password-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" required>
+            <button type="button" onclick="toggleLoginPassword()" title="Ẩn/hiện mật khẩu" aria-label="Ẩn hoặc hiện mật khẩu">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="login-error" id="login-error"></div>
+        <button class="btn-primary login-submit" type="submit">
+          <i class="fa-solid fa-right-to-bracket"></i> Đăng nhập
+        </button>
+      </form>
+      <div class="login-default-note">
+        Tài khoản mặc định lần đầu: <strong>admin</strong> / <strong>admin123</strong>
+      </div>
+    </section>
+  </main>
+  <script src="js/login.js"></script>
+</body>
+</html>

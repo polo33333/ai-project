@@ -1,0 +1,71 @@
+<!-- PAGE VIEW: Dedicated System Audit Logs & Error Audit Page View -->
+<div class="system-tools-page audit-page system-logs-card" data-display="grid" style="display: none;" id="view-system-logs">
+  <section class="system-tools-hero audit-page-hero">
+    <div class="system-tools-hero-icon audit-system-logs-icon"><i class="fa-solid fa-terminal"></i></div>
+    <div>
+      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-terminal" style="color: #4f46e5;"></i> Nhật ký Hệ thống & Error Audit</div>
+      <p class="system-logs-subtitle">
+        Theo dõi hoạt động hệ thống, lỗi kết nối SQL Server, đồng bộ Qdrant Vector và cảnh báo theo thời gian thực.
+      </p>
+    </div>
+    <div class="system-logs-actions">
+      <button class="btn-secondary-sm" onclick="fetchSystemLogs()"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+      <button class="btn-secondary-sm danger-soft" onclick="clearSystemLogs()"><i class="fa-solid fa-trash"></i> Xóa Logs</button>
+    </div>
+  </section>
+
+  <!-- Log Status Summary Metrics Bar -->
+  <div class="log-summary-grid">
+    <div class="log-stat-card total">
+      <div>
+        <span>Tổng số Logs</span>
+        <div id="log-stat-total">0</div>
+      </div>
+      <i class="fa-solid fa-list"></i>
+    </div>
+    <div class="log-stat-card success">
+      <div>
+        <span>Thành công / Info</span>
+        <div id="log-stat-success">0</div>
+      </div>
+      <i class="fa-solid fa-circle-check"></i>
+    </div>
+    <div class="log-stat-card warn">
+      <div>
+        <span>Cảnh báo</span>
+        <div id="log-stat-warn">0</div>
+      </div>
+      <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+    <div class="log-stat-card error">
+      <div>
+        <span>Lỗi hệ thống</span>
+        <div id="log-stat-error">0</div>
+      </div>
+      <i class="fa-solid fa-bug"></i>
+    </div>
+  </div>
+
+  <!-- System Logs Table -->
+  <section class="audit-data-panel" aria-label="Dòng sự kiện hệ thống">
+  <div class="module-section-heading"><div><h3>Dòng sự kiện hệ thống</h3><p>Xem mức độ, nguồn phát sinh và nội dung từng sự kiện.</p></div></div>
+  <div class="system-tools-card data-table-container system-logs-table-wrap">
+    <table class="custom-table system-logs-table">
+      <thead>
+        <tr>
+          <th style="width: 16%;">Thời gian</th>
+          <th style="width: 10%;">Cấp độ</th>
+          <th style="width: 16%;">Phân hệ</th>
+          <th>Thông điệp Nhật ký</th>
+        </tr>
+      </thead>
+      <tbody id="system-logs-tbody">
+        <!-- Dynamically populated via JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination Controls for System Logs -->
+  <div class="pagination-wrapper" id="logs-pagination"></div>
+  </section>
+</div>

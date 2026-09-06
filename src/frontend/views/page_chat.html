@@ -1,0 +1,129 @@
+﻿<!-- PAGE VIEW: Dedicated AI Chat & Text-to-SQL Playground Page View -->
+<div class="content-card" id="view-page_chat" style="display: none; grid-column: span 2; padding: 0; background: transparent; border: none; box-shadow: none;">
+  <div class="chat-page-layout"
+    style="display: flex; gap: 6px; height: calc(100vh - 150px); font-family: 'Inter', sans-serif;">
+
+    <!-- LEFT PANEL: SESSIONS SIDEBAR -->
+    <div class="chat-sidebar"
+      style="width: 290px; min-width: 290px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+      <button class="chat-sessions-toggle" type="button" aria-expanded="false" aria-controls="chat-sessions-list"
+        onclick="const expanded = this.parentElement.classList.toggle('sessions-open'); this.setAttribute('aria-expanded', String(expanded));">
+        <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Cuộc trò chuyện
+        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+      </button>
+
+      <!-- Sidebar Header & New Chat Button -->
+      <div style="padding: 16px; border-bottom: 1px solid var(--border-color); background: #f8fafc;">
+        <button onclick="createNewChatSession()"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; font-size: 13.5px; padding: 11px 16px; border-radius: 10px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
+          <i class="fa-solid fa-plus"></i> Tạo đoạn chat mới
+        </button>
+      </div>
+
+      <!-- Sessions List -->
+      <div style="flex: 1; overflow-y: auto; padding: 12px;" id="chat-sessions-list">
+        <!-- Dynamically populated via JS -->
+      </div>
+
+      <!-- Clear All Conversations Footer -->
+      <div style="padding: 12px 16px; border-top: 1px solid var(--border-color); background: #f8fafc;">
+        <button onclick="clearAllChatSessions()"
+          style="width: 100%; background: #ffffff; border: 1px solid #e2e8f0; color: #b91c1c; font-size: 12px; font-weight: 600; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <i class="fa-solid fa-trash-can"></i> Xóa tất cả các cuộc trò chuyện
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: MAIN CHAT PLAYGROUND -->
+    <div class="chat-main"
+      style="flex: 1; min-width: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+
+      <!-- Chat Top Bar -->
+      <div
+        style="padding: 14px 22px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div
+            style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);">
+            <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
+          </div>
+          <div>
+            <h3 id="current-session-title"
+              style="margin: 0; font-size: 15.5px; font-weight: 800; color: var(--text-primary);">Cuộc trò chuyện mới
+            </h3>
+            <!-- Persona Badge -->
+            <div id="chat-persona-badge" class="chat-persona-badge">
+              <span id="persona-name-tag" class="chat-persona-name"><span id="persona-display-name">KAI</span></span>
+              <span class="chat-persona-role">Trợ lý Dữ liệu Thông minh</span>
+              <!-- Tool Calling Badge -->
+              <span id="tool-calling-badge"
+                style="display: none; align-items: center; gap: 4px; background: #ecfdf5; color: #059669; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 20px;">
+                <i class="fa-solid fa-wrench" style="font-size: 9px;"></i> Tools On
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Model Picker -->
+        <div class="page-chat-model-picker">
+          <button id="page-chat-model-trigger" class="page-chat-model-trigger" type="button"
+            onclick="toggleChatModelMenu(event)" aria-haspopup="listbox" aria-expanded="false">
+            <span id="page-chat-model-label">Đang tải...</span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="page-chat-model-menu" class="page-chat-model-menu" role="listbox"></div>
+          <select id="page-chat-model-selector" aria-hidden="true" tabindex="-1" hidden></select>
+        </div>
+      </div>
+
+      <!-- Messages Container -->
+      <div id="page-chat-messages-container"
+        style="flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 18px; background: #f8fafc;">
+        <!-- Chat bubbles populated dynamically -->
+      </div>
+
+      <!-- Quick Suggestion Prompts Bar -->
+      <div id="quick-prompts-bar"
+        style="padding: 8px 22px 0 22px; background: #ffffff; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;">
+        <!-- Dynamically populated via JS -->
+      </div>
+
+      <!-- Bottom Input Box -->
+      <div style="padding: 12px 22px 18px 22px; background: #ffffff;">
+        <div id="page-chat-attachment-preview" class="page-chat-attachment-preview"></div>
+        <div class="chat-input-wrapper"
+          style="display: flex; gap: 10px; background: #ffffff; padding: 6px 8px 6px 16px; border-radius: 14px; border: 1.5px solid #cbd5e1; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: border-color 0.2s;">
+          <div class="page-chat-add-wrap">
+            <button id="page-chat-add-trigger" class="btn-input-new-chat" type="button"
+              onclick="toggleChatAddMenu(event)" title="Thêm nội dung" aria-haspopup="menu" aria-expanded="false">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <div id="page-chat-add-menu" class="page-chat-add-menu" role="menu">
+              <button class="is-disabled" type="button" disabled aria-disabled="true" title="Tính năng đang tạm khóa"><i class="fa-solid fa-paperclip"></i><span>Thêm tệp hoặc ảnh</span><kbd>Ctrl+U</kbd></button>
+              <button type="button" onclick="toggleChatKnowledgePanel(event)"><i class="fa-solid fa-book-open"></i><span>Thêm từ thư viện tri thức</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+              <div id="page-chat-knowledge-panel" class="page-chat-knowledge-panel" hidden onclick="event.stopPropagation()">
+                <div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="page-chat-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderChatKnowledgeOptions()"></div>
+                <div id="page-chat-knowledge-options" class="page-chat-knowledge-options"></div>
+              </div>
+              <div class="page-chat-menu-divider"></div>
+              <button id="page-chat-web-toggle" type="button" onclick="togglePageChatWebSearch(event)"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><i class="fa-solid fa-check menu-check"></i></button>
+            </div>
+            <input id="page-chat-file-input" type="file" multiple hidden onchange="handlePageChatFiles(event)">
+            <input id="page-chat-camera-input" type="file" accept="image/*" capture="environment" hidden onchange="handlePageChatFiles(event)">
+            <select id="page-chat-knowledge-source" hidden><option value="auto">Tự động</option><option value="none">Không dùng</option></select>
+          </div>
+          <div id="page-chat-knowledge-inline" class="page-chat-knowledge-inline"></div>
+          <input type="text" id="page-chat-user-input"
+            placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)"
+            style="flex: 1; border: none; background: transparent; outline: none; font-size: 13.5px; font-family: inherit; color: var(--text-primary);"
+            onkeypress="handlePageChatKeyPress(event)">
+          <button id="page-chat-send-button" class="page-chat-send-button page-chat-send-icon-btn" type="button" onclick="handlePageChatSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"
+            style="padding: 9px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>

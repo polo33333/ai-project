@@ -1,0 +1,166 @@
+/* Responsive guardrails shared by every main view. Loaded last on purpose. */
+main.main-content {
+  container: main-content / inline-size;
+  overflow-x: hidden;
+}
+
+main.main-content > :not(.top-bar),
+#main-view-container,
+#main-view-container > *,
+.content-card,
+.analytics-page-card,
+.training-page,
+.library-page,
+.system-tools-page {
+  min-width: 0;
+  max-width: 100%;
+}
+
+header.top-bar {
+  width: auto;
+  max-width: none;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+canvas,
+svg,
+img {
+  max-width: 100%;
+}
+
+/* Tables keep their useful column width, but scroll inside their own card. */
+.content-card .data-table-container,
+.table-scroll,
+.audit-table-wrap,
+.provider-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@container main-content (max-width: 1180px) {
+  .metrics-grid,
+  .analytics-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .middle-grid,
+  .analytics-main-grid,
+  .dashboard-overview-lower.is-dashboard,
+  .provider-config-grid,
+  .workflow-manager-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-feedback-chart {
+    height: 220px;
+  }
+
+  .workspace-kpi-grid,
+  .feedback-summary-grid,
+  .audit-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container main-content (max-width: 820px) {
+  .analytics-kpi-grid,
+  .training-summary,
+  .workflow-manager-grid,
+  .api-integration-grid,
+  .system-tools-grid,
+  .provider-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-header,
+  .analytics-panel-header,
+  .library-topbar,
+  .glossary-toolbar,
+  .dictionary-header,
+  .provider-page-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .top-bar-actions {
+    gap: 8px;
+  }
+
+  .search-input-wrapper {
+    width: min(220px, 34vw);
+  }
+}
+
+@media (max-width: 1100px) {
+  main.main-content {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  header.top-bar {
+    margin-right: -20px;
+    margin-left: -20px;
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 860px) {
+  main.main-content {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  header.top-bar {
+    top: -16px;
+    margin: -16px -16px 0;
+    padding: 14px 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .page-title-group h1 {
+    font-size: 18px;
+  }
+
+  .search-input-wrapper {
+    display: none;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .user-profile {
+    padding-right: 6px;
+  }
+
+  .metrics-grid,
+  .workspace-kpi-grid,
+  .feedback-summary-grid,
+  .audit-stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .content-card,
+  .analytics-panel,
+  .analytics-page-card {
+    padding: 14px;
+  }
+
+  .ai-suggestion-banner {
+    flex-wrap: wrap;
+    padding: 13px;
+  }
+
+  .banner-actions {
+    width: 100%;
+    margin-left: 0;
+    flex-direction: row;
+  }
+
+  .banner-primary-action {
+    flex: 1;
+  }
+}

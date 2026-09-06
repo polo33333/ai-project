@@ -1,0 +1,90 @@
+<div id="view-sql_connector" class="system-tools-page data-connect-page view-page-container" data-display="grid" style="display: none; width: 100%;">
+  <section class="system-tools-hero data-connect-hero">
+    <div class="system-tools-hero-icon sql-connect-hero-icon"><i class="fa-solid fa-plug"></i></div>
+    <div>
+      <span class="system-tools-eyebrow">DATA CONNECTION</span>
+      <h2>Kết nối CSDL</h2>
+      <p>Kết nối nguồn SQL Server chỉ đọc, đồng bộ cấu trúc bảng và quản lý nguồn dữ liệu cho AI.</p>
+    </div>
+    <button class="btn-secondary-sm" type="button" onclick="fetchDbSources()"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+  </section>
+
+  <div class="content-card sql-ingest-card">
+    <div class="sql-ingest-header">
+      <div class="sql-ingest-title-block">
+        <div class="card-title">
+          <i class="fa-solid fa-plug"></i>
+          Nạp cấu trúc bảng mới
+        </div>
+        <p class="card-subtitle">
+          Kết nối trực tiếp SQL Server bằng tài khoản chỉ đọc và đồng bộ cấu trúc bảng vào Lược đồ CSDL.
+        </p>
+      </div>
+    </div>
+
+    <div id="page-mode-live-section">
+      <form onsubmit="return false;" id="page-live-source-form">
+        <div class="sql-form-grid">
+          <div>
+            <label class="form-label">Server Host / IP</label>
+            <input type="text" class="form-control" id="page-live-host" placeholder="103.226.248.147 hoặc 103.226.248.147\\SQLEXPRESS">
+          </div>
+          <div>
+            <label class="form-label">Database Name</label>
+            <input type="text" class="form-control" id="page-live-dbname" placeholder="IPMS">
+          </div>
+          <div>
+            <label class="form-label">SQL Login (Read-Only User)</label>
+            <input type="text" class="form-control" id="page-live-user" placeholder="readonly_user" autocomplete="username">
+          </div>
+          <div>
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="page-live-pass" placeholder="••••••••" autocomplete="current-password">
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="sql-ingest-footer">
+      <button class="btn-primary sql-ingest-submit" onclick="submitPageSchemaIngestion()">
+        <i class="fa-solid fa-plug-circle-check"></i> <span id="page-live-submit-label">Kết nối & nạp lược đồ</span>
+      </button>
+      <button class="btn-secondary-sm" id="page-live-cancel-edit" onclick="cancelEditDbSource()" style="display: none;">
+        <i class="fa-solid fa-xmark"></i> Hủy chỉnh sửa
+      </button>
+    </div>
+  </div>
+
+  <div class="content-card sql-sources-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">
+          <i class="fa-solid fa-server"></i>
+          Danh sách nguồn CSDL đã kết nối & nạp lược đồ
+        </div>
+        <p class="card-subtitle">
+          Danh sách các CSDL SQL Server đang được kết nối trực tiếp ở chế độ chỉ đọc.
+        </p>
+      </div>
+    </div>
+
+    <div class="data-table-container">
+      <table class="custom-table" id="sql-sources-table">
+        <thead>
+          <tr>
+            <th style="width: 20%;">Tên CSDL</th>
+            <th style="width: 15%;">Loại kết nối</th>
+            <th style="width: 18%;">Host / Cổng</th>
+            <th style="width: 14%;">Số lượng bảng</th>
+            <th style="width: 12%;">Trạng thái</th>
+            <th style="width: 10%;">Đồng bộ</th>
+            <th style="width: 11%;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="db-sources-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination-wrapper" id="sql-pagination"></div>
+  </div>
+</div>

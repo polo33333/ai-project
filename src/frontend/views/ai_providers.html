@@ -1,0 +1,140 @@
+<div id="view-ai-providers" class="system-tools-page ai-report-page" data-display="grid" style="display: none;">
+  <section class="system-tools-hero ai-report-hero">
+    <div class="system-tools-hero-icon ai-provider-hero-icon"><i class="fa-solid fa-network-wired"></i></div>
+    <div>
+      <span class="system-tools-eyebrow">MULTI-LLM ROUTER</span>
+      <h2>Cấu hình AI Providers</h2>
+      <p>Quản lý model AI, thứ tự ưu tiên, trạng thái kết nối và provider đang hoạt động cho toàn hệ thống.</p>
+    </div>
+    <button class="btn-secondary-sm" type="button" onclick="fetchAiProviders()"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+  </section>
+
+  <div class="content-card provider-config-card" id="page-add-provider-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">
+          <i class="fa-solid fa-network-wired"></i>
+          Cấu hình AI Providers & Multi-LLM Router
+        </div>
+        <p class="card-subtitle">
+          Quản lý các model AI, thứ tự ưu tiên, kiểm tra kết nối và chọn provider đang hoạt động cho hệ thống.
+        </p>
+      </div>
+      <button class="btn-secondary-sm" onclick="fetchAiProviders()">
+        <i class="fa-solid fa-rotate"></i> Tải lại
+      </button>
+    </div>
+
+    <div class="ai-report-section-title"><i class="fa-solid fa-sliders"></i> Khai báo hoặc cập nhật Provider</div>
+    <p class="module-section-description">Thiết lập kết nối, chọn model và xác định độ ưu tiên khi hệ thống xử lý yêu cầu.</p>
+    <form onsubmit="return false;" class="provider-form-grid" id="page-provider-form">
+      <div>
+        <label class="form-label">Tên AI Provider</label>
+        <input type="text" class="form-control" id="page-new-prov-name" placeholder="VD: Google Gemini 2.5 Flash">
+      </div>
+      <div>
+        <label class="form-label">Loại kết nối</label>
+        <select class="form-control" id="page-new-prov-type" onchange="onProvTypeChange()">
+          <option value="Google Gemini API">Google Gemini API</option>
+          <option value="OpenAI Compatible">OpenAI API / Compatible</option>
+          <option value="Ollama (Local)">Ollama Local</option>
+          <option value="DeepSeek API">DeepSeek API</option>
+          <option value="LM Studio">LM Studio</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Endpoint Base URL</label>
+        <input type="text" class="form-control" id="page-new-prov-url" placeholder="https://generativelanguage.googleapis.com" autocomplete="off">
+      </div>
+      <div>
+        <div class="provider-label-row">
+          <label class="form-label">Model AI</label>
+          <button class="btn-secondary-sm" onclick="autoFetchProviderModels()">
+            <i class="fa-solid fa-rotate"></i> Quét model
+          </button>
+        </div>
+        <select class="form-control" id="page-new-prov-model">
+          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">API Key</label>
+        <input type="password" class="form-control" id="page-new-prov-key" placeholder="AIzaSy... / sk-..." autocomplete="current-password">
+      </div>
+      <div>
+        <label class="form-label">Độ ưu tiên Router</label>
+        <select class="form-control" id="page-new-prov-priority">
+          <option value="1">Ưu tiên 1 - Chính</option>
+          <option value="2">Ưu tiên 2 - Fallback</option>
+          <option value="3">Ưu tiên 3 - Dự phòng</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Chi phí / 1k tokens (USD)</label>
+        <input type="number" class="form-control" id="page-new-prov-cost" value="0" min="0" step="0.0001">
+      </div>
+      <div class="provider-form-actions">
+        <button class="btn-primary" id="page-provider-save-btn" onclick="savePageNewAiProvider()">
+          <i class="fa-solid fa-floppy-disk"></i> <span id="page-provider-save-label">Lưu provider</span>
+        </button>
+        <button class="btn-secondary-sm" id="page-provider-cancel-btn" onclick="cancelEditAiProvider()" style="display: none;">
+          <i class="fa-solid fa-xmark"></i> Hủy chỉnh sửa
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="content-card provider-router-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">
+          <i class="fa-solid fa-brain"></i>
+          Multi-LLM Router Matrix
+        </div>
+        <p class="card-subtitle">
+          Provider đang active sẽ được ưu tiên khi chat, gọi AI và chạy tool calling.
+        </p>
+      </div>
+    </div>
+
+    <div class="active-provider-box" id="page-active-provider-info-box">
+      <div class="active-provider-main">
+        <span class="active-provider-icon"><i class="fa-solid fa-brain"></i></span>
+        <div>
+          <div class="active-provider-label">Provider đang hoạt động</div>
+          <div class="active-provider-title" id="active-model-title-text">Chưa có provider active</div>
+        </div>
+      </div>
+      <div class="active-provider-meta">
+        <div>
+          <span>Base URL</span>
+          <code id="active-model-url-text">-</code>
+        </div>
+        <div>
+          <span>Bảo mật</span>
+          <strong id="active-model-security-text">-</strong>
+        </div>
+        <div>
+          <span>Đơn giá</span>
+          <strong id="active-model-cost-text">$0 / 1k tokens</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="data-table-container provider-table-wrap">
+      <table class="custom-table ai-providers-table">
+        <thead>
+          <tr>
+            <th style="width: 24%;">Provider</th>
+            <th style="width: 14%;">Loại</th>
+            <th style="width: 28%;">Model / Base URL</th>
+            <th style="width: 11%;">Chi phí</th>
+            <th style="width: 13%;">Trạng thái</th>
+            <th style="width: 10%;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="page-ai-providers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>

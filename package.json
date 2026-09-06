@@ -1,0 +1,27 @@
+{
+  "name": "ai-project",
+  "version": "1.0.0",
+  "description": "KnowledgeHub AI Server",
+  "main": "server.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1",
+    "dev": "node server.js",
+    "test": "node --test \"tests/*.test.js\"",
+    "eval:retrieval": "node scripts/evaluate_retrieval.js",
+    "eval:local": "node scripts/evaluate_local_harness.js",
+    "training:collect": "node scripts/training_collect.js",
+    "training:evaluate": "node scripts/training_evaluate.js"
+  },
+  "author": "kingdom",
+  "license": "ISC",
+  "dependencies": {
+    "csv-parse": "^6.1.0",
+    "mammoth": "^1.9.1",
+    "pdf-parse": "^1.1.1",
+    "tedious": "^16.7.0",
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "direct-json",
+    "content": "{\"tool\":\"calculate_expression\",\"arguments\":{\"expression\":\"43 + 343\"}}",
+    "expectedKind": "tool_call",
+    "expectedTool": "calculate_expression"
+  },
+  {
+    "name": "markdown-json",
+    "content": "```json\n{\"tool\":\"get_current_datetime\",\"arguments\":{}}\n```",
+    "expectedKind": "tool_call",
+    "expectedTool": "get_current_datetime"
+  },
+  {
+    "name": "natural-answer",
+    "content": "Xin chào, tôi có thể giúp gì cho bạn?",
+    "expectedKind": "final"
+  }
+]

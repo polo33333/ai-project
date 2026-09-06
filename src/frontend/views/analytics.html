@@ -1,0 +1,110 @@
+<div class="system-tools-page ai-report-page analytics-page-card" data-display="grid" style="display: none;" id="view-analytics">
+  <section class="system-tools-hero ai-report-hero analytics-page-hero">
+    <div class="system-tools-hero-icon analytics-hero-icon"><i class="fa-solid fa-chart-pie"></i></div>
+    <div>
+      <div class="card-title">
+        <span class="analytics-title-icon"><i class="fa-solid fa-chart-pie"></i></span>
+        Báo cáo & Thống kê Metrics
+      </div>
+      <p class="card-subtitle">
+        Theo dõi lượt gọi AI, độ trễ, chi phí ước tính, provider đang dùng và trạng thái các thành phần hệ thống.
+      </p>
+    </div>
+    <div class="analytics-header-actions">
+      <button class="btn-secondary-sm" onclick="initPageAnalyticsCharts()">
+        <i class="fa-solid fa-rotate"></i> Làm mới dữ liệu
+      </button>
+      <span class="metric-tag green"><i class="fa-solid fa-signal"></i> Realtime monitor</span>
+    </div>
+  </section>
+
+  <div class="analytics-kpi-grid">
+    <div class="analytics-kpi-card">
+      <span class="metric-icon orange"><i class="fa-solid fa-coins"></i></span>
+      <div>
+        <p>Chi phí ước tính</p>
+        <strong id="analytics-total-cost">$0.00</strong>
+        <small>Tính theo tokenCost provider đã cấu hình</small>
+      </div>
+    </div>
+    <div class="analytics-kpi-card">
+      <span class="metric-icon green"><i class="fa-solid fa-bolt"></i></span>
+      <div>
+        <p>Độ trễ trung bình</p>
+        <strong><span id="analytics-avg-latency">0</span> ms</strong>
+        <small>Dựa trên AI audit history</small>
+      </div>
+    </div>
+    <div class="analytics-kpi-card">
+      <span class="metric-icon purple"><i class="fa-solid fa-layer-group"></i></span>
+      <div>
+        <p>Tổng lượt gọi AI</p>
+        <strong id="analytics-total-queries">0</strong>
+        <small>Chat & Text-to-SQL audit</small>
+      </div>
+    </div>
+    <div class="analytics-kpi-card">
+      <span class="metric-icon blue"><i class="fa-solid fa-shield-halved"></i></span>
+      <div>
+        <p>SQL Guard</p>
+        <strong class="text-green">100%</strong>
+        <small>SELECT-only sandbox</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-main-grid">
+    <section class="analytics-panel analytics-chart-panel">
+      <div class="analytics-panel-header">
+        <div>
+          <h4><i class="fa-solid fa-chart-area"></i> Lượt gọi AI local, bên thứ ba & chi phí theo tháng</h4>
+          <span>Phân loại theo provider; chi phí được cộng từ token usage của từng audit và cấu hình `tokenCost`.</span>
+        </div>
+      </div>
+      <div class="analytics-chart-box">
+        <canvas id="pageAnalyticsChart"></canvas>
+      </div>
+    </section>
+
+    <section class="analytics-panel">
+      <div class="analytics-panel-header">
+        <div>
+          <h4><i class="fa-solid fa-chart-column"></i> Tỷ trọng sử dụng Providers</h4>
+          <span>Phân bổ theo model/provider trong audit history.</span>
+        </div>
+      </div>
+      <div id="analytics-provider-breakdown" class="analytics-provider-breakdown"></div>
+      <div class="analytics-note">
+        <i class="fa-solid fa-lightbulb"></i>
+        Router sẽ ưu tiên provider active, các provider còn lại dùng cho fallback hoặc lựa chọn thủ công.
+      </div>
+    </section>
+  </div>
+
+  <div class="analytics-health-grid">
+    <div class="analytics-health-card">
+      <span class="metric-icon green"><i class="fa-solid fa-database"></i></span>
+      <div>
+        <strong>Qdrant Vector DB</strong>
+        <p id="analytics-health-qdrant">Theo dõi qua `/api/qdrant/status`</p>
+      </div>
+      <span class="metric-tag green">Healthy</span>
+    </div>
+    <div class="analytics-health-card">
+      <span class="metric-icon blue"><i class="fa-solid fa-plug"></i></span>
+      <div>
+        <strong>SQL Server Connector</strong>
+        <p>Read-only schema sources</p>
+      </div>
+      <span class="metric-tag green">Connected</span>
+    </div>
+    <div class="analytics-health-card">
+      <span class="metric-icon purple"><i class="fa-solid fa-brain"></i></span>
+      <div>
+        <strong>Multi-LLM Router</strong>
+        <p>Active provider + fallback providers</p>
+      </div>
+      <span class="metric-tag green">Ready</span>
+    </div>
+  </div>
+</div>

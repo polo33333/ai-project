@@ -1,0 +1,243 @@
+# Kế Hoạch Tích Hợp Luồng `agent_core` Thay Thế Luồng Cũ — V2
+
+## 1. Mục tiêu
+
+Refactor vòng lặp agent hiện tại trong `src/backend/intelligent_core/core.js` sang kiến trúc `agent_core`, gồm:
+
+- `AgentHarness`: điều phối LLM, tool calling, provider fallback, token usage và trace.
+- `ToolManager` + `BaseTool`: quản lý tool theo một contract thống nhất.
+- `ErrorRecovery`: phân loại lỗi SQL và cho phép LLM sửa/thử lại trong giới hạn an toàn.
+- `WorkflowEngine`: chạy các pipeline cố định, được đăng ký và kiểm soát.
+
+Việc chuyển đổi phải:
+
+1. Không làm thay đổi API contract mà router và frontend đang sử dụng.
+2. Đạt parity với toàn bộ tool active trong `intelligent_core/tool_registry.js`.
+3. Không làm giảm các lớp bảo vệ hiện có: `SecurityGuard`, schema context, knowledge routing, permission và audit log.
+4. Có feature flag, canary và rollback về luồng cũ trong giai đoạn chuyển tiếp.
+
+---
+
+## 2. Phạm vi và API contract phải bảo toàn
+
+### 2.1. Contract nội bộ của `IntelligentCore.chat()`
+
+Luồng mới phải tiếp tục trả các trường sau:
+
+- `success`, `question`, `replyText`, `type`, `executionMode`
+- `toolCalls`
+- `sqlQuery`, `executionResult`, `sqlExecutions`
+- `chartSpec`, `calcResult`
+- `tokenUsage`, `providerFallbacks`, `contextSelection`
+- `usedProvider`
+- Khi lỗi: `success: false`, `error` và các trường fallback hiện có
+
+### 2.2. Contract HTTP
+
+Router vẫn chịu trách nhiệm map `replyText` thành `reply`. Phải regression-test tối thiểu:
+
+- `POST /api/intelligent-core/chat`
+- `POST /api/embed/chat`
+
+Frontend không phải thay đổi trong đợt refactor này.
+
+### 2.3. Contract thực thi tool
+
+Chuẩn hóa kết quả từ `BaseTool.execute()`:
+
+```js
+{
+  success: true | false,
+  tool: "tool_name",
+  result: object | null,
+  error: string | null,
+  durationMs: number
+}
+```
+
+Quy ước:
+
+- `run()` chỉ trả payload nghiệp vụ khi thành công.
+- `run()` phải throw lỗi có kiểm soát khi thất bại; hoặc `BaseTool.execute()` phải nhận biết và propagate `result.success === false`.
+- Không được sinh kết quả lồng nhau kiểu `{ success: true, result: { success: false } }`.
+- Hình dạng payload của từng tool phải tương thích registry cũ, đặc biệt `rows`, `columns`, `rowCount`, `sql`, `chartSpec` và `downloadUrl`.
+
+---
+
+## 3. Kế hoạch triển khai
+
+### Giai đoạn 0: Baseline và feature flag
+
+1. Thêm test snapshot cho output của `IntelligentCore.chat()` và response của hai chat API.
+2. Tạo golden dataset gồm câu hỏi general, datetime, SQL, chart, calculation, glossary, schema, knowledge search và export.
+3. Thêm feature flag, ví dụ `AGENT_CORE_ENABLED`, mặc định tắt trong giai đoạn đầu.
+4. Giữ nguyên loop cũ cho đến khi luồng mới vượt qua regression và live verification.
+
+### Giai đoạn 1: Sửa nền tảng `BaseTool`
+
+1. Sửa contract `BaseTool.execute()` theo Mục 2.3.
+2. Bổ sung validation JSON Schema hoặc validation tương đương cho kiểu dữ liệu, enum và required fields.
+3. Bảo đảm timeout không gây unhandled rejection và tool có thể nhận `AbortSignal` nếu service hỗ trợ.
+4. Xác định rõ permission policy: nếu tool cần quyền mà context không có `permissions`, phải deny theo mặc định cho API nhạy cảm.
+5. Viết unit test cho success, validation failure, business failure, permission denied và timeout.
+
+### Giai đoạn 2: Đạt tool parity
+
+`agent_core` phải có đủ toàn bộ tool active hiện tại:
+
+1. `get_current_datetime`
+2. `export_data`
+3. `execute_sql_query`
+4. `render_chart`
+5. `calculate_stats`
+6. `calculate_expression`
+7. `search_schema`
+8. `get_glossary_term`
+9. `search_knowledge_base`
+
+Công việc:
+
+- Bổ sung `RenderChartTool`, `CalculateStatsTool`, `CalculateExpressionTool`, `SearchSchemaTool` và `GetGlossaryTermTool`.
+- Giữ nguyên schema, behavior và payload của registry cũ.
+- Không dùng `eval` hoặc `Function` không kiểm soát cho `calculate_expression`; chỉ cho phép grammar/toán tử trong allowlist.
+- Test tự động so sánh danh sách tên và JSON schema giữa registry cũ và `defaultToolManager`.
+- Thực thi parity test cho output của từng tool.
+
+### Giai đoạn 3: Provider fallback và token collector trong `AgentHarness`
+
+1. Chuyển logic tạo provider candidates và dispatch fallback từ loop cũ vào một module dùng chung.
+2. Fallback chỉ áp dụng cho lỗi có thể phục hồi, ví dụ:
+   - Timeout, network error.
+   - Rate limit.
+   - Provider 5xx hoặc provider tạm thời không khả dụng.
+3. Không fallback mù quáng cho lỗi request, auth, invalid tool schema hoặc context quá lớn.
+4. Ghi mỗi lần fallback vào `providerFallbacks`, gồm provider, loại lỗi, latency và thời điểm; không ghi secret.
+5. `usedProvider` phải là provider thực sự sinh câu trả lời cuối.
+6. Cộng token usage của mọi LLM call, bao gồm schema selection, retry, fallback và final synthesis. Nếu provider không trả usage thì đặt `available: false` hoặc ghi rõ partial usage.
+7. Test provider đầu timeout, provider thứ hai thành công; tất cả provider thất bại; và lỗi không được fallback.
+
+### Giai đoạn 4: Self-healing SQL có giới hạn
+
+1. Phân loại các lỗi có thể sửa:
+   - Invalid column name.
+   - Invalid object/table/view name.
+   - Group By thiếu cột.
+   - Conversion/type mismatch.
+   - Một số syntax error an toàn để thử lại.
+2. Chỉ retry khi `canRecover === true`.
+3. Giới hạn tối đa 2 lần sửa cho một yêu cầu SQL; tổng số vòng vẫn không vượt quá `maxIterations`.
+4. Lưu fingerprint của SQL đã thử; không chạy lại cùng một câu SQL bị lỗi.
+5. Mọi SQL được sửa phải đi qua `SecurityGuard.validateSqlQuery()` trước khi thực thi.
+6. Nếu lỗi liên quan schema, cho phép tra `search_schema` hoặc schema context trước khi sinh SQL mới.
+7. Trace lưu error category, attempt number, recovery decision và SQL đã mask; không lưu credential hoặc dữ liệu nhạy cảm.
+8. Khi hết retry, trả lỗi có kiểm soát và không tuyên bố truy vấn thành công.
+
+### Giai đoạn 5: Tích hợp `AgentHarness` vào `IntelligentCore.chat()`
+
+Giữ lại trong `IntelligentCore.chat()`:
+
+- Resolve provider ban đầu.
+- `SecurityGuard` và scope validation.
+- `SchemaContextService`, model-based schema selection nếu cần.
+- Knowledge intent/routing, RAG context và source filtering.
+- AI persona/system prompt và history trimming.
+- Response builder tương thích contract cũ.
+
+Chuyển cho `AgentHarness.run()`:
+
+- Vòng lặp LLM/tool.
+- Tool whitelist theo `contextSelection` và `useTools`.
+- Provider fallback.
+- Token collection.
+- SQL recovery.
+- Trace và iteration limits.
+
+Thêm adapter chuyển kết quả harness sang `_buildSuccessResponse()`; không cho router phụ thuộc trực tiếp vào cấu trúc nội bộ của harness.
+
+Trường hợp hết iteration mà đã có tool result phải thực hiện một final synthesis call không kèm tool, giống behavior hiện tại.
+
+### Giai đoạn 6: Workflow API
+
+Cung cấp API chạy workflow cố định, dự kiến `POST /api/agent/workflow/run`.
+
+Yêu cầu bắt buộc:
+
+1. Request chỉ được truyền `workflowId` có trong allowlist và input data; không nhận code, module path hoặc class tùy ý.
+2. Authentication, authorization và permission phải được kiểm tra trước khi chạy.
+3. Validate input schema theo từng workflow.
+4. Áp dụng timeout, row limit, export limit và cancellation.
+5. Ghi audit log cho workflow, step, tool, thời gian và kết quả; mask thông tin nhạy cảm.
+6. Có `runId`/idempotency key để tránh chạy lặp. Workflow dài nên chạy theo job và cung cấp endpoint kiểm tra trạng thái.
+7. Quy định rõ behavior khi step fail: stop, retry có giới hạn hoặc compensate.
+
+---
+
+## 4. Verification plan
+
+### 4.1. Unit tests
+
+- `BaseTool`: schema validation, permission, timeout và error propagation.
+- Tất cả built-in tool: schema và `run()`/`execute()`.
+- Tool parity giữa registry cũ và `agent_core`.
+- `ErrorRecovery`: invalid column, invalid object, Group By, conversion, unknown error.
+- SQL retry budget, duplicate SQL detection và security revalidation.
+- Provider fallback policy và token collector.
+- Harness: malformed arguments, unknown tool, tool timeout, permission denied và max iterations.
+- Workflow: validation, authorization, conditional step, partial failure và idempotency.
+
+### 4.2. Integration/contract tests
+
+- Snapshot output thành công và thất bại của `IntelligentCore.chat()`.
+- Response contract của `/api/intelligent-core/chat` và `/api/embed/chat`.
+- Mapping SQL rows/columns, nhiều SQL executions, chart, calculation và export URL.
+- Knowledge routing khi bật/tắt search và khi giới hạn `knowledgeSourceIds`.
+- So sánh luồng cũ/mới trên golden dataset.
+
+### 4.3. Live verification
+
+1. `IntelligentCore.chat("Hôm nay ngày mấy?")` — general context + datetime.
+2. `IntelligentCore.chat("Thống kê sản lượng điện tháng trước")` — schema selection + SQL + self-healing nếu có lỗi.
+3. `IntelligentCore.chat("Tìm quy trình an toàn điện")` — knowledge routing + RAG sources.
+4. Yêu cầu vẽ chart từ kết quả SQL.
+5. Yêu cầu tính thống kê và biểu thức.
+6. Yêu cầu export CSV/XLSX/PDF và xác minh file thực sự đúng định dạng.
+7. Giả lập provider chính timeout để xác minh fallback.
+8. Chạy server và kiểm tra Chat Frontend, Embed Chat, audit log và conversation memory.
+
+### 4.4. Tiêu chí chấp nhận
+
+- Toàn bộ test cũ và test mới pass.
+- Không sai khác API contract ngoài các trường trace mới mang tính bổ sung.
+- Tool parity đạt 100% về tên, schema và output quan trọng.
+- Không thực thi SQL không qua `SecurityGuard`.
+- SQL retry không vượt budget và không lặp cùng SQL.
+- Provider fallback có trace, `usedProvider` và token usage đúng.
+- Workflow không thể chạy workflow ngoài allowlist hoặc vượt permission.
+- Latency và error rate của luồng mới không xấu hơn ngưỡng đã thống nhất so với baseline.
+
+---
+
+## 5. Chiến lược rollout và rollback
+
+1. Merge nền tảng và tool parity nhưng chưa bật luồng mới.
+2. Chạy shadow comparison trên golden dataset; không thực thi hai lần các tool có side effect.
+3. Bật canary cho môi trường dev/test, sau đó một tỷ lệ nhỏ request production nếu có hạ tầng theo dõi.
+4. Theo dõi success rate, latency, token usage, tool error, SQL retry và provider fallback.
+5. Khi vượt ngưỡng lỗi, tắt `AGENT_CORE_ENABLED` để quay về loop cũ.
+6. Chỉ xóa loop cũ sau khi luồng mới ổn định qua thời gian theo dõi đã thống nhất.
+
+---
+
+## 6. Thứ tự thực hiện đề xuất
+
+1. Baseline tests + feature flag.
+2. Sửa contract `BaseTool`.
+3. Port tool và đạt parity.
+4. Provider fallback + token collector.
+5. SQL self-healing có retry budget.
+6. Tích hợp harness vào `IntelligentCore.chat()` qua adapter.
+7. Contract/integration tests.
+8. Workflow API.
+9. Live verification, canary và rollout.
+
+Workflow API không nên chặn việc thay thế agent loop; có thể triển khai sau khi chat flow mới đã ổn định.

@@ -1,0 +1,22 @@
+<section id="view-training-core" class="system-tools-page audit-page training-page" data-display="grid" style="display:none">
+  <div class="system-tools-hero training-hero">
+    <div class="system-tools-hero-icon audit-training-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+    <div><span class="training-eyebrow"><i class="fa-solid fa-graduation-cap"></i> LOCAL MODEL IMPROVEMENT</span><h2>Training Core</h2><p>Chỉ hiển thị các phản hồi được kiểm duyệt ở trạng thái “Cần xem lại”.</p></div>
+    <button class="btn-primary" type="button" onclick="fetchTrainingReport()"><i class="fa-solid fa-rotate"></i> Làm mới báo cáo</button>
+  </div>
+  <div id="training-summary" class="training-summary"></div>
+  <div class="training-layout audit-data-panel">
+    <aside class="training-issues"><div class="training-panel-title"><span><i class="fa-solid fa-chart-column"></i> Nhóm lỗi</span></div><div id="training-failure-counts"></div></aside>
+    <main class="training-cases-panel">
+      <div class="training-toolbar">
+        <div class="training-panel-title"><span><i class="fa-solid fa-list-check"></i> Case cần cải tiến</span><small id="training-case-count"></small></div>
+        <div class="training-filters">
+          <label><i class="fa-solid fa-magnifying-glass"></i><input id="training-search" placeholder="Tìm câu hỏi, ID..." oninput="renderTrainingCases()"></label>
+          <select id="training-failure-filter" onchange="renderTrainingCases()"><option value="">Tất cả lỗi</option></select>
+          <select id="training-rating-filter" onchange="renderTrainingCases()"><option value="">Tất cả đánh giá</option><option value="dislike">Dislike</option><option value="like">Like</option><option value="none">Chưa đánh giá</option></select>
+        </div>
+      </div>
+      <div id="training-cases" class="training-cases"><div class="training-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải báo cáo...</div></div>
+    </main>
+  </div>
+</section>

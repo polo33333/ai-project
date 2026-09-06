@@ -1,0 +1,70 @@
+<!-- PAGE VIEW 9: Dedicated AI Execution & Chat History Page View -->
+<div class="system-tools-page audit-page chat-history-card" data-display="grid" style="display: none;" id="view-chat-history">
+  <section class="system-tools-hero audit-page-hero">
+    <div class="system-tools-hero-icon audit-chat-history-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+    <div>
+      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-clock-rotate-left" style="color: #4f46e5;"></i> Lịch sử Trò chuyện & Gọi AI</div>
+      <p class="chat-history-subtitle">
+        Theo dõi câu hỏi, model xử lý, dữ liệu JSON gửi AI, truy vấn phát sinh, độ trễ và trạng thái.
+      </p>
+    </div>
+    <button class="btn-secondary-sm" onclick="fetchChatHistory()"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+  </section>
+
+  <div class="log-summary-grid chat-history-summary-grid">
+    <div class="log-stat-card total">
+      <div>
+        <span>Tổng lượt gọi AI</span>
+        <div id="chat-stat-total">0</div>
+      </div>
+      <i class="fa-solid fa-comments"></i>
+    </div>
+    <div class="log-stat-card success">
+      <div>
+        <span>Thành công</span>
+        <div id="chat-stat-success">0</div>
+      </div>
+      <i class="fa-solid fa-circle-check"></i>
+    </div>
+    <div class="log-stat-card error">
+      <div>
+        <span>Lỗi gọi AI</span>
+        <div id="chat-stat-error">0</div>
+      </div>
+      <i class="fa-solid fa-circle-xmark"></i>
+    </div>
+    <div class="log-stat-card warn">
+      <div>
+        <span>Độ trễ TB</span>
+        <div><span id="chat-stat-latency">0</span>ms</div>
+      </div>
+      <i class="fa-solid fa-gauge-high"></i>
+    </div>
+  </div>
+
+  <!-- Chat History Table -->
+  <section class="audit-data-panel" aria-label="Lịch sử yêu cầu AI">
+  <div class="module-section-heading"><div><h3>Lịch sử yêu cầu AI</h3><p>Đối chiếu nội dung, model xử lý và kết quả của từng yêu cầu.</p></div></div>
+  <div class="system-tools-card data-table-container chat-history-table-wrap">
+    <table class="custom-table chat-history-table">
+      <thead>
+        <tr>
+          <th style="width: 11%;">Thời gian</th>
+          <th style="width: 18%;">Câu hỏi / Prompt</th>
+          <th style="width: 14%;">Model AI</th>
+          <th style="width: 7%;">Độ trễ</th>
+          <th style="width: 8%;">Trạng thái</th>
+          <th style="width: 8%;">Đánh giá</th>
+          <th style="width: 34%;">Truy vấn / Data JSON gọi AI</th>
+        </tr>
+      </thead>
+      <tbody id="chat-history-tbody">
+        <!-- Dynamically populated via JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination Controls for Chat History -->
+  <div class="pagination-wrapper" id="chat-pagination"></div>
+  </section>
+</div>

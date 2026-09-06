@@ -1,0 +1,131 @@
+<!-- PAGE VIEW 5: Dedicated Automated Watch Folder Management View -->
+<div class="system-tools-page workspace-page watchfolder-page" data-display="grid" style="display: none;" id="view-watchfolder">
+  <section class="system-tools-hero workspace-hero">
+    <div class="system-tools-hero-icon watchfolder-hero-icon"><i class="fa-solid fa-folder-tree"></i></div>
+    <div>
+      <span class="system-tools-eyebrow">AUTOMATIC INGESTION</span>
+      <h2>Thư mục giám sát</h2>
+      <p>Theo dõi thư mục, tự động xử lý tệp mới và đồng bộ nội dung vào thư viện tri thức cùng Qdrant.</p>
+    </div>
+    <div class="workspace-hero-actions">
+      <button class="btn-secondary-sm" onclick="fetchWatchFolderData()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
+      <button class="btn-primary" onclick="openAddWatchFolderModal()"><i class="fa-solid fa-folder-plus"></i> Thêm thư mục</button>
+    </div>
+  </section>
+
+  <div class="card-header">
+    <div>
+      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-folder-tree" style="color: #4f46e5;"></i> Giám sát Thư mục Tự động (Watch Folder FS Events)</div>
+      <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+        Theo dõi các thư mục cục bộ hoặc mạng. Khi có tệp mới (.sql, .pdf, .docx, .xlsx) thả vào, hệ thống tự động quét OCR, phân tích DDL và nhúng Vector sang Qdrant DB.
+      </p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button class="btn-secondary-sm" onclick="fetchWatchFolderData()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
+      <button class="btn-primary" onclick="openAddWatchFolderModal()"><i class="fa-solid fa-folder-plus"></i> Thêm thư mục</button>
+    </div>
+  </div>
+
+  <!-- KPI Summary Grid for Watch Folder -->
+  <div class="workspace-kpi-grid">
+    <div class="workspace-stat-card">
+      <div class="workspace-stat-heading"><span>Thư mục giám sát</span><i class="fa-regular fa-folder" aria-hidden="true"></i></div>
+      <div class="workspace-stat-value" id="wf-stat-folders">0 Folder</div>
+      <div class="workspace-stat-description">Thư mục cục bộ & mạng</div>
+    </div>
+    <div class="workspace-stat-card stat-green">
+      <div class="workspace-stat-heading"><span>Trạng thái watcher</span><i class="fa-regular fa-circle-check" aria-hidden="true"></i></div>
+      <div class="workspace-stat-value is-status" id="wf-stat-status"><i class="fa-solid fa-circle-check"></i> Sẵn sàng</div>
+      <div class="workspace-stat-description" id="wf-stat-active">0 watcher active</div>
+    </div>
+    <div class="workspace-stat-card stat-violet">
+      <div class="workspace-stat-heading"><span>Tệp tự động nạp</span><i class="fa-regular fa-file-lines" aria-hidden="true"></i></div>
+      <div class="workspace-stat-value" id="wf-stat-scanned">0 Tệp</div>
+      <div class="workspace-stat-description">Tự động xử lý & lập chỉ mục</div>
+    </div>
+    <div class="workspace-stat-card stat-blue">
+      <div class="workspace-stat-heading"><span>Đích đến vector</span><i class="fa-solid fa-database" aria-hidden="true"></i></div>
+      <div class="workspace-stat-value is-status">Qdrant <span class="workspace-stat-port">:6333</span></div>
+      <div class="workspace-stat-description">Đồng bộ collection tự động</div>
+    </div>
+  </div>
+
+  <!-- Section 1: Active Watched Folders Table -->
+  <section class="system-tools-card workspace-table-card">
+    <h4 style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+      <i class="fa-solid fa-list-check" style="color: #4f46e5;"></i> Danh sách các Thư mục đang Giám sát Trực tiếp
+    </h4>
+    <div class="data-table-container">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th style="width: 40%;">Đường dẫn Thư mục (Directory Path)</th>
+            <th>Bộ lọc Định dạng Tệp</th>
+            <th>Số tệp đã quét</th>
+            <th>Trạng thái Watcher</th>
+            <th>Lần quét cuối</th>
+            <th style="width: 14%;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="watchfolder-tbody">
+          <tr><td colspan="6" class="watchfolder-state-cell"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải dữ liệu...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Section 2: Recent FS Auto-Ingestion Audit Logs Table -->
+  <section class="system-tools-card workspace-table-card">
+    <h4 style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+      <i class="fa-solid fa-clock-rotate-left" style="color: #6366f1;"></i> Lịch sử Nhật ký Tự động Phát hiện & Nạp Tệp (Live Audit Logs)
+    </h4>
+    <div class="data-table-container">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th>Tên Tệp được Phát hiện</th>
+            <th>Thư mục Nguồn</th>
+            <th>Sự kiện Watcher</th>
+            <th>Chỉ mục Qdrant Vector</th>
+            <th>Thời gian phát hiện</th>
+          </tr>
+        </thead>
+        <tbody id="watchfolder-logs-tbody">
+          <tr><td colspan="5" class="watchfolder-state-cell">Chưa có sự kiện.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="watchfolder-logs-pagination" class="pagination-wrapper"></div>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="watchfolder-add-modal" onclick="handleWatchFolderModalBackdrop(event)">
+  <div class="copilot-modal-dialog watchfolder-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="watchfolder-modal-title">
+    <div class="copilot-modal-header">
+      <div class="copilot-modal-title" id="watchfolder-modal-title"><i class="fa-solid fa-folder-plus" style="color:#4f46e5"></i> Thêm thư mục giám sát</div>
+      <button class="modal-close-btn" onclick="closeWatchFolderModal()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form class="watchfolder-form" id="watchfolder-add-form" onsubmit="submitWatchFolder(event)">
+      <div>
+        <label class="form-label" for="watchfolder-path-input">Đường dẫn tuyệt đối <span style="color:#dc2626">*</span></label>
+        <input class="form-control" id="watchfolder-path-input" required placeholder="VD: D:\\Enterprise_Reports hoặc \\\\server\\shared\\documents" autocomplete="off">
+        <small>Đường dẫn phải tồn tại trên máy đang chạy backend và tài khoản dịch vụ phải có quyền đọc.</small>
+      </div>
+      <fieldset class="watchfolder-filter-fieldset">
+        <legend>Định dạng cần theo dõi</legend>
+        <label><input type="checkbox" name="watchfolder-filter" value=".pdf" checked> PDF</label>
+        <label><input type="checkbox" name="watchfolder-filter" value=".docx" checked> DOCX</label>
+        <label><input type="checkbox" name="watchfolder-filter" value=".xlsx" checked> XLSX</label>
+        <label><input type="checkbox" name="watchfolder-filter" value=".csv"> CSV</label>
+        <label><input type="checkbox" name="watchfolder-filter" value=".sql" checked> SQL</label>
+        <label><input type="checkbox" name="watchfolder-filter" value=".txt"> TXT</label>
+        <label><input type="checkbox" name="watchfolder-filter" value=".md"> Markdown</label>
+      </fieldset>
+      <div class="watchfolder-notice"><i class="fa-solid fa-circle-info"></i> Hệ thống sẽ quét file hiện có, theo dõi file mới và tự động đưa nội dung vào Thư viện tri thức và Qdrant.</div>
+      <div class="library-modal-actions">
+        <button type="button" class="btn-secondary-sm" onclick="closeWatchFolderModal()">Hủy</button>
+        <button type="submit" class="btn-primary" id="watchfolder-submit-btn"><i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình</button>
+      </div>
+    </form>
+  </div>
+</div>

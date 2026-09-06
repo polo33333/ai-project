@@ -1,0 +1,142 @@
+<div class="system-tools-page data-connect-page dictionary-page-card" data-display="grid" style="display: none;" id="view-dictionary">
+  <section class="system-tools-hero data-connect-hero dictionary-page-hero">
+    <div class="system-tools-hero-icon dictionary-hero-icon"><i class="fa-solid fa-table-list"></i></div>
+    <div>
+      <div class="card-title">
+        <i class="fa-solid fa-table-list"></i>
+        Lược đồ CSDL & Quan hệ bảng
+      </div>
+      <p class="card-subtitle">
+        Quản lý bảng, cột, khóa và quan hệ trong CSDL; lựa chọn cấu trúc được phép đưa vào ngữ cảnh truy vấn của AI.
+      </p>
+    </div>
+    <div class="dictionary-header-actions">
+      <button class="btn-secondary-sm" onclick="openRelationshipDiagram()">
+        <i class="fa-solid fa-diagram-project"></i> Sơ đồ quan hệ
+      </button>
+      <button class="btn-primary" onclick="triggerAiGenerateDictionary()">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> AI Sync mô tả toàn bộ bảng
+      </button>
+      <button class="btn-secondary-sm" onclick="switchMainTab('sql')">
+        <i class="fa-solid fa-plus"></i> Nạp nguồn DB mới
+      </button>
+    </div>
+  </section>
+
+  <section class="system-tools-card dictionary-content-card">
+  <div class="dictionary-controls">
+    <div class="dictionary-controls-left">
+      <div class="search-input-wrapper dictionary-search">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="text" class="search-input" id="dict-search-input" placeholder="Tìm tên bảng hoặc cột..." oninput="filterDictionaryTables()">
+      </div>
+      <div class="dictionary-filter-group">
+        <button class="btn-secondary-sm active" id="btn-filter-all" onclick="filterTableStatus('all')">Tất cả bảng</button>
+        <button class="btn-secondary-sm" id="btn-filter-active" onclick="filterTableStatus('active')">
+          <i class="fa-solid fa-circle-check"></i> Đang Active
+        </button>
+        <button class="btn-secondary-sm" id="btn-filter-inactive" onclick="filterTableStatus('inactive')">Đã tắt</button>
+      </div>
+    </div>
+    <div id="dict-tables-counter" class="dictionary-counter">Tổng số: <strong>0 bảng</strong> (0 cột)</div>
+  </div>
+
+  <div id="dictionary-tables-accordion" class="dictionary-table-list"></div>
+
+  <div class="pagination-wrapper" id="dict-pagination"></div>
+  </section>
+
+  <div class="dictionary-drawer-backdrop" id="dictionary-drawer-backdrop" onclick="closeDictionaryDrawer()"></div>
+  <section class="dictionary-drawer" id="dictionary-drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dict-drawer-table-name">
+    <div class="dictionary-drawer-header">
+      <div>
+        <div class="dictionary-drawer-kicker">Cấu trúc bảng</div>
+        <h3 id="dict-drawer-table-name">-</h3>
+        <p id="dict-drawer-table-meta">-</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeDictionaryDrawer()" title="Đóng">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="dictionary-drawer-body">
+      <div class="dictionary-drawer-section dictionary-status-panel">
+        <div>
+          <div class="dictionary-section-label">Trạng thái AI</div>
+          <p>Bảng active sẽ được đưa vào ngữ cảnh schema khi AI tạo truy vấn.</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="dict-drawer-active-toggle" onchange="toggleSelectedDictionaryTableActive(this.checked)">
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div class="dictionary-drawer-section">
+        <div class="dictionary-section-label">Mô tả bảng cho AI</div>
+        <label for="dict-drawer-table-domain">Domain nghiệp vụ</label>
+        <input class="form-control" id="dict-drawer-table-domain" list="dictionary-domain-suggestions" placeholder="Ví dụ: employee, electricity, contract">
+        <datalist id="dictionary-domain-suggestions">
+          <option value="employee"><option value="electricity"><option value="contract">
+          <option value="customer"><option value="water"><option value="waste">
+        </datalist>
+        <textarea class="form-control dictionary-table-description" id="dict-drawer-table-description" rows="4" placeholder="Mô tả ý nghĩa nghiệp vụ của bảng này..."></textarea>
+        <div class="dictionary-drawer-actions">
+          <button class="btn-primary" onclick="saveSelectedTableDescription()">
+            <i class="fa-solid fa-floppy-disk"></i> Lưu mô tả bảng
+          </button>
+        </div>
+      </div>
+
+      <div class="dictionary-drawer-section">
+        <div class="dictionary-section-row">
+          <div>
+            <div class="dictionary-section-label">Danh sách cột</div>
+            <p id="dict-drawer-columns-count">0 cột thuộc tính</p>
+          </div>
+        </div>
+        <div id="dict-drawer-columns" class="dictionary-columns-list"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="relationship-diagram-modal">
+  <div class="relationship-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="relationship-diagram-title">
+    <div class="copilot-modal-header">
+      <div class="copilot-modal-title" id="relationship-diagram-title"><i class="fa-solid fa-diagram-project" style="color:#4f46e5"></i> Relationship Diagram — Bảng Active</div>
+      <div class="relationship-header-actions">
+        <button class="btn-secondary-sm" onclick="resetRelationshipDiagramLayout()"><i class="fa-solid fa-rotate"></i> Sắp xếp lại</button>
+        <button class="modal-close-btn" onclick="closeRelationshipDiagram()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div class="relationship-modal-body">
+      <div class="relationship-canvas-wrap">
+        <div id="relationship-diagram-canvas" class="relationship-diagram-canvas">
+          <svg id="relationship-lines" class="relationship-lines" aria-hidden="true"></svg>
+          <div id="relationship-table-nodes"></div>
+          <div id="relationship-empty" class="relationship-empty" hidden><i class="fa-solid fa-table-list"></i><strong>Chưa có bảng trên sơ đồ</strong><span>Chọn một bảng Active ở panel bên phải và nhấn Thêm.</span></div>
+        </div>
+      </div>
+      <aside class="relationship-side-panel">
+        <h4><i class="fa-solid fa-table-list"></i> Bảng trên sơ đồ</h4>
+        <div class="relationship-add-table-row">
+          <select class="form-control" id="relation-add-table"></select>
+          <button class="btn-secondary-sm" onclick="addTableToRelationshipDiagram()"><i class="fa-solid fa-plus"></i> Thêm</button>
+        </div>
+        <h4><i class="fa-solid fa-link"></i> Tạo quan hệ</h4>
+        <div class="relationship-form-grid">
+          <label>Bảng nguồn<select class="form-control" id="relation-source-table" onchange="updateRelationshipColumnOptions('source')"></select></label>
+          <label>Cột nguồn<select class="form-control" id="relation-source-column"></select></label>
+          <label>Kiểu quan hệ<select class="form-control" id="relation-type"><option value="many-to-one">N : 1</option><option value="one-to-many">1 : N</option><option value="one-to-one">1 : 1</option><option value="many-to-many">N : N</option></select></label>
+          <label>Bảng đích<select class="form-control" id="relation-target-table" onchange="updateRelationshipColumnOptions('target')"></select></label>
+          <label>Cột đích<select class="form-control" id="relation-target-column"></select></label>
+          <label>Mô tả<input class="form-control" id="relation-description" placeholder="VD: Mỗi đơn hàng thuộc một khách hàng"></label>
+          <button class="btn-primary" id="relationship-save-button" onclick="createTableRelationship()"><i class="fa-solid fa-plus"></i> Tạo quan hệ</button>
+          <button class="btn-secondary-sm" id="relationship-cancel-edit" style="display:none" onclick="cancelEditTableRelationship()"><i class="fa-solid fa-xmark"></i> Hủy chỉnh sửa</button>
+        </div>
+        <div class="relationship-list-header"><strong>Quan hệ hiện có</strong><span id="relationship-count">0</span></div>
+        <div id="relationship-list" class="relationship-list"></div>
+      </aside>
+    </div>
+  </div>
+</div>
