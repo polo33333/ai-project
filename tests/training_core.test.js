@@ -45,6 +45,15 @@ test('training response evaluator requires requested output tools', () => {
   assert.deepEqual(result.failures, ['MISSING_CHART', 'MISSING_EXPORT']);
 });
 
+test('training response evaluator rejects a truncated data answer', () => {
+  const result = evaluateResponse({
+    reply: 'D',
+    plan: { outputs: { data: true, chart: false, export: false } },
+    toolCalls: [{ toolName: 'execute_sql_query', success: true }]
+  });
+  assert.deepEqual(result.failures, ['INSUFFICIENT_DATA_ANSWER']);
+});
+
 test('failure classifier detects history contamination', () => {
   const failures = classifyCase({
     question: 'vẽ biểu đồ sản lượng điện',

@@ -11,12 +11,6 @@
       </p>
     </div>
     <div class="dictionary-header-actions">
-      <button class="btn-secondary-sm" onclick="openRelationshipDiagram()">
-        <i class="fa-solid fa-diagram-project"></i> Sơ đồ quan hệ
-      </button>
-      <button class="btn-primary" onclick="triggerAiGenerateDictionary()">
-        <i class="fa-solid fa-wand-magic-sparkles"></i> AI Sync mô tả toàn bộ bảng
-      </button>
       <button class="btn-secondary-sm" onclick="switchMainTab('sql')">
         <i class="fa-solid fa-plus"></i> Nạp nguồn DB mới
       </button>
@@ -38,7 +32,20 @@
         <button class="btn-secondary-sm" id="btn-filter-inactive" onclick="filterTableStatus('inactive')">Đã tắt</button>
       </div>
     </div>
-    <div id="dict-tables-counter" class="dictionary-counter">Tổng số: <strong>0 bảng</strong> (0 cột)</div>
+    <div class="dictionary-controls-right">
+      <div class="dictionary-controls-actions">
+        <button class="btn-secondary-sm" onclick="openBusinessDomainsModal()">
+          <i class="fa-solid fa-layer-group"></i> Domain nghiệp vụ
+        </button>
+        <button class="btn-secondary-sm" onclick="openRelationshipDiagram()">
+          <i class="fa-solid fa-diagram-project"></i> Sơ đồ quan hệ
+        </button>
+        <button class="btn-primary" onclick="triggerAiGenerateDictionary()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Tạo mô tả bảng thông minh
+        </button>
+      </div>
+      <div id="dict-tables-counter" class="dictionary-counter">Tổng số: <strong>0 bảng</strong> (0 cột)</div>
+    </div>
   </div>
 
   <div id="dictionary-tables-accordion" class="dictionary-table-list"></div>
@@ -73,12 +80,10 @@
 
       <div class="dictionary-drawer-section">
         <div class="dictionary-section-label">Mô tả bảng cho AI</div>
-        <label for="dict-drawer-table-domain">Domain nghiệp vụ</label>
-        <input class="form-control" id="dict-drawer-table-domain" list="dictionary-domain-suggestions" placeholder="Ví dụ: employee, electricity, contract">
-        <datalist id="dictionary-domain-suggestions">
-          <option value="employee"><option value="electricity"><option value="contract">
-          <option value="customer"><option value="water"><option value="waste">
-        </datalist>
+        <label class="dictionary-domain-label" for="dict-drawer-table-domain">Domain nghiệp vụ</label>
+        <select class="form-control" id="dict-drawer-table-domain">
+          <option value="">Chưa gán nhóm nghiệp vụ</option>
+        </select>
         <textarea class="form-control dictionary-table-description" id="dict-drawer-table-description" rows="4" placeholder="Mô tả ý nghĩa nghiệp vụ của bảng này..."></textarea>
         <div class="dictionary-drawer-actions">
           <button class="btn-primary" onclick="saveSelectedTableDescription()">
@@ -98,6 +103,38 @@
       </div>
     </div>
   </section>
+</div>
+
+<div class="modal-backdrop" id="business-domains-modal">
+  <div class="domain-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="business-domains-title">
+    <div class="domain-manager-header">
+      <div class="domain-manager-heading">
+        <span class="domain-manager-heading-icon"><i class="fa-solid fa-layer-group"></i></span>
+        <div><h3 id="business-domains-title">Nhóm nghiệp vụ cho AI</h3><p>Quản lý từ khóa giúp AI nhận diện và chọn đúng bảng dữ liệu.</p></div>
+      </div>
+      <button class="modal-close-btn" onclick="closeBusinessDomainsModal()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="domain-manager-body">
+      <div class="domain-manager-form">
+        <div class="domain-manager-form-title"><span class="domain-manager-form-icon"><i class="fa-solid fa-plus"></i></span><div><strong id="domain-form-title">Thêm nhóm mới</strong><small id="domain-form-subtitle">Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện</small></div></div>
+        <input type="hidden" id="domain-old-key">
+        <label>Mã nghiệp vụ<input class="form-control" id="domain-key-input" placeholder="Ví dụ: contract"></label>
+        <label>Từ khóa và từ đồng nghĩa<textarea class="form-control" id="domain-aliases-input" rows="4" placeholder="hợp đồng, thỏa thuận, giao kèo"></textarea></label>
+        <div class="domain-manager-hint"><i class="fa-regular fa-lightbulb"></i><span>Mỗi từ khóa cách nhau bằng dấu phẩy hoặc xuống dòng.</span></div>
+        <div class="domain-manager-actions">
+          <button class="btn-secondary-sm" id="domain-cancel-button" onclick="resetBusinessDomainForm()" hidden>Hủy sửa</button>
+          <button class="btn-primary" onclick="saveBusinessDomain()"><i class="fa-solid fa-floppy-disk"></i> Lưu nhóm</button>
+        </div>
+      </div>
+      <div class="domain-manager-content">
+        <div class="domain-manager-toolbar">
+          <div><strong>Danh sách nghiệp vụ</strong><span id="business-domains-count">0 nhóm</span></div>
+          <div class="domain-manager-search"><i class="fa-solid fa-magnifying-glass"></i><input id="business-domains-search" placeholder="Tìm nghiệp vụ..." oninput="renderBusinessDomains()"></div>
+        </div>
+        <div id="business-domains-list" class="domain-manager-list"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="relationship-diagram-modal">

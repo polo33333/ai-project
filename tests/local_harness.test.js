@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const BaseTool = require('../src/backend/agent_core/tools/base_tool');
 const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
 const LocalModelHarness = require('../src/backend/agent_core/harness/local_model_harness');
-const { buildRequestedLatestMonthsSql, isBusinessSqlCall, ensureDownloadLink } = LocalModelHarness;
+const { buildRequestedLatestMonthsSql, isBusinessSqlCall, ensureDownloadLink, isInsufficientSqlAnswer } = LocalModelHarness;
 const { isLocalProvider } = require('../src/backend/agent_core/harness/provider_classifier');
 const { normalizeAssistantResponse } = require('../src/backend/agent_core/harness/tool_call_normalizer');
 const { validateToolCall } = require('../src/backend/agent_core/harness/tool_argument_validator');
@@ -301,6 +301,30 @@ test('local harness does not accept a final chart answer before render_chart suc
   assert.equal(result.trace.steps.some(step => step.type === 'INCOMPLETE_CHART_RESPONSE'), true);
 });
 
+test('local harness rejects SQL for a lower-ranked unrelated table before execution', async () => {
+  const toolManager = new ToolManager();
+  toolManager.registerTool(new SqlTool([{ ContractID: 1, ContractNo: 'HD001' }]));
+  const responses = [
+    { content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: 'SELECT TOP 10 * FROM T_GarbageOutput' } } }] },
+    { content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: 'SELECT TOP 10 ContractID, ContractNo FROM T_Contract' } } }] },
+    { content: 'Hợp đồng **HD001**.' }
+  ];
+  const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift(), maxIterations: 3 });
+  const result = await harness.run({
+    userMessage: 'chi tiết các hợp đồng', provider: localProvider,
+    messages: [{ role: 'user', content: 'chi tiết các hợp đồng' }],
+    enabledToolNames: ['execute_sql_query'],
+    context: {
+      selectedTables: ['T_Contract', 'T_GarbageOutput'],
+      requestPlan: { intent: 'record_lookup', table: 'T_Contract', requiredColumns: [], outputs: { data: true, chart: false, export: false } }
+    }
+  });
+  assert.equal(result.toolCalls.length, 1);
+  assert.match(result.toolCalls[0].args.sql, /T_Contract/i);
+  assert.equal(result.trace.steps.some(step => step.type === 'WRONG_TABLE'), true);
+  assert.match(result.replyText, /HD001/);
+});
+
 test('local harness executes printed SQL instead of returning SQL-only prose', async () => {
   const toolManager = new ToolManager();
   toolManager.registerTool(new SqlTool());
@@ -312,6 +336,33 @@ test('local harness executes printed SQL instead of returning SQL-only prose', a
   assert.equal(result.toolCalls.some(call => call.toolName === 'execute_sql_query' && call.success), true);
   assert.match(result.replyText, /1.*dòng/);
   assert.equal(result.trace.steps.some(step => step.type === 'EXECUTED_PRINTED_SQL'), true);
+});
+
+test('local harness replaces printed SQL outside the request plan with a safe planned-table query', async () => {
+  let executions = 0;
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool();
+  const originalRun = sqlTool.run.bind(sqlTool);
+  sqlTool.run = async args => { executions += 1; return originalRun(args); };
+  toolManager.registerTool(sqlTool);
+  const harness = new LocalModelHarness({
+    toolManager,
+    dispatch: async () => ({ content: '```sql\nSELECT TOP 10 * FROM T_GarbageOutput\n```' }),
+    maxIterations: 1
+  });
+  const result = await harness.run({
+    userMessage: 'bảng hợp đồng hiện tại có dữ liệu gì', provider: localProvider,
+    messages: [{ role: 'user', content: 'bảng hợp đồng hiện tại có dữ liệu gì' }],
+    enabledToolNames: ['execute_sql_query'],
+    context: {
+      selectedTables: ['T_Contract', 'T_GarbageOutput'],
+      requestPlan: { intent: 'record_lookup', table: 'T_Contract', requiredColumns: [], outputs: { data: true, chart: false, export: false } }
+    }
+  });
+  assert.equal(executions, 1);
+  assert.equal(result.trace.steps.some(step => step.type === 'DETERMINISTIC_SQL_REJECTED'), true);
+  assert.equal(result.trace.steps.some(step => step.type === 'PLANNED_TABLE_RECOVERY'), true);
+  assert.match(result.toolCalls[0].args.sql, /FROM \[T_Contract\]/i);
 });
 
 test('local harness executes printed SQL for a detailed employee lookup', async () => {
@@ -550,4 +601,9 @@ test('list answers must mention actual SQL row values instead of only row count'
   assert.equal(isListRequest('liệt kê khách hàng'), true);
   assert.equal(listAnswerMentionsRowValue('Hệ thống chỉ hiển thị 1 khách hàng đang hoạt động.', sqlCall), false);
   assert.equal(listAnswerMentionsRowValue('Khách hàng: LJIP — Công ty Long Giang.', sqlCall), true);
+});
+
+test('contract detail requests and truncated model text trigger the SQL rows fallback', () => {
+  assert.equal(isListRequest('chi tiết các hợp đồng'), true);
+  assert.equal(isInsufficientSqlAnswer('D'), true);
 });

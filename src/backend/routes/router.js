@@ -22,6 +22,7 @@ const knowledgeCore = require('../knowledge_core');
 const { selectUserFacingSqlExecutions } = require('../utils/chat_result_selector');
 const { buildTrainingReport } = require('../training_core');
 const trainingResolutionService = require('../training_core/resolution_service');
+const domainAliasService = require('../intelligent_core/domain_alias_service');
 
 // ── Intelligent Core (src/backend/intelligent_core/) ──────────────────────────
 const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } = require('../intelligent_core');
@@ -382,6 +383,44 @@ async function handleRequest(req, res) {
   if (pathname === '/api/dictionary' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify(dictionaryService.getGroupedTables()));
+    return;
+  }
+
+  if (pathname === '/api/dictionary/domains' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+    res.end(JSON.stringify(domainAliasService.getDomainAliases()));
+    return;
+  }
+
+  if (pathname === '/api/dictionary/domains/save' && req.method === 'POST') {
+    try {
+      const payload = await readJsonBody(req);
+      const domains = domainAliasService.upsertDomainAlias(payload);
+      dictionaryService.reassignDomain(payload.oldDomain, payload.domain);
+      await dictionaryService.syncToQdrant();
+      loggerService.addLog('INFO', 'Data Dictionary', `Cập nhật nhóm nghiệp vụ '${payload.domain}' & tự động đồng bộ Qdrant.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', domains }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/dictionary/domains/delete' && req.method === 'POST') {
+    try {
+      const { domain } = await readJsonBody(req);
+      const domains = domainAliasService.deleteDomainAlias(domain);
+      if (!domains) throw new Error('Không tìm thấy nhóm nghiệp vụ.');
+      await dictionaryService.syncToQdrant();
+      loggerService.addLog('INFO', 'Data Dictionary', `Xóa nhóm nghiệp vụ '${domain}' & tự động đồng bộ Qdrant.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', domains }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
     return;
   }
 

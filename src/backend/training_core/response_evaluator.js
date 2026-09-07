@@ -5,6 +5,7 @@ function evaluateResponse({ reply = '', plan = {}, toolCalls = [] } = {}) {
   const success = name => toolCalls.some(call => (call.toolName || call.name) === name && call.success !== false);
   const failures = [];
   if (!text) failures.push('EMPTY_ANSWER');
+  if (plan.outputs?.data && text && text.replace(/\s+/g, '').length < 4) failures.push('INSUFFICIENT_DATA_ANSWER');
   if (/^\s*(?:```\s*)?(?:select|with)\b/i.test(text)) failures.push('SQL_ONLY_ANSWER');
   if (/schema|số cột|khóa chính/i.test(text) && plan.outputs?.data) failures.push('SCHEMA_ONLY_ANSWER');
   if (plan.outputs?.data && !success('execute_sql_query')) failures.push('MISSING_SQL');

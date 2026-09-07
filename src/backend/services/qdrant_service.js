@@ -166,7 +166,7 @@ class QdrantService {
    * @param {Array} tablesStore Array of table objects from DictionaryService
    * @param {Array} glossaryStore Array of glossary objects from DictionaryService
    */
-  async syncTablesToQdrant(tablesStore, glossaryStore = [], relationshipsStore = []) {
+  async syncTablesToQdrant(tablesStore, glossaryStore = [], relationshipsStore = [], domainAliases = {}) {
     try {
       // 1. Purge all existing collection points first to ensure inactive or deleted tables are completely removed!
       try {
@@ -184,7 +184,9 @@ class QdrantService {
       // 3. Index Active Tables & Columns
       for (const table of activeTables) {
         // Table level metadata
-        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}: ${table.tableDescription || ''}. Các cột: ${table.columns.map(c => c.columnName).join(', ')}`;
+        const aliases = Array.isArray(domainAliases?.[table.domain]) ? domainAliases[table.domain] : [];
+        const aliasText = aliases.length ? ` Từ khóa nghiệp vụ: ${aliases.join(', ')}.` : '';
+        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText} ${table.tableDescription || ''}. Các cột: ${table.columns.map(c => c.columnName).join(', ')}`;
         const tableVector = this.generateVector(tableText);
 
         points.push({
@@ -194,6 +196,7 @@ class QdrantService {
             type: 'table',
             tableName: table.tableName,
             dbName: table.dbName || 'SQLServer_DB',
+            domain: table.domain || null,
             description: table.tableDescription || '',
             columnCount: table.columns.length,
             columnsList: table.columns.map(c => c.columnName),

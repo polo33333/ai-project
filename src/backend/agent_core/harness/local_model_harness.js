@@ -118,6 +118,23 @@ function buildEntityLookupSql(userMessage = '', refs = {}) {
   return `SELECT TOP 100 * FROM [${table.tableName}] WHERE [${nameColumn.columnName}] LIKE N'%${escapedTerm}%'${orderClause}`;
 }
 
+function buildPlannedTablePreviewSql(plan = {}) {
+  if (!plan.table) return '';
+  const table = dictionaryService.getGroupedTables().find(candidate => candidate.tableName === plan.table && candidate.isActive !== false);
+  if (!table) return '';
+  const columns = (table.columns || []).map(column => column.columnName).filter(Boolean).slice(0, 20);
+  if (!columns.length) return '';
+  const baseName = table.tableName.replace(/^[A-Z]+_/i, '');
+  const preferredOrderNames = [`${baseName}Date`, 'CreateDate', 'UpdateDate'];
+  const orderColumn = preferredOrderNames
+    .map(name => table.columns.find(column => column.columnName.toLowerCase() === name.toLowerCase()))
+    .find(Boolean)
+    || table.columns.find(column => column.isPrimaryKey)
+    || table.columns.find(column => /id$/i.test(column.columnName));
+  const orderClause = orderColumn ? ` ORDER BY [${orderColumn.columnName}] DESC` : '';
+  return `SELECT TOP 100 ${columns.map(column => `[${column}]`).join(', ')} FROM [${table.tableName}]${orderClause}`;
+}
+
 function buildLatestMonthsSql(toolCalls, months) {
   const sqlCalls = toolCalls.filter(call => call.toolName === 'execute_sql_query');
   for (const call of [...sqlCalls].reverse()) {
@@ -225,6 +242,7 @@ function ensureDownloadLink(text, downloadUrl) {
 function isInsufficientSqlAnswer(text = '') {
   const clean = String(text || '').trim();
   if (!clean) return true;
+  if (clean.replace(/\s+/g, '').length < 12) return true;
   if (extractSql(clean)) return true;
   const normalized = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
   return normalized.includes('da truy van du lieu thanh cong')
@@ -238,7 +256,7 @@ function normalizeForComparison(value = '') {
 
 function isListRequest(text = '') {
   const normalized = normalizeForComparison(text);
-  return /(^|\s)ds(?:\s|$)|danh sach|liet ke|cho (?:(?:toi|minh)\s+)?xem/.test(normalized);
+  return /(^|\s)ds(?:\s|$)|danh sach|liet ke|chi tiet|cho (?:(?:toi|minh)\s+)?xem/.test(normalized);
 }
 
 function listAnswerMentionsRowValue(text = '', sqlCall = null) {
@@ -372,12 +390,14 @@ class LocalModelHarness {
       if (!this.toolManager || !toolEnabled(name)) return null;
       if (name === 'execute_sql_query') {
         const structuralValidation = validateCallAgainstPolicy({ name }, args, requestPolicy, []);
+        const sqlEvaluation = trainingService.evaluateSql(args.sql, requestPlan);
+        const violatesPlannedTable = sqlEvaluation.violations.some(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY');
         const referencesWrongData = explicitSchemaRefs.tables.length > 0 && !explicitSchemaRefs.tables.some(table =>
           new RegExp(`\\b${String(table.tableName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(String(args.sql || ''))
         );
         const metadataQuery = /\b(?:information_schema|sys\.(?:tables|columns|objects|schemas))\b/i.test(String(args.sql || ''));
-        if (!structuralValidation.valid || referencesWrongData || metadataQuery) {
-          trace.steps.push({ type: 'DETERMINISTIC_SQL_REJECTED', toolName: name, reason, error: structuralValidation.error || 'SQL does not match the requested business data.' });
+        if (!structuralValidation.valid || violatesPlannedTable || referencesWrongData || metadataQuery) {
+          trace.steps.push({ type: 'DETERMINISTIC_SQL_REJECTED', toolName: name, reason, error: structuralValidation.error || `SQL does not match the planned table ${requestPlan.table || ''}.`.trim() });
           return null;
         }
       }
@@ -517,6 +537,25 @@ class LocalModelHarness {
         continue;
       }
 
+      if (call.name === 'execute_sql_query') {
+        const sqlEvaluation = trainingService.evaluateSql(validation.args.sql, requestPlan);
+        trace.training.sqlEvaluations.push(sqlEvaluation);
+        const blockingViolation = sqlEvaluation.violations.find(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY');
+        if (blockingViolation) {
+          const expectedTable = requestPlan.table || 'the highest-ranked business table';
+          const error = blockingViolation === 'WRONG_TABLE'
+            ? `SQL queries the wrong business table. Use ${expectedTable} for the current request.`
+            : 'Schema metadata is not business data. Query the selected business table.';
+          trace.steps.push({ iteration: trace.iterations, type: blockingViolation, toolName: call.name, error });
+          conversation.push({
+            role: 'tool', tool_call_id: call.id, name: call.name,
+            content: JSON.stringify({ success: false, error, expectedTable })
+          });
+          emitProgress(onProgress, { type: 'policy_repair', label: 'SQL chọn sai bảng, đang điều chỉnh', status: 'warning', icon: 'wrench', iteration: trace.iterations, toolName: call.name });
+          continue;
+        }
+      }
+
       if (['render_chart', 'export_data'].includes(call.name) && requestPolicy.dataRequired && !toolCalls.some(item => item.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(item))) {
         const error = `${call.name} bị từ chối: chưa có kết quả SQL nghiệp vụ hợp lệ để sử dụng.`;
         trace.steps.push({ iteration: trace.iterations, type: 'PREMATURE_OUTPUT_TOOL', toolName: call.name, error });
@@ -530,7 +569,7 @@ class LocalModelHarness {
       throwIfAborted();
       const log = { toolName: call.name, args: validation.args, success: execution.success, result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs };
       toolCalls.push(log);
-      if (call.name === 'execute_sql_query') trace.training.sqlEvaluations.push(trainingService.evaluateSql(validation.args.sql, requestPlan));
+      if (call.name === 'execute_sql_query' && !trace.training.sqlEvaluations.length) trace.training.sqlEvaluations.push(trainingService.evaluateSql(validation.args.sql, requestPlan));
       trace.toolCalls.push({ toolName: call.name, args: validation.args, success: execution.success, durationMs: execution.durationMs, source: call.source });
       trace.steps.push({ iteration: trace.iterations, type: 'tool_call', toolName: call.name, success: execution.success });
       emitProgress(onProgress, {
@@ -563,6 +602,7 @@ class LocalModelHarness {
         usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
       }
     }
+    let entityLookupAttempted = false;
     if (!usefulSql && requestPolicy.dataRequired) {
       const plannedTable = requestPlan.table
         ? dictionaryService.getGroupedTables().find(table => table.tableName === requestPlan.table)
@@ -572,7 +612,15 @@ class LocalModelHarness {
         : { ...explicitSchemaRefs, tables: plannedTable ? [plannedTable] : [] };
       const entityLookupSql = buildEntityLookupSql(effectiveUserMessage, lookupRefs);
       if (entityLookupSql) {
+        entityLookupAttempted = true;
         await executeDeterministicTool('execute_sql_query', { sql: entityLookupSql }, 'ENTITY_LOOKUP_RECOVERY');
+        usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
+      }
+    }
+    if (!usefulSql && requestPolicy.dataRequired && !entityLookupAttempted) {
+      const previewSql = buildPlannedTablePreviewSql(requestPlan);
+      if (previewSql) {
+        await executeDeterministicTool('execute_sql_query', { sql: previewSql }, 'PLANNED_TABLE_RECOVERY');
         usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
       }
     }
@@ -692,6 +740,7 @@ module.exports.repairInvalidColumnSql = repairInvalidColumnSql;
 module.exports.isBusinessSqlCall = isBusinessSqlCall;
 module.exports.buildRequestedLatestMonthsSql = buildRequestedLatestMonthsSql;
 module.exports.buildEntityLookupSql = buildEntityLookupSql;
+module.exports.buildPlannedTablePreviewSql = buildPlannedTablePreviewSql;
 // Backward-compat alias: old name/signature is gone (now takes `refs` too),
 // keep this so any external import of the old name doesn't crash on require.
 module.exports.buildEmployeeLookupSql = buildEntityLookupSql;

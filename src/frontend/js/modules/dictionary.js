@@ -15,6 +15,7 @@ window.relationshipLineStyles = {};
 window.relationshipLineDragState = null;
 window.relationshipCanvasPanState = null;
 window.relationshipCanvasZoom = 1;
+window.businessDomainsData = {};
 
 function loadRelationshipDiagramState() {
   try {
@@ -60,15 +61,28 @@ function findDictionaryTable(tableName) {
 
 async function fetchDataDictionary() {
   try {
-    const res = await fetch('/api/dictionary');
+    const [res, domainsRes] = await Promise.all([fetch('/api/dictionary'), fetch('/api/dictionary/domains')]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (domainsRes.ok) window.businessDomainsData = await domainsRes.json();
     window.groupedTablesData = Array.isArray(data) ? data : (data.tables || []);
+    renderDictionaryDomainOptions();
     renderDataDictionary();
   } catch (err) {
     console.error('Lỗi nạp Lược đồ CSDL:', err);
     if (typeof showToast === 'function') showToast('Không thể nạp Lược đồ CSDL.', 'error');
   }
+}
+
+function renderDictionaryDomainOptions(selectedValue) {
+  const select = document.getElementById('dict-drawer-table-domain');
+  if (!select) return;
+  const current = selectedValue !== undefined ? selectedValue : select.value;
+  const keys = Object.keys(window.businessDomainsData || {}).sort((a, b) => a.localeCompare(b));
+  if (current && !keys.includes(current)) keys.push(current);
+  select.innerHTML = '<option value="">Chưa gán nhóm nghiệp vụ</option>' + keys
+    .map(key => `<option value="${escapeDictHtml(key)}">${escapeDictHtml(key)}</option>`).join('');
+  select.value = current || '';
 }
 
 function getFilteredDictionaryTables() {
@@ -165,7 +179,7 @@ function renderDictionaryDrawer(table) {
   if (nameEl) nameEl.textContent = table.tableName || '-';
   if (metaEl) metaEl.textContent = `${table.dbName || 'SQLServer_DB'} • ${cols.length} cột thuộc tính`;
   if (descEl) descEl.value = table.tableDescription || '';
-  if (domainEl) domainEl.value = table.domain || '';
+  renderDictionaryDomainOptions(table.domain || '');
   if (activeEl) activeEl.checked = !!table.isActive;
   if (countEl) countEl.textContent = `${cols.length} cột thuộc tính`;
 
@@ -189,6 +203,118 @@ function renderDictionaryDrawer(table) {
       </div>
     `;
   }).join('');
+}
+
+async function openBusinessDomainsModal() {
+  try {
+    const searchInput = document.getElementById('business-domains-search');
+    if (searchInput) searchInput.value = '';
+    const res = await fetch('/api/dictionary/domains');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    window.businessDomainsData = data || {};
+    renderBusinessDomains();
+    resetBusinessDomainForm();
+    if (typeof openModal === 'function') openModal('business-domains-modal');
+  } catch (err) {
+    if (typeof showToast === 'function') showToast(`Không thể tải nhóm nghiệp vụ: ${err.message}`, 'error');
+  }
+}
+
+function closeBusinessDomainsModal() {
+  if (typeof closeModal === 'function') closeModal('business-domains-modal');
+}
+
+function renderBusinessDomains() {
+  const container = document.getElementById('business-domains-list');
+  if (!container) return;
+  const keyword = document.getElementById('business-domains-search')?.value.trim().toLowerCase() || '';
+  const allEntries = Object.entries(window.businessDomainsData || {}).sort(([a], [b]) => a.localeCompare(b));
+  const entries = allEntries.filter(([domain, aliases]) => !keyword || domain.toLowerCase().includes(keyword) || (aliases || []).some(alias => alias.toLowerCase().includes(keyword)));
+  const count = document.getElementById('business-domains-count');
+  if (count) count.textContent = `${allEntries.length} nhóm`;
+  container.innerHTML = entries.length ? entries.map(([domain, aliases], index) => {
+    const tableCount = getDictionaryTables().filter(table => table.domain === domain).length;
+    const aliasChips = (aliases || []).map(alias => `<span class="domain-alias-chip">${escapeDictHtml(alias)}</span>`).join('');
+    return `<div class="domain-manager-item accent-${index % 5}">
+      <div class="domain-manager-item-icon"><i class="fa-solid fa-cubes-stacked"></i></div>
+      <div class="domain-manager-item-info">
+        <div class="domain-manager-item-title"><strong>${escapeDictHtml(domain)}</strong><span><i class="fa-solid fa-table"></i> ${tableCount} bảng</span></div>
+        <div class="domain-alias-chips">${aliasChips || '<span class="domain-alias-empty">Chưa có từ khóa nhận diện</span>'}</div>
+      </div>
+      <div class="domain-manager-item-actions">
+        <button class="icon-action-btn" onclick="editBusinessDomain('${encodeURIComponent(domain)}')" title="Chỉnh sửa"><i class="fa-solid fa-pen"></i></button>
+        <button class="icon-action-btn danger-soft" onclick="deleteBusinessDomain('${encodeURIComponent(domain)}')" title="Xóa"><i class="fa-regular fa-trash-can"></i></button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="dictionary-empty"><strong>Chưa có nhóm nghiệp vụ.</strong></div>';
+}
+
+function editBusinessDomain(encodedDomain) {
+  const domain = decodeURIComponent(encodedDomain);
+  document.getElementById('domain-old-key').value = domain;
+  document.getElementById('domain-key-input').value = domain;
+  document.getElementById('domain-aliases-input').value = (window.businessDomainsData[domain] || []).join(', ');
+  document.getElementById('domain-cancel-button').hidden = false;
+  document.getElementById('domain-form-title').textContent = `Chỉnh sửa ${domain}`;
+  document.getElementById('domain-form-subtitle').textContent = 'Cập nhật mã nhóm hoặc từ khóa nhận diện';
+  const formIcon = document.querySelector('.domain-manager-form-icon i');
+  if (formIcon) formIcon.className = 'fa-solid fa-pen';
+  document.getElementById('domain-key-input').focus();
+}
+
+function resetBusinessDomainForm() {
+  const oldKey = document.getElementById('domain-old-key');
+  const key = document.getElementById('domain-key-input');
+  const aliases = document.getElementById('domain-aliases-input');
+  if (oldKey) oldKey.value = '';
+  if (key) key.value = '';
+  if (aliases) aliases.value = '';
+  const cancel = document.getElementById('domain-cancel-button');
+  if (cancel) cancel.hidden = true;
+  const title = document.getElementById('domain-form-title');
+  const subtitle = document.getElementById('domain-form-subtitle');
+  if (title) title.textContent = 'Thêm nhóm mới';
+  if (subtitle) subtitle.textContent = 'Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện';
+  const formIcon = document.querySelector('.domain-manager-form-icon i');
+  if (formIcon) formIcon.className = 'fa-solid fa-plus';
+}
+
+async function saveBusinessDomain() {
+  const oldDomain = document.getElementById('domain-old-key')?.value.trim() || '';
+  const domain = document.getElementById('domain-key-input')?.value.trim() || '';
+  const aliases = document.getElementById('domain-aliases-input')?.value || '';
+  if (!domain) return showToast?.('Vui lòng nhập mã nghiệp vụ.', 'warning');
+  try {
+    const res = await fetch('/api/dictionary/domains/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldDomain, domain, aliases }) });
+    const data = await res.json();
+    if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.businessDomainsData = data.domains || {};
+    renderBusinessDomains();
+    renderDictionaryDomainOptions();
+    resetBusinessDomainForm();
+    showToast?.('Đã lưu nhóm nghiệp vụ và đồng bộ cho AI.', 'success');
+  } catch (err) {
+    showToast?.(`Không thể lưu nhóm nghiệp vụ: ${err.message}`, 'error');
+  }
+}
+
+async function deleteBusinessDomain(encodedDomain) {
+  const domain = decodeURIComponent(encodedDomain);
+  const usedCount = getDictionaryTables().filter(table => table.domain === domain).length;
+  const warning = usedCount ? `Nhóm "${domain}" đang được ${usedCount} bảng sử dụng. Chỉ xóa bộ từ khóa, domain trên bảng vẫn được giữ. Tiếp tục?` : `Xóa nhóm nghiệp vụ "${domain}"?`;
+  if (!confirm(warning)) return;
+  try {
+    const res = await fetch('/api/dictionary/domains/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain }) });
+    const data = await res.json();
+    if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.businessDomainsData = data.domains || {};
+    renderBusinessDomains();
+    renderDictionaryDomainOptions();
+    showToast?.('Đã xóa nhóm nghiệp vụ.', 'success');
+  } catch (err) {
+    showToast?.(`Không thể xóa nhóm nghiệp vụ: ${err.message}`, 'error');
+  }
 }
 
 function openDictionaryDrawer(encodedTableName) {

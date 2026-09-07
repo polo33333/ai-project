@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildSchemaContext, isStandaloneCalculation } = require('../src/backend/intelligent_core/schema_context_service');
+const dictionaryService = require('../src/backend/services/dictionary_service');
+const { getDomainAliases, normalizeDomainAliases, normalizeDomainKey } = require('../src/backend/intelligent_core/domain_alias_service');
 
 test('standalone statistics with an explicit number list bypass SQL schema retrieval', () => {
   assert.equal(
@@ -30,4 +32,34 @@ test('database statistics still use schema retrieval', () => {
 
 test('long arithmetic expressions bypass SQL schema retrieval', () => {
   assert.equal(isStandaloneCalculation('Hãy tính giúp tôi (120 + 450 + 230) / 3'), true);
+});
+
+test('Vietnamese natural-language contract requests select the configured contract domain', async () => {
+  for (const question of ['ds hợp đồng', 'bảng hợp đồng hiện tại có dữ liệu gì']) {
+    const context = await buildSchemaContext(question, { dbName: 'IPMS' });
+    assert.equal(context.mode, 'data');
+    assert.equal(context.selectedTables[0], 'T_Contract');
+    assert.match(context.schemaContext, /Business domain: contract/);
+  }
+});
+
+test('business domains accept Vietnamese natural-language labels', () => {
+  assert.equal(dictionaryService.normalizeDomain('Hợp đồng dịch vụ'), 'hop_dong_dich_vu');
+  assert.equal(dictionaryService.normalizeDomain('Điện bán ra'), 'dien_ban_ra');
+});
+
+test('domain aliases are loaded from the editable data file', () => {
+  const aliases = getDomainAliases();
+  assert.ok(aliases.contract.includes('hop dong'));
+});
+
+test('invalid domain alias entries are safely normalized', () => {
+  assert.deepEqual(normalizeDomainAliases({ contract: ['hop dong', '', 'hop dong'], invalid: 'text' }), {
+    contract: ['hop dong'],
+    invalid: []
+  });
+});
+
+test('Vietnamese domain keys are normalized for persistent configuration', () => {
+  assert.equal(normalizeDomainKey('Hợp đồng dịch vụ'), 'hop_dong_dich_vu');
 });

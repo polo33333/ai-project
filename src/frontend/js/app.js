@@ -803,7 +803,7 @@ function renderCopilotText(text) {
       if (literal) return `<span class="json-token json-literal">${literal}</span>`;
       return `<span class="json-token json-number">${number}</span>`;
     });
-    html = html.replace(`__KAI_JSON_BLOCK_${idx}__`, `<div class="json-code-viewer copilot-json-viewer"><div class="json-code-header"><span><i class="fa-solid fa-brackets-curly"></i> JSON</span><button type="button" onclick="navigator.clipboard.writeText(this.closest('.json-code-viewer').querySelector('code').textContent); showToast('Đã sao chép JSON!','info');"><i class="fa-solid fa-copy"></i> Sao chép</button></div><pre class="copilot-json-block"><code>${highlighted}</code></pre></div>`);
+    html = html.replace(`__KAI_JSON_BLOCK_${idx}__`, `<div class="json-code-viewer copilot-json-viewer"><div class="json-code-header"><span><i class="fa-solid fa-brackets-curly"></i> JSON</span><button type="button" onclick="navigator.clipboard.writeText(this.closest('.json-code-viewer').querySelector('code').textContent);"><i class="fa-solid fa-copy"></i> Sao chép</button></div><pre class="copilot-json-block"><code>${highlighted}</code></pre></div>`);
   });
   return html;
 }
@@ -842,7 +842,7 @@ function renderCopilotSql(sqlQuery, label = 'Câu lệnh SQL') {
     <details class="copilot-sql-panel" open>
       <summary><span><i class="fa-solid fa-code"></i> ${escapeCopilotHtml(label)}</span><i class="fa-solid fa-chevron-down"></i></summary>
       <div class="copilot-sql-code">
-        <button type="button" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent); showToast('Đã sao chép SQL!','info');"><i class="fa-solid fa-copy"></i> Sao chép</button>
+        <button type="button" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent);"><i class="fa-solid fa-copy"></i> Sao chép</button>
         <code>${escapeCopilotHtml(sqlQuery)}</code>
       </div>
     </details>
@@ -1356,8 +1356,12 @@ window.sendChatMessage = async function sendChatMessage() {
       if (typeof showToast === 'function') showToast('Đã dừng tiến trình trả lời.', 'info');
       return;
     }
+    const noAnswer = /local model returned an empty response|stream kết thúc mà không có câu trả lời cuối/i.test(String(err?.message || ''));
+    const errorContent = noAnswer
+      ? '<strong>Chưa có câu trả lời phù hợp.</strong> Vui lòng thử lại.'
+      : `<strong>Lỗi kết nối AI:</strong> ${escapeCopilotHtml(err?.message || 'Không thể kết nối tới mô hình AI.')}`;
     messages.insertAdjacentHTML('beforeend', `
-      <div class="chat-bubble ai error">Lỗi kết nối AI: ${escapeCopilotHtml(err.message)}</div>
+      <div class="chat-bubble ai error">${errorContent}</div>
     `);
   } finally {
     if (window.copilotRequestController === requestController) {

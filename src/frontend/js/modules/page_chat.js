@@ -372,6 +372,14 @@ function renderChartSpec(canvasId, chartSpec) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const isDarkTheme = document.documentElement.dataset.theme === 'dark';
+    const themeColors = isDarkTheme
+      ? { text: '#b8c4d8', grid: '#344158', tooltipBg: '#202c40', tooltipBorder: '#465773' }
+      : { text: '#64748b', grid: '#e2e8f0', tooltipBg: '#0f172a', tooltipBorder: '#334155' };
+    const specOptions = chartSpec.options || {};
+    const specPlugins = specOptions.plugins || {};
+    const specScales = specOptions.scales || {};
+    const isRadialChart = ['pie', 'doughnut', 'polarArea'].includes(chartSpec.type);
 
     // Normalize chartSpec
     const config = {
@@ -379,20 +387,48 @@ function renderChartSpec(canvasId, chartSpec) {
       data: chartSpec.data || {},
       options: {
         responsive: true,
+        ...specOptions,
         plugins: {
-          legend: { position: 'top', labels: { font: { family: 'Inter', size: 12 } } },
+          ...specPlugins,
+          legend: {
+            position: 'top',
+            ...(specPlugins.legend || {}),
+            labels: {
+              font: { family: 'Inter', size: 12 },
+              ...(specPlugins.legend?.labels || {}),
+              color: themeColors.text
+            }
+          },
           title: {
             display: !!chartSpec.title,
             text: chartSpec.title || '',
             font: { family: 'Inter', size: 14, weight: 'bold' },
-            color: '#1e293b'
+            ...(specPlugins.title || {}),
+            color: themeColors.text
+          },
+          tooltip: {
+            ...(specPlugins.tooltip || {}),
+            titleColor: '#f8fafc',
+            bodyColor: '#e2e8f0',
+            backgroundColor: themeColors.tooltipBg,
+            borderColor: themeColors.tooltipBorder,
+            borderWidth: 1
           }
         },
-        scales: chartSpec.type !== 'pie' && chartSpec.type !== 'doughnut' ? {
-          x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 11 } } },
-          y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 11 } } }
-        } : {},
-        ...(chartSpec.options || {})
+        scales: isRadialChart ? {} : {
+          x: {
+            ...(specScales.x || {}),
+            grid: { ...(specScales.x?.grid || {}), color: themeColors.grid },
+            border: { ...(specScales.x?.border || {}), color: themeColors.grid },
+            ticks: { font: { family: 'Inter', size: 11 }, ...(specScales.x?.ticks || {}), color: themeColors.text }
+          },
+          y: {
+            ...(specScales.y || {}),
+            grid: { ...(specScales.y?.grid || {}), color: themeColors.grid },
+            border: { ...(specScales.y?.border || {}), color: themeColors.grid },
+            ticks: { font: { family: 'Inter', size: 11 }, ...(specScales.y?.ticks || {}), color: themeColors.text }
+          }
+        }
       }
     };
 
@@ -681,7 +717,6 @@ async function copyPageChatQuestion(button) {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    if (typeof showToast === 'function') showToast('Đã sao chép câu hỏi.', 'success');
   } catch (_) {
     if (typeof showToast === 'function') showToast('Không thể sao chép câu hỏi.', 'error');
   }
@@ -696,7 +731,6 @@ function editPageChatQuestion(button) {
   input.focus();
   input.setSelectionRange?.(text.length, text.length);
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  if (typeof showToast === 'function') showToast('Bạn có thể chỉnh sửa rồi gửi lại.', 'info');
 }
 
 // Main Send Message
@@ -807,7 +841,7 @@ async function sendPageChatMessage() {
             <span style="font-size:11.5px;font-weight:700;color:#38bdf8;"><i class="fa-solid fa-code" style="margin-right:6px;"></i>Câu lệnh SQL ${index + 1}/${sqlExecutions.length}</span>
             <span style="font-size:10px;color:#a5b4fc;background:rgba(99,102,241,.18);padding:2px 7px;border-radius:20px;">${execution.rowCount ?? execution.rows?.length ?? 0} dòng</span>
             <i class="fa-solid fa-chevron-down chat-sql-chevron" style="margin-left:auto;font-size:10px;color:#94a3b8;"></i>
-            <button onclick="navigator.clipboard.writeText(this.dataset.sql); showToast('Đã sao chép SQL!','info');" data-sql="${escapedSql}" style="background:rgba(255,255,255,.1);border:none;color:#94a3b8;padding:3px 8px;border-radius:4px;font-size:10.5px;cursor:pointer;">
+            <button onclick="navigator.clipboard.writeText(this.dataset.sql);" data-sql="${escapedSql}" style="background:rgba(255,255,255,.1);border:none;color:#94a3b8;padding:3px 8px;border-radius:4px;font-size:10.5px;cursor:pointer;">
               <i class="fa-solid fa-copy"></i> Copy SQL
             </button>
           </summary>
@@ -918,8 +952,8 @@ async function sendPageChatMessage() {
     let chartHtml = '';
     if (chartSpec && typeof chartSpec === 'object') {
       chartHtml = `
-        <div style="margin-top:12px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff;padding:14px;">
-          <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+        <div class="chat-chart-box">
+          <div class="chat-chart-title">
             <i class="fa-solid fa-chart-bar" style="color:#6366f1;"></i>
             ${chartSpec.title || 'Biểu đồ dữ liệu'}
           </div>
@@ -1008,6 +1042,10 @@ async function sendPageChatMessage() {
       if (typeof showToast === 'function') showToast('Đã dừng tiến trình trả lời.', 'info');
       return;
     }
+    const noAnswer = /local model returned an empty response|stream kết thúc mà không có câu trả lời cuối/i.test(String(err?.message || ''));
+    const errorContent = noAnswer
+      ? '<strong>Chưa có câu trả lời phù hợp.</strong> Vui lòng thử lại.'
+      : `<strong>Lỗi kết nối AI:</strong> ${escapeChatMarkdown(err?.message || 'Không thể kết nối tới mô hình AI.')}`;
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;';
     errDiv.innerHTML = `
@@ -1015,7 +1053,7 @@ async function sendPageChatMessage() {
         <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
       </div>
       <div style="background:#fff;border:1px solid #fee2e2;padding:14px 18px;border-radius:2px 14px 14px 14px;font-size:13.5px;color:#b91c1c;">
-        <strong>Lỗi kết nối AI:</strong> ${err.message}
+        ${errorContent}
       </div>
     `;
     appendChatMessage({ role: 'assistant', html: errDiv.outerHTML });
@@ -1225,7 +1263,6 @@ function createNewChatSession() {
   const msgContainer = document.getElementById('page-chat-messages-container');
   if (msgContainer) msgContainer.innerHTML = '';
   renderChatSessionsList();
-  showToast(`Đã tạo "${newSession.title}"!`, 'info');
 }
 
 function deleteSingleChatSession(id, event) {

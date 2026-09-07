@@ -113,6 +113,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(input,textarea)::placeholder { color: #8e9db7 !important; opacity: 1; }
 :root[data-theme="dark"] :is(input,textarea,select):focus { border-color: #9c8bee !important; box-shadow: 0 0 0 3px #a18def20; }
 :root[data-theme="dark"] :is(.btn-secondary-sm,.pagination-btn,.icon-action-btn,.library-action-btn,.system-tools-filters button,.workflow-card-actions button,.workflow-section-title select,.chat-sessions-toggle,.library-top-actions button:not(.btn-primary),.api-embed-rules span,.library-summary span,.api-key-count,.library-tabs,.sql-mode-tabs,.dictionary-controls button) { background: var(--dark-raised); border-color: var(--border-color); color: var(--text-secondary); }
+:root[data-theme="dark"] .dictionary-controls .btn-primary { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
 :root[data-theme="dark"] :is(.library-tabs button.active,.pagination-btn.active,.btn-secondary-sm.active,.system-tools-filters button.active) { background: #332b50 !important; border-color: #605080 !important; color: #d0c5ff !important; }
 :root[data-theme="dark"] .library-tabs button { color: var(--text-secondary); }
 :root[data-theme="dark"] .library-tabs button:hover { background: #28354c; color: #d0c5ff; }
@@ -231,6 +232,8 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(div,span,p,small,label)[style*="color: #64748b"],
 :root[data-theme="dark"] :is(div,span,p,small,label)[style*="color: #475569"] { color: var(--text-secondary) !important; }
 :root[data-theme="dark"] #page-chat-messages-container { background: #101a2a !important; }
+:root[data-theme="dark"] :is(.chat-chart-box,.copilot-chart-box) { background: var(--dark-raised) !important; border-color: #40506b !important; }
+:root[data-theme="dark"] .chat-chart-title { color: var(--text-primary); }
 :root[data-theme="dark"] :is(.chat-input-wrapper,.drawer-header,.modal-header,.modal-footer,.workflow-dialog header,.workflow-dialog footer) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; }
 :root[data-theme="dark"] ::selection { color: #f0ebff; background: #56467f; }
 :root[data-theme="dark"] * { scrollbar-color: #465671 #111a2a; }
@@ -291,6 +294,13 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 
 /* Login shares the same saved appearance. */
 :root[data-theme="dark"] :is(.data-table-container,.dashboard-log-stat,.dashboard-log-empty,.dictionary-empty,.dictionary-drawer-body,.dictionary-drawer-section,.glossary-search-box,.copilot-modal-dialog,.relationship-modal-dialog,.relationship-table-node,.relationship-side-panel,.chat-session-menu,.chat-bubble.ai,.copilot-chat-messages,.library-preview-content pre) { background: var(--dark-surface) !important; border-color: var(--border-color) !important; color: var(--text-primary); }
+:root[data-theme="dark"] :is(.domain-manager-dialog,.domain-manager-item,.domain-manager-form) { background: var(--dark-surface) !important; border-color: var(--border-color) !important; }
+:root[data-theme="dark"] .domain-manager-header { background: linear-gradient(135deg,#1c283b,#211d39) !important; border-color: var(--border-color) !important; }
+:root[data-theme="dark"] .domain-manager-body { background: var(--dark-raised) !important; }
+:root[data-theme="dark"] :is(.domain-manager-search input,.domain-alias-chip,.domain-manager-item-title > span) { color: var(--text-secondary); background: #1c283b; border-color: #35445d; }
+:root[data-theme="dark"] .domain-manager-toolbar > div:first-child span { color:#c0b5ff; background:#30294f; }
+:root[data-theme="dark"] .domain-manager-hint { color:#e8c976; background:#3e321d; }
+:root[data-theme="dark"] .domain-manager-item:hover { border-color:#514579 !important; box-shadow:0 8px 20px #0003; }
 :root[data-theme="dark"] .router-status-card > div[style] > div { background: var(--dark-raised); border-color: var(--border-color); }
 :root[data-theme="dark"] .router-status-card > div[style] span { color: var(--text-secondary); }
 :root[data-theme="dark"] .router-status-card > div[style] :is(strong,span i) { background: #30294f; color: #c0b5ff !important; }
@@ -354,6 +364,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .chat-session-item.is-current { background: #30294f !important; border-color: #514579 !important; }
 :root[data-theme="dark"] :is(.chat-session-title,.page-chat-model-label,.page-chat-model-trigger,.chat-session-menu button,.page-chat-add-menu button) { color: var(--text-primary) !important; }
 :root[data-theme="dark"] :is(.page-chat-model-option,.page-chat-add-menu button):hover { background: var(--bg-hover); }
+:root[data-theme="dark"] .chat-session-menu-separator { background: #34445d !important; }
 :root[data-theme="dark"] .page-chat-menu-divider { background: #29364c !important; }
 :root[data-theme="dark"] .btn-input-new-chat {
   color: #c0b5ff !important;

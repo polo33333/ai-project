@@ -5,7 +5,8 @@
   try { preference = localStorage.getItem(key); } catch { /* Follow device appearance. */ }
   function updateCharts(dark) {
     if (!window.Chart) return;
-    const text = dark ? '#a9b6ca' : '#64748b', grid = dark ? '#29354a' : '#e2e8f0';
+    const text = dark ? '#b8c4d8' : '#64748b', grid = dark ? '#344158' : '#e2e8f0';
+    const tooltipBg = dark ? '#202c40' : '#0f172a', tooltipBorder = dark ? '#465773' : '#334155';
     Chart.defaults.color = text;
     Chart.defaults.borderColor = grid;
     Object.values(Chart.instances || {}).forEach(chart => {
@@ -15,6 +16,13 @@
         if (scale.border) scale.border.color = grid;
       });
       if (chart.options.plugins?.legend?.labels) chart.options.plugins.legend.labels.color = text;
+      if (chart.options.plugins?.title) chart.options.plugins.title.color = text;
+      if (chart.options.plugins?.tooltip) {
+        Object.assign(chart.options.plugins.tooltip, {
+          titleColor: '#f8fafc', bodyColor: '#e2e8f0', backgroundColor: tooltipBg,
+          borderColor: tooltipBorder, borderWidth: 1
+        });
+      }
       chart.update('none');
     });
   }
@@ -41,6 +49,7 @@
           if (scale.grid) scale.grid.color = '#29354a';
         });
         if (chart.options.plugins?.legend?.labels) chart.options.plugins.legend.labels.color = '#a9b6ca';
+        if (chart.options.plugins?.title) chart.options.plugins.title.color = '#b8c4d8';
       }
     });
     apply();

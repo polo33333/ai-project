@@ -2,6 +2,7 @@
 
 const dictionaryService = require('../services/dictionary_service');
 const qdrantService = require('../services/qdrant_service');
+const domainAliasService = require('./domain_alias_service');
 
 const MAX_TABLES = Math.max(1, parseInt(process.env.AI_SCHEMA_MAX_TABLES || '6', 10));
 const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COLUMNS_PER_TABLE || '40', 10));
@@ -11,6 +12,7 @@ const STOP_WORDS = new Set(['ai', 'ban', 'toi', 'la', 'cho', 'cua', 'va', 'voi',
 function normalize(value) {
   return String(value || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[_\W]+/g, ' ')
     .toLowerCase().trim();
@@ -25,8 +27,18 @@ function lexicalScore(queryTokens, text) {
   return queryTokens.reduce((score, token) => score + (haystack.includes(` ${token} `) ? 4 : (token.length >= 4 && haystack.includes(token)) ? 1 : 0), 0);
 }
 
+function domainText(domain) {
+  const normalizedDomain = normalize(domain);
+  if (!normalizedDomain) return '';
+  const paddedDomain = ` ${normalizedDomain} `;
+  const aliases = Object.entries(domainAliasService.getDomainAliases())
+    .filter(([canonical, terms]) => normalize(canonical) === normalizedDomain || terms.some(term => paddedDomain.includes(` ${normalize(term)} `)))
+    .flatMap(([canonical, terms]) => [canonical, ...terms]);
+  return [domain, ...aliases].join(' ');
+}
+
 function tableText(table) {
-  return [table.tableName, table.dbName, table.tableDescription,
+  return [table.tableName, table.dbName, table.domain, domainText(table.domain), table.tableDescription,
     ...(table.columns || []).flatMap(column => [column.columnName, column.description, column.dataType])
   ].filter(Boolean).join(' ');
 }
@@ -46,7 +58,7 @@ function isStandaloneCalculation(query, options = {}) {
 function isGeneralConversation(query, queryTokens, tables, hasGlossaryExpansion = false) {
   const normalized = normalize(query);
   const hasSchemaMatch = tables.some(table => lexicalScore(queryTokens, tableText(table)) > 0);
-  const dataIntent = /\b(sql|database|db|du lieu|bang|cot|truy van|bao cao|thong ke|bieu do|do thi|xuat file|excel|csv|pdf)\b/.test(normalized);
+  const dataIntent = /\b(sql|database|db|du lieu|bang|cot|truy van|bao cao|thong ke|bieu do|do thi|xuat file|excel|csv|pdf|ds|danh sach|chi tiet|hop dong)\b/.test(normalized);
   const greeting = /^(hi|hello|hey|chao|xin chao|cam on|thank you|thanks)(\s+ban)?[.!?\s]*$/.test(normalized);
   const standaloneCalculation = isStandaloneCalculation(query, { hasSchemaMatch });
   return greeting || standaloneCalculation || (!hasGlossaryExpansion && !dataIntent && !hasSchemaMatch && queryTokens.length <= 4);
@@ -124,7 +136,7 @@ async function buildSchemaContext(query, options = {}) {
   const lines = [];
   for (const table of selected) {
     const columns = selectColumns(table, expandedQuery, vectorColumnNames);
-    lines.push(`Table ${table.tableName}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
+    lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
     lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
   }
   if (relationships.length > 0) {
@@ -139,7 +151,7 @@ async function buildSchemaContext(query, options = {}) {
     useTools: true,
     retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length },
     needsModelSelection: maxLexicalScore < 4,
-    tableCatalog: activeTables.map(table => `${table.tableName}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`).join('\n').slice(0, 12000)
+    tableCatalog: activeTables.map(table => `${table.tableName}${table.domain ? ` [domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`).join('\n').slice(0, 12000)
   };
 }
 
@@ -164,7 +176,7 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   const lines = [];
   for (const table of selected) {
     const columns = selectColumns(table, query, new Set());
-    lines.push(`Table ${table.tableName}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
+    lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
     lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
   }
   if (relationships.length) {

@@ -52,7 +52,7 @@ class DictionaryService {
   }
 
   normalizeDomain(value) {
-    const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+    const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
     return normalized.replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || null;
   }
 
@@ -145,6 +145,21 @@ class DictionaryService {
     return false;
   }
 
+  reassignDomain(oldDomain, newDomain) {
+    const oldKey = this.normalizeDomain(oldDomain);
+    const newKey = this.normalizeDomain(newDomain);
+    if (!oldKey || !newKey || oldKey === newKey) return 0;
+    let updatedCount = 0;
+    this.tablesStore.forEach(table => {
+      if (table.domain === oldKey) {
+        table.domain = newKey;
+        updatedCount += 1;
+      }
+    });
+    if (updatedCount) this.persist();
+    return updatedCount;
+  }
+
   async updateColumnDescription(tableName, columnName, newDesc) {
     const table = this.tablesStore.find(t => t.tableName === tableName);
     if (table) {
@@ -218,9 +233,15 @@ class DictionaryService {
 
   async syncToQdrant() {
     const qdrantService = require('./qdrant_service');
+    const domainAliasService = require('../intelligent_core/domain_alias_service');
     try {
       const activeRelationships = this.tableRelationships.filter(relation => relation.isActive !== false);
-      const result = await qdrantService.syncTablesToQdrant(this.tablesStore, this.businessGlossary, activeRelationships);
+      const result = await qdrantService.syncTablesToQdrant(
+        this.tablesStore,
+        this.businessGlossary,
+        activeRelationships,
+        domainAliasService.getDomainAliases()
+      );
       if (result && result.success) {
         console.log(`[Qdrant] Đồng bộ thành công ${result.indexedTables || 0} bảng active & ${result.indexedGlossary || 0} thuật ngữ (${result.totalPoints || 0} vector points) vào Qdrant DB.`);
       }
