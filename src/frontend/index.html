@@ -222,7 +222,11 @@
       <!-- Top Header Bar -->
       <header class="top-bar">
         <div class="page-title-group">
-          <h1 id="page-heading">Tổng quan hệ thống</h1>
+          <span class="dashboard-heading-icon" id="dashboard-heading-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div>
+            <h1 id="page-heading">Tổng quan hệ thống</h1>
+            <p class="dashboard-heading-subtitle" id="dashboard-heading-subtitle">Tổng hợp hoạt động và hiệu suất của hệ thống AI</p>
+          </div>
         </div>
 
         <!-- Top Actions -->
@@ -259,40 +263,44 @@
 
       <!-- Top Metric Cards Grid (4 Column) -->
       <section class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-header">
-            <span class="metric-title">SQL Connectors</span>
-            <span class="metric-icon blue"><i class="fa-solid fa-plug"></i></span>
+        <div class="metric-card metric-card-blue">
+          <span class="metric-main-icon blue"><i class="fa-solid fa-share-nodes"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">SQL Connectors</span></div>
+            <div class="metric-val" id="val-connectors">00</div>
+            <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> Live Read-Only DB</div>
           </div>
-          <div class="metric-val" id="val-connectors">00</div>
-          <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> Live Read-Only DB</div>
+          <span class="metric-icon blue"><i class="fa-solid fa-circle"></i></span>
         </div>
 
-        <div class="metric-card">
-          <div class="metric-header">
-            <span class="metric-title">Schema đã nạp</span>
-            <span class="metric-icon purple"><i class="fa-solid fa-database"></i></span>
+        <div class="metric-card metric-card-purple">
+          <span class="metric-main-icon purple"><i class="fa-solid fa-database"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Schema đã nạp</span></div>
+            <div class="metric-val" id="val-tables">0</div>
+            <div class="metric-sub text-purple"><i class="fa-solid fa-circle-check"></i> Indexed Qdrant DB</div>
           </div>
-          <div class="metric-val" id="val-tables">0</div>
-          <div class="metric-sub text-purple"><i class="fa-solid fa-circle-check"></i> Indexed Qdrant DB</div>
+          <span class="metric-icon purple"><i class="fa-solid fa-layer-group"></i></span>
         </div>
 
-        <div class="metric-card">
-          <div class="metric-header">
-            <span class="metric-title">Text-to-SQL AI Queries</span>
-            <span class="metric-icon green"><i class="fa-solid fa-brain"></i></span>
+        <div class="metric-card metric-card-green">
+          <span class="metric-main-icon green"><i class="fa-solid fa-comment-dots"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Text-to-SQL AI Queries</span></div>
+            <div class="metric-val" id="val-queries">0</div>
+            <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> 100% &nbsp; SELECT ONLY</div>
           </div>
-          <div class="metric-val" id="val-queries">0</div>
-          <div class="metric-sub text-green"><i class="fa-solid fa-shield-halved"></i> 100% SELECT ONLY</div>
+          <span class="metric-icon green"><i class="fa-solid fa-chart-line"></i></span>
         </div>
 
-        <div class="metric-card">
-          <div class="metric-header">
-            <span class="metric-title">Token Usage Cost</span>
-            <span class="metric-icon orange"><i class="fa-solid fa-coins"></i></span>
+        <div class="metric-card metric-card-orange">
+          <span class="metric-main-icon orange"><i class="fa-solid fa-coins"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Token Usage Cost</span></div>
+            <div class="metric-val" id="val-cost">$0.00</div>
+            <div class="metric-sub text-muted">Ước tính theo provider</div>
           </div>
-          <div class="metric-val" id="val-cost">$0.00</div>
-          <div class="metric-sub text-muted">Ước tính theo provider</div>
+          <span class="metric-icon orange"><i class="fa-solid fa-arrow-trend-up"></i></span>
         </div>
       </section>
 
@@ -339,7 +347,7 @@
             <div class="card-title" id="dashboard-activity-title"><i class="fa-solid fa-calendar-days"></i> Bản đồ nhiệt</div>
             <div class="dashboard-activity-peak" id="dashboard-activity-peak">Chưa có dữ liệu hoạt động</div>
           </div>
-          <span class="dashboard-activity-period" id="dashboard-activity-period">Năm hiện tại</span>
+          <select class="dashboard-activity-period" id="dashboard-activity-period" onchange="changeDashboardActivityYear(this.value)" aria-label="Chọn năm hiển thị bản đồ nhiệt"></select>
         </div>
         <div class="dashboard-activity-body">
           <div class="dashboard-activity-scroll">
@@ -415,26 +423,34 @@
       <div class="copilot-chat-input-area">
         <div class="chat-input-wrapper copilot-chat-composer">
           <input type="text" class="chat-input" id="chat-user-input"
-            placeholder="Đặt câu hỏi hoặc yêu cầu sinh SQL (VD: Liệt kê 5 nhân viên có doanh số cao nhất)..."
+            placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)" maxlength="4000"
+            oninput="updateCopilotCharacterCount(this.value)"
             onkeypress="handleChatKeyPress(event)">
           <div id="copilot-attachment-preview" class="page-chat-attachment-preview"></div>
           <div class="page-chat-add-wrap">
-          <button id="copilot-add-trigger" class="btn-input-new-chat" onclick="toggleCopilotAddMenu(event)" title="Thêm nội dung" aria-haspopup="menu" aria-expanded="false">
-            <i class="fa-solid fa-plus"></i>
+          <button class="page-chat-option-btn is-disabled" type="button" disabled title="Đính kèm tệp — sắp ra mắt" aria-label="Đính kèm tệp, hiện chưa khả dụng"><i class="fa-solid fa-paperclip"></i></button>
+          <button id="copilot-knowledge-toggle" class="page-chat-option-btn" type="button" onclick="toggleCopilotKnowledgePanel(event)" title="Chọn nguồn tri thức" aria-label="Chọn nguồn tri thức" aria-expanded="false"><i class="fa-solid fa-database"></i></button>
+          <button id="copilot-web-toggle" class="page-chat-option-btn" type="button" onclick="toggleCopilotWebSearch(event)" title="Tìm kiếm web" aria-label="Tìm kiếm web" aria-pressed="false"><i class="fa-solid fa-globe"></i></button>
+          <button id="copilot-add-trigger" class="page-chat-tools-trigger" onclick="toggleCopilotAddMenu(event)" title="Công cụ khác" aria-haspopup="menu" aria-expanded="false">
+            <span>Công cụ</span><i class="fa-solid fa-chevron-down"></i>
           </button>
           <div id="copilot-add-menu" class="page-chat-add-menu" role="menu">
-            <button class="is-disabled" type="button" disabled aria-disabled="true" title="Tính năng đang tạm khóa"><i class="fa-solid fa-paperclip"></i><span>Thêm tệp hoặc ảnh</span><kbd>Ctrl+U</kbd></button>
-            <button type="button" onclick="toggleCopilotKnowledgePanel(event)"><i class="fa-solid fa-book-open"></i><span>Thêm từ thư viện tri thức</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
-            <div id="copilot-knowledge-panel" class="page-chat-knowledge-panel" hidden onclick="event.stopPropagation()"><div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="copilot-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderCopilotKnowledgeOptions()"></div><div id="copilot-knowledge-options" class="page-chat-knowledge-options"></div></div>
-            <div class="page-chat-menu-divider"></div>
-            <button id="copilot-web-toggle" type="button" onclick="toggleCopilotWebSearch(event)"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><i class="fa-solid fa-check menu-check"></i></button>
+            <button type="button" onclick="showCopilotAddNotice('project')"><i class="fa-solid fa-folder-tree"></i><span>Dự án</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+            <button type="button" onclick="showCopilotAddNotice('skills')"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Skills</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+            <button type="button" onclick="showCopilotAddNotice('connector')"><i class="fa-solid fa-plug"></i><span>Connector</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
           </div>
+          <div id="copilot-knowledge-panel" class="page-chat-knowledge-panel page-chat-inline-panel" hidden onclick="event.stopPropagation()"><div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="copilot-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderCopilotKnowledgeOptions()"></div><div id="copilot-knowledge-options" class="page-chat-knowledge-options"></div></div>
           <input id="copilot-file-input" type="file" multiple hidden onchange="handleCopilotFiles(event)">
           <input id="copilot-camera-input" type="file" accept="image/*" capture="environment" hidden onchange="handleCopilotFiles(event)">
           <select id="copilot-knowledge-source" multiple hidden><option value="auto" selected>Tự động</option><option value="none">Không dùng</option></select>
           </div>
           <div id="copilot-knowledge-inline" class="page-chat-knowledge-inline"></div>
-          <button id="copilot-send-button" class="chat-send-btn copilot-send-icon-btn" type="button" onclick="handleCopilotSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"><i class="fa-solid fa-paper-plane"></i></button>
+          <div class="page-chat-composer-actions">
+            <span id="copilot-character-count" class="page-chat-character-count">0/4000</span>
+            <button class="page-chat-compact-action" type="button" onclick="toggleCopilotAddMenu(event)" title="Tùy chọn khác" aria-label="Tùy chọn khác"><i class="fa-solid fa-ellipsis"></i></button>
+            <button class="page-chat-compact-action is-disabled" type="button" disabled title="Nhập bằng giọng nói — sắp ra mắt" aria-label="Nhập bằng giọng nói, hiện chưa khả dụng"><i class="fa-solid fa-microphone"></i></button>
+            <button id="copilot-send-button" class="chat-send-btn copilot-send-icon-btn" type="button" onclick="handleCopilotSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,8 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Pipeline tài liệu `Import/Watch Folder -> Parse -> Chunk -> BGE-M3 -> Qdrant -> Hybrid Retrieval -> LLM` đã có lát cắt chạy thật, nhưng metadata vẫn dùng JSON, ingestion chạy trong tiến trình Node.js và chưa có queue/DLQ production. Xem [Trạng thái triển khai](#trạng-thái-triển-khai) trước khi sử dụng với dữ liệu thật.
 
+Rà soát backend ngày **08/09/2026**: xem [Đánh giá tổng quan, lỗi tồn đọng và kế hoạch phát triển](docs/Backend_Review_Development_Plan.md). Tài liệu phân biệt vấn đề xác nhận từ mã nguồn với rủi ro cần integration/load test, kèm ưu tiên và tiêu chí nghiệm thu.
+
 ## Tính năng hiện có
 
 ### SQL Knowledge Connector
@@ -22,6 +24,11 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 - Quản lý AI Provider: thêm, sửa, xóa, kích hoạt, lấy danh sách model và kiểm tra kết nối.
 - Persona, lịch sử hội thoại, audit log và model selector.
 - Công cụ tích hợp: kiểm tra/sửa/thực thi SQL, tìm schema/glossary/Qdrant, tính toán, biểu đồ và export.
+- Local Model Harness: kiểm tra tham số công cụ, phục hồi lỗi, tổng hợp kết quả và kiểm tra yêu cầu biểu đồ/export.
+- Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
+- Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
+- Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
+- Workflow engine: thực thi bước tự động, điều kiện, retry và trace.
 
 ### API và quản trị
 
@@ -147,6 +154,8 @@ Nếu dùng Ollama cho embedding, khởi động Ollama và tải `bge-m3`. LLM 
 npm start
 ```
 
+Nếu đã tự khởi động các dịch vụ phụ trợ, có thể chạy trực tiếp bằng `npm run dev` hoặc `node server.js`; cách này không gọi script PowerShell khởi động Ollama/Qdrant.
+
 Trên Windows, `npm start` gọi `scripts/start-local.ps1` và tự động:
 
 1. Đọc cấu hình `.env`.
@@ -233,6 +242,9 @@ Backend hiện dùng `node:http`, chưa dùng Fastify. Metadata đang lưu bằn
 |   `-- backend/
 |       |-- routes/router.js          # REST và static-file router
 |       |-- intelligent_core/         # Agent loop, tools, adapters, guardrails
+|       |-- agent_core/               # Local Harness, tools và workflow engine
+|       |-- memory_core/              # Memory router, references và quality gate
+|       |-- training_core/            # Case collection, evaluation và đề xuất
 |       |-- knowledge_core/           # Library, Watch Folder và hybrid retrieval
 |       |-- services/                 # SQL, Qdrant, provider, auth, logs...
 |       `-- utils/storage_helper.js   # JSON persistence
@@ -260,6 +272,8 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 | `POST` | `/api/qdrant/sync` | Đồng bộ schema sang Qdrant |
 | `GET` | `/api/qdrant/status` | Trạng thái Qdrant |
 | `POST` | `/api/intelligent-core/chat` | Agentic chat và tool calling |
+| `POST` | `/api/intelligent-core/chat/stream` | SSE tiến trình và phản hồi cuối |
+| `GET` | `/api/training-report` | Báo cáo đánh giá và cải tiến |
 | `POST` | `/api/text2sql` | Chat/Text-to-SQL với provider tùy chọn |
 | `GET` | `/api/ai-providers` | Danh sách AI providers |
 | `POST` | `/api/ai-providers/add` | Thêm provider |
@@ -276,11 +290,13 @@ Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embe
 
 ## Kiểm tra mã nguồn
 
-Project có test nền tảng cho BM25, RRF, GraphRAG router và nhận diện file nguồn Watch Folder:
+Project có tests cho Local Harness, Memory Core, Training Core, workflow engine, adapters, settings, SQL/schema context, export và retrieval. Lần rà soát ngày 08/09/2026 chạy **95 tests đạt, 0 thất bại**. Kết quả này chưa chứng minh hoạt động end-to-end với SQL Server/Qdrant/LLM thật hoặc khả năng chịu tải:
 
 ```powershell
 npm test
 ```
+
+Các script bổ sung: `npm run eval:local`, `npm run training:collect`, `npm run training:evaluate`. Kiểm tra đầu vào và môi trường trong `scripts/` trước khi chạy; các lệnh này có thể gọi dịch vụ hoặc ghi kết quả đánh giá.
 
 Có thể kiểm tra cú pháp toàn bộ JavaScript bằng PowerShell:
 
@@ -306,13 +322,15 @@ Các kế hoạch Phase 1-2 đã xác định unit test, integration test, secur
 Phiên bản hiện tại là prototype và **không nên expose trực tiếp ra Internet**.
 
 - API key của AI Provider hiện được lưu plaintext trong `data/ai_providers.json`.
-- Một số API response provider có thể còn chứa cấu hình nhạy cảm.
+- `getProviders()` hiện vẫn trả `apiKey` gốc cùng `apiKeyMasked`; cần loại secret bằng DTO trước khi mở rộng quyền truy cập (BE-01).
 - Password hiện hash SHA-256 không salt; chưa dùng Argon2id/bcrypt.
 - Có tài khoản admin mặc định.
 - Chưa có RBAC theo Library/folder/document.
 - Chưa có CSRF protection hoàn chỉnh và cookie production hardening.
 - SQL Connector phải sử dụng database account read-only riêng.
 - Các file `data/*.json`, `.env`, archive và log có thể chứa secret hoặc dữ liệu nghiệp vụ.
+- `server.listen(PORT)` hiện không chỉ định host; URL localhost trong log không có nghĩa server chỉ lắng nghe localhost.
+- JSON persistence đang ghi đồng bộ và chỉ log lỗi ghi; session cũng được persist sau mỗi request hợp lệ. Cần xử lý độ bền dữ liệu và đo hiệu năng trước khi triển khai nhiều người dùng.
 
 Trước khi chia sẻ repo hoặc triển khai:
 
@@ -323,6 +341,8 @@ Trước khi chia sẻ repo hoặc triển khai:
 5. Hoàn thành Security Gate trong kế hoạch Phase 1-2.
 
 ## Roadmap
+
+Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Xem backlog BE-01–BE-11 và tiêu chí nghiệm thu trong [kế hoạch backend](docs/Backend_Review_Development_Plan.md). Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành.
 
 ### Phase 1 - Nền tảng MVP
 
@@ -350,6 +370,8 @@ Trước khi chia sẻ repo hoặc triển khai:
 Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ chi tiết để giao tự động cho coding agents. Phase 5 chưa được định nghĩa trong master plan hiện hành.
 
 ## Tài liệu
+
+- [Đánh giá backend và kế hoạch phát triển — 08/09/2026](docs/Backend_Review_Development_Plan.md)
 
 - [KnowledgeHub Master Plan v3](docs/KnowledgeHub_Master_Plan_v3.docx)
 - [Kế hoạch triển khai Phase 1-2 - bản nháp](docs/KnowledgeHub_Phase1_Phase2_Implementation_Plan_Draft.md)

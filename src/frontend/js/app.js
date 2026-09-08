@@ -522,6 +522,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   const cleanKey = tabKey.replace(/-/g, '_');
   const isDashboard = cleanKey === 'overview' || cleanKey === 'dashboard';
   const mainContent = document.querySelector('main.main-content');
+  mainContent?.classList.toggle('chat-workspace-page', cleanKey === 'page_chat');
   mainContent?.classList.toggle('training-workspace', cleanKey === 'training_core');
   mainContent?.classList.toggle('dictionary-workspace', cleanKey === 'dictionary');
   mainContent?.classList.toggle('settings-workspace', cleanKey === 'settings');
@@ -544,6 +545,9 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   if (isDashboard && typeof refreshDashboardMetrics === 'function') refreshDashboardMetrics();
 
   const pageHeading = document.getElementById('page-heading');
+  const dashboardHeadingIcon = document.getElementById('dashboard-heading-icon');
+  const dashboardHeadingSubtitle = document.getElementById('dashboard-heading-subtitle');
+  if (dashboardHeadingIcon) dashboardHeadingIcon.hidden = false;
   const titles = {
     settings: 'Cài đặt hệ thống',
     overview: 'Tổng quan hệ thống',
@@ -568,6 +572,42 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     api_docs: 'API tích hợp',
     library: 'Thư viện tri thức'
   };
+  const pageMeta = {
+    settings: { icon: 'fa-gear', subtitle: 'Quản lý cấu hình và tùy chọn vận hành hệ thống' },
+    page_chat: { icon: 'fa-comments', subtitle: 'Trao đổi, phân tích dữ liệu và làm việc cùng trợ lý AI' },
+    dictionary: { icon: 'fa-table-columns', subtitle: 'Khám phá cấu trúc bảng, cột và quan hệ trong cơ sở dữ liệu' },
+    glossary: { icon: 'fa-book-open', subtitle: 'Quản lý thuật ngữ và ngữ cảnh nghiệp vụ dùng chung' },
+    sql: { icon: 'fa-plug', subtitle: 'Quản lý các kết nối cơ sở dữ liệu an toàn' },
+    sql_connector: { icon: 'fa-plug', subtitle: 'Quản lý các kết nối cơ sở dữ liệu an toàn' },
+    sql_connectors: { icon: 'fa-plug', subtitle: 'Quản lý các kết nối cơ sở dữ liệu an toàn' },
+    providers: { icon: 'fa-microchip', subtitle: 'Cấu hình mô hình và nhà cung cấp trí tuệ nhân tạo' },
+    ai_providers: { icon: 'fa-microchip', subtitle: 'Cấu hình mô hình, định tuyến và nhà cung cấp AI' },
+    analytics: { icon: 'fa-chart-line', subtitle: 'Theo dõi mức sử dụng, chi phí và hiệu suất hệ thống' },
+    workflows: { icon: 'fa-diagram-project', subtitle: 'Thiết kế và quản lý các quy trình tự động hóa' },
+    mcp: { icon: 'fa-server', subtitle: 'Quản lý nguồn công cụ và ngữ cảnh từ MCP Server' },
+    mcp_sources: { icon: 'fa-server', subtitle: 'Quản lý nguồn công cụ và ngữ cảnh từ MCP Server' },
+    system_tools: { icon: 'fa-screwdriver-wrench', subtitle: 'Kiểm tra và vận hành các công cụ của hệ thống' },
+    watchfolder: { icon: 'fa-folder-open', subtitle: 'Theo dõi và tự động tiếp nhận tài liệu từ thư mục' },
+    system_logs: { icon: 'fa-file-lines', subtitle: 'Theo dõi sự kiện và trạng thái vận hành hệ thống' },
+    chat_history: { icon: 'fa-clock-rotate-left', subtitle: 'Tra cứu lịch sử hội thoại và các lượt gọi AI' },
+    chat_feedback: { icon: 'fa-thumbs-up', subtitle: 'Theo dõi phản hồi và chất lượng câu trả lời AI' },
+    training_core: { icon: 'fa-graduation-cap', subtitle: 'Đánh giá dữ liệu huấn luyện và đề xuất cải tiến mô hình' },
+    api_docs: { icon: 'fa-code', subtitle: 'Tài liệu và hướng dẫn tích hợp API hệ thống' },
+    library: { icon: 'fa-book-bookmark', subtitle: 'Quản lý tài liệu và nguồn tri thức dành cho AI' }
+  };
+  const activeMeta = pageMeta[cleanKey] || pageMeta[tabKey];
+  if (dashboardHeadingIcon) {
+    dashboardHeadingIcon.classList.toggle('is-page-icon', !isDashboard);
+    dashboardHeadingIcon.innerHTML = isDashboard
+      ? '<i></i><i></i><i></i>'
+      : `<i class="fa-solid ${activeMeta?.icon || 'fa-layer-group'}" aria-hidden="true"></i>`;
+  }
+  if (dashboardHeadingSubtitle) {
+    dashboardHeadingSubtitle.hidden = false;
+    dashboardHeadingSubtitle.textContent = isDashboard
+      ? 'Tổng hợp hoạt động và hiệu suất của hệ thống AI'
+      : (activeMeta?.subtitle || 'Quản lý và vận hành hệ thống KnowledgeHub AI');
+  }
   if (pageHeading) {
     pageHeading.textContent = titles[cleanKey] || titles[tabKey] || 'KnowledgeHub AI';
   }
@@ -1042,6 +1082,10 @@ function closeCopilotComposerMenus() {
   document.getElementById('copilot-add-menu')?.classList.remove('is-open');
   document.getElementById('copilot-model-trigger')?.setAttribute('aria-expanded', 'false');
   document.getElementById('copilot-add-trigger')?.setAttribute('aria-expanded', 'false');
+  const knowledgePanel = document.getElementById('copilot-knowledge-panel');
+  if (knowledgePanel) knowledgePanel.hidden = true;
+  document.getElementById('copilot-knowledge-toggle')?.classList.remove('is-active');
+  document.getElementById('copilot-knowledge-toggle')?.setAttribute('aria-expanded', 'false');
 }
 
 window.toggleCopilotModelMenu = function toggleCopilotModelMenu(event) {
@@ -1129,9 +1173,9 @@ window.populateCopilotKnowledgeSources = async function () {
   const select = document.getElementById('copilot-knowledge-source'); if (!select) return; const current = getCopilotKnowledgeValues(select);
   try { const response = await fetch('/api/library'); const data = await response.json(); window.copilotKnowledgeDocuments = (Array.isArray(data) ? data : []).filter(item => Number(item.chunksCount || 0) > 0); select.innerHTML = '<option value="auto">Tự động</option><option value="none">Không dùng thư viện tri thức</option>' + window.copilotKnowledgeDocuments.map(item => `<option value="${escapeCopilotHtml(item.id)}">${escapeCopilotHtml(item.title)}</option>`).join(''); const available = new Set([...select.options].map(option => option.value)); setCopilotKnowledgeValues(select, current.filter(value => available.has(value))); renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); } catch (_) { }
 };
-window.toggleCopilotKnowledgePanel = function (event) { event?.stopPropagation(); const panel = document.getElementById('copilot-knowledge-panel'); if (!panel) return; panel.hidden = !panel.hidden; if (!panel.hidden) { renderCopilotKnowledgeOptions(); setTimeout(() => document.getElementById('copilot-knowledge-search')?.focus(), 0); } };
+window.toggleCopilotKnowledgePanel = function (event) { event?.stopPropagation(); const panel = document.getElementById('copilot-knowledge-panel'); if (!panel) return; panel.hidden = !panel.hidden; document.getElementById('copilot-knowledge-toggle')?.classList.toggle('is-active', !panel.hidden); document.getElementById('copilot-knowledge-toggle')?.setAttribute('aria-expanded', String(!panel.hidden)); if (!panel.hidden) { renderCopilotKnowledgeOptions(); setTimeout(() => document.getElementById('copilot-knowledge-search')?.focus(), 0); } };
 window.renderCopilotKnowledgeOptions = function () { const root = document.getElementById('copilot-knowledge-options'), select = document.getElementById('copilot-knowledge-source'); if (!root || !select) return; const q = (document.getElementById('copilot-knowledge-search')?.value || '').toLowerCase(); const docs = (window.copilotKnowledgeDocuments || []).filter(x => x.title.toLowerCase().includes(q)); const selected = new Set(getCopilotKnowledgeValues(select)); const option = (value, icon, title, note) => `<button type="button" class="chat-knowledge-option ${selected.has(value) ? 'active' : ''}" data-value="${escapeCopilotHtml(value)}" onclick="selectCopilotKnowledgeSource(this.dataset.value,event)"><i class="fa-solid ${icon}"></i><span><strong>${escapeCopilotHtml(title)}</strong><small>${escapeCopilotHtml(note)}</small></span><i class="fa-solid fa-check"></i></button>`; root.innerHTML = option('auto', 'fa-wand-magic-sparkles', 'Tự động chọn nguồn', 'Hybrid RAG trong toàn bộ thư viện') + option('none', 'fa-ban', 'Không dùng nguồn tri thức', 'Chỉ dùng CSDL và hội thoại') + docs.map(x => option(x.id, 'fa-file-lines', x.title, `${x.fileType} · ${x.chunksCount} chunks · ${x.status === 'Đã lập chỉ mục' ? 'Hybrid' : 'chỉ BM25'}`)).join(''); };
-window.selectCopilotKnowledgeSource = function (value, event) { event?.stopPropagation(); const select = document.getElementById('copilot-knowledge-source'); if (!select) return; const current = new Set(getCopilotKnowledgeValues(select)); if (value === 'auto' || value === 'none') { setCopilotKnowledgeValues(select, [value]); if (value === 'none') { window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); } } else { current.delete('auto'); current.delete('none'); if (current.has(value)) current.delete(value); else current.add(value); setCopilotKnowledgeValues(select, [...current]); window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); } renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); };
+window.selectCopilotKnowledgeSource = function (value, event) { event?.stopPropagation(); const select = document.getElementById('copilot-knowledge-source'); if (!select) return; const current = new Set(getCopilotKnowledgeValues(select)); if (value === 'auto' || value === 'none') { setCopilotKnowledgeValues(select, [value]); if (value === 'none') { window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); document.getElementById('copilot-web-toggle')?.setAttribute('aria-pressed', 'false'); } } else { current.delete('auto'); current.delete('none'); if (current.has(value)) current.delete(value); else current.add(value); setCopilotKnowledgeValues(select, [...current]); window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); document.getElementById('copilot-web-toggle')?.setAttribute('aria-pressed', 'false'); } renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); };
 function renderCopilotKnowledgeChip() {
   const root = document.getElementById('copilot-knowledge-inline'), select = document.getElementById('copilot-knowledge-source');
   if (!root || !select) return;
@@ -1157,7 +1201,13 @@ window.toggleCopilotWebSearch = function toggleCopilotWebSearch(event) {
     window.renderCopilotKnowledgeOptions();
   }
   document.getElementById('copilot-web-toggle')?.classList.toggle('is-active', window.copilotWebSearchEnabled);
+  document.getElementById('copilot-web-toggle')?.setAttribute('aria-pressed', String(window.copilotWebSearchEnabled));
   renderCopilotKnowledgeChip();
+};
+
+window.updateCopilotCharacterCount = function updateCopilotCharacterCount(value = '') {
+  const count = document.getElementById('copilot-character-count');
+  if (count) count.textContent = `${String(value).length}/4000`;
 };
 
 window.showCopilotAddNotice = function showCopilotAddNotice(type) {
@@ -1205,6 +1255,7 @@ window.resetCopilotChatModal = function resetCopilotChatModal() {
   const input = document.getElementById('chat-user-input');
   if (messages) messages.innerHTML = getCopilotWelcomeHtml();
   if (input) input.value = '';
+  window.updateCopilotCharacterCount?.('');
   window.copilotAttachments = [];
   renderCopilotAttachments();
 };
@@ -1287,6 +1338,7 @@ window.sendChatMessage = async function sendChatMessage() {
   if (!text && attachedFiles.length === 0) return;
   const providerId = document.getElementById('chat-model-selector')?.value || null;
   input.value = '';
+  window.updateCopilotCharacterCount('');
   window.copilotAttachments = [];
   renderCopilotAttachments();
 

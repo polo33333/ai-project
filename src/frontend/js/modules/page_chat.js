@@ -3,6 +3,8 @@ window.currentChatSessionId = null;
 window.chatSessions = [];  // Start empty - first session created on first view open
 window.aiPersona = { name: 'KAI', role: 'Trợ lý Dữ liệu Thông minh' }; // default, overridden by API
 const CHAT_STORAGE_KEY = 'knowledgehub_chat_sessions_v1';
+const CHAT_ACTIVE_SESSION_KEY = 'knowledgehub_active_chat_session_v1';
+const normalizedChatSessions = new WeakSet();
 window.pageChatAttachments = [];
 window.pageChatWebSearchEnabled = false;
 window.pageChatRequestController = null;
@@ -86,6 +88,10 @@ function closePageChatMenus() {
   document.getElementById('page-chat-add-menu')?.classList.remove('is-open');
   document.getElementById('page-chat-model-trigger')?.setAttribute('aria-expanded', 'false');
   document.getElementById('page-chat-add-trigger')?.setAttribute('aria-expanded', 'false');
+  const knowledgePanel = document.getElementById('page-chat-knowledge-panel');
+  if (knowledgePanel) knowledgePanel.hidden = true;
+  document.getElementById('page-chat-knowledge-toggle')?.classList.remove('is-active');
+  document.getElementById('page-chat-knowledge-toggle')?.setAttribute('aria-expanded', 'false');
 }
 
 function toggleChatModelMenu(event) {
@@ -163,6 +169,7 @@ function togglePageChatWebSearch(event) {
     renderChatKnowledgeOptions();
   }
   document.getElementById('page-chat-web-toggle')?.classList.toggle('is-active', window.pageChatWebSearchEnabled);
+  document.getElementById('page-chat-web-toggle')?.setAttribute('aria-pressed', String(window.pageChatWebSearchEnabled));
   renderChatKnowledgeChip();
 }
 
@@ -194,6 +201,7 @@ document.addEventListener('keydown', event => {
 
 function saveChatSessions() {
   try {
+    localStorage.setItem(CHAT_ACTIVE_SESSION_KEY, window.currentChatSessionId || '');
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
       currentChatSessionId: window.currentChatSessionId,
       chatSessions: window.chatSessions || []
@@ -248,10 +256,16 @@ function fixStoredMojibake(value) {
 
 function normalizeStoredChatSession(session) {
   if (!session || typeof session !== 'object') return session;
+  if (normalizedChatSessions.has(session)) return session;
+  const idTimestamp = Number(String(session.id || '').match(/(\d{10,})/)?.[1]);
+  const fallbackTimestamp = Number.isFinite(idTimestamp) ? idTimestamp : Date.now();
+  session.createdAt = Number(session.createdAt) || fallbackTimestamp;
+  session.updatedAt = Number(session.updatedAt) || session.createdAt;
   session.title = fixStoredMojibake(session.title || '');
   session.messages = Array.isArray(session.messages)
-    ? session.messages.map(message => ({
+    ? session.messages.map((message, index) => ({
       ...message,
+      createdAt: Number(message.createdAt) || session.createdAt + index,
       html: fixStoredMojibake(message.html || '')
     }))
     : [];
@@ -261,6 +275,7 @@ function normalizeStoredChatSession(session) {
       content: fixStoredMojibake(item.content || '')
     }))
     : [];
+  normalizedChatSessions.add(session);
   return session;
 }
 
@@ -270,7 +285,7 @@ function loadChatSessions() {
     if (!raw) return;
     const data = JSON.parse(raw);
     if (Array.isArray(data.chatSessions)) window.chatSessions = data.chatSessions.map(normalizeStoredChatSession);
-    if (data.currentChatSessionId) window.currentChatSessionId = data.currentChatSessionId;
+    window.currentChatSessionId = localStorage.getItem(CHAT_ACTIVE_SESSION_KEY) || data.currentChatSessionId || null;
     saveChatSessions();
   } catch (err) {
     console.warn('Không thể đọc chat session:', err);
@@ -296,7 +311,9 @@ function ensureChatSession() {
       id: newId,
       title: 'Cuộc trò chuyện mới',
       messages: [],
-      history: []
+      history: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     });
     window.currentChatSessionId = newId;
     saveChatSessions();
@@ -672,7 +689,28 @@ function enhanceAssistantMessageNode(node) {
   bubble.classList.add('chat-ai-message-bubble');
 }
 
-function appendChatMessage(record, shouldPersist = true) {
+function addChatMessageTime(node, role, timestamp) {
+  const time = new Date(Number(timestamp));
+  const label = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  if (role === 'user') {
+    const bubble = node.querySelector('.chat-user-message-bubble');
+    if (bubble && !bubble.querySelector('.chat-message-time')) {
+      bubble.insertAdjacentHTML('afterbegin', `<div class="chat-user-message-meta"><strong>Bạn</strong><time class="chat-message-time">${label}</time></div>`);
+    }
+    return;
+  }
+  const bubble = node.querySelector('.chat-ai-message-bubble');
+  if (!bubble || bubble.querySelector('.chat-message-time')) return;
+  const existingHead = bubble.firstElementChild;
+  if (existingHead?.querySelector('.fa-robot')) {
+    existingHead.classList.add('chat-ai-message-meta');
+    existingHead.insertAdjacentHTML('beforeend', `<time class="chat-message-time">${label}</time>`);
+  } else {
+    bubble.insertAdjacentHTML('afterbegin', `<div class="chat-ai-message-meta"><strong>Trợ lý AI</strong><time class="chat-message-time">${label}</time></div>`);
+  }
+}
+
+function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
   const container = document.getElementById('page-chat-messages-container');
   if (!container || !record) return;
 
@@ -680,11 +718,13 @@ function appendChatMessage(record, shouldPersist = true) {
   wrapper.innerHTML = record.html || '';
   const node = wrapper.firstElementChild;
   if (!node) return;
+  record.createdAt = Number(record.createdAt) || Date.now();
   if (record.role === 'user') enhanceUserMessageNode(node, record.content || '');
   if (record.role === 'assistant') enhanceAssistantMessageNode(node);
+  addChatMessageTime(node, record.role, record.createdAt);
 
   container.appendChild(node);
-  container.scrollTop = container.scrollHeight;
+  if (shouldScroll) container.scrollTop = container.scrollHeight;
 
   if (record.chartSpec && record.chartId) {
     requestAnimationFrame(() => {
@@ -696,6 +736,7 @@ function appendChatMessage(record, shouldPersist = true) {
     const session = getCurrentChatSession();
     if (session) {
       session.messages.push(record);
+      session.updatedAt = Date.now();
       saveChatSessions();
     }
   }
@@ -713,8 +754,9 @@ function renderCurrentChatMessages() {
       ? { ...record, content: userHistory[userIndex]?.content || '' }
       : record;
     if (record.role === 'user') userIndex += 1;
-    appendChatMessage(hydrated, false);
+    appendChatMessage(hydrated, false, false);
   });
+  container.scrollTop = container.scrollHeight;
 }
 
 async function submitChatFeedback(button) {
@@ -803,6 +845,7 @@ async function sendPageChatMessage() {
   if (!session) return;
 
   input.value = '';
+  updatePageChatCharacterCount('');
   window.pageChatAttachments = [];
   renderPageChatAttachments();
 
@@ -1166,6 +1209,8 @@ function toggleChatKnowledgePanel(event) {
   const panel = document.getElementById('page-chat-knowledge-panel');
   if (!panel) return;
   panel.hidden = !panel.hidden;
+  document.getElementById('page-chat-knowledge-toggle')?.classList.toggle('is-active', !panel.hidden);
+  document.getElementById('page-chat-knowledge-toggle')?.setAttribute('aria-expanded', String(!panel.hidden));
   if (!panel.hidden) { renderChatKnowledgeOptions(); setTimeout(() => document.getElementById('page-chat-knowledge-search')?.focus(), 0); }
 }
 
@@ -1191,6 +1236,7 @@ function selectChatKnowledgeSource(value, event) {
     if (value === 'none') {
       window.pageChatWebSearchEnabled = false;
       document.getElementById('page-chat-web-toggle')?.classList.remove('is-active');
+      document.getElementById('page-chat-web-toggle')?.setAttribute('aria-pressed', 'false');
     }
   } else {
     current.delete('auto');
@@ -1199,6 +1245,7 @@ function selectChatKnowledgeSource(value, event) {
     setChatKnowledgeValues(select, [...current]);
     window.pageChatWebSearchEnabled = false;
     document.getElementById('page-chat-web-toggle')?.classList.remove('is-active');
+    document.getElementById('page-chat-web-toggle')?.setAttribute('aria-pressed', 'false');
   }
   updateChatKnowledgeSourceState();
 }
@@ -1237,6 +1284,11 @@ function handlePageChatKeyPress(e) {
   }
 }
 
+function updatePageChatCharacterCount(value = '') {
+  const count = document.getElementById('page-chat-character-count');
+  if (count) count.textContent = `${String(value).length}/4000`;
+}
+
 function useQuickPrompt(text) {
   if (window.pageChatIsResponding) {
     if (typeof showToast === 'function') showToast('Hãy dừng câu trả lời hiện tại trước khi gửi yêu cầu mới.', 'info');
@@ -1255,27 +1307,35 @@ function renderChatSessionsList() {
   const container = document.getElementById('chat-sessions-list');
   if (!container) return;
   container.innerHTML = '';
-  const sessions = (window.chatSessions || []).map(normalizeStoredChatSession).sort((a, b) => {
-    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-    if (a.pinned && b.pinned) return Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0);
-    return 0;
-  });
+  const sessions = (window.chatSessions || []).map(normalizeStoredChatSession)
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
   window.chatSessions = sessions;
-  saveChatSessions();
   if (sessions.length === 0) {
     container.innerHTML = `<div style="text-align:center;padding:20px 10px;color:var(--text-muted);font-size:12.5px;">Chưa có cuộc trò chuyện.<br>Bấm <strong>"+ Tạo đoạn chat mới"</strong> để bắt đầu. </div>`;
     return;
   }
-  sessions.forEach(session => {
+  const formatSessionTime = timestamp => {
+    const date = new Date(Number(timestamp));
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const daysAgo = Math.floor((startToday - startDate) / 86400000);
+    if (daysAgo <= 0) return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    if (daysAgo === 1) return 'Hôm qua';
+    if (daysAgo < 7) return `${daysAgo} ngày trước`;
+    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  };
+  const renderSession = session => {
     const isCurrent = session.id === window.currentChatSessionId;
     const div = document.createElement('div');
     div.className = `chat-session-item${isCurrent ? ' is-current' : ''}${session.pinned ? ' is-pinned' : ''}`;
     div.dataset.sessionId = session.id;
     div.innerHTML = `
       <div class="chat-session-main" onclick="selectChatSession('${session.id}')">
-        <i class="fa-${session.pinned ? 'solid' : 'regular'} fa-message"></i>
+        <i class="fa-${session.pinned ? 'solid' : 'regular'} ${session.pinned ? 'fa-thumbtack' : 'fa-message'}"></i>
         <span title="${escapeChatMarkdown(session.title)}">${escapeChatMarkdown(session.title)}</span>
-        ${session.pinned ? '<i class="fa-solid fa-thumbtack chat-session-pin-indicator" title="Đã ghim"></i>' : ''}
+        ${session.pinned ? '' : `<time>${formatSessionTime(session.updatedAt)}</time>`}
       </div>
       <button class="chat-session-more" onclick="toggleChatSessionMenu('${session.id}',event)" title="Tùy chọn" aria-label="Tùy chọn đoạn chat" aria-expanded="false">
         <i class="fa-solid fa-ellipsis"></i>
@@ -1288,7 +1348,18 @@ function renderChatSessionsList() {
       </div>
     `;
     container.appendChild(div);
-  });
+  };
+  const recentSessions = sessions.filter(session => !session.pinned);
+  const pinnedSessions = sessions.filter(session => session.pinned)
+    .sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0));
+  if (recentSessions.length) {
+    container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title"><i class="fa-regular fa-clock"></i> Gần đây</div>');
+    recentSessions.forEach(renderSession);
+  }
+  if (pinnedSessions.length) {
+    container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title is-pinned"><i class="fa-solid fa-thumbtack"></i> Ghim</div>');
+    pinnedSessions.forEach(renderSession);
+  }
 
   // Sync title in header
   const currentSession = sessions.find(s => s.id === window.currentChatSessionId);
@@ -1350,7 +1421,8 @@ function createNewChatSession() {
   if (window.pageChatIsResponding) return showToast('Hãy dừng câu trả lời hiện tại trước khi tạo đoạn chat mới.', 'info');
   const newId = `session-${Date.now()}`;
   const count = window.chatSessions.length + 1;
-  const newSession = { id: newId, title: `Cuộc trò chuyện mới ${count}`, messages: [], history: [] };
+  const now = Date.now();
+  const newSession = { id: newId, title: `Cuộc trò chuyện mới ${count}`, messages: [], history: [], createdAt: now, updatedAt: now };
   window.chatSessions.unshift(newSession);
   window.currentChatSessionId = newId;
   saveChatSessions();
@@ -1385,7 +1457,7 @@ function deleteSingleChatSession(id, event) {
 function selectChatSession(id) {
   if (window.pageChatIsResponding && id !== window.currentChatSessionId) return showToast('Hãy dừng câu trả lời hiện tại trước khi chuyển đoạn chat.', 'info');
   window.currentChatSessionId = id;
-  saveChatSessions();
+  try { localStorage.setItem(CHAT_ACTIVE_SESSION_KEY, id); } catch (_) { /* storage unavailable */ }
   const session = window.chatSessions.find(s => s.id === id);
   if (session) {
     normalizeStoredChatSession(session);
@@ -1477,6 +1549,7 @@ window.sendPageChatMessage = sendPageChatMessage;
 window.handlePageChatSendAction = handlePageChatSendAction;
 window.stopPageChatResponse = stopPageChatResponse;
 window.handlePageChatKeyPress = handlePageChatKeyPress;
+window.updatePageChatCharacterCount = updatePageChatCharacterCount;
 window.useQuickPrompt = useQuickPrompt;
 window.createNewChatSession = createNewChatSession;
 window.deleteSingleChatSession = deleteSingleChatSession;
@@ -1505,4 +1578,5 @@ document.addEventListener('DOMContentLoaded', () => {
   populateChatModelSelector();
   fetchAndRenderQuickPrompts();
   document.getElementById('page-chat-web-toggle')?.classList.toggle('is-active', window.pageChatWebSearchEnabled);
+  document.getElementById('page-chat-web-toggle')?.setAttribute('aria-pressed', String(window.pageChatWebSearchEnabled));
 });

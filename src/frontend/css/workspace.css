@@ -204,7 +204,7 @@ header.top-bar { background: #ffffffeb; box-shadow: none; border-bottom-color: v
 }
 .page-chat-composer {
   display: grid !important;
-  grid-template-columns: 36px minmax(0, 1fr) 42px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px 10px !important;
   padding: 10px 10px 9px 14px !important;
@@ -231,18 +231,22 @@ header.top-bar { background: #ffffffeb; box-shadow: none; border-bottom-color: v
   line-height: 1.5;
 }
 .page-chat-composer .page-chat-attachment-preview { grid-column: 1 / -1; margin: 0; }
-.page-chat-composer .page-chat-add-wrap { grid-column: 1; }
+.page-chat-composer .page-chat-add-wrap { grid-column: 1; grid-row: 3; }
 .page-chat-composer .page-chat-knowledge-inline {
   grid-column: 2;
+  grid-row: 3;
   min-width: 0;
-  flex-wrap: wrap;
-  overflow: hidden;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.page-chat-composer .page-chat-send-button { grid-column: 3; justify-self: end; }
+.page-chat-composer .page-chat-knowledge-inline::-webkit-scrollbar { display: none; }
+.page-chat-composer .page-chat-knowledge-inline .chat-knowledge-chip { flex: 0 0 auto; }
+.page-chat-composer .page-chat-composer-actions { grid-column: 3; grid-row: 3; justify-self: end; }
 .page-chat-composer .chat-knowledge-chip { max-width: min(100%, 360px); }
 #copilot-modal .copilot-chat-composer {
   display: grid !important;
-  grid-template-columns: 36px minmax(0, 1fr) 42px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px 10px;
   padding: 10px 10px 9px 14px !important;
@@ -252,6 +256,10 @@ header.top-bar { background: #ffffffeb; box-shadow: none; border-bottom-color: v
   box-shadow: 0 2px 8px #20283f0a;
   transition: border-color .2s, box-shadow .2s;
 }
+#copilot-modal .copilot-chat-composer .page-chat-add-wrap { grid-column: 1; grid-row: 3; display: flex; align-items: center; gap: 7px; }
+#copilot-modal .copilot-chat-composer .page-chat-knowledge-inline { grid-column: 2; grid-row: 3; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#copilot-modal .copilot-chat-composer .page-chat-knowledge-inline::-webkit-scrollbar { display: none; }
+#copilot-modal .copilot-chat-composer .page-chat-composer-actions { grid-column: 3; grid-row: 3; justify-self: end; }
 #copilot-modal .copilot-chat-composer:focus-within { border-color: #8e86df; box-shadow: 0 0 0 3px #5955d90d; }
 #copilot-modal .copilot-chat-composer .chat-input {
   grid-column: 1 / -1;
@@ -366,7 +374,7 @@ button:disabled { cursor: not-allowed; }
   #page-chat-messages-container { padding: 14px !important; min-height: 120px; }
   #quick-prompts-bar { padding-inline: 12px !important; }
   .chat-input-wrapper { min-width: 0; gap: 5px !important; padding-left: 8px !important; }
-  .page-chat-composer { grid-template-columns: 34px minmax(0, 1fr) 42px; padding: 9px 8px 8px !important; }
+  .page-chat-composer { grid-template-columns: auto minmax(0, 1fr) auto; padding: 9px 8px 8px !important; }
   #page-chat-user-input { min-width: 0; width: 100%; }
   .library-search { flex-basis: 100%; max-width: none; }
   .library-controls { flex-wrap: wrap; }

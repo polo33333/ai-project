@@ -8,6 +8,7 @@ window.dashboardAnalyticsHistory = window.dashboardAnalyticsHistory || [];
 window.dashboardAnalyticsProviders = window.dashboardAnalyticsProviders || [];
 window.dashboardFeedbackRange = window.dashboardFeedbackRange || '7d';
 window.dashboardFeedbackData = window.dashboardFeedbackData || [];
+window.dashboardActivityYear = window.dashboardActivityYear || new Date().getFullYear();
 
 function findAnalyticsProvider(item = {}, providers = []) {
   const providerId = item.requestPayload?.providerId || null;
@@ -214,7 +215,20 @@ function renderDashboardActivity(history = []) {
 
   const today = new Date();
   today.setHours(12, 0, 0, 0);
-  const year = today.getFullYear();
+  const currentYear = today.getFullYear();
+  const availableYears = new Set([currentYear]);
+  (history || []).forEach(item => {
+    const date = parseViTimestamp(item.timestamp);
+    if (!date) return;
+    availableYears.add(Number(getVietnamDateParts(date).year));
+  });
+  const years = [...availableYears].filter(Number.isInteger).sort((a, b) => b - a);
+  const requestedYear = Number(window.dashboardActivityYear);
+  const year = availableYears.has(requestedYear) ? requestedYear : currentYear;
+  window.dashboardActivityYear = year;
+  if (periodLabel) {
+    periodLabel.innerHTML = years.map(value => `<option value="${value}"${value === year ? ' selected' : ''}>Năm ${value}</option>`).join('');
+  }
   const yearStart = new Date(year, 0, 1, 12);
   const yearEnd = new Date(year, 11, 31, 12);
   const firstDay = new Date(yearStart);
@@ -243,7 +257,7 @@ function renderDashboardActivity(history = []) {
     const key = vietnamDayKey(date);
     days.push({ date, key, ...(activity.get(key) || { queries: 0, tokens: 0 }) });
   }
-  const visibleDays = days.filter(day => day.date >= yearStart && day.date <= yearEnd && day.date <= today);
+  const visibleDays = days.filter(day => day.date >= yearStart && day.date <= yearEnd && (year < currentYear || day.date <= today));
   const peak = visibleDays.reduce((best, day) => day.tokens > best.tokens ? day : best, { tokens: 0, queries: 0, date: null });
   const totalTokens = visibleDays.reduce((sum, day) => sum + day.tokens, 0);
   const totalQueries = visibleDays.reduce((sum, day) => sum + day.queries, 0);
@@ -273,13 +287,19 @@ function renderDashboardActivity(history = []) {
   peakLabel.textContent = peak.date
     ? `Cao nhất: ${formatNumber(peak.tokens)} tokens (${peak.date.toLocaleDateString('vi-VN')})`
     : `Chưa có dữ liệu hoạt động trong năm ${year}`;
-  if (periodLabel) periodLabel.textContent = `Năm ${year}`;
   const setSummary = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
   setSummary('dashboard-activity-total-tokens', formatNumber(totalTokens));
   setSummary('dashboard-activity-total-queries', formatNumber(totalQueries));
   setSummary('dashboard-activity-active-days', formatNumber(activeDays));
   setSummary('dashboard-activity-success-rate', totalQueries ? `${Math.round(successfulQueries / totalQueries * 100)}%` : '0%');
   setSummary('dashboard-activity-best-month', monthlyTokens[bestMonthIndex] ? `Tháng ${bestMonthIndex + 1} · ${formatNumber(monthlyTokens[bestMonthIndex])} tokens` : 'Chưa có dữ liệu');
+}
+
+function changeDashboardActivityYear(year) {
+  const parsedYear = Number(year);
+  if (!Number.isInteger(parsedYear)) return;
+  window.dashboardActivityYear = parsedYear;
+  renderDashboardActivity(window.dashboardAnalyticsHistory || []);
 }
 
 function renderDashboardChart(history, providers = window.dashboardAnalyticsProviders || []) {
@@ -372,6 +392,13 @@ function renderDashboardFeedbackChart(feedback = []) {
     ? `${total} lượt đánh giá · ${satisfaction}% hài lòng`
     : 'Chưa có đánh giá';
 
+  canvas.setAttribute(
+    'aria-label',
+    total
+      ? `${total} lượt đánh giá, ${satisfaction}% hài lòng, ${likes} thích và ${dislikes} không thích`
+      : 'Chưa có đánh giá câu trả lời AI'
+  );
+
   const feedbackPercentLabels = {
     id: 'feedbackPercentLabels',
     afterDatasetsDraw(chartInstance) {
@@ -399,6 +426,28 @@ function renderDashboardFeedbackChart(feedback = []) {
     }
   };
 
+  const feedbackCenterLabel = {
+    id: 'feedbackCenterLabel',
+    afterDatasetsDraw(chartInstance) {
+      const arc = chartInstance.getDatasetMeta(0)?.data?.[0];
+      if (!arc) return;
+      const ctx = chartInstance.ctx;
+      const primaryColor = document.documentElement.dataset.theme === 'dark' ? '#e2e8f0' : '#2563a5';
+      const secondaryColor = document.documentElement.dataset.theme === 'dark' ? '#94a3b8' : '#64748b';
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = primaryColor;
+      ctx.font = '700 18px Inter, sans-serif';
+      ctx.fillText(`${satisfaction}%`, arc.x, arc.y - 8);
+      ctx.fillStyle = secondaryColor;
+      ctx.font = '500 12px Inter, sans-serif';
+      ctx.fillText(total ? 'Hài lòng' : 'Chưa có dữ liệu', arc.x, arc.y + 13);
+      ctx.restore();
+    }
+  };
+
   destroyChart('dashboardFeedbackChart');
   window.khCharts.dashboardFeedbackChart = new Chart(canvas, {
     type: 'doughnut',
@@ -407,16 +456,20 @@ function renderDashboardFeedbackChart(feedback = []) {
       datasets: [{
         data: [likes, dislikes],
         backgroundColor: ['#10b981', '#ef4444'],
-        borderColor: () => document.documentElement.dataset.theme === 'dark' ? '#151f30' : '#ffffff',
-        borderWidth: 3,
+        borderColor: 'transparent',
+        borderWidth: 0,
+        borderRadius: 12,
+        spacing: 4,
         hoverOffset: 8
       }]
     },
-    plugins: [feedbackPercentLabels],
+    plugins: [feedbackPercentLabels, feedbackCenterLabel],
     options: {
       responsive: true,
       maintainAspectRatio: false,
       cutout: '56%',
+      rotation: 0,
+      layout: { padding: { top: 2 } },
       animation: { duration: 700, easing: 'easeOutQuart', animateRotate: true, animateScale: true },
       plugins: {
         legend: { position: 'bottom', labels: { usePointStyle: true, padding: 18, font: { weight: '700' } } },
@@ -591,3 +644,4 @@ window.refreshDashboardMetrics = refreshDashboardMetrics;
 window.initPageAnalyticsCharts = initPageAnalyticsCharts;
 window.changeDashboardAnalyticsRange = changeDashboardAnalyticsRange;
 window.changeDashboardFeedbackRange = changeDashboardFeedbackRange;
+window.changeDashboardActivityYear = changeDashboardActivityYear;

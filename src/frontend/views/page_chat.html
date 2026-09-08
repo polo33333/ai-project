@@ -1,6 +1,6 @@
 ﻿<!-- PAGE VIEW: Dedicated AI Chat & Text-to-SQL Playground Page View -->
 <div class="content-card" id="view-page_chat" style="display: none; grid-column: span 2; padding: 0; background: transparent; border: none; box-shadow: none;">
-  <div class="chat-page-layout"
+  <div class="chat-page-layout chat-workspace"
     style="display: flex; gap: 6px; height: calc(100vh - 150px); font-family: 'Inter', sans-serif;">
 
     <!-- LEFT PANEL: SESSIONS SIDEBAR -->
@@ -13,10 +13,10 @@
       </button>
 
       <!-- Sidebar Header & New Chat Button -->
-      <div style="padding: 16px; border-bottom: 1px solid var(--border-color); background: #f8fafc;">
-        <button onclick="createNewChatSession()"
+      <div class="chat-sidebar-new" style="padding: 16px; border-bottom: 1px solid var(--border-color); background: #f8fafc;">
+        <button class="chat-new-session-btn" onclick="createNewChatSession()"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; font-size: 13.5px; padding: 11px 16px; border-radius: 10px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
-          <i class="fa-solid fa-plus"></i> Tạo đoạn chat mới
+          <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
         </button>
       </div>
 
@@ -26,8 +26,8 @@
       </div>
 
       <!-- Clear All Conversations Footer -->
-      <div style="padding: 12px 16px; border-top: 1px solid var(--border-color); background: #f8fafc;">
-        <button onclick="clearAllChatSessions()"
+      <div class="chat-sidebar-footer" style="padding: 12px 16px; border-top: 1px solid var(--border-color); background: #f8fafc;">
+        <button class="chat-clear-sessions-btn" onclick="clearAllChatSessions()"
           style="width: 100%; background: #ffffff; border: 1px solid #e2e8f0; color: #b91c1c; font-size: 12px; font-weight: 600; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
           <i class="fa-solid fa-trash-can"></i> Xóa tất cả các cuộc trò chuyện
         </button>
@@ -39,7 +39,7 @@
       style="flex: 1; min-width: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
 
       <!-- Chat Top Bar -->
-      <div
+      <div class="chat-main-toolbar"
         style="padding: 14px 22px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
         <div style="display: flex; align-items: center; gap: 12px;">
           <div
@@ -88,36 +88,50 @@
       </div>
 
       <!-- Bottom Input Box -->
-      <div style="padding: 12px 22px 18px 22px; background: #ffffff;">
+      <div class="page-chat-composer-area" style="padding: 12px 22px 18px 22px; background: #ffffff;">
         <div class="chat-input-wrapper page-chat-composer">
           <input type="text" id="page-chat-user-input"
             placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)"
+            maxlength="4000" oninput="updatePageChatCharacterCount(this.value)"
             onkeypress="handlePageChatKeyPress(event)">
           <div id="page-chat-attachment-preview" class="page-chat-attachment-preview"></div>
           <div class="page-chat-add-wrap">
-            <button id="page-chat-add-trigger" class="btn-input-new-chat" type="button"
-              onclick="toggleChatAddMenu(event)" title="Thêm nội dung" aria-haspopup="menu" aria-expanded="false">
-              <i class="fa-solid fa-plus"></i>
+            <button class="page-chat-option-btn is-disabled" type="button" disabled title="Đính kèm tệp — sắp ra mắt" aria-label="Đính kèm tệp, hiện chưa khả dụng">
+              <i class="fa-solid fa-paperclip"></i>
+            </button>
+            <button id="page-chat-knowledge-toggle" class="page-chat-option-btn" type="button" onclick="toggleChatKnowledgePanel(event)" title="Chọn nguồn tri thức" aria-label="Chọn nguồn tri thức" aria-expanded="false">
+              <i class="fa-solid fa-database"></i>
+            </button>
+            <button id="page-chat-web-toggle" class="page-chat-option-btn" type="button" onclick="togglePageChatWebSearch(event)" title="Tìm kiếm web" aria-label="Tìm kiếm web" aria-pressed="false">
+              <i class="fa-solid fa-globe"></i>
+            </button>
+            <button id="page-chat-add-trigger" class="page-chat-tools-trigger" type="button"
+              onclick="toggleChatAddMenu(event)" title="Công cụ khác" aria-haspopup="menu" aria-expanded="false">
+              <span>Công cụ</span><i class="fa-solid fa-chevron-down"></i>
             </button>
             <div id="page-chat-add-menu" class="page-chat-add-menu" role="menu">
-              <button class="is-disabled" type="button" disabled aria-disabled="true" title="Tính năng đang tạm khóa"><i class="fa-solid fa-paperclip"></i><span>Thêm tệp hoặc ảnh</span><kbd>Ctrl+U</kbd></button>
-              <button type="button" onclick="toggleChatKnowledgePanel(event)"><i class="fa-solid fa-book-open"></i><span>Thêm từ thư viện tri thức</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
-              <div id="page-chat-knowledge-panel" class="page-chat-knowledge-panel" hidden onclick="event.stopPropagation()">
-                <div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="page-chat-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderChatKnowledgeOptions()"></div>
-                <div id="page-chat-knowledge-options" class="page-chat-knowledge-options"></div>
-              </div>
-              <div class="page-chat-menu-divider"></div>
-              <button id="page-chat-web-toggle" type="button" onclick="togglePageChatWebSearch(event)"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><i class="fa-solid fa-check menu-check"></i></button>
+              <button type="button" onclick="showChatAddNotice('project')"><i class="fa-solid fa-folder-tree"></i><span>Dự án</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+              <button type="button" onclick="showChatAddNotice('skills')"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Skills</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+              <button type="button" onclick="showChatAddNotice('connector')"><i class="fa-solid fa-plug"></i><span>Connector</span><i class="fa-solid fa-chevron-right menu-chevron"></i></button>
+            </div>
+            <div id="page-chat-knowledge-panel" class="page-chat-knowledge-panel page-chat-inline-panel" hidden onclick="event.stopPropagation()">
+              <div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="page-chat-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderChatKnowledgeOptions()"></div>
+              <div id="page-chat-knowledge-options" class="page-chat-knowledge-options"></div>
             </div>
             <input id="page-chat-file-input" type="file" multiple hidden onchange="handlePageChatFiles(event)">
             <input id="page-chat-camera-input" type="file" accept="image/*" capture="environment" hidden onchange="handlePageChatFiles(event)">
             <select id="page-chat-knowledge-source" multiple hidden><option value="auto" selected>Tự động</option><option value="none">Không dùng</option></select>
           </div>
           <div id="page-chat-knowledge-inline" class="page-chat-knowledge-inline"></div>
-          <button id="page-chat-send-button" class="page-chat-send-button page-chat-send-icon-btn" type="button" onclick="handlePageChatSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"
-            style="padding: 9px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
-            <i class="fa-solid fa-paper-plane"></i>
-          </button>
+          <div class="page-chat-composer-actions">
+            <span id="page-chat-character-count" class="page-chat-character-count">0/4000</span>
+            <button class="page-chat-compact-action" type="button" onclick="toggleChatAddMenu(event)" title="Tùy chọn khác" aria-label="Tùy chọn khác"><i class="fa-solid fa-ellipsis"></i></button>
+            <button class="page-chat-compact-action is-disabled" type="button" disabled title="Nhập bằng giọng nói — sắp ra mắt" aria-label="Nhập bằng giọng nói, hiện chưa khả dụng"><i class="fa-solid fa-microphone"></i></button>
+            <button id="page-chat-send-button" class="page-chat-send-button page-chat-send-icon-btn" type="button" onclick="handlePageChatSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"
+              style="padding: 9px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
         </div>
       </div>
 
