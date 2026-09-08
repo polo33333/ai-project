@@ -19,6 +19,9 @@ function detectTopic({ currentPlan = {}, lastPlan = null, questionText = '', ref
   if (!tableChanged && currentPlan.table && lastPlan.table) {
     return { mode: 'recent', reason: 'same_table_followup', maxMessages: policy.recentMaxMessages() };
   }
+  if (!selfContained && policy.isShortContextualFollowup(questionText)) {
+    return { mode: 'recent', reason: 'short_contextual_followup', maxMessages: policy.recentMaxMessages() };
+  }
   if (tableChanged && hasPronoun) {
     if (domainChanged) {
       const hasEntity = Boolean(references.lastEntity?.updatedAt);

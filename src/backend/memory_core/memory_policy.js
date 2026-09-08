@@ -71,6 +71,14 @@ function isExportOrChartIntent(questionText) {
   return matchesReferenceKeyword(questionText, 'lastExport') || matchesReferenceKeyword(questionText, 'lastDataset');
 }
 
+function isShortContextualFollowup(questionText) {
+  const text = normalize(questionText).trim();
+  if (!text || text.split(/\s+/).length > 8) return false;
+  if (/^(?:hi|hello|hey|xin chao|chao|cam on|thanks?)\b/.test(text)) return false;
+  return /\b(?:ntn|nhu the nao|the nao|ra sao|ket qua sao|ti so|ty so|bao nhieu|chi tiet|cu the|con hom nay|con hom qua|doi nao|tran nao)\b/.test(text)
+    || /^(?:con|va|the)\b/.test(text);
+}
+
 function isPlanSelfContained(plan = {}) {
   if (!plan.table || !plan.intent) return false;
   const explicitSchema = Array.isArray(plan.requiredColumns) && plan.requiredColumns.length > 0;
@@ -93,6 +101,7 @@ module.exports = {
   hasReferencePronoun,
   isEnabled,
   isExportOrChartIntent,
+  isShortContextualFollowup,
   isPlanSelfContained,
   isShadowMode,
   matchesReferenceKeyword,

@@ -518,6 +518,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   tabKey = normalizeMainTabKey(tabKey);
   if (!tabKey) return;
   rememberMainTab(tabKey);
+  window.updatePageChatMiniPanel?.();
   const cleanKey = tabKey.replace(/-/g, '_');
   const isDashboard = cleanKey === 'overview' || cleanKey === 'dashboard';
   const mainContent = document.querySelector('main.main-content');
@@ -1115,21 +1116,31 @@ function renderCopilotRetrievalContext(contextSelection) {
   return `<div class="copilot-rag-context"><div><i class="fa-solid fa-diagram-project"></i>${labels.map(label => `<span>${escapeCopilotHtml(label)}</span>`).join('')}</div><small><i class="fa-solid fa-book-open"></i> ${escapeCopilotHtml(sources.join(' · '))}</small></div>`;
 }
 
+function getCopilotKnowledgeValues(select = document.getElementById('copilot-knowledge-source')) {
+  const values = select ? [...select.selectedOptions].map(option => option.value) : [];
+  return values.length ? values : ['auto'];
+}
+function setCopilotKnowledgeValues(select, values) {
+  if (!select) return;
+  const wanted = new Set(values?.length ? values : ['auto']);
+  [...select.options].forEach(option => { option.selected = wanted.has(option.value); });
+}
 window.populateCopilotKnowledgeSources = async function () {
-  const select = document.getElementById('copilot-knowledge-source'); if (!select) return; const current = select.value || 'auto';
-  try { const response = await fetch('/api/library'); const data = await response.json(); window.copilotKnowledgeDocuments = (Array.isArray(data) ? data : []).filter(item => Number(item.chunksCount || 0) > 0); select.innerHTML = '<option value="auto">Tự động</option><option value="none">Không dùng thư viện tri thức</option>' + window.copilotKnowledgeDocuments.map(item => `<option value="${escapeCopilotHtml(item.id)}">${escapeCopilotHtml(item.title)}</option>`).join(''); select.value = [...select.options].some(x => x.value === current) ? current : 'auto'; renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); } catch (_) { }
+  const select = document.getElementById('copilot-knowledge-source'); if (!select) return; const current = getCopilotKnowledgeValues(select);
+  try { const response = await fetch('/api/library'); const data = await response.json(); window.copilotKnowledgeDocuments = (Array.isArray(data) ? data : []).filter(item => Number(item.chunksCount || 0) > 0); select.innerHTML = '<option value="auto">Tự động</option><option value="none">Không dùng thư viện tri thức</option>' + window.copilotKnowledgeDocuments.map(item => `<option value="${escapeCopilotHtml(item.id)}">${escapeCopilotHtml(item.title)}</option>`).join(''); const available = new Set([...select.options].map(option => option.value)); setCopilotKnowledgeValues(select, current.filter(value => available.has(value))); renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); } catch (_) { }
 };
 window.toggleCopilotKnowledgePanel = function (event) { event?.stopPropagation(); const panel = document.getElementById('copilot-knowledge-panel'); if (!panel) return; panel.hidden = !panel.hidden; if (!panel.hidden) { renderCopilotKnowledgeOptions(); setTimeout(() => document.getElementById('copilot-knowledge-search')?.focus(), 0); } };
-window.renderCopilotKnowledgeOptions = function () { const root = document.getElementById('copilot-knowledge-options'), select = document.getElementById('copilot-knowledge-source'); if (!root || !select) return; const q = (document.getElementById('copilot-knowledge-search')?.value || '').toLowerCase(); const docs = (window.copilotKnowledgeDocuments || []).filter(x => x.title.toLowerCase().includes(q)); const option = (value, icon, title, note) => `<button type="button" class="chat-knowledge-option ${select.value === value ? 'active' : ''}" data-value="${escapeCopilotHtml(value)}" onclick="selectCopilotKnowledgeSource(this.dataset.value,event)"><i class="fa-solid ${icon}"></i><span><strong>${escapeCopilotHtml(title)}</strong><small>${escapeCopilotHtml(note)}</small></span><i class="fa-solid fa-check"></i></button>`; root.innerHTML = option('auto', 'fa-wand-magic-sparkles', 'Tự động chọn nguồn', 'Hybrid RAG trong toàn bộ thư viện') + option('none', 'fa-ban', 'Không dùng nguồn tri thức', 'Chỉ dùng CSDL và hội thoại') + docs.map(x => option(x.id, 'fa-file-lines', x.title, `${x.fileType} · ${x.chunksCount} chunks · ${x.status === 'Đã lập chỉ mục' ? 'Hybrid' : 'chỉ BM25'}`)).join(''); };
-window.selectCopilotKnowledgeSource = function (value, event) { event?.stopPropagation(); const select = document.getElementById('copilot-knowledge-source'); if (!select) return; select.value = value; if (value !== 'auto') { window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); } renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); document.getElementById('copilot-knowledge-panel').hidden = true; closeCopilotComposerMenus(); };
+window.renderCopilotKnowledgeOptions = function () { const root = document.getElementById('copilot-knowledge-options'), select = document.getElementById('copilot-knowledge-source'); if (!root || !select) return; const q = (document.getElementById('copilot-knowledge-search')?.value || '').toLowerCase(); const docs = (window.copilotKnowledgeDocuments || []).filter(x => x.title.toLowerCase().includes(q)); const selected = new Set(getCopilotKnowledgeValues(select)); const option = (value, icon, title, note) => `<button type="button" class="chat-knowledge-option ${selected.has(value) ? 'active' : ''}" data-value="${escapeCopilotHtml(value)}" onclick="selectCopilotKnowledgeSource(this.dataset.value,event)"><i class="fa-solid ${icon}"></i><span><strong>${escapeCopilotHtml(title)}</strong><small>${escapeCopilotHtml(note)}</small></span><i class="fa-solid fa-check"></i></button>`; root.innerHTML = option('auto', 'fa-wand-magic-sparkles', 'Tự động chọn nguồn', 'Hybrid RAG trong toàn bộ thư viện') + option('none', 'fa-ban', 'Không dùng nguồn tri thức', 'Chỉ dùng CSDL và hội thoại') + docs.map(x => option(x.id, 'fa-file-lines', x.title, `${x.fileType} · ${x.chunksCount} chunks · ${x.status === 'Đã lập chỉ mục' ? 'Hybrid' : 'chỉ BM25'}`)).join(''); };
+window.selectCopilotKnowledgeSource = function (value, event) { event?.stopPropagation(); const select = document.getElementById('copilot-knowledge-source'); if (!select) return; const current = new Set(getCopilotKnowledgeValues(select)); if (value === 'auto' || value === 'none') { setCopilotKnowledgeValues(select, [value]); if (value === 'none') { window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); } } else { current.delete('auto'); current.delete('none'); if (current.has(value)) current.delete(value); else current.add(value); setCopilotKnowledgeValues(select, [...current]); window.copilotWebSearchEnabled = false; document.getElementById('copilot-web-toggle')?.classList.remove('is-active'); } renderCopilotKnowledgeOptions(); renderCopilotKnowledgeChip(); };
 function renderCopilotKnowledgeChip() {
   const root = document.getElementById('copilot-knowledge-inline'), select = document.getElementById('copilot-knowledge-source');
   if (!root || !select) return;
   const chips = [];
-  if (select.value !== 'auto') {
-    const label = select.options[select.selectedIndex]?.textContent || 'Nguồn tri thức';
-    chips.push(`<span class="chat-knowledge-chip ${select.value === 'none' ? 'disabled' : ''}" title="${escapeCopilotHtml(label)}"><i class="fa-solid ${select.value === 'none' ? 'fa-ban' : 'fa-book-open'}"></i><span>${escapeCopilotHtml(label)}</span><button type="button" title="Bỏ nguồn đã chọn" onclick="selectCopilotKnowledgeSource('auto',event)"><i class="fa-solid fa-xmark"></i></button></span>`);
-  }
+  getCopilotKnowledgeValues(select).filter(value => value !== 'auto').forEach(value => {
+    const option = [...select.options].find(item => item.value === value);
+    const label = option?.textContent || 'Nguồn tri thức';
+    chips.push(`<span class="chat-knowledge-chip ${value === 'none' ? 'disabled' : ''}" title="${escapeCopilotHtml(label)}"><i class="fa-solid ${value === 'none' ? 'fa-ban' : 'fa-book-open'}"></i><span>${escapeCopilotHtml(label)}</span><button type="button" data-value="${escapeCopilotHtml(value)}" title="Bỏ nguồn đã chọn" onclick="selectCopilotKnowledgeSource(this.dataset.value,event)"><i class="fa-solid fa-xmark"></i></button></span>`);
+  });
   if (window.copilotWebSearchEnabled) {
     chips.push('<span class="chat-knowledge-chip web-search-chip" title="Tìm kiếm trên web đang bật"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><button type="button" title="Tắt tìm kiếm web" onclick="toggleCopilotWebSearch(event)"><i class="fa-solid fa-xmark"></i></button></span>');
   }
@@ -1142,7 +1153,7 @@ window.toggleCopilotWebSearch = function toggleCopilotWebSearch(event) {
   window.copilotWebSearchEnabled = !window.copilotWebSearchEnabled;
   if (window.copilotWebSearchEnabled) {
     const knowledgeSource = document.getElementById('copilot-knowledge-source');
-    if (knowledgeSource) knowledgeSource.value = 'auto';
+    if (knowledgeSource) setCopilotKnowledgeValues(knowledgeSource, ['auto']);
     window.renderCopilotKnowledgeOptions();
   }
   document.getElementById('copilot-web-toggle')?.classList.toggle('is-active', window.copilotWebSearchEnabled);
@@ -1316,6 +1327,7 @@ window.sendChatMessage = async function sendChatMessage() {
   try {
     const attachmentContext = await buildCopilotAttachmentContext(attachedFiles);
     const requestMessage = `${text || 'Hãy phân tích tệp đính kèm.'}${attachmentContext}`;
+    const knowledgeSources = getCopilotKnowledgeValues();
     const data = await fetchCopilotStreamingChat({
       question: requestMessage,
       message: requestMessage,
@@ -1323,8 +1335,8 @@ window.sendChatMessage = async function sendChatMessage() {
       sessionId: window.copilotPopupSessionId,
       providerId,
       useTools: true,
-      knowledgeSearchEnabled: !window.copilotWebSearchEnabled && (document.getElementById('copilot-knowledge-source')?.value || 'auto') !== 'none',
-      knowledgeSourceIds: !window.copilotWebSearchEnabled && !['auto', 'none'].includes(document.getElementById('copilot-knowledge-source')?.value || 'auto') ? [document.getElementById('copilot-knowledge-source').value] : [],
+      knowledgeSearchEnabled: !window.copilotWebSearchEnabled && !knowledgeSources.includes('none'),
+      knowledgeSourceIds: !window.copilotWebSearchEnabled ? knowledgeSources.filter(value => !['auto', 'none'].includes(value)) : [],
       webSearch: window.copilotWebSearchEnabled,
       attachments: attachedFiles.map(file => ({ name: file.name, type: file.type, size: file.size }))
     }, event => {

@@ -13,6 +13,16 @@ function unwrapUrl(value = '') {
   } catch (_) { return value; }
 }
 
+function buildContextualQuery(query, history = [], contextualize = false) {
+  const current = String(query || '').trim();
+  if (!contextualize) return current;
+  const previousUserMessage = [...(Array.isArray(history) ? history : [])]
+    .reverse()
+    .find(item => item?.role === 'user' && String(item.content || '').trim())?.content;
+  const previous = String(previousUserMessage || '').trim();
+  return previous && previous !== current ? `${previous}\n${current}` : current;
+}
+
 function parseResults(html = '', limit = 5) {
   return String(html).split(/class="result\s+results_links[^\"]*"/i).slice(1).map(block => {
     const link = block.match(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i)
@@ -45,4 +55,4 @@ async function search(query, { signal = null } = {}) {
   }
 }
 
-module.exports = { search, parseResults };
+module.exports = { search, parseResults, buildContextualQuery };

@@ -181,10 +181,12 @@ class IntelligentCore {
     if (webSearch) {
       emitProgress(options.onProgress, { type: 'web_search_started', label: 'Đang tìm kiếm trên web', status: 'running', icon: 'globe' });
       try {
-        const webResults = await webSearchService.search(userMessage, { signal: options.signal });
+        const contextualizeWebSearch = memoryPolicy.isShortContextualFollowup(userMessage);
+        const webSearchQuery = webSearchService.buildContextualQuery(userMessage, history, contextualizeWebSearch);
+        const webResults = await webSearchService.search(webSearchQuery, { signal: options.signal });
         if (!webResults.length) throw new Error('Không tìm thấy kết quả web phù hợp.');
         webContext = webResults.map((item, index) => `[Web ${index + 1}] ${item.title}\nURL: ${item.url}\n${item.snippet}`).join('\n\n');
-        contextSelection.webSearch = { enabled: true, resultCount: webResults.length, sources: webResults.map(item => ({ title: item.title, url: item.url })) };
+        contextSelection.webSearch = { enabled: true, contextualized: webSearchQuery !== userMessage, resultCount: webResults.length, sources: webResults.map(item => ({ title: item.title, url: item.url })) };
         emitProgress(options.onProgress, { type: 'web_search_completed', label: `Đã tìm thấy ${webResults.length} kết quả web`, status: 'done', icon: 'globe' });
       } catch (error) {
         if (options.signal?.aborted) throw error;

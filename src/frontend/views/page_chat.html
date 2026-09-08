@@ -43,7 +43,7 @@
         style="padding: 14px 22px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
         <div style="display: flex; align-items: center; gap: 12px;">
           <div
-            style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);">
+            style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);">
             <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
           </div>
           <div>
@@ -89,9 +89,11 @@
 
       <!-- Bottom Input Box -->
       <div style="padding: 12px 22px 18px 22px; background: #ffffff;">
-        <div id="page-chat-attachment-preview" class="page-chat-attachment-preview"></div>
-        <div class="chat-input-wrapper"
-          style="display: flex; gap: 10px; background: #ffffff; padding: 6px 8px 6px 16px; border-radius: 14px; border: 1.5px solid #cbd5e1; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: border-color 0.2s;">
+        <div class="chat-input-wrapper page-chat-composer">
+          <input type="text" id="page-chat-user-input"
+            placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)"
+            onkeypress="handlePageChatKeyPress(event)">
+          <div id="page-chat-attachment-preview" class="page-chat-attachment-preview"></div>
           <div class="page-chat-add-wrap">
             <button id="page-chat-add-trigger" class="btn-input-new-chat" type="button"
               onclick="toggleChatAddMenu(event)" title="Thêm nội dung" aria-haspopup="menu" aria-expanded="false">
@@ -109,13 +111,9 @@
             </div>
             <input id="page-chat-file-input" type="file" multiple hidden onchange="handlePageChatFiles(event)">
             <input id="page-chat-camera-input" type="file" accept="image/*" capture="environment" hidden onchange="handlePageChatFiles(event)">
-            <select id="page-chat-knowledge-source" hidden><option value="auto">Tự động</option><option value="none">Không dùng</option></select>
+            <select id="page-chat-knowledge-source" multiple hidden><option value="auto" selected>Tự động</option><option value="none">Không dùng</option></select>
           </div>
           <div id="page-chat-knowledge-inline" class="page-chat-knowledge-inline"></div>
-          <input type="text" id="page-chat-user-input"
-            placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)"
-            style="flex: 1; border: none; background: transparent; outline: none; font-size: 13.5px; font-family: inherit; color: var(--text-primary);"
-            onkeypress="handlePageChatKeyPress(event)">
           <button id="page-chat-send-button" class="page-chat-send-button page-chat-send-icon-btn" type="button" onclick="handlePageChatSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"
             style="padding: 9px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
             <i class="fa-solid fa-paper-plane"></i>

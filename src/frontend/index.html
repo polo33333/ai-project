@@ -29,7 +29,7 @@
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
-  <link rel="stylesheet" href="css/styles.css?v=20260907-domain-label-v1">
+  <link rel="stylesheet" href="css/styles.css?v=20260908-round-thinking-avatar">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
   <link rel="stylesheet" href="css/audit-logs.css">
   <link rel="stylesheet" href="css/provider-management.css">
@@ -38,10 +38,10 @@
   <link rel="stylesheet" href="css/api-docs.css?v=20260904-left-align-api-keys">
   <link rel="stylesheet" href="css/system-tools.css?v=20260906-hero-glow">
   <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
-  <link rel="stylesheet" href="css/workspace.css?v=20260906-sidebar-active-rail">
+  <link rel="stylesheet" href="css/workspace.css?v=20260908-synced-brand-icon">
   <link rel="stylesheet" href="css/module-workspaces.css?v=20260906-training-time-first">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
-  <link rel="stylesheet" href="css/theme.css?v=20260907-dictionary-controls-v1">
+  <link rel="stylesheet" href="css/theme.css?v=20260908-chat-sql-dark-border">
   <link rel="stylesheet" href="css/settings.css?v=20260906-qdrant-button-align-2">
 </head>
 
@@ -53,7 +53,7 @@
     <aside class="sidebar" id="app-sidebar" aria-label="Điều hướng chính">
       <div class="sidebar-brand">
         <div class="brand-title-wrapper">
-          <div class="brand-logo" aria-label="KnowledgeHub AI"><i class="fa-solid fa-brain" aria-hidden="true"></i></div>
+          <div class="brand-logo" aria-label="KnowledgeHub AI"><img src="/favicon.svg?v=20260908-brand-sync" alt="" aria-hidden="true"></div>
           <div class="brand-name">KnowledgeHub AI</div>
         </div>
         <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-controls="app-sidebar" aria-expanded="true" onclick="toggleSidebarCollapse()"
@@ -413,8 +413,11 @@
       </div>
 
       <div class="copilot-chat-input-area">
-        <div id="copilot-attachment-preview" class="page-chat-attachment-preview"></div>
-        <div class="chat-input-wrapper">
+        <div class="chat-input-wrapper copilot-chat-composer">
+          <input type="text" class="chat-input" id="chat-user-input"
+            placeholder="Đặt câu hỏi hoặc yêu cầu sinh SQL (VD: Liệt kê 5 nhân viên có doanh số cao nhất)..."
+            onkeypress="handleChatKeyPress(event)">
+          <div id="copilot-attachment-preview" class="page-chat-attachment-preview"></div>
           <div class="page-chat-add-wrap">
           <button id="copilot-add-trigger" class="btn-input-new-chat" onclick="toggleCopilotAddMenu(event)" title="Thêm nội dung" aria-haspopup="menu" aria-expanded="false">
             <i class="fa-solid fa-plus"></i>
@@ -428,12 +431,9 @@
           </div>
           <input id="copilot-file-input" type="file" multiple hidden onchange="handleCopilotFiles(event)">
           <input id="copilot-camera-input" type="file" accept="image/*" capture="environment" hidden onchange="handleCopilotFiles(event)">
-          <select id="copilot-knowledge-source" hidden><option value="auto">Tự động</option><option value="none">Không dùng</option></select>
+          <select id="copilot-knowledge-source" multiple hidden><option value="auto" selected>Tự động</option><option value="none">Không dùng</option></select>
           </div>
           <div id="copilot-knowledge-inline" class="page-chat-knowledge-inline"></div>
-          <input type="text" class="chat-input" id="chat-user-input"
-            placeholder="Đặt câu hỏi hoặc yêu cầu sinh SQL (VD: Liệt kê 5 nhân viên có doanh số cao nhất)..."
-            onkeypress="handleChatKeyPress(event)">
           <button id="copilot-send-button" class="chat-send-btn copilot-send-icon-btn" type="button" onclick="handleCopilotSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"><i class="fa-solid fa-paper-plane"></i></button>
         </div>
       </div>
@@ -590,7 +590,7 @@
   <script src="js/modules/ai_providers.js"></script>
   <script src="js/modules/dictionary.js?v=20260907-domain-manager-v2"></script>
   <script src="js/modules/glossary.js"></script>
-  <script src="js/modules/page_chat.js?v=20260907-friendly-empty-response"></script>
+  <script src="js/modules/page_chat.js?v=20260908-multi-knowledge-source"></script>
   <script src="js/modules/sql_connector.js"></script>
   <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
   <script src="js/modules/chat_history.js"></script>
@@ -606,7 +606,7 @@
   <!-- Main App Router Script -->
   <script src="js/sidebar.js?v=20260906-null-safe-footer"></script>
   <script src="js/notifications.js?v=1.0.1"></script>
-  <script src="js/app.js?v=20260907-friendly-empty-response"></script>
+  <script src="js/app.js?v=20260908-multi-knowledge-source"></script>
 </body>
 
 </html>

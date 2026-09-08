@@ -606,4 +606,6 @@ test('list answers must mention actual SQL row values instead of only row count'
 test('contract detail requests and truncated model text trigger the SQL rows fallback', () => {
   assert.equal(isListRequest('chi tiết các hợp đồng'), true);
   assert.equal(isInsufficientSqlAnswer('D'), true);
+  assert.equal(isInsufficientSqlAnswer('Tổng quan:\n- **Tháng 02/20'), true);
+  assert.equal(isInsufficientSqlAnswer('Tổng quan:\n- **Tháng 02/2024:** 1.850.000 kWh.'), false);
 });

@@ -264,6 +264,20 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .chat-tool-pipeline span[style*="background:#e0e7ff"] { color: #c9c1ff !important; background: #302d55 !important; }
 :root[data-theme="dark"] .chat-tool-pipeline span[style*="background:#fee2e2"] { color: #f4a4b1 !important; background: #402633 !important; }
 :root[data-theme="dark"] .chat-tool-result[open] > summary { border-bottom-color: #35445d !important; }
+:root[data-theme="dark"] .chat-sql-panel {
+  border-color: #344159 !important;
+  background: #101a2a !important;
+  box-shadow: none !important;
+}
+:root[data-theme="dark"] .chat-sql-panel > summary {
+  border-bottom-color: #344159 !important;
+  background: #1b273a !important;
+}
+:root[data-theme="dark"] .chat-sql-panel > pre { background: #101a2a !important; }
+:root[data-theme="dark"] .chat-sql-panel > summary button {
+  color: #9cabc1 !important;
+  background: #29364a !important;
+}
 :root[data-theme="dark"] :is(.dashboard-log-content strong,.dictionary-row-main strong,.chat-ai-answer,.chat-markdown-table td) { color: var(--text-primary) !important; }
 :root[data-theme="dark"] :is(.dashboard-log-content p,.dashboard-log-item time,.dictionary-row-main p,.dictionary-row-meta,.chat-embedded-thinking-step,.chat-feedback,.chat-feedback button) { color: var(--text-secondary); }
 :root[data-theme="dark"] :is(.dictionary-drawer-header,.chat-technical-details,.chat-token-usage span,.chat-markdown-table th,.chat-inline-code,.dictionary-column-meta code,#quick-prompts-bar button) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; color: var(--text-secondary) !important; }

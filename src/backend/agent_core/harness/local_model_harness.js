@@ -244,6 +244,15 @@ function isInsufficientSqlAnswer(text = '') {
   if (!clean) return true;
   if (clean.replace(/\s+/g, '').length < 12) return true;
   if (extractSql(clean)) return true;
+  // Tool execution may succeed even when the model hits its output limit.
+  // Reject answers cut in the middle of a Markdown construct so the
+  // deterministic SQL-row fallback can return complete data instead.
+  const markdownWithoutEscapes = clean
+    .replace(/\\\*\*/g, '')
+    .replace(/\\`/g, '');
+  const strongMarkerCount = (markdownWithoutEscapes.match(/\*\*/g) || []).length;
+  const fenceCount = (markdownWithoutEscapes.match(/```/g) || []).length;
+  if (strongMarkerCount % 2 !== 0 || fenceCount % 2 !== 0) return true;
   const normalized = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
   return normalized.includes('da truy van du lieu thanh cong')
     && normalized.includes('dong ket qua')

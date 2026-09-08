@@ -63,6 +63,13 @@ body.login-page {
   font-size: 21px;
 }
 
+.login-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
 .login-feature-list {
   display: flex;
   flex-direction: column;

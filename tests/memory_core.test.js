@@ -6,7 +6,8 @@ const assert = require('node:assert/strict');
 const { MemoryService } = require('../src/backend/memory_core/memory_service');
 const { routeMemory } = require('../src/backend/memory_core/memory_router');
 const { resolveReference } = require('../src/backend/memory_core/reference_store');
-const { getDomain, hasReferencePronoun } = require('../src/backend/memory_core/memory_policy');
+const { getDomain, hasReferencePronoun, isShortContextualFollowup } = require('../src/backend/memory_core/memory_policy');
+const { buildContextualQuery } = require('../src/backend/services/web_search_service');
 
 function plan(table, overrides = {}) {
   return {
@@ -77,6 +78,23 @@ test('same-table follow-ups use at most four recent messages', () => {
   assert.equal(decision.mode, 'recent');
   assert.ok(decision.maxMessages <= 4);
   assert.equal(memory.getContext(decision).length, 4);
+});
+
+test('short web follow-ups reuse recent context and expand the search query', () => {
+  const previousPlan = { intent: 'general', table: null, requiredColumns: [], outputs: {} };
+  const currentPlan = { intent: 'general', table: null, requiredColumns: [], outputs: {} };
+  const decision = routeMemory({
+    question: 'tỉ số ntn',
+    currentPlan,
+    session: { id: 'web', lastPlan: previousPlan, messages: [], references: {} }
+  });
+  assert.equal(isShortContextualFollowup('tỉ số ntn'), true);
+  assert.equal(decision.mode, 'recent');
+  assert.equal(decision.reason, 'short_contextual_followup');
+  assert.equal(buildContextualQuery('tỉ số ntn', [
+    { role: 'user', content: 'kết quả các trận bóng đá hôm nay' },
+    { role: 'assistant', content: 'Đây là kết quả bóng đá.' }
+  ], true), 'kết quả các trận bóng đá hôm nay\ntỉ số ntn');
 });
 
 test('entity, dataset and export references resolve by intent keyword', () => {

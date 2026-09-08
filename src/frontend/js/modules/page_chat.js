@@ -7,6 +7,52 @@ window.pageChatAttachments = [];
 window.pageChatWebSearchEnabled = false;
 window.pageChatRequestController = null;
 window.pageChatIsResponding = false;
+window.pageChatMiniPanelState = { status: 'idle', label: '', question: '' };
+
+function ensurePageChatMiniPanel() {
+  let panel = document.getElementById('page-chat-mini-panel');
+  if (panel) return panel;
+  panel = document.createElement('button');
+  panel.id = 'page-chat-mini-panel';
+  panel.className = 'page-chat-mini-panel';
+  panel.type = 'button';
+  panel.hidden = true;
+  panel.setAttribute('aria-live', 'polite');
+  panel.setAttribute('aria-label', 'Mở cuộc trò chuyện AI');
+  panel.innerHTML = `
+    <span class="page-chat-mini-icon"><svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg></span>
+    <span class="page-chat-mini-copy"><strong>Chat AI</strong><span class="page-chat-mini-label"></span><small class="page-chat-mini-question"></small></span>
+    <span class="page-chat-mini-status" aria-hidden="true"><i class="fa-solid fa-spinner fa-spin"></i></span>
+    <span class="page-chat-mini-progress" aria-hidden="true"><span></span></span>`;
+  panel.addEventListener('click', () => window.switchMainTab?.('page-chat'));
+  document.body.appendChild(panel);
+  return panel;
+}
+
+window.updatePageChatMiniPanel = function updatePageChatMiniPanel(nextState) {
+  if (nextState) window.pageChatMiniPanelState = { ...window.pageChatMiniPanelState, ...nextState };
+  const state = window.pageChatMiniPanelState;
+  const activeTab = String(window.activeMainTab || '').replace(/-/g, '_');
+  const onChatPage = activeTab === 'page_chat';
+  const panel = ensurePageChatMiniPanel();
+
+  panel.hidden = onChatPage || state.status === 'idle';
+  panel.dataset.status = state.status;
+  panel.querySelector('.page-chat-mini-label').textContent = state.label || 'Đang xử lý yêu cầu…';
+  panel.querySelector('.page-chat-mini-question').textContent = state.question || 'Bấm để quay lại cuộc trò chuyện';
+  const statusIcon = panel.querySelector('.page-chat-mini-status');
+  statusIcon.innerHTML = state.status === 'complete'
+    ? '<i class="fa-solid fa-check"></i>'
+    : state.status === 'error'
+      ? '<i class="fa-solid fa-triangle-exclamation"></i>'
+      : state.status === 'stopped'
+        ? '<i class="fa-solid fa-stop"></i>'
+        : '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+  if (onChatPage && state.status !== 'running') {
+    window.pageChatMiniPanelState = { status: 'idle', label: '', question: '' };
+  }
+};
 
 function setPageChatResponding(active) {
   window.pageChatIsResponding = Boolean(active);
@@ -113,7 +159,7 @@ function togglePageChatWebSearch(event) {
   window.pageChatWebSearchEnabled = !window.pageChatWebSearchEnabled;
   if (window.pageChatWebSearchEnabled) {
     const knowledgeSource = document.getElementById('page-chat-knowledge-source');
-    if (knowledgeSource) knowledgeSource.value = 'auto';
+    if (knowledgeSource) setChatKnowledgeValues(knowledgeSource, ['auto']);
     renderChatKnowledgeOptions();
   }
   document.getElementById('page-chat-web-toggle')?.classList.toggle('is-active', window.pageChatWebSearchEnabled);
@@ -620,6 +666,12 @@ function enhanceUserMessageNode(node, question) {
   group.appendChild(actions);
 }
 
+function enhanceAssistantMessageNode(node) {
+  const bubble = node?.children?.[1];
+  if (!bubble) return;
+  bubble.classList.add('chat-ai-message-bubble');
+}
+
 function appendChatMessage(record, shouldPersist = true) {
   const container = document.getElementById('page-chat-messages-container');
   if (!container || !record) return;
@@ -629,6 +681,7 @@ function appendChatMessage(record, shouldPersist = true) {
   const node = wrapper.firstElementChild;
   if (!node) return;
   if (record.role === 'user') enhanceUserMessageNode(node, record.content || '');
+  if (record.role === 'assistant') enhanceAssistantMessageNode(node);
 
   container.appendChild(node);
   container.scrollTop = container.scrollHeight;
@@ -782,10 +835,15 @@ async function sendPageChatMessage() {
   const requestController = new AbortController();
   window.pageChatRequestController = requestController;
   setPageChatResponding(true);
+  window.updatePageChatMiniPanel({
+    status: 'running',
+    label: 'Đang bắt đầu xử lý…',
+    question: msg || attachedFiles.map(file => file.name).join(', ')
+  });
 
   try {
     const selectedProviderId = document.getElementById('page-chat-model-selector')?.value || null;
-    const knowledgeSource = document.getElementById('page-chat-knowledge-source')?.value || 'auto';
+    const knowledgeSources = getChatKnowledgeValues();
     const attachmentContext = await buildPageChatAttachmentContext(attachedFiles);
     const requestMessage = `${msg || 'Hãy phân tích tệp đính kèm.'}${attachmentContext}`;
     const requestPayload = {
@@ -794,14 +852,15 @@ async function sendPageChatMessage() {
       history: session.history.slice(-20),
       sessionId: session.id,
       providerId: selectedProviderId,
-      knowledgeSearchEnabled: !window.pageChatWebSearchEnabled && knowledgeSource !== 'none',
-      knowledgeSourceIds: !window.pageChatWebSearchEnabled && !['auto', 'none'].includes(knowledgeSource) ? [knowledgeSource] : [],
+      knowledgeSearchEnabled: !window.pageChatWebSearchEnabled && !knowledgeSources.includes('none'),
+      knowledgeSourceIds: !window.pageChatWebSearchEnabled ? knowledgeSources.filter(value => !['auto', 'none'].includes(value)) : [],
       webSearch: window.pageChatWebSearchEnabled,
       attachments: attachedFiles.map(file => ({ name: file.name, type: file.type, size: file.size }))
     };
     const data = await fetchStreamingChat(requestPayload, event => {
       progressEvents.push(event);
       addThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running');
+      window.updatePageChatMiniPanel({ status: 'running', label: event.label || 'Đang xử lý yêu cầu…' });
     }, requestController.signal);
     thinkingDiv.remove();
 
@@ -1003,10 +1062,10 @@ async function sendPageChatMessage() {
     const aiDiv = document.createElement('div');
     aiDiv.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;';
     aiDiv.innerHTML = `
-      <div class="chat-ai-avatar" style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1 0%,#a855f7 100%);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 3px 8px rgba(99,102,241,.25);flex-shrink:0;">
+      <div class="chat-ai-avatar" style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#6366f1 0%,#a855f7 100%);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 3px 8px rgba(99,102,241,.25);flex-shrink:0;">
         <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;padding:14px 18px;border-radius:2px 14px 14px 14px;max-width:85%;font-size:13.5px;box-shadow:0 4px 14px rgba(0,0,0,.03);line-height:1.6;flex:1;">
+      <div class="chat-ai-message-bubble" style="background:#fff;border:1px solid #e2e8f0;padding:14px 18px;border-radius:14px;max-width:85%;font-size:13.5px;box-shadow:0 4px 14px rgba(0,0,0,.03);line-height:1.6;flex:1;">
         <div style="font-weight:700;color:#4338ca;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
           <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#a855f7);">
             <i class="fa-solid fa-robot" style="font-size:9px;color:#fff;"></i>
@@ -1027,6 +1086,7 @@ async function sendPageChatMessage() {
       chartSpec: chartSpec && typeof chartSpec === 'object' ? chartSpec : null,
       chartId: chartSpec && typeof chartSpec === 'object' ? chartId : null
     });
+    window.updatePageChatMiniPanel({ status: 'complete', label: 'Đã hoàn thành câu trả lời' });
     if (typeof fetchChatHistory === 'function') fetchChatHistory();
 
     // Render chart after DOM insert (Chart.js needs canvas in DOM)
@@ -1039,6 +1099,7 @@ async function sendPageChatMessage() {
   } catch (err) {
     thinkingDiv.remove();
     if (err?.name === 'AbortError') {
+      window.updatePageChatMiniPanel({ status: 'stopped', label: 'Đã dừng trả lời' });
       if (typeof showToast === 'function') showToast('Đã dừng tiến trình trả lời.', 'info');
       return;
     }
@@ -1049,14 +1110,15 @@ async function sendPageChatMessage() {
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;';
     errDiv.innerHTML = `
-      <div class="chat-ai-avatar" style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1 0%,#a855f7 100%);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">
+      <div class="chat-ai-avatar" style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#6366f1 0%,#a855f7 100%);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">
         <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
       </div>
-      <div style="background:#fff;border:1px solid #fee2e2;padding:14px 18px;border-radius:2px 14px 14px 14px;font-size:13.5px;color:#b91c1c;">
+      <div class="chat-ai-message-bubble" style="background:#fff;border:1px solid #fee2e2;padding:14px 18px;border-radius:14px;font-size:13.5px;color:#b91c1c;">
         ${errorContent}
       </div>
     `;
     appendChatMessage({ role: 'assistant', html: errDiv.outerHTML });
+    window.updatePageChatMiniPanel({ status: 'error', label: 'Không thể hoàn thành câu trả lời' });
   } finally {
     if (window.pageChatRequestController === requestController) {
       window.pageChatRequestController = null;
@@ -1068,16 +1130,28 @@ async function sendPageChatMessage() {
 async function populateChatKnowledgeSources() {
   const select = document.getElementById('page-chat-knowledge-source');
   if (!select) return;
-  const current = select.value || 'auto';
+  const current = getChatKnowledgeValues(select);
   try {
     const response = await fetch('/api/library');
     const documents = await response.json();
     const ready = (Array.isArray(documents) ? documents : []).filter(item => Number(item.chunksCount || 0) > 0);
     window.pageChatKnowledgeDocuments = ready;
     select.innerHTML = '<option value="auto">Tự động chọn nguồn tri thức</option><option value="none">Không dùng thư viện tri thức</option>' + ready.map(item => `<option value="${escapeChatMarkdown(item.id)}">${escapeChatMarkdown(item.title)}</option>`).join('');
-    select.value = [...select.options].some(option => option.value === current) ? current : 'auto';
+    const available = new Set([...select.options].map(option => option.value));
+    setChatKnowledgeValues(select, current.filter(value => available.has(value)));
     updateChatKnowledgeSourceState();
   } catch (_) { }
+}
+
+function getChatKnowledgeValues(select = document.getElementById('page-chat-knowledge-source')) {
+  const values = select ? [...select.selectedOptions].map(option => option.value) : [];
+  return values.length ? values : ['auto'];
+}
+
+function setChatKnowledgeValues(select, values) {
+  if (!select) return;
+  const wanted = new Set(values?.length ? values : ['auto']);
+  [...select.options].forEach(option => { option.selected = wanted.has(option.value); });
 }
 
 function updateChatKnowledgeSourceState() {
@@ -1101,21 +1175,43 @@ function renderChatKnowledgeOptions() {
   if (!root || !select) return;
   const query = (document.getElementById('page-chat-knowledge-search')?.value || '').toLowerCase();
   const documents = (window.pageChatKnowledgeDocuments || []).filter(item => item.title.toLowerCase().includes(query));
-  const option = (value, icon, title, note) => `<button type="button" class="chat-knowledge-option ${select.value === value ? 'active' : ''}" data-value="${escapeChatMarkdown(value)}" onclick="selectChatKnowledgeSource(this.dataset.value,event)"><i class="fa-solid ${icon}"></i><span><strong>${escapeChatMarkdown(title)}</strong><small>${escapeChatMarkdown(note)}</small></span><i class="fa-solid fa-check"></i></button>`;
+  const selected = new Set(getChatKnowledgeValues(select));
+  const option = (value, icon, title, note) => `<button type="button" class="chat-knowledge-option ${selected.has(value) ? 'active' : ''}" data-value="${escapeChatMarkdown(value)}" onclick="selectChatKnowledgeSource(this.dataset.value,event)"><i class="fa-solid ${icon}"></i><span><strong>${escapeChatMarkdown(title)}</strong><small>${escapeChatMarkdown(note)}</small></span><i class="fa-solid fa-check"></i></button>`;
   root.innerHTML = option('auto', 'fa-wand-magic-sparkles', 'Tự động chọn nguồn', 'AI tìm trong toàn bộ thư viện') + option('none', 'fa-ban', 'Không dùng nguồn tri thức', 'Chỉ dùng CSDL và hội thoại') + documents.map(item => option(item.id, getLibraryChatIcon(item.fileType), item.title, `${item.fileType} · ${item.chunksCount} chunks`)).join('');
 }
 
 function getLibraryChatIcon(type) { return ({ PDF: 'fa-file-pdf', DOCX: 'fa-file-word', XLSX: 'fa-file-excel', XLS: 'fa-file-excel', CSV: 'fa-file-csv' })[String(type).toUpperCase()] || 'fa-file-lines'; }
-function selectChatKnowledgeSource(value, event) { event?.stopPropagation(); const select = document.getElementById('page-chat-knowledge-source'); if (!select) return; select.value = value; if (value !== 'auto') { window.pageChatWebSearchEnabled = false; document.getElementById('page-chat-web-toggle')?.classList.remove('is-active'); } updateChatKnowledgeSourceState(); document.getElementById('page-chat-knowledge-panel').hidden = true; document.getElementById('page-chat-add-menu')?.classList.remove('is-open'); }
+function selectChatKnowledgeSource(value, event) {
+  event?.stopPropagation();
+  const select = document.getElementById('page-chat-knowledge-source');
+  if (!select) return;
+  const current = new Set(getChatKnowledgeValues(select));
+  if (value === 'auto' || value === 'none') {
+    setChatKnowledgeValues(select, [value]);
+    if (value === 'none') {
+      window.pageChatWebSearchEnabled = false;
+      document.getElementById('page-chat-web-toggle')?.classList.remove('is-active');
+    }
+  } else {
+    current.delete('auto');
+    current.delete('none');
+    if (current.has(value)) current.delete(value); else current.add(value);
+    setChatKnowledgeValues(select, [...current]);
+    window.pageChatWebSearchEnabled = false;
+    document.getElementById('page-chat-web-toggle')?.classList.remove('is-active');
+  }
+  updateChatKnowledgeSourceState();
+}
 function renderChatKnowledgeChip() {
   const root = document.getElementById('page-chat-knowledge-inline');
   const select = document.getElementById('page-chat-knowledge-source');
   if (!root || !select) return;
   const chips = [];
-  if (select.value !== 'auto') {
-    const label = select.options[select.selectedIndex]?.textContent || 'Nguồn tri thức';
-    chips.push(`<span class="chat-knowledge-chip ${select.value === 'none' ? 'disabled' : ''}" title="${escapeChatMarkdown(label)}"><i class="fa-solid ${select.value === 'none' ? 'fa-ban' : 'fa-book-open'}"></i><span>${escapeChatMarkdown(label)}</span><button type="button" title="Bỏ nguồn đã chọn" onclick="selectChatKnowledgeSource('auto',event)"><i class="fa-solid fa-xmark"></i></button></span>`);
-  }
+  getChatKnowledgeValues(select).filter(value => value !== 'auto').forEach(value => {
+    const option = [...select.options].find(item => item.value === value);
+    const label = option?.textContent || 'Nguồn tri thức';
+    chips.push(`<span class="chat-knowledge-chip ${value === 'none' ? 'disabled' : ''}" title="${escapeChatMarkdown(label)}"><i class="fa-solid ${value === 'none' ? 'fa-ban' : 'fa-book-open'}"></i><span>${escapeChatMarkdown(label)}</span><button type="button" data-value="${escapeChatMarkdown(value)}" title="Bỏ nguồn đã chọn" onclick="selectChatKnowledgeSource(this.dataset.value,event)"><i class="fa-solid fa-xmark"></i></button></span>`);
+  });
   if (window.pageChatWebSearchEnabled) {
     chips.push('<span class="chat-knowledge-chip web-search-chip" title="Tìm kiếm trên web đang bật"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><button type="button" title="Tắt tìm kiếm web" onclick="togglePageChatWebSearch(event)"><i class="fa-solid fa-xmark"></i></button></span>');
   }
