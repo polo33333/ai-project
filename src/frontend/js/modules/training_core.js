@@ -109,15 +109,18 @@ window.renderTrainingCases = function renderTrainingCases() {
     groupedCases.get(groupCode).push(item);
   });
   const caseMarkup = item => `
-    <details class="training-case">
-      <summary><div class="training-case-main"><div class="training-case-identity"><time><i class="fa-regular fa-calendar"></i>${escapeTrainingHtml(formatTrainingTime(item.timestamp))}</time><span class="training-case-meta-separator" aria-hidden="true"></span><span class="training-case-id"><i class="fa-solid fa-hashtag" aria-hidden="true"></i>${escapeTrainingHtml(item.id)}</span></div><strong>${escapeTrainingHtml(item.question)}</strong><div>${item.failures.map(code => `<span class="training-failure-chip">${escapeTrainingHtml(trainingFailureLabel(code))}</span>`).join('')}</div></div><div class="training-case-meta"><span class="training-status ${String(item.rating || 'none')}">${escapeTrainingHtml(item.rating || 'chưa đánh giá')}</span><button class="training-resolve-btn ${item.resolved ? 'is-resolved' : ''}" type="button" onclick="event.preventDefault();event.stopPropagation();setTrainingCaseResolved(decodeURIComponent('${encodeURIComponent(item.id)}'),${!item.resolved},this)"><i class="fa-solid ${item.resolved ? 'fa-rotate-left' : 'fa-check'}"></i>${item.resolved ? 'Mở lại' : 'Đã xử lý'}</button><i class="fa-solid fa-chevron-down"></i></div></summary>
-      <div class="training-case-body">
-        <section><h4>Câu trả lời hiện tại</h4><pre>${escapeTrainingHtml(item.reply || '—')}</pre></section>
-        <section><h4>SQL</h4><pre>${escapeTrainingHtml(item.sql || 'Chưa có SQL')}</pre></section>
-        <section><h4>Memory decision</h4><pre>${escapeTrainingHtml(item.memoryDecision ? JSON.stringify(item.memoryDecision, null, 2) : 'Không có trace memory')}</pre></section>
-        <section class="training-suggestions"><h4>Đề xuất cải tiến</h4>${(item.suggestions || []).map(suggestion => `<article><span class="training-target">${escapeTrainingHtml(suggestion.target)}</span><div><strong>${escapeTrainingHtml(suggestion.title)}</strong><p>${escapeTrainingHtml(suggestion.message)}</p><code>${escapeTrainingHtml(suggestion.action)}</code></div></article>`).join('')}</section>
-      </div>
-    </details>`;
+    <div class="training-case-shell">
+      <details class="training-case">
+        <summary><div class="training-case-main"><div class="training-case-identity"><time><i class="fa-regular fa-calendar"></i>${escapeTrainingHtml(formatTrainingTime(item.timestamp))}</time><span class="training-case-meta-separator" aria-hidden="true"></span><span class="training-case-id"><i class="fa-solid fa-hashtag" aria-hidden="true"></i>${escapeTrainingHtml(item.id)}</span></div><strong>${escapeTrainingHtml(item.question)}</strong><div>${item.failures.map(code => `<span class="training-failure-chip">${escapeTrainingHtml(trainingFailureLabel(code))}</span>`).join('')}</div></div><div class="training-case-meta"><span class="training-status ${String(item.rating || 'none')}">${escapeTrainingHtml(item.rating || 'chưa đánh giá')}</span><i class="fa-solid fa-chevron-down"></i></div></summary>
+        <div class="training-case-body">
+          <section><h4>Câu trả lời hiện tại</h4><pre>${escapeTrainingHtml(item.reply || '—')}</pre></section>
+          <section><h4>SQL</h4><pre>${escapeTrainingHtml(item.sql || 'Chưa có SQL')}</pre></section>
+          <section><h4>Memory decision</h4><pre>${escapeTrainingHtml(item.memoryDecision ? JSON.stringify(item.memoryDecision, null, 2) : 'Không có trace memory')}</pre></section>
+          <section class="training-suggestions"><h4>Đề xuất cải tiến</h4>${(item.suggestions || []).map(suggestion => `<article><span class="training-target">${escapeTrainingHtml(suggestion.target)}</span><div><strong>${escapeTrainingHtml(suggestion.title)}</strong><p>${escapeTrainingHtml(suggestion.message)}</p><code>${escapeTrainingHtml(suggestion.action)}</code></div></article>`).join('')}</section>
+        </div>
+      </details>
+      <button class="training-resolve-btn ${item.resolved ? 'is-resolved' : ''}" type="button" onclick="setTrainingCaseResolved(decodeURIComponent('${encodeURIComponent(item.id)}'),${!item.resolved},this)"><i class="fa-solid ${item.resolved ? 'fa-rotate-left' : 'fa-check'}"></i>${item.resolved ? 'Mở lại' : 'Đã xử lý'}</button>
+    </div>`;
   document.getElementById('training-cases').innerHTML = [...groupedCases.entries()].map(([code, items]) => `
     <section class="training-case-group">
       <header><span><i class="fa-solid fa-triangle-exclamation"></i>${escapeTrainingHtml(trainingFailureLabel(code))}</span><strong>${items.length} case</strong></header>

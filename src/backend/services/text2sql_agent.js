@@ -149,7 +149,7 @@ class Text2SqlAgent {
 
     let provider = aiProviderManager.getActiveProvider();
     if (targetProviderId) {
-      const found = aiProviderManager.getProviders().find(p => p.id === targetProviderId);
+      const found = aiProviderManager.getProviderForExecution(targetProviderId);
       if (found) provider = found;
     }
 

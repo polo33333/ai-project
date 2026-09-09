@@ -23,6 +23,8 @@ const { selectUserFacingSqlExecutions } = require('../utils/chat_result_selector
 const { buildTrainingReport } = require('../training_core');
 const trainingResolutionService = require('../training_core/resolution_service');
 const domainAliasService = require('../intelligent_core/domain_alias_service');
+const crypto = require('crypto');
+const { buildChatDiagnostics } = require('../utils/chat_diagnostics');
 
 // ── Intelligent Core (src/backend/intelligent_core/) ──────────────────────────
 const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } = require('../intelligent_core');
@@ -149,7 +151,8 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
   const toolResult = rawRows.length ? { columns, rows: rawRows.map(row => columns.map(column => row?.[column] ?? '')) } : null;
   const toolCalls = (coreResult.toolCalls || []).map(item => ({
     name: item.toolName, success: item.success, rowCount: item.result?.rowCount ?? item.result?.rows?.length ?? null,
-    downloadUrl: item.toolName === 'export_data' ? item.result?.downloadUrl || null : null, error: item.error || null
+    downloadUrl: item.toolName === 'export_data' ? item.result?.downloadUrl || null : null, error: item.error || null,
+    durationMs: Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null
   }));
   return {
     status: coreResult.success ? 'success' : 'error', reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
@@ -166,6 +169,24 @@ function parseCookies(req) {
     if (key) acc[key] = decodeURIComponent(valueParts.join('=') || '');
     return acc;
   }, {});
+}
+
+function configuredOrigin(req) {
+  const configured = String(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
+  const origin = req.headers.origin;
+  if (!origin) return null;
+  if (configured.includes(origin)) return origin;
+  const hostOrigin = `${process.env.TRUST_PROXY === 'true' && req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
+  return origin === hostOrigin ? origin : null;
+}
+
+function isAdminMutation(pathname, method) {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
+  return /^\/api\/(sql|dictionary|glossary|providers|ai-providers|mcp|api-keys|watchfolder|documents|library|workflows|training|system)/.test(pathname);
+}
+
+function isAdminOnlyResource(pathname) {
+  return /^\/api\/(settings|providers|ai-providers|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
 }
 
 function getSessionToken(req) {
@@ -190,6 +211,8 @@ function isPublicPath(pathname) {
     || pathname === '/api/auth/login'
     || pathname === '/api/auth/logout'
     || pathname === '/api/auth/me'
+    || pathname === '/health/live'
+    || pathname === '/health/ready'
     || pathname.startsWith('/api/workflows/webhook/')
     || pathname.startsWith('/css/')
     || pathname === '/js/theme.js'
@@ -205,15 +228,23 @@ function isPublicPath(pathname) {
  * @param {import('http').ServerResponse} res 
  */
 async function handleRequest(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const requestId = String(req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 128);
+  req.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  const allowedOrigin = configuredOrigin(req);
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, X-User-Id, X-Room-Id, X-Session-Id, X-Workflow-Secret'
+    'Content-Type, Authorization, X-User-Id, X-Room-Id, X-Session-Id, X-Workflow-Secret, X-Request-Id'
   );
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(204);
+    res.writeHead(req.headers.origin && !allowedOrigin ? 403 : 204);
     res.end();
     return;
   }
@@ -221,6 +252,17 @@ async function handleRequest(req, res) {
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const pathname = parsedUrl.pathname;
   const currentAccount = authService.getAccountBySession(getSessionToken(req));
+  if (pathname === '/health/live' || pathname === '/health/ready') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ status: 'ok', requestId }));
+    return;
+  }
+  const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (isMutation && req.headers.origin && !allowedOrigin && pathname !== '/api/embed/chat') {
+    res.writeHead(403, { 'Content-Type': 'application/json; charset=UTF-8' });
+    res.end(JSON.stringify({ status: 'error', message: 'ORIGIN_NOT_ALLOWED', requestId }));
+    return;
+  }
   const isChatRoute = ['/api/intelligent-core/chat', '/api/intelligent-core/chat/stream', '/api/embed/chat', '/api/chat', '/api/v1/chat/completions'].includes(pathname);
   if (isChatRoute) {
     const rateKey = currentAccount?.id || req.socket.remoteAddress || 'anonymous';
@@ -273,6 +315,12 @@ async function handleRequest(req, res) {
     }
     res.writeHead(302, { Location: '/login.html' });
     res.end();
+    return;
+  }
+
+  if (currentAccount?.role !== 'admin' && (isAdminOnlyResource(pathname) || isAdminMutation(pathname, req.method) || pathname.startsWith('/api/exports/'))) {
+    res.writeHead(403, { 'Content-Type': 'application/json; charset=UTF-8' });
+    res.end(JSON.stringify({ status: 'error', message: 'FORBIDDEN', requestId }));
     return;
   }
 
@@ -513,8 +561,8 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/dictionary/update-table' && req.method === 'POST') {
     try {
-      const { tableName, description, domain } = await readJsonBody(req);
-      const updated = await dictionaryService.updateTableMetadata(tableName, { description, domain });
+      const { tableName, description, domain, defaultMetric, defaultTimeColumn, defaultAggregation } = await readJsonBody(req);
+      const updated = await dictionaryService.updateTableMetadata(tableName, { description, domain, defaultMetric, defaultTimeColumn, defaultAggregation });
       if (!updated) throw new Error('Không tìm thấy bảng cần cập nhật.');
       loggerService.addLog('INFO', 'Data Dictionary', `Cập nhật metadata Bảng '${tableName}' & tự động đồng bộ Qdrant.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -792,7 +840,8 @@ async function handleRequest(req, res) {
         webSearch: coreResult.contextSelection?.webSearch || null,
         sessionId: normalizedSessionId, toolCalls: payload.toolCalls, executionMode: coreResult.executionMode,
         tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null,
-        memoryDecision: coreResult.trace?.memoryDecision || null, memoryPersisted: memoryPersistence.persisted
+        memoryDecision: coreResult.trace?.memoryDecision || null, memoryPersisted: memoryPersistence.persisted,
+        diagnostics: buildChatDiagnostics(coreResult.trace)
       });
       payload.auditId = audit.id;
       sendEvent('final', payload);
@@ -940,7 +989,8 @@ async function handleRequest(req, res) {
         success: t.success,
         rowCount: t.result?.rows?.length ?? null,
         downloadUrl: t.toolName === 'export_data' ? t.result?.downloadUrl || null : null,
-        error: t.error || null
+        error: t.error || null,
+        durationMs: Number.isFinite(Number(t.durationMs)) ? Number(t.durationMs) : null
       }));
 
       loggerService.addLog('INFO', 'AI Chat',
@@ -964,7 +1014,7 @@ async function handleRequest(req, res) {
         execMs,
         coreResult.trace?.completionStatus || 'SUCCESS',
         null,
-        { ...auditPayloadBase, toolCalls: toolCallsSummary, executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, memoryPersisted: memoryPersistence.persisted }
+        { ...auditPayloadBase, toolCalls: toolCallsSummary, executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, memoryPersisted: memoryPersistence.persisted, diagnostics: buildChatDiagnostics(coreResult.trace) }
       );
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -1333,7 +1383,7 @@ async function handleRequest(req, res) {
 
       let targetProvider = aiProviderManager.getActiveProvider();
       if (providerId) {
-        const found = aiProviderManager.getProviders().find(p => p.id === providerId);
+        const found = aiProviderManager.getProviderForExecution(providerId);
         if (found) targetProvider = found;
       }
 
@@ -1463,7 +1513,7 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({
       providers: aiProviderManager.getProviders(),
-      activeProvider: aiProviderManager.getActiveProvider()
+      activeProvider: aiProviderManager.publicProvider(aiProviderManager.getActiveProvider())
     }));
     return;
   }

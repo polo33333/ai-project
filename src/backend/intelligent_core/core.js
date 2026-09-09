@@ -29,7 +29,7 @@ function providerTimeoutMs(provider) {
 }
 
 function getProviderCandidates(selectedProvider) {
-  let fallbacks = aiProviderManager.getProviders()
+  let fallbacks = aiProviderManager.getProvidersForExecution()
     .filter(candidate => candidate.id !== selectedProvider?.id)
     .filter(candidate => candidate.baseUrl && candidate.model && candidate.status !== 'unconfigured')
     .sort((a, b) => (Number(a.priority) || 999) - (Number(b.priority) || 999));
@@ -109,7 +109,7 @@ class IntelligentCore {
     // ── Resolve provider ───────────────────────────────────────────────────
     let provider = aiProviderManager.getActiveProvider();
     if (providerId) {
-      const found = aiProviderManager.getProviders().find(p => p.id === providerId);
+      const found = aiProviderManager.getProviderForExecution(providerId);
       if (found) provider = found;
     }
     const providerCandidates = getProviderCandidates(provider);
@@ -264,7 +264,7 @@ ${strictSelectedKnowledge
       : memoryService.getContext(memoryDecision);
     const memorySystemContext = memoryHistory.filter(item => item?.role === 'system').map(item => item.content).filter(Boolean).join('\n');
     const webPrompt = webContext
-      ? `\n\n# Kết quả tìm kiếm web\n${webContext}\n\nChỉ khẳng định thông tin có trong kết quả trên, đính kèm URL nguồn liên quan và không tự tạo dữ liệu thời gian thực.`
+      ? `\n\n# Chế độ tìm kiếm web — ƯU TIÊN CAO\nNgười dùng đã chủ động bật tìm kiếm web. Với yêu cầu này, thông tin từ các kết quả web dưới đây nằm trong phạm vi được phép và ghi đè giới hạn chỉ dùng dữ liệu doanh nghiệp. Không được từ chối chỉ vì thông tin không có trong CSDL nội bộ.\n\n${webContext}\n\nTrả lời trực tiếp từ các kết quả trên, đính kèm URL nguồn liên quan. Chỉ khẳng định dữ kiện xuất hiện trong kết quả và không tự tạo số liệu thời gian thực.`
       : (webSearch ? '\n\n# Tìm kiếm web\nKhông lấy được kết quả web cho yêu cầu này. Hãy nói rõ rằng dữ liệu web hiện không khả dụng; không được giả vờ đã tìm thấy nguồn hoặc tự tạo URL.' : '');
     const systemPrompt = `${aiPersonaService.buildSystemPrompt(
       schemaContext,
@@ -299,6 +299,7 @@ ${strictSelectedKnowledge
             requestPlan,
             memoryDecision,
             webSearch: Boolean(webSearch),
+            webSearchResultCount: contextSelection.webSearch?.resultCount || 0,
             signal: options.signal || null,
             knowledgeGrounding: strictSelectedKnowledge ? {
               required: true,

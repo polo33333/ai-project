@@ -170,6 +170,9 @@ function renderDictionaryDrawer(table) {
   const metaEl = document.getElementById('dict-drawer-table-meta');
   const descEl = document.getElementById('dict-drawer-table-description');
   const domainEl = document.getElementById('dict-drawer-table-domain');
+  const metricEl = document.getElementById('dict-drawer-default-metric');
+  const timeEl = document.getElementById('dict-drawer-default-time');
+  const aggregationEl = document.getElementById('dict-drawer-default-aggregation');
   const activeEl = document.getElementById('dict-drawer-active-toggle');
   const countEl = document.getElementById('dict-drawer-columns-count');
   const columnsEl = document.getElementById('dict-drawer-columns');
@@ -180,6 +183,12 @@ function renderDictionaryDrawer(table) {
   if (metaEl) metaEl.textContent = `${table.dbName || 'SQLServer_DB'} • ${cols.length} cột thuộc tính`;
   if (descEl) descEl.value = table.tableDescription || '';
   renderDictionaryDomainOptions(table.domain || '');
+  const numericType = /^(?:tinyint|smallint|int|bigint|decimal|numeric|float|real|money|smallmoney)$/i;
+  if (metricEl) metricEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => numericType.test(col.dataType) && !/id$/i.test(col.columnName)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
+  if (timeEl) timeEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => /date|time/i.test(col.dataType)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
+  if (metricEl) metricEl.value = table.defaultMetric || '';
+  if (timeEl) timeEl.value = table.defaultTimeColumn || '';
+  if (aggregationEl) aggregationEl.value = table.defaultAggregation || 'SUM';
   if (activeEl) activeEl.checked = !!table.isActive;
   if (countEl) countEl.textContent = `${cols.length} cột thuộc tính`;
 
@@ -222,7 +231,23 @@ async function openBusinessDomainsModal() {
 }
 
 function closeBusinessDomainsModal() {
+  resetBusinessDomainForm();
   if (typeof closeModal === 'function') closeModal('business-domains-modal');
+}
+
+function setBusinessDomainFormOpen(open) {
+  const body = document.querySelector('.domain-manager-body');
+  const form = document.getElementById('domain-manager-form');
+  body?.classList.toggle('is-form-open', Boolean(open));
+  form?.setAttribute('aria-hidden', String(!open));
+}
+
+function openNewBusinessDomainForm() {
+  resetBusinessDomainForm();
+  setBusinessDomainFormOpen(true);
+  const cancel = document.getElementById('domain-cancel-button');
+  if (cancel) cancel.hidden = false;
+  setTimeout(() => document.getElementById('domain-key-input')?.focus(), 180);
 }
 
 function renderBusinessDomains() {
@@ -260,7 +285,8 @@ function editBusinessDomain(encodedDomain) {
   document.getElementById('domain-form-subtitle').textContent = 'Cập nhật mã nhóm hoặc từ khóa nhận diện';
   const formIcon = document.querySelector('.domain-manager-form-icon i');
   if (formIcon) formIcon.className = 'fa-solid fa-pen';
-  document.getElementById('domain-key-input').focus();
+  setBusinessDomainFormOpen(true);
+  setTimeout(() => document.getElementById('domain-key-input')?.focus(), 180);
 }
 
 function resetBusinessDomainForm() {
@@ -278,6 +304,7 @@ function resetBusinessDomainForm() {
   if (subtitle) subtitle.textContent = 'Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện';
   const formIcon = document.querySelector('.domain-manager-form-icon i');
   if (formIcon) formIcon.className = 'fa-solid fa-plus';
+  setBusinessDomainFormOpen(false);
 }
 
 async function saveBusinessDomain() {
@@ -398,19 +425,22 @@ async function saveSelectedTableDescription() {
   const tableName = window.selectedDictionaryTableName;
   const description = document.getElementById('dict-drawer-table-description')?.value.trim() || '';
   const domain = document.getElementById('dict-drawer-table-domain')?.value.trim() || '';
+  const defaultMetric = document.getElementById('dict-drawer-default-metric')?.value || '';
+  const defaultTimeColumn = document.getElementById('dict-drawer-default-time')?.value || '';
+  const defaultAggregation = document.getElementById('dict-drawer-default-aggregation')?.value || 'SUM';
   if (!tableName) return;
   try {
     const res = await fetch('/api/dictionary/update-table', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableName, description, domain })
+      body: JSON.stringify({ tableName, description, domain, defaultMetric, defaultTimeColumn, defaultAggregation })
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     window.groupedTablesData = Array.isArray(data.tables) ? data.tables : getDictionaryTables();
     renderDataDictionary();
     renderDictionaryDrawer(findDictionaryTable(tableName));
-    if (typeof showToast === 'function') showToast('Đã lưu mô tả và domain của bảng.', 'success');
+    if (typeof showToast === 'function') showToast('Đã lưu cấu hình nghiệp vụ của bảng.', 'success');
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể lưu mô tả bảng: ${err.message}`, 'error');
   }

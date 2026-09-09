@@ -32,6 +32,8 @@ class DictionaryService {
         existing.columns = formattedCols;
         existing.dbName = t.dbName || existing.dbName;
         if (t.domain !== undefined) existing.domain = this.normalizeDomain(t.domain);
+        if (existing.defaultMetric && !formattedCols.some(column => column.columnName === existing.defaultMetric)) delete existing.defaultMetric;
+        if (existing.defaultTimeColumn && !formattedCols.some(column => column.columnName === existing.defaultTimeColumn)) delete existing.defaultTimeColumn;
       } else {
         this.tablesStore.push({
           tableName: t.tableName,
@@ -138,6 +140,26 @@ class DictionaryService {
     if (table) {
       if (updates.description !== undefined) table.tableDescription = String(updates.description || '');
       if (updates.domain !== undefined) table.domain = this.normalizeDomain(updates.domain);
+      const column = name => (table.columns || []).find(item => item.columnName === String(name || ''));
+      if (updates.defaultMetric !== undefined) {
+        const value = String(updates.defaultMetric || '');
+        if (value && !column(value)) throw Object.assign(new Error('Cột metric mặc định không tồn tại trong bảng.'), { statusCode: 400 });
+        if (value && !/^(?:tinyint|smallint|int|bigint|decimal|numeric|float|real|money|smallmoney)$/i.test(column(value)?.dataType || '')) {
+          throw Object.assign(new Error('Metric mặc định phải là cột kiểu số.'), { statusCode: 400 });
+        }
+        if (value) table.defaultMetric = value; else delete table.defaultMetric;
+      }
+      if (updates.defaultTimeColumn !== undefined) {
+        const value = String(updates.defaultTimeColumn || '');
+        if (value && !column(value)) throw Object.assign(new Error('Cột thời gian mặc định không tồn tại trong bảng.'), { statusCode: 400 });
+        if (value && !/date|time/i.test(column(value)?.dataType || '')) throw Object.assign(new Error('Cột thời gian mặc định phải có kiểu ngày/giờ.'), { statusCode: 400 });
+        if (value) table.defaultTimeColumn = value; else delete table.defaultTimeColumn;
+      }
+      if (updates.defaultAggregation !== undefined) {
+        const value = String(updates.defaultAggregation || '').toUpperCase();
+        if (value && !['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'].includes(value)) throw Object.assign(new Error('Phép tổng hợp mặc định không hợp lệ.'), { statusCode: 400 });
+        if (value) table.defaultAggregation = value; else delete table.defaultAggregation;
+      }
       this.persist();
       await this.syncToQdrant();
       return true;

@@ -92,7 +92,7 @@ img {
   }
 
   #global-feature-search {
-    width: clamp(240px, 42vw, 420px);
+    width: clamp(216px, 37.8vw, 378px);
   }
 }
 

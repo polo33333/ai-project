@@ -137,17 +137,40 @@
 .training-filters { flex-wrap: wrap; gap: 10px; }
 .training-filters label { min-width: 150px; background: #fff; }
 .training-filters label input { min-width: 0; }
-.training-case { margin: 12px; border: 1px solid #dce3ee; border-radius: 11px; overflow: hidden; }
-.training-case > summary { padding: 17px; }
+.training-case-shell { position: relative; margin: 12px; }
+.training-case { margin: 0; border: 1px solid #dce3ee; border-radius: 11px; overflow: hidden; }
+.training-case > summary { padding: 17px 138px 17px 17px; }
 .training-case[open] > summary { background: #f1f0fa; }
+.training-case-meta > i {
+  position: absolute;
+  top: 22px;
+  right: 17px;
+  color: #7c8ba3;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.training-case[open] .training-case-meta > i { transform: rotate(180deg); }
 .training-case-main > strong { font-size: 13px; line-height: 1.6; font-weight: 600; }
 .training-case-body { padding: 14px; gap: 12px; }
 .training-loading, .training-empty { padding: 32px 20px; color: #6b7890; line-height: 1.7; }
 
 /* Workflows: distinguish definitions, execution history, and individual steps. */
-.workflow-manager .system-tools-summary > div, #view-system-tools .system-tools-summary > div { min-height: 104px; display: grid; justify-content: start; gap: 12px; padding: 20px; border-radius: 13px; border-color: #dce3ee; box-shadow: var(--shadow-md); }
-.workflow-manager .system-tools-summary span, #view-system-tools .system-tools-summary span { font-size: 12px; font-weight: 500; }
-.workflow-manager .system-tools-summary strong, #view-system-tools .system-tools-summary strong { font-size: 27px; font-weight: 650; letter-spacing: -.6px; }
+.workflow-manager .system-tools-summary > .metric-card, #view-system-tools .system-tools-summary > .metric-card { min-height:116px; display:grid; grid-template-columns:52px minmax(0,1fr); align-items:center; justify-content:stretch; gap:16px; padding:20px; border-radius:16px; box-shadow:0 4px 14px rgba(30,64,175,.06); }
+.workflow-manager .system-tools-summary .metric-content, #view-system-tools .system-tools-summary .metric-content { display:grid; align-content:center; gap:7px; min-width:0; }
+.workflow-manager .system-tools-summary .metric-content > span, #view-system-tools .system-tools-summary .metric-content > span { color:var(--text-secondary); font-size:12px; font-weight:500; }
+.workflow-manager .system-tools-summary .metric-content > strong, #view-system-tools .system-tools-summary .metric-content > strong { color:var(--text-primary); font-size:30px; line-height:1; font-weight:650; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+
+/* One visual language for the statistic panels across workspace tabs. */
+.analytics-kpi-card,
+.audit-page .log-stat-card,
+.training-workspace .training-stat,
+.workspace-stat-card {
+  min-height:116px;
+  box-sizing:border-box;
+  border-color:var(--border-color);
+  border-radius:16px;
+  background:linear-gradient(135deg,#fff 65%,#fafaff);
+  box-shadow:0 4px 14px rgba(30,64,175,.06);
+}
 .workflow-list-card, .workflow-runs-card { padding: 22px; }
 .workflow-manager-card { padding: 19px; gap: 13px; box-shadow: none; border-color: #dce3ee; }
 .workflow-manager-card h3 { font-size: 15px; font-weight: 650; }
@@ -366,7 +389,7 @@ main.main-content.training-workspace { overflow-y: hidden; }
 .training-case-meta-separator { width:3px; height:3px; border-radius:50%; background:#aab4c4; }
 .training-case-identity .training-case-id { display:inline-flex; align-items:center; gap:4px; color:#78859a; font-size:10px; font-weight:550; }
 .training-case-identity .training-case-id i { color:#9aa6b8; font-size:8px; }
-.training-resolve-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid #a9d9c8; border-radius:7px; color:#08785a; background:#eaf8f3; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.training-resolve-btn { position:absolute; z-index:1; top:14px; right:42px; display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid #a9d9c8; border-radius:7px; color:#08785a; background:#eaf8f3; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; }
 .training-resolve-btn:hover { background:#d8f2e8; }
 .training-resolve-btn.is-resolved { color:#5f55bd; border-color:#cdc6ef; background:#f0edff; }
 .training-resolve-btn:disabled { opacity:.55; }

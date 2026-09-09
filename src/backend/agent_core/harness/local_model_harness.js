@@ -119,7 +119,17 @@ function buildEntityLookupSql(userMessage = '', refs = {}) {
 }
 
 function buildPlannedTablePreviewSql(plan = {}) {
+  if (plan.unfilteredList && plan.table && plan.schemaColumns?.length) {
+    const quote = name => `[${String(name).replace(/\]/g, ']]')}]`;
+    const columns = plan.schemaColumns.filter(name => !/password|pwd|secret|token|credential|api.?key/i.test(name));
+    if (!columns.length) return '';
+    return `SELECT TOP 100 ${columns.map(quote).join(', ')} FROM ${quote(plan.table)}`;
+  }
   if (!plan.table) return '';
+  // Only an explicit, unfiltered preview request can be replaced by sample rows.
+  const question = String(plan.question || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+  const escapedTable = String(plan.table).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!new RegExp(`^(?:xem|cho xem) (?:du lieu mau|vai dong mau)(?: (?:cua|trong))?(?: bang)? ${escapedTable}[.!?]*$`).test(question.trim())) return '';
   const table = dictionaryService.getGroupedTables().find(candidate => candidate.tableName === plan.table && candidate.isActive !== false);
   if (!table) return '';
   const columns = (table.columns || []).map(column => column.columnName).filter(Boolean).slice(0, 20);
@@ -149,6 +159,15 @@ function buildLatestMonthsSql(toolCalls, months) {
     return `SELECT TOP ${months} FORMAT(${dateColumn}, 'yyyy-MM') AS Period, SUM(${metric}) AS [${alias}] FROM ${table} WHERE ${dateColumn} IS NOT NULL GROUP BY FORMAT(${dateColumn}, 'yyyy-MM') ORDER BY Period DESC`;
   }
   return '';
+}
+
+function buildPlannedTimeSeriesSql(plan = {}) {
+  if (!plan.table || !plan.metric || !plan.timeColumn || !plan.temporalMonths) return '';
+  const quote = name => `[${String(name).replace(/\]/g, ']]')}]`;
+  const months = Math.max(1, Math.min(120, Number(plan.temporalMonths) || 1));
+  const aggregation = ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'].includes(String(plan.aggregation || '').toUpperCase())
+    ? String(plan.aggregation).toUpperCase() : 'SUM';
+  return `SELECT TOP ${months} FORMAT(${quote(plan.timeColumn)}, 'yyyy-MM') AS [Period], ${aggregation}(${quote(plan.metric)}) AS ${quote(plan.metric)} FROM ${quote(plan.table)} WHERE ${quote(plan.timeColumn)} IS NOT NULL GROUP BY FORMAT(${quote(plan.timeColumn)}, 'yyyy-MM') ORDER BY [Period] DESC`;
 }
 
 function buildChartArgs(rows, title = 'Biểu đồ dữ liệu') {
@@ -190,7 +209,7 @@ function isUngroundedKnowledgeAnswer(text = '') {
 
 function localCandidates(selected) {
   const allowCloud = process.env.LOCAL_MODEL_ALLOW_CLOUD_FALLBACK === 'true';
-  return [selected, ...aiProviderManager.getProviders()
+  return [selected, ...aiProviderManager.getProvidersForExecution()
     .filter(candidate => candidate.id !== selected?.id)
     .filter(candidate => candidate.baseUrl && candidate.model && candidate.status !== 'unconfigured')
     .filter(candidate => allowCloud || isLocalProvider(candidate))
@@ -400,7 +419,7 @@ class LocalModelHarness {
       if (name === 'execute_sql_query') {
         const structuralValidation = validateCallAgainstPolicy({ name }, args, requestPolicy, []);
         const sqlEvaluation = trainingService.evaluateSql(args.sql, requestPlan);
-        const violatesPlannedTable = sqlEvaluation.violations.some(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY');
+        const violatesPlannedTable = sqlEvaluation.violations.some(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY' || violation.startsWith('UNKNOWN_COLUMN:') || violation === 'UNREQUESTED_FILTER');
         const referencesWrongData = explicitSchemaRefs.tables.length > 0 && !explicitSchemaRefs.tables.some(table =>
           new RegExp(`\\b${String(table.tableName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(String(args.sql || ''))
         );
@@ -424,6 +443,7 @@ class LocalModelHarness {
 
     while (trace.iterations < this.maxIterations) {
       trace.iterations += 1;
+      const modelStartedAt = Date.now();
       emitProgress(onProgress, { type: 'model_started', label: `Model đang phân tích · vòng ${trace.iterations}`, status: 'running', icon: 'brain', iteration: trace.iterations, providerName: activeProvider?.name });
       let dispatched;
       try {
@@ -437,7 +457,7 @@ class LocalModelHarness {
         break;
       }
       activeProvider = dispatched.provider;
-      emitProgress(onProgress, { type: 'model_completed', label: `Model đã hoàn thành vòng ${trace.iterations}`, status: 'done', icon: 'robot', iteration: trace.iterations, providerName: activeProvider?.name });
+      emitProgress(onProgress, { type: 'model_completed', label: `Model đã hoàn thành vòng ${trace.iterations}`, status: 'done', icon: 'robot', iteration: trace.iterations, providerName: activeProvider?.name, durationMs: Date.now() - modelStartedAt });
       const normalized = normalizeAssistantResponse(dispatched.response);
 
       if (normalized.kind === 'final') {
@@ -549,18 +569,22 @@ class LocalModelHarness {
       if (call.name === 'execute_sql_query') {
         const sqlEvaluation = trainingService.evaluateSql(validation.args.sql, requestPlan);
         trace.training.sqlEvaluations.push(sqlEvaluation);
-        const blockingViolation = sqlEvaluation.violations.find(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY');
+        const blockingViolation = sqlEvaluation.violations.find(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY' || violation.startsWith('UNKNOWN_COLUMN:') || violation === 'UNREQUESTED_FILTER');
         if (blockingViolation) {
           const expectedTable = requestPlan.table || 'the highest-ranked business table';
-          const error = blockingViolation === 'WRONG_TABLE'
+          const error = blockingViolation.startsWith('UNKNOWN_COLUMN:')
+            ? `${blockingViolation}. Use only columns belonging to ${expectedTable}. Do not borrow columns from other tables.`
+            : blockingViolation === 'UNREQUESTED_FILTER'
+            ? 'The user requested an unfiltered list. Remove invented WHERE filters; use TOP to limit the list.'
+            : blockingViolation === 'WRONG_TABLE'
             ? `SQL queries the wrong business table. Use ${expectedTable} for the current request.`
             : 'Schema metadata is not business data. Query the selected business table.';
           trace.steps.push({ iteration: trace.iterations, type: blockingViolation, toolName: call.name, error });
           conversation.push({
             role: 'tool', tool_call_id: call.id, name: call.name,
-            content: JSON.stringify({ success: false, error, expectedTable })
+            content: JSON.stringify({ success: false, error, expectedTable, availableColumns: requestPlan.schemaColumns || [] })
           });
-          emitProgress(onProgress, { type: 'policy_repair', label: 'SQL chọn sai bảng, đang điều chỉnh', status: 'warning', icon: 'wrench', iteration: trace.iterations, toolName: call.name });
+          emitProgress(onProgress, { type: 'policy_repair', label: 'SQL chưa khớp cấu trúc hoặc yêu cầu, đang điều chỉnh', status: 'warning', icon: 'wrench', iteration: trace.iterations, toolName: call.name });
           continue;
         }
       }
@@ -588,7 +612,9 @@ class LocalModelHarness {
       });
       conversation.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: compactToolResult(execution) });
       if (call.name === 'execute_sql_query' && execution.success && !hasUsefulRows(log) && requestPolicy.temporalMonths) {
-        conversation.push({ role: 'user', content: `The query returned no usable rows. “Latest ${requestPolicy.temporalMonths} months” means the latest months present in the table, not months relative to today's date. Query the latest available monthly buckets.` });
+        conversation.push({ role: 'user', content: requestPlan.allowLatestAvailableMonths
+          ? `The user explicitly requested months with available data. Query the latest ${requestPolicy.temporalMonths} available monthly buckets while preserving all other requested filters.`
+          : 'The query returned no rows. Preserve the requested dates and filters. Do not substitute older available months or sample rows. Report that no matching data was found.' });
       }
     }
 
@@ -633,8 +659,9 @@ class LocalModelHarness {
         usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
       }
     }
-    if (!usefulSql && requestPolicy.temporalMonths) {
-      const recoverySql = buildRequestedLatestMonthsSql(effectiveUserMessage, requestPolicy.temporalMonths, context.selectedTables || [])
+    if (!usefulSql && requestPolicy.temporalMonths && requestPlan.allowLatestAvailableMonths) {
+      const recoverySql = buildPlannedTimeSeriesSql(requestPlan)
+        || buildRequestedLatestMonthsSql(effectiveUserMessage, requestPolicy.temporalMonths, context.selectedTables || [])
         || buildLatestMonthsSql(toolCalls, requestPolicy.temporalMonths);
       if (recoverySql) {
         await executeDeterministicTool('execute_sql_query', { sql: recoverySql }, 'LATEST_DATA_MONTHS_RECOVERY');
@@ -655,6 +682,7 @@ class LocalModelHarness {
       'EXECUTED_PRINTED_SQL',
       'INVALID_COLUMN_RECOVERY',
       'ENTITY_LOOKUP_RECOVERY',
+      'PLANNED_TABLE_RECOVERY',
       'LATEST_DATA_MONTHS_RECOVERY'
     ].includes(step.type) && step.success);
     if (dataRecoveryCompleted) finalText = null;
@@ -710,8 +738,17 @@ class LocalModelHarness {
         : buildToolFallbackReply(toolCalls);
       if (finalText) trace.steps.push({ type: 'DETERMINISTIC_TOOL_FALLBACK' });
     }
+    // List tables are rendered from executed rows, not retyped by the model.
+    // A fluent answer can still end halfway through a Markdown row.
+    if (usefulSql?.result?.rows?.length > 1 && !requestPolicy.chartRequired && (requestPlan.intent === 'list' || isListRequest(effectiveUserMessage))) {
+      finalText = buildSqlRowsFallbackReply(usefulSql);
+      trace.steps.push({ type: 'GROUNDED_LIST_RENDER', rowCount: usefulSql.result.rows.length });
+    }
     const exportCall = [...toolCalls].reverse().find(call => call.toolName === 'export_data' && call.success && call.result?.downloadUrl);
     if (requestPolicy.exportRequired && exportCall) finalText = ensureDownloadLink(finalText, exportCall.result.downloadUrl);
+    if (!String(finalText || '').trim() && requestPolicy.dataRequired) {
+      finalText = 'Chưa thể xác minh dữ liệu đúng với yêu cầu. Vui lòng làm rõ bộ lọc hoặc khoảng thời gian cần tra cứu.';
+    }
     if (!String(finalText || '').trim()) throw lastDispatchError || new Error('Local model returned an empty response.');
     finalText = sanitizeFinalText(finalText, hasSuccessfulTool(toolCalls, 'render_chart'));
     const responseEvaluation = trainingService.evaluateResponse({ reply: finalText, plan: requestPlan, toolCalls });
@@ -750,6 +787,7 @@ module.exports.isBusinessSqlCall = isBusinessSqlCall;
 module.exports.buildRequestedLatestMonthsSql = buildRequestedLatestMonthsSql;
 module.exports.buildEntityLookupSql = buildEntityLookupSql;
 module.exports.buildPlannedTablePreviewSql = buildPlannedTablePreviewSql;
+module.exports.buildPlannedTimeSeriesSql = buildPlannedTimeSeriesSql;
 // Backward-compat alias: old name/signature is gone (now takes `refs` too),
 // keep this so any external import of the old name doesn't crash on require.
 module.exports.buildEmployeeLookupSql = buildEntityLookupSql;

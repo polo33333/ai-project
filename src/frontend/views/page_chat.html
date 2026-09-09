@@ -90,10 +90,10 @@
       <!-- Bottom Input Box -->
       <div class="page-chat-composer-area" style="padding: 12px 22px 18px 22px; background: #ffffff;">
         <div class="chat-input-wrapper page-chat-composer">
-          <input type="text" id="page-chat-user-input"
-            placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)"
-            maxlength="4000" oninput="updatePageChatCharacterCount(this.value)"
-            onkeypress="handlePageChatKeyPress(event)">
+          <textarea id="page-chat-user-input" rows="1"
+            placeholder="Nhập câu hỏi, yêu cầu SQL... (Enter để gửi · Shift+Enter xuống dòng)"
+            maxlength="4000" oninput="updatePageChatCharacterCount(this.value); resizeChatComposerInput(this)"
+            onkeydown="handlePageChatKeyPress(event)"></textarea>
           <div id="page-chat-attachment-preview" class="page-chat-attachment-preview"></div>
           <div class="page-chat-add-wrap">
             <button class="page-chat-option-btn is-disabled" type="button" disabled title="Đính kèm tệp — sắp ra mắt" aria-label="Đính kèm tệp, hiện chưa khả dụng">
@@ -105,8 +105,8 @@
             <button id="page-chat-web-toggle" class="page-chat-option-btn" type="button" onclick="togglePageChatWebSearch(event)" title="Tìm kiếm web" aria-label="Tìm kiếm web" aria-pressed="false">
               <i class="fa-solid fa-globe"></i>
             </button>
-            <button id="page-chat-add-trigger" class="page-chat-tools-trigger" type="button"
-              onclick="toggleChatAddMenu(event)" title="Công cụ khác" aria-haspopup="menu" aria-expanded="false">
+            <button id="page-chat-add-trigger" class="page-chat-tools-trigger is-disabled" type="button"
+              title="Công cụ khác — sắp ra mắt" aria-label="Công cụ khác, hiện chưa khả dụng" aria-expanded="false" disabled>
               <span>Công cụ</span><i class="fa-solid fa-chevron-down"></i>
             </button>
             <div id="page-chat-add-menu" class="page-chat-add-menu" role="menu">
@@ -125,10 +125,10 @@
           <div id="page-chat-knowledge-inline" class="page-chat-knowledge-inline"></div>
           <div class="page-chat-composer-actions">
             <span id="page-chat-character-count" class="page-chat-character-count">0/4000</span>
-            <button class="page-chat-compact-action" type="button" onclick="toggleChatAddMenu(event)" title="Tùy chọn khác" aria-label="Tùy chọn khác"><i class="fa-solid fa-ellipsis"></i></button>
+            <button class="page-chat-compact-action is-disabled" type="button" disabled title="Tùy chọn khác — sắp ra mắt" aria-label="Tùy chọn khác, hiện chưa khả dụng"><i class="fa-solid fa-ellipsis"></i></button>
             <button class="page-chat-compact-action is-disabled" type="button" disabled title="Nhập bằng giọng nói — sắp ra mắt" aria-label="Nhập bằng giọng nói, hiện chưa khả dụng"><i class="fa-solid fa-microphone"></i></button>
             <button id="page-chat-send-button" class="page-chat-send-button page-chat-send-icon-btn" type="button" onclick="handlePageChatSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"
-              style="padding: 9px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
+              style="padding: 9px 20px; border-radius: 50% !important; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25); transition: all 0.2s;">
               <i class="fa-solid fa-paper-plane"></i>
             </button>
           </div>

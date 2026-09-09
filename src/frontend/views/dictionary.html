@@ -84,10 +84,16 @@
         <select class="form-control" id="dict-drawer-table-domain">
           <option value="">Chưa gán nhóm nghiệp vụ</option>
         </select>
+        <div class="dictionary-defaults-grid">
+          <label>Metric mặc định<select class="form-control" id="dict-drawer-default-metric"><option value="">Tự động nhận diện</option></select></label>
+          <label>Cột thời gian<select class="form-control" id="dict-drawer-default-time"><option value="">Tự động nhận diện</option></select></label>
+          <label>Phép tổng hợp<select class="form-control" id="dict-drawer-default-aggregation"><option value="SUM">SUM — Tổng</option><option value="AVG">AVG — Trung bình</option><option value="MIN">MIN — Nhỏ nhất</option><option value="MAX">MAX — Lớn nhất</option><option value="COUNT">COUNT — Đếm</option></select></label>
+        </div>
+        <p class="dictionary-defaults-hint"><i class="fa-regular fa-lightbulb"></i> Dùng khi câu hỏi không gọi tên rõ metric hoặc cột thời gian.</p>
         <textarea class="form-control dictionary-table-description" id="dict-drawer-table-description" rows="4" placeholder="Mô tả ý nghĩa nghiệp vụ của bảng này..."></textarea>
         <div class="dictionary-drawer-actions">
           <button class="btn-primary" onclick="saveSelectedTableDescription()">
-            <i class="fa-solid fa-floppy-disk"></i> Lưu mô tả bảng
+            <i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình bảng
           </button>
         </div>
       </div>
@@ -115,21 +121,22 @@
       <button class="modal-close-btn" onclick="closeBusinessDomainsModal()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="domain-manager-body">
-      <div class="domain-manager-form">
-        <div class="domain-manager-form-title"><span class="domain-manager-form-icon"><i class="fa-solid fa-plus"></i></span><div><strong id="domain-form-title">Thêm nhóm mới</strong><small id="domain-form-subtitle">Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện</small></div></div>
+      <button class="domain-manager-form-backdrop" type="button" onclick="resetBusinessDomainForm()" aria-label="Đóng biểu mẫu" tabindex="-1"></button>
+      <div class="domain-manager-form" id="domain-manager-form" aria-hidden="true">
+        <div class="domain-manager-form-title"><span class="domain-manager-form-icon"><i class="fa-solid fa-plus"></i></span><div><strong id="domain-form-title">Thêm nhóm mới</strong><small id="domain-form-subtitle">Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện</small></div><button class="domain-manager-form-close" type="button" onclick="resetBusinessDomainForm()" aria-label="Đóng biểu mẫu"><i class="fa-solid fa-xmark"></i></button></div>
         <input type="hidden" id="domain-old-key">
         <label>Mã nghiệp vụ<input class="form-control" id="domain-key-input" placeholder="Ví dụ: contract"></label>
         <label>Từ khóa và từ đồng nghĩa<textarea class="form-control" id="domain-aliases-input" rows="4" placeholder="hợp đồng, thỏa thuận, giao kèo"></textarea></label>
         <div class="domain-manager-hint"><i class="fa-regular fa-lightbulb"></i><span>Mỗi từ khóa cách nhau bằng dấu phẩy hoặc xuống dòng.</span></div>
         <div class="domain-manager-actions">
-          <button class="btn-secondary-sm" id="domain-cancel-button" onclick="resetBusinessDomainForm()" hidden>Hủy sửa</button>
+          <button class="btn-secondary-sm" id="domain-cancel-button" onclick="resetBusinessDomainForm()">Hủy</button>
           <button class="btn-primary" onclick="saveBusinessDomain()"><i class="fa-solid fa-floppy-disk"></i> Lưu nhóm</button>
         </div>
       </div>
       <div class="domain-manager-content">
         <div class="domain-manager-toolbar">
           <div><strong>Danh sách nghiệp vụ</strong><span id="business-domains-count">0 nhóm</span></div>
-          <div class="domain-manager-search"><i class="fa-solid fa-magnifying-glass"></i><input id="business-domains-search" placeholder="Tìm nghiệp vụ..." oninput="renderBusinessDomains()"></div>
+          <div class="domain-manager-toolbar-actions"><button class="btn-primary domain-manager-add-button" type="button" onclick="openNewBusinessDomainForm()"><i class="fa-solid fa-plus"></i> Thêm nhóm</button><div class="domain-manager-search"><i class="fa-solid fa-magnifying-glass"></i><input id="business-domains-search" placeholder="Tìm nghiệp vụ..." oninput="renderBusinessDomains()"></div></div>
         </div>
         <div id="business-domains-list" class="domain-manager-list"></div>
       </div>

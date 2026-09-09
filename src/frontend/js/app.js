@@ -1099,9 +1099,14 @@ window.toggleCopilotModelMenu = function toggleCopilotModelMenu(event) {
 window.toggleCopilotAddMenu = function toggleCopilotAddMenu(event) {
   event?.stopPropagation();
   const menu = document.getElementById('copilot-add-menu');
+  const trigger = document.getElementById('copilot-add-trigger');
+  if (!trigger || trigger.disabled) {
+    menu?.classList.remove('is-open');
+    return;
+  }
   const shouldOpen = !menu?.classList.contains('is-open');
   closeCopilotComposerMenus();
-  if (shouldOpen) { menu?.classList.add('is-open'); document.getElementById('copilot-add-trigger')?.setAttribute('aria-expanded', 'true'); }
+  if (shouldOpen) { menu?.classList.add('is-open'); trigger.setAttribute('aria-expanded', 'true'); }
 };
 
 window.selectCopilotModel = function selectCopilotModel(value) {
@@ -1254,7 +1259,10 @@ window.resetCopilotChatModal = function resetCopilotChatModal() {
   const messages = document.getElementById('chat-messages-container');
   const input = document.getElementById('chat-user-input');
   if (messages) messages.innerHTML = getCopilotWelcomeHtml();
-  if (input) input.value = '';
+  if (input) {
+    input.value = '';
+    window.resizeChatComposerInput?.(input);
+  }
   window.updateCopilotCharacterCount?.('');
   window.copilotAttachments = [];
   renderCopilotAttachments();
@@ -1282,6 +1290,13 @@ window.handleChatKeyPress = function handleChatKeyPress(e) {
     }
     sendChatMessage();
   }
+};
+
+window.resizeChatComposerInput = function resizeChatComposerInput(element) {
+  if (!element) return;
+  element.style.height = 'auto';
+  element.style.height = `${Math.min(element.scrollHeight, 140)}px`;
+  element.style.overflowY = element.scrollHeight > 140 ? 'auto' : 'hidden';
 };
 
 window.populateCopilotModelSelector = async function populateCopilotModelSelector() {
@@ -1338,6 +1353,7 @@ window.sendChatMessage = async function sendChatMessage() {
   if (!text && attachedFiles.length === 0) return;
   const providerId = document.getElementById('chat-model-selector')?.value || null;
   input.value = '';
+  window.resizeChatComposerInput?.(input);
   window.updateCopilotCharacterCount('');
   window.copilotAttachments = [];
   renderCopilotAttachments();

@@ -39,6 +39,7 @@ function domainText(domain) {
 
 function tableText(table) {
   return [table.tableName, table.dbName, table.domain, domainText(table.domain), table.tableDescription,
+    table.defaultMetric, table.defaultTimeColumn, table.defaultAggregation,
     ...(table.columns || []).flatMap(column => [column.columnName, column.description, column.dataType])
   ].filter(Boolean).join(' ');
 }
@@ -136,7 +137,9 @@ async function buildSchemaContext(query, options = {}) {
   const lines = [];
   for (const table of selected) {
     const columns = selectColumns(table, expandedQuery, vectorColumnNames);
-    lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
+    const defaults = table.defaultMetric || table.defaultTimeColumn
+      ? ` [Defaults: metric=${table.defaultMetric || 'none'}, time=${table.defaultTimeColumn || 'none'}, aggregation=${table.defaultAggregation || 'SUM'}]` : '';
+    lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${defaults}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
     lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
   }
   if (relationships.length > 0) {
@@ -176,7 +179,9 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   const lines = [];
   for (const table of selected) {
     const columns = selectColumns(table, query, new Set());
-    lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
+    const defaults = table.defaultMetric || table.defaultTimeColumn
+      ? ` [Defaults: metric=${table.defaultMetric || 'none'}, time=${table.defaultTimeColumn || 'none'}, aggregation=${table.defaultAggregation || 'SUM'}]` : '';
+    lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${defaults}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
     lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
   }
   if (relationships.length) {

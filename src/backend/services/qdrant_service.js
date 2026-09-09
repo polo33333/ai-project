@@ -186,7 +186,9 @@ class QdrantService {
         // Table level metadata
         const aliases = Array.isArray(domainAliases?.[table.domain]) ? domainAliases[table.domain] : [];
         const aliasText = aliases.length ? ` Từ khóa nghiệp vụ: ${aliases.join(', ')}.` : '';
-        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText} ${table.tableDescription || ''}. Các cột: ${table.columns.map(c => c.columnName).join(', ')}`;
+        const defaultsText = table.defaultMetric || table.defaultTimeColumn
+          ? ` Mặc định: metric ${table.defaultMetric || 'không có'}, thời gian ${table.defaultTimeColumn || 'không có'}, tổng hợp ${table.defaultAggregation || 'SUM'}.` : '';
+        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText}${defaultsText} ${table.tableDescription || ''}. Các cột: ${table.columns.map(c => c.columnName).join(', ')}`;
         const tableVector = this.generateVector(tableText);
 
         points.push({

@@ -229,6 +229,9 @@ header.top-bar { background: #ffffffeb; box-shadow: none; border-bottom-color: v
   font-family: inherit;
   font-size: 13.5px;
   line-height: 1.5;
+  max-height: 140px;
+  overflow-y: hidden;
+  resize: none;
 }
 .page-chat-composer .page-chat-attachment-preview { grid-column: 1 / -1; margin: 0; }
 .page-chat-composer .page-chat-add-wrap { grid-column: 1; grid-row: 3; }
@@ -276,6 +279,9 @@ header.top-bar { background: #ffffffeb; box-shadow: none; border-bottom-color: v
   font-size: 13px;
   line-height: 1.5;
   box-shadow: none;
+  max-height: 140px;
+  overflow-y: hidden;
+  resize: none;
 }
 #copilot-modal .copilot-chat-composer .page-chat-attachment-preview { grid-column: 1 / -1; margin: 0; }
 #copilot-modal .copilot-chat-composer .page-chat-add-wrap { grid-column: 1; }
@@ -363,9 +369,11 @@ button:disabled { cursor: not-allowed; }
   .analytics-page-hero .analytics-header-actions { flex-wrap: wrap; }
   /* Override legacy inline desktop dimensions so the conversation remains accessible. */
   .chat-page-layout { flex-direction: column; height: calc(100dvh - 120px) !important; min-height: 580px; gap: 10px !important; }
-  .chat-sidebar { width: 100% !important; min-width: 0 !important; flex-shrink: 0; max-height: 240px; }
+  .chat-workspace .chat-sidebar { width: 100% !important; min-width: 0 !important; flex: 0 0 42px !important; height: 42px; min-height: 42px; max-height: 42px; }
+  .chat-workspace .chat-sidebar.sessions-open { flex-basis: min(340px, 45dvh) !important; height: min(340px, 45dvh); max-height: min(340px, 45dvh); }
   .chat-sessions-toggle { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 10px 14px; border: 0; background: #fff; color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; }
   .chat-sessions-toggle i:last-child { margin-left: auto; font-size: 10px; }
+  .chat-sessions-toggle i:last-child { transition: transform .18s ease; }
   .sessions-open .chat-sessions-toggle i:last-child { transform: rotate(180deg); }
   .chat-sidebar:not(.sessions-open) > div { display: none; }
   .chat-main { min-height: 400px; }

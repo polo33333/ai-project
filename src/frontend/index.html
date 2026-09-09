@@ -29,7 +29,7 @@
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
-  <link rel="stylesheet" href="css/styles.css?v=20260908-round-thinking-avatar">
+  <link rel="stylesheet" href="css/styles.css?v=20260909-summary-accessibility">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
   <link rel="stylesheet" href="css/audit-logs.css">
   <link rel="stylesheet" href="css/provider-management.css">
@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="css/system-tools.css?v=20260906-hero-glow">
   <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
   <link rel="stylesheet" href="css/workspace.css?v=20260908-synced-brand-icon">
-  <link rel="stylesheet" href="css/module-workspaces.css?v=20260906-training-time-first">
+  <link rel="stylesheet" href="css/module-workspaces.css?v=20260909-summary-accessibility">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
   <link rel="stylesheet" href="css/theme.css?v=20260908-chat-sql-dark-border">
   <link rel="stylesheet" href="css/settings.css?v=20260906-qdrant-button-align-2">
@@ -407,7 +407,8 @@
             <select id="chat-model-selector" hidden aria-hidden="true" tabindex="-1"></select>
           </div>
 
-          <button class="modal-close-btn" onclick="closeCopilotPopup()" title="Đóng cửa sổ"><i
+          <button class="modal-close-btn copilot-modal-close" onclick="closeCopilotPopup()" title="Đóng cửa sổ"
+            aria-label="Đóng cửa sổ Trợ lý AI"><i
               class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
@@ -422,16 +423,16 @@
 
       <div class="copilot-chat-input-area">
         <div class="chat-input-wrapper copilot-chat-composer">
-          <input type="text" class="chat-input" id="chat-user-input"
-            placeholder="Nhập câu hỏi, yêu cầu SQL, vẽ biểu đồ, tính toán... (Enter để gửi)" maxlength="4000"
-            oninput="updateCopilotCharacterCount(this.value)"
-            onkeypress="handleChatKeyPress(event)">
+          <textarea class="chat-input" id="chat-user-input" rows="1"
+            placeholder="Nhập câu hỏi, yêu cầu SQL... (Enter để gửi · Shift+Enter xuống dòng)" maxlength="4000"
+            oninput="updateCopilotCharacterCount(this.value); resizeChatComposerInput(this)"
+            onkeydown="handleChatKeyPress(event)"></textarea>
           <div id="copilot-attachment-preview" class="page-chat-attachment-preview"></div>
           <div class="page-chat-add-wrap">
           <button class="page-chat-option-btn is-disabled" type="button" disabled title="Đính kèm tệp — sắp ra mắt" aria-label="Đính kèm tệp, hiện chưa khả dụng"><i class="fa-solid fa-paperclip"></i></button>
           <button id="copilot-knowledge-toggle" class="page-chat-option-btn" type="button" onclick="toggleCopilotKnowledgePanel(event)" title="Chọn nguồn tri thức" aria-label="Chọn nguồn tri thức" aria-expanded="false"><i class="fa-solid fa-database"></i></button>
           <button id="copilot-web-toggle" class="page-chat-option-btn" type="button" onclick="toggleCopilotWebSearch(event)" title="Tìm kiếm web" aria-label="Tìm kiếm web" aria-pressed="false"><i class="fa-solid fa-globe"></i></button>
-          <button id="copilot-add-trigger" class="page-chat-tools-trigger" onclick="toggleCopilotAddMenu(event)" title="Công cụ khác" aria-haspopup="menu" aria-expanded="false">
+          <button id="copilot-add-trigger" class="page-chat-tools-trigger is-disabled" type="button" disabled title="Công cụ khác — sắp ra mắt" aria-label="Công cụ khác, hiện chưa khả dụng" aria-expanded="false">
             <span>Công cụ</span><i class="fa-solid fa-chevron-down"></i>
           </button>
           <div id="copilot-add-menu" class="page-chat-add-menu" role="menu">
@@ -447,7 +448,7 @@
           <div id="copilot-knowledge-inline" class="page-chat-knowledge-inline"></div>
           <div class="page-chat-composer-actions">
             <span id="copilot-character-count" class="page-chat-character-count">0/4000</span>
-            <button class="page-chat-compact-action" type="button" onclick="toggleCopilotAddMenu(event)" title="Tùy chọn khác" aria-label="Tùy chọn khác"><i class="fa-solid fa-ellipsis"></i></button>
+            <button class="page-chat-compact-action is-disabled" type="button" disabled title="Tùy chọn khác — sắp ra mắt" aria-label="Tùy chọn khác, hiện chưa khả dụng"><i class="fa-solid fa-ellipsis"></i></button>
             <button class="page-chat-compact-action is-disabled" type="button" disabled title="Nhập bằng giọng nói — sắp ra mắt" aria-label="Nhập bằng giọng nói, hiện chưa khả dụng"><i class="fa-solid fa-microphone"></i></button>
             <button id="copilot-send-button" class="chat-send-btn copilot-send-icon-btn" type="button" onclick="handleCopilotSendAction()" aria-label="Gửi yêu cầu" title="Gửi yêu cầu"><i class="fa-solid fa-paper-plane"></i></button>
           </div>
@@ -606,12 +607,12 @@
   <script src="js/modules/ai_providers.js"></script>
   <script src="js/modules/dictionary.js?v=20260907-domain-manager-v2"></script>
   <script src="js/modules/glossary.js"></script>
-  <script src="js/modules/page_chat.js?v=20260908-multi-knowledge-source"></script>
+  <script src="js/modules/page_chat.js?v=20260909-summary-history-repair"></script>
   <script src="js/modules/sql_connector.js"></script>
   <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
   <script src="js/modules/chat_history.js"></script>
   <script src="js/modules/chat_feedback.js"></script>
-  <script src="js/modules/training_core.js?v=20260906-time-first"></script>
+  <script src="js/modules/training_core.js?v=20260909-summary-accessibility"></script>
   <script src="js/modules/mcp_api.js"></script>
   <script src="js/modules/analytics.js?v=20260906-visible-chart-animation"></script>
   <script src="js/modules/library.js?v=20260905-tab-actions"></script>

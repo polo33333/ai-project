@@ -23,7 +23,7 @@ function providerTimeoutMs(provider) {
 }
 
 function getProviderCandidates(selectedProvider) {
-  const fallbacks = aiProviderManager.getProviders()
+  const fallbacks = aiProviderManager.getProvidersForExecution()
     .filter(candidate => candidate.id !== selectedProvider?.id)
     .filter(candidate => candidate.baseUrl && candidate.model && candidate.status !== 'unconfigured')
     .sort((a, b) => (Number(a.priority) || 999) - (Number(b.priority) || 999));
@@ -42,6 +42,12 @@ function isRecoverableProviderError(error) {
 
   // Lỗi 400 Bad Request, 401 Unauthorized, context length exceeded -> Không fallback mù quáng
   return false;
+}
+
+function isWebScopeRefusal(text = '') {
+  const normalized = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+  return /(?:khong duoc ket noi|khong co quyen truy cap|chi co the ho tro|chi ho tro|ngoai pham vi|du lieu noi bo|tri thuc doanh nghiep)/.test(normalized)
+    && /(?:web|thoi gian thuc|thi truong|thong tin|du lieu)/.test(normalized);
 }
 
 async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, collectUsage, externalSignal = null) {
@@ -183,6 +189,14 @@ class AgentHarness {
 
       // 1. Nếu không có tool calls -> LLM đã trả lời xong
       if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+        if (context.webSearch && context.webSearchResultCount > 0 && isWebScopeRefusal(assistantMsg.content) && iterations < this.maxIterations) {
+          trace.steps.push({ iteration: iterations, type: 'web_grounding_repair' });
+          conversation.push({
+            role: 'user',
+            content: 'Bạn đã có kết quả tìm kiếm web trong system context. Hãy trả lời trực tiếp từ các kết quả đó và dẫn URL nguồn; không từ chối vì thiếu dữ liệu nội bộ.'
+          });
+          continue;
+        }
         finalText = assistantMsg.content || '';
         trace.steps.push({
           iteration: iterations,
@@ -334,3 +348,4 @@ class AgentHarness {
 }
 
 module.exports = AgentHarness;
+module.exports.isWebScopeRefusal = isWebScopeRefusal;

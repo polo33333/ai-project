@@ -29,27 +29,44 @@ const http = require('http');
 const router = require('./src/backend/routes/router');
 const knowledgeCore = require('./src/backend/knowledge_core');
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '127.0.0.1';
+const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS || 10000));
 
 knowledgeCore.start().catch(error => {
   console.error('[Knowledge] Failed to start module:', error);
 });
 
 const server = http.createServer((req, res) => {
-  router.handleRequest(req, res);
+  Promise.resolve(router.handleRequest(req, res)).catch(error => {
+    console.error('[HTTP] Unhandled request error:', error);
+    if (!res.headersSent) res.writeHead(error.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+    if (!res.writableEnded) res.end(JSON.stringify({ status: 'error', message: error.statusCode ? error.message : 'INVALID_REQUEST', requestId: req.requestId || null }));
+  });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`=============================================================`);
   console.log(`🚀 KnowledgeHub AI Backend & Dashboard UI is running!`);
-  console.log(`👉 Access Dashboard at: http://localhost:${PORT}`);
+  console.log(`👉 Access Dashboard at: http://${HOST}:${PORT}`);
   console.log(`=============================================================`);
 });
 
 async function shutdown(signal) {
   console.log(`[System] ${signal}: shutting down...`);
-  await knowledgeCore.stop();
-  server.close(() => process.exit(0));
+  const forceTimer = setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS);
+  forceTimer.unref();
+  try {
+    await Promise.all([
+      knowledgeCore.stop(),
+      new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    ]);
+    clearTimeout(forceTimer);
+    process.exit(0);
+  } catch (error) {
+    console.error('[System] Shutdown failed:', error);
+    process.exit(1);
+  }
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));

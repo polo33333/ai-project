@@ -9,6 +9,7 @@ window.pageChatAttachments = [];
 window.pageChatWebSearchEnabled = false;
 window.pageChatRequestController = null;
 window.pageChatIsResponding = false;
+window.pageChatPendingThinking = null;
 window.pageChatMiniPanelState = { status: 'idle', label: '', question: '' };
 
 function ensurePageChatMiniPanel() {
@@ -107,6 +108,10 @@ function toggleChatAddMenu(event) {
   event?.stopPropagation();
   const menu = document.getElementById('page-chat-add-menu');
   const trigger = document.getElementById('page-chat-add-trigger');
+  if (!trigger || trigger.disabled) {
+    menu?.classList.remove('is-open');
+    return;
+  }
   const open = !menu?.classList.contains('is-open');
   closePageChatMenus();
   if (open) { menu?.classList.add('is-open'); trigger?.setAttribute('aria-expanded', 'true'); }
@@ -275,6 +280,15 @@ function normalizeStoredChatSession(session) {
       content: fixStoredMojibake(item.content || '')
     }))
     : [];
+  // Older versions permanently shortened generated titles to 40 characters.
+  // Restore them from the first user turn so the wider header can show the text.
+  if (/\.\.\.$/.test(session.title)) {
+    const firstQuestion = session.history.find(item => item?.role === 'user' && String(item.content || '').trim())?.content;
+    const titlePrefix = session.title.slice(0, -3);
+    if (firstQuestion && String(firstQuestion).startsWith(titlePrefix)) {
+      session.title = String(firstQuestion).split(/\n\n\[Nội dung tệp|\n\n\[Tệp đính kèm/)[0].trim().slice(0, 200);
+    }
+  }
   normalizedChatSessions.add(session);
   return session;
 }
@@ -437,8 +451,8 @@ function renderChartSpec(canvasId, chartSpec) {
     const ctx = canvas.getContext('2d');
     const isDarkTheme = document.documentElement.dataset.theme === 'dark';
     const themeColors = isDarkTheme
-      ? { text: '#b8c4d8', grid: '#344158', tooltipBg: '#202c40', tooltipBorder: '#465773' }
-      : { text: '#64748b', grid: '#e2e8f0', tooltipBg: '#0f172a', tooltipBorder: '#334155' };
+      ? { text: '#d2dbea', grid: '#40506a', tooltipBg: '#202c40', tooltipBorder: '#5a6b88' }
+      : { text: '#475569', grid: '#d7dfeb', tooltipBg: '#0f172a', tooltipBorder: '#334155' };
     const specOptions = chartSpec.options || {};
     const specPlugins = specOptions.plugins || {};
     const specScales = specOptions.scales || {};
@@ -451,13 +465,15 @@ function renderChartSpec(canvasId, chartSpec) {
       options: {
         responsive: true,
         ...specOptions,
+        maintainAspectRatio: false,
+        devicePixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
         plugins: {
           ...specPlugins,
           legend: {
             position: 'top',
             ...(specPlugins.legend || {}),
             labels: {
-              font: { family: 'Inter', size: 12 },
+              font: { family: 'Inter', size: 12, weight: '600' },
               ...(specPlugins.legend?.labels || {}),
               color: themeColors.text
             }
@@ -465,7 +481,7 @@ function renderChartSpec(canvasId, chartSpec) {
           title: {
             display: !!chartSpec.title,
             text: chartSpec.title || '',
-            font: { family: 'Inter', size: 14, weight: 'bold' },
+            font: { family: 'Inter', size: 14, weight: '700' },
             ...(specPlugins.title || {}),
             color: themeColors.text
           },
@@ -483,13 +499,13 @@ function renderChartSpec(canvasId, chartSpec) {
             ...(specScales.x || {}),
             grid: { ...(specScales.x?.grid || {}), color: themeColors.grid },
             border: { ...(specScales.x?.border || {}), color: themeColors.grid },
-            ticks: { font: { family: 'Inter', size: 11 }, ...(specScales.x?.ticks || {}), color: themeColors.text }
+            ticks: { font: { family: 'Inter', size: 12, weight: '500' }, ...(specScales.x?.ticks || {}), color: themeColors.text }
           },
           y: {
             ...(specScales.y || {}),
             grid: { ...(specScales.y?.grid || {}), color: themeColors.grid },
             border: { ...(specScales.y?.border || {}), color: themeColors.grid },
-            ticks: { font: { family: 'Inter', size: 11 }, ...(specScales.y?.ticks || {}), color: themeColors.text }
+            ticks: { font: { family: 'Inter', size: 12, weight: '500' }, ...(specScales.y?.ticks || {}), color: themeColors.text }
           }
         }
       }
@@ -497,14 +513,28 @@ function renderChartSpec(canvasId, chartSpec) {
 
     // Apply default colors if not set
     if (config.data.datasets) {
-      const palette = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7'];
+      const palette = ['#5b5ce2', '#20a77a', '#df8b16', '#dc5360', '#0897af', '#9253d7'];
+      const opaqueColor = color => {
+        if (typeof color !== 'string') return color;
+        if (/^#[0-9a-f]{8}$/i.test(color)) return color.slice(0, 7);
+        const rgba = color.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+        return rgba ? `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})` : color;
+      };
       config.data.datasets.forEach((ds, i) => {
         if (!ds.backgroundColor) {
-          ds.backgroundColor = config.type === 'bar'
-            ? palette[i % palette.length] + 'cc'
-            : palette;
+          ds.backgroundColor = config.type === 'bar' ? palette[i % palette.length] : palette;
+        } else {
+          ds.backgroundColor = Array.isArray(ds.backgroundColor)
+            ? ds.backgroundColor.map(opaqueColor)
+            : opaqueColor(ds.backgroundColor);
         }
-        if (!ds.borderColor) ds.borderColor = palette[i % palette.length];
+        if (!ds.borderColor) ds.borderColor = Array.isArray(ds.backgroundColor) ? ds.backgroundColor : palette[i % palette.length];
+        else ds.borderColor = Array.isArray(ds.borderColor) ? ds.borderColor.map(opaqueColor) : opaqueColor(ds.borderColor);
+        if (config.type === 'bar') {
+          ds.borderWidth = ds.borderWidth ?? 1;
+          ds.borderRadius = ds.borderRadius ?? 5;
+          ds.maxBarThickness = ds.maxBarThickness ?? 120;
+        }
         if (config.type === 'line') ds.tension = ds.tension ?? 0.3;
       });
     }
@@ -526,9 +556,9 @@ function createThinkingBubble(containerId) {
     </div>
     <div class="chat-thinking-card">
       <div class="chat-thinking-head">
-        <canvas class="chat-thinking-spinner" width="22" height="22"></canvas>
+        <canvas class="chat-thinking-spinner" width="22" height="22" aria-hidden="true"></canvas>
         <div class="chat-thinking-copy">
-          <strong>Thinking</strong>
+          <strong>Đang xử lý yêu cầu</strong>
           <span id="${containerId}-current">AI đang phân tích yêu cầu của bạn...</span>
         </div>
         <button type="button" class="chat-thinking-toggle" aria-label="Xem chi tiết quá trình xử lý" aria-expanded="false">
@@ -549,6 +579,21 @@ function createThinkingBubble(containerId) {
     };
   }
   return div;
+}
+
+function formatThinkingDuration(durationMs) {
+  const ms = Math.max(0, Number(durationMs) || 0);
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
+}
+
+function formatExecutionTime(value) {
+  const match = String(value ?? '').match(/[\d.]+/);
+  return match ? formatThinkingDuration(Number(match[0])) : String(value || '');
+}
+
+function disposeThinkingBubble(root) {
+  if (root?._elapsedTimer) clearInterval(root._elapsedTimer);
+  root._elapsedTimer = null;
 }
 
 function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '') {
@@ -573,18 +618,28 @@ function typeThinkingText(element, value) {
   }, 14);
 }
 
-function addThinkingStep(containerId, icon, label, status = 'running') {
-  const stepsEl = document.getElementById(`${containerId}-steps`);
+function addThinkingStep(containerId, icon, label, status = 'running', event = {}) {
+  const pending = window.pageChatPendingThinking;
+  const root = pending?.node?.id === containerId ? pending.node : document.getElementById(containerId);
+  const stepsEl = root?.querySelector('.chat-thinking-steps');
   if (!stepsEl) return;
-  typeThinkingText(document.getElementById(`${containerId}-current`), label);
-  const color = status === 'done' ? '#22c55e' : status === 'error' ? '#ef4444' : status === 'warning' ? '#f59e0b' : '#6366f1';
+  typeThinkingText(root.querySelector('.chat-thinking-copy span'), label);
+  const key = event.toolName ? `tool:${event.toolName}` : event.iteration != null && /^model_/.test(event.type || '') ? `model:${event.iteration}` : '';
+  let step = key ? Array.from(stepsEl.children).reverse().find(item => item.dataset?.stepKey === key && item.dataset?.status === 'running') : null;
   const statusIcon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : icon;
   const spinIcons = ['spinner', 'circle-notch', 'arrows-rotate', 'sync', 'gear', 'cog'];
   const spinClass = (status === 'running' && spinIcons.includes(statusIcon)) ? 'fa-spin' : '';
-  const step = document.createElement('div');
-  step.className = 'chat-thinking-step';
-  step.innerHTML = `<span style="color:${color};"><i class="fa-solid fa-${statusIcon} ${spinClass}"></i></span><span>${escapeChatMarkdown(label)}</span>`;
-  stepsEl.appendChild(step);
+  if (!step) {
+    step = document.createElement('div');
+    step.className = 'chat-thinking-step';
+    step.dataset.stepKey = key;
+    step._startedAt = performance.now();
+    stepsEl.appendChild(step);
+  }
+  step.dataset.status = status;
+  const duration = event.durationMs != null ? event.durationMs : (status !== 'running' ? performance.now() - step._startedAt : null);
+  const toolCode = event.toolName ? `<code>${escapeChatMarkdown(event.toolName)}</code>` : '';
+  step.innerHTML = `<span class="chat-thinking-step-icon"><i class="fa-solid fa-${statusIcon} ${spinClass}"></i></span><span class="chat-thinking-step-copy"><strong>${escapeChatMarkdown(label)}</strong>${toolCode}</span>${duration != null ? `<time>${formatThinkingDuration(duration)}</time>` : '<time>đang chạy</time>'}`;
 }
 
 function finalizeThinkingBubble(containerId, executionTime) {
@@ -592,13 +647,14 @@ function finalizeThinkingBubble(containerId, executionTime) {
   if (!root) return;
   const card = root.querySelector('.chat-thinking-card');
   const head = root.querySelector('.chat-thinking-head');
+  disposeThinkingBubble(root);
   const spinner = root.querySelector('.chat-thinking-spinner');
   const title = head?.querySelector('strong');
   const subtitle = head?.querySelector('span');
   const steps = document.getElementById(`${containerId}-steps`);
   if (spinner) spinner.style.display = 'none';
   if (title) title.textContent = 'Đã hoàn thành phân tích';
-  if (subtitle) subtitle.textContent = `${steps?.children.length || 0} bước${executionTime ? ` · ${executionTime}` : ''} · Bấm để xem lại`;
+  if (subtitle) subtitle.textContent = `${steps?.children.length || 0} bước đã hoàn thành`;
   if (card) card.classList.add('is-complete');
   if (steps) steps.hidden = true;
   if (head && steps) {
@@ -689,6 +745,26 @@ function enhanceAssistantMessageNode(node) {
   bubble.classList.add('chat-ai-message-bubble');
 }
 
+function repairStoredSummaryMarkup(node) {
+  if (!node) return false;
+  let repaired = false;
+  const interactiveSelector = 'a[href],button,input,select,textarea,[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
+  node.querySelectorAll('summary').forEach(summary => {
+    const details = summary.parentElement;
+    if (!details || details.tagName !== 'DETAILS') return;
+    [...summary.querySelectorAll(interactiveSelector)].forEach(control => {
+      details.insertBefore(control, summary.nextSibling);
+      if (control.matches('button') && /copy sql|sao chép/i.test(control.textContent || '')) {
+        control.classList.add('chat-sql-copy-btn');
+        control.removeAttribute('style');
+        control.type = 'button';
+      }
+      repaired = true;
+    });
+  });
+  return repaired;
+}
+
 function addChatMessageTime(node, role, timestamp) {
   const time = new Date(Number(timestamp));
   const label = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -718,6 +794,8 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
   wrapper.innerHTML = record.html || '';
   const node = wrapper.firstElementChild;
   if (!node) return;
+  const repairedStoredMarkup = repairStoredSummaryMarkup(node);
+  if (repairedStoredMarkup) record.html = node.outerHTML;
   record.createdAt = Number(record.createdAt) || Date.now();
   if (record.role === 'user') enhanceUserMessageNode(node, record.content || '');
   if (record.role === 'assistant') enhanceAssistantMessageNode(node);
@@ -740,6 +818,7 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
       saveChatSessions();
     }
   }
+  return repairedStoredMarkup;
 }
 
 function renderCurrentChatMessages() {
@@ -749,13 +828,19 @@ function renderCurrentChatMessages() {
   container.innerHTML = '';
   const userHistory = (session?.history || []).filter(item => item.role === 'user');
   let userIndex = 0;
+  let repairedStoredMarkup = false;
   (session?.messages || []).forEach(record => {
     const hydrated = record.role === 'user' && !record.content
       ? { ...record, content: userHistory[userIndex]?.content || '' }
       : record;
     if (record.role === 'user') userIndex += 1;
-    appendChatMessage(hydrated, false, false);
+    repairedStoredMarkup = appendChatMessage(hydrated, false, false) || repairedStoredMarkup;
   });
+  if (repairedStoredMarkup) saveChatSessions();
+  const pending = window.pageChatPendingThinking;
+  if (pending && pending.sessionId === session?.id) {
+    container.appendChild(pending.node);
+  }
   container.scrollTop = container.scrollHeight;
 }
 
@@ -846,6 +931,7 @@ async function sendPageChatMessage() {
 
   input.value = '';
   updatePageChatCharacterCount('');
+  window.resizeChatComposerInput?.(input);
   window.pageChatAttachments = [];
   renderPageChatAttachments();
 
@@ -873,6 +959,7 @@ async function sendPageChatMessage() {
   const thinkingId = `thinking-${Date.now()}`;
   const thinkingDiv = createThinkingBubble(thinkingId);
   const progressEvents = [];
+  window.pageChatPendingThinking = { sessionId: session.id, node: thinkingDiv };
   container.appendChild(thinkingDiv);
   container.scrollTop = container.scrollHeight;
   const requestController = new AbortController();
@@ -902,10 +989,12 @@ async function sendPageChatMessage() {
     };
     const data = await fetchStreamingChat(requestPayload, event => {
       progressEvents.push(event);
-      addThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running');
+      addThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running', event);
       window.updatePageChatMiniPanel({ status: 'running', label: event.label || 'Đang xử lý yêu cầu…' });
     }, requestController.signal);
+    disposeThinkingBubble(thinkingDiv);
     thinkingDiv.remove();
+    if (window.pageChatPendingThinking?.node === thinkingDiv) window.pageChatPendingThinking = null;
 
     // Build AI Response
     const aiResponseText = cleanReplyText(data.reply || data.replyText || 'Không tìm thấy thông tin tương ứng.');
@@ -926,7 +1015,7 @@ async function sendPageChatMessage() {
 
     // Auto-update session title from first message
     if (session.history.length === 2 && session.title.startsWith('Cuộc trò chuyện mới')) {
-      session.title = msg.slice(0, 40) + (msg.length > 40 ? '...' : '');
+      session.title = msg.slice(0, 200);
       saveChatSessions();
       renderChatSessionsList();
     }
@@ -939,14 +1028,14 @@ async function sendPageChatMessage() {
         const escapedSql = escapeChatMarkdown(query);
         return `
         <details class="chat-sql-panel" open style="margin-top:12px;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#0f172a;">
-          <summary style="background:#1e293b;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;list-style:none;">
+          <summary style="background:#1e293b;padding:8px 102px 8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;list-style:none;">
             <span style="font-size:11.5px;font-weight:700;color:#38bdf8;"><i class="fa-solid fa-code" style="margin-right:6px;"></i>Câu lệnh SQL ${index + 1}/${sqlExecutions.length}</span>
             <span style="font-size:10px;color:#a5b4fc;background:rgba(99,102,241,.18);padding:2px 7px;border-radius:20px;">${execution.rowCount ?? execution.rows?.length ?? 0} dòng</span>
             <i class="fa-solid fa-chevron-down chat-sql-chevron" style="margin-left:auto;font-size:10px;color:#94a3b8;"></i>
-            <button onclick="navigator.clipboard.writeText(this.dataset.sql);" data-sql="${escapedSql}" style="background:rgba(255,255,255,.1);border:none;color:#94a3b8;padding:3px 8px;border-radius:4px;font-size:10.5px;cursor:pointer;">
-              <i class="fa-solid fa-copy"></i> Copy SQL
-            </button>
           </summary>
+          <button class="chat-sql-copy-btn" type="button" onclick="navigator.clipboard.writeText(this.dataset.sql);" data-sql="${escapedSql}" aria-label="Sao chép câu lệnh SQL">
+            <i class="fa-solid fa-copy"></i> Copy SQL
+          </button>
           <pre style="color:#38bdf8;padding:12px 14px;font-size:12px;font-family:monospace;margin:0;overflow-x:auto;line-height:1.5;">${escapeChatMarkdown(query)}</pre>
         </details>
       `;
@@ -979,6 +1068,9 @@ async function sendPageChatMessage() {
         const errBadge = tc.error
           ? `<span style="background:#fee2e2;color:#b91c1c;padding:1px 8px;border-radius:20px;font-size:10.5px;">${tc.error.slice(0, 40)}</span>`
           : '';
+        const durationBadge = tc.durationMs != null
+          ? `<time class="chat-tool-duration"><i class="fa-regular fa-clock"></i>${formatThinkingDuration(tc.durationMs)}</time>`
+          : '';
         const isLast = idx === data.toolCalls.length - 1;
         return `
           <div style="display:flex;gap:10px;align-items:flex-start;padding-bottom:${isLast ? '0' : '12px'};position:relative;">
@@ -997,6 +1089,7 @@ async function sendPageChatMessage() {
                 <span style="font-size:11px;color:${statusColor};font-weight:600;">${isOk ? 'Thành công' : 'Lỗi'}</span>
               </div>
             </div>
+            ${durationBadge}
           </div>`;
       }).join('');
 
@@ -1059,7 +1152,7 @@ async function sendPageChatMessage() {
             <i class="fa-solid fa-chart-bar" style="color:#6366f1;"></i>
             ${chartSpec.title || 'Biểu đồ dữ liệu'}
           </div>
-          <canvas id="${chartId}" style="max-height:280px;"></canvas>
+          <canvas id="${chartId}" class="chat-chart-canvas"></canvas>
         </div>
       `;
     }
@@ -1082,6 +1175,7 @@ async function sendPageChatMessage() {
       <details class="chat-technical-details">
         <summary>
           <span><i class="fa-solid fa-brain"></i> Thinking · Quá trình xử lý</span>
+          <time class="chat-process-total"><i class="fa-regular fa-clock"></i>${escapeChatMarkdown(formatExecutionTime(data.executionTime))}</time>
           <i class="fa-solid fa-chevron-down chat-technical-chevron"></i>
         </summary>
         <div class="chat-technical-content">
@@ -1140,7 +1234,9 @@ async function sendPageChatMessage() {
     }
 
   } catch (err) {
+    disposeThinkingBubble(thinkingDiv);
     thinkingDiv.remove();
+    if (window.pageChatPendingThinking?.node === thinkingDiv) window.pageChatPendingThinking = null;
     if (err?.name === 'AbortError') {
       window.updatePageChatMiniPanel({ status: 'stopped', label: 'Đã dừng trả lời' });
       if (typeof showToast === 'function') showToast('Đã dừng tiến trình trả lời.', 'info');
@@ -1335,7 +1431,7 @@ function renderChatSessionsList() {
       <div class="chat-session-main" onclick="selectChatSession('${session.id}')">
         <i class="fa-${session.pinned ? 'solid' : 'regular'} ${session.pinned ? 'fa-thumbtack' : 'fa-message'}"></i>
         <span title="${escapeChatMarkdown(session.title)}">${escapeChatMarkdown(session.title)}</span>
-        ${session.pinned ? '' : `<time>${formatSessionTime(session.updatedAt)}</time>`}
+        <time>${formatSessionTime(session.updatedAt)}</time>
       </div>
       <button class="chat-session-more" onclick="toggleChatSessionMenu('${session.id}',event)" title="Tùy chọn" aria-label="Tùy chọn đoạn chat" aria-expanded="false">
         <i class="fa-solid fa-ellipsis"></i>
@@ -1402,7 +1498,7 @@ function renameChatSession(id, event) {
   if (!session) return;
   const nextTitle = prompt('Đổi tên đoạn chat:', session.title);
   if (nextTitle === null) return;
-  const cleanTitle = nextTitle.trim().slice(0, 80);
+  const cleanTitle = nextTitle.trim().slice(0, 200);
   if (!cleanTitle) return showToast('Tên đoạn chat không được để trống.', 'warn');
   session.title = cleanTitle;
   saveChatSessions();

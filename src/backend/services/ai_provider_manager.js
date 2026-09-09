@@ -62,11 +62,29 @@ class AiProviderManager {
     StorageHelper.saveJson('ai_providers.json', this.providers);
   }
 
+  publicProvider(provider) {
+    if (!provider) return null;
+    const allowed = ['id', 'name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'model',
+      'supportsToolCalling', 'priority', 'isActive', 'status', 'tokenCost'];
+    const result = {};
+    for (const key of allowed) result[key] = provider[key];
+    result.hasApiKey = Boolean(provider.apiKey);
+    result.apiKeyMasked = provider.apiKey ? `${String(provider.apiKey).slice(0, 4)}••••••••` : 'Không cần API Key';
+    return result;
+  }
+
   getProviders() {
-    return this.providers.map(p => ({
-      ...p,
-      apiKeyMasked: p.apiKey ? `${p.apiKey.substring(0, 4)}••••••••` : "Không cần API Key"
-    }));
+    return this.providers.map(p => this.publicProvider(p));
+  }
+
+  // Execution-only accessors. Never serialize their return values to clients:
+  // unlike getProviders(), these objects intentionally retain credentials.
+  getProvidersForExecution() {
+    return [...this.providers];
+  }
+
+  getProviderForExecution(providerId) {
+    return this.providers.find(provider => provider.id === providerId) || null;
   }
 
   getActiveProvider() {
@@ -96,7 +114,7 @@ class AiProviderManager {
     this.activeProviderId = providerId;
     this.persist();
     console.log(`[AI Router] Active Provider switched to: ${target.name} (${target.model})`);
-    return target;
+    return this.publicProvider(target);
   }
 
   addProvider(data) {
@@ -119,7 +137,7 @@ class AiProviderManager {
 
     this.providers.push(newProvider);
     this.persist();
-    return newProvider;
+    return this.publicProvider(newProvider);
   }
 
   updateProvider(providerId, data) {
@@ -135,7 +153,7 @@ class AiProviderManager {
       }
     }
     this.persist();
-    return target;
+    return this.publicProvider(target);
   }
 
   deleteProvider(providerId) {

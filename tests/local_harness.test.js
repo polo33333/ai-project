@@ -338,7 +338,7 @@ test('local harness executes printed SQL instead of returning SQL-only prose', a
   assert.equal(result.trace.steps.some(step => step.type === 'EXECUTED_PRINTED_SQL'), true);
 });
 
-test('local harness replaces printed SQL outside the request plan with a safe planned-table query', async () => {
+test('local harness rejects wrong-table SQL without replacing the request with sample rows', async () => {
   let executions = 0;
   const toolManager = new ToolManager();
   const sqlTool = new SqlTool();
@@ -359,10 +359,28 @@ test('local harness replaces printed SQL outside the request plan with a safe pl
       requestPlan: { intent: 'record_lookup', table: 'T_Contract', requiredColumns: [], outputs: { data: true, chart: false, export: false } }
     }
   });
-  assert.equal(executions, 1);
+  assert.equal(executions, 0);
   assert.equal(result.trace.steps.some(step => step.type === 'DETERMINISTIC_SQL_REJECTED'), true);
-  assert.equal(result.trace.steps.some(step => step.type === 'PLANNED_TABLE_RECOVERY'), true);
-  assert.match(result.toolCalls[0].args.sql, /FROM \[T_Contract\]/i);
+  assert.equal(result.trace.steps.some(step => step.type === 'PLANNED_TABLE_RECOVERY'), false);
+  assert.equal(result.trace.completionStatus, 'PARTIAL');
+  assert.match(result.replyText, /Chưa thể xác minh/);
+});
+
+test('empty calendar query does not trigger available-month recovery', async () => {
+  let executions = 0;
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool();
+  sqlTool.run = async args => { executions++; return { sql: args.sql, rows: [], rowCount: 0 }; };
+  toolManager.registerTool(sqlTool);
+  const responses = [
+    { content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: "SELECT FORMAT(PaymentDate, 'yyyy-MM') Period, SUM(TotalQty) TotalQty FROM T_ElectricityOutput WHERE PaymentDate >= DATEADD(MONTH,-7,GETDATE()) GROUP BY FORMAT(PaymentDate, 'yyyy-MM')" } } }] },
+    { content: 'Không có dữ liệu trong khoảng thời gian yêu cầu.' }
+  ];
+  const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift(), maxIterations: 2 });
+  const question = 'sản lượng 7 tháng tính đến hôm nay';
+  const result = await harness.run({ userMessage: question, provider: localProvider, messages: [{ role: 'user', content: question }], enabledToolNames: ['execute_sql_query'] });
+  assert.equal(executions, 1);
+  assert.equal(result.trace.steps.some(step => step.type === 'LATEST_DATA_MONTHS_RECOVERY'), false);
 });
 
 test('local harness executes printed SQL for a detailed employee lookup', async () => {
@@ -516,7 +534,7 @@ test('local harness recovers latest database months then creates chart and expor
   ];
   const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift(), maxIterations: 2 });
   const result = await harness.run({
-    userMessage: 'vẽ biểu đồ sản lượng 7 tháng gần nhất và gửi file Excel', provider: localProvider,
+    userMessage: 'vẽ biểu đồ sản lượng 7 tháng gần nhất có dữ liệu và gửi file Excel', provider: localProvider,
     messages: [{ role: 'user', content: 'vẽ biểu đồ sản lượng 7 tháng gần nhất và gửi file Excel' }],
     enabledToolNames: ['execute_sql_query', 'render_chart', 'export_data']
   });
@@ -541,7 +559,7 @@ test('retrieved table fallback automatically renders and exports when the model 
   toolManager.registerTools([new RetrievedTableSqlTool(), new ChartTool(), new ExportTool()]);
   const responses = [{ content: 'Tôi chỉ tìm thấy schema.' }, { content: 'Chưa có dữ liệu.' }];
   const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift(), maxIterations: 2 });
-  const question = 'vẽ biểu đồ sản lượng điện theo cột TotalQty trong 7 tháng gần nhất theo ngày ElectricityOutputDate và gửi file';
+  const question = 'vẽ biểu đồ sản lượng điện theo cột TotalQty trong 7 tháng gần nhất có dữ liệu theo ngày ElectricityOutputDate và gửi file';
   const result = await harness.run({
     userMessage: question,
     provider: localProvider,
@@ -554,6 +572,57 @@ test('retrieved table fallback automatically renders and exports when the model 
   assert.equal(result.toolCalls.some(call => call.toolName === 'export_data' && call.success), true);
   assert.match(result.toolCalls.find(call => call.toolName === 'execute_sql_query' && call.success).args.sql, /SUM\(\[TotalQty\]\)/i);
   assert.equal(result.trace.completionStatus, 'SUCCESS');
+});
+
+test('invalid projected column is repaired before reaching SQL execution', async () => {
+  const executed = [];
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool();
+  sqlTool.run = async args => { executed.push(args.sql); return { sql: args.sql, rows: [{ CustomerName: 'Test customer' }], rowCount: 1 }; };
+  toolManager.registerTool(sqlTool);
+  let calls = 0;
+  const harness = new LocalModelHarness({ toolManager, maxIterations: 3, dispatch: async () => {
+    calls++;
+    if (calls <= 2) return { content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: `SELECT ${calls === 1 ? 'CompanyName' : 'CustomerName'} FROM M_Customer` } } }] };
+    return { content: 'Danh sách khách hàng: Test customer.' };
+  } });
+  const result = await harness.run({ userMessage: 'ds khách hàng', provider: localProvider,
+    messages: [{ role: 'user', content: 'ds khách hàng' }], enabledToolNames: ['execute_sql_query'],
+    context: { requestPlan: { table: 'M_Customer', schemaColumns: ['CustomerName'], unfilteredList: true, requiredColumns: [], outputs: { data: true } } } });
+  assert.deepEqual(executed, ['SELECT CustomerName FROM M_Customer']);
+  assert.ok(result.trace.steps.some(step => step.type === 'UNKNOWN_COLUMN:CompanyName'));
+});
+
+test('unfiltered customer list recovers from repeated invalid model SQL using schema columns', async () => {
+  const executed = [];
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool();
+  sqlTool.run = async args => { executed.push(args.sql); return { sql: args.sql, rows: [{ CustomerName: 'Customer fixture' }], rowCount: 1 }; };
+  toolManager.registerTool(sqlTool);
+  const harness = new LocalModelHarness({ toolManager, maxIterations: 1,
+    dispatch: async () => ({ content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: 'SELECT CompanyName FROM M_Customer WHERE IsActive = 1' } } }] }) });
+  const result = await harness.run({ userMessage: 'ds khách hàng', provider: localProvider,
+    messages: [{ role: 'user', content: 'ds khách hàng' }], enabledToolNames: ['execute_sql_query'],
+    context: { requestPlan: { table: 'M_Customer', intent: 'list', schemaColumns: ['CustomerName', 'PassWord', 'ApiKey'], unfilteredList: true, requiredColumns: [], outputs: { data: true } } } });
+  assert.deepEqual(executed, ['SELECT TOP 100 [CustomerName] FROM [M_Customer]']);
+  assert.match(result.replyText, /Customer fixture/);
+  assert.equal(result.trace.completionStatus, 'SUCCESS');
+});
+
+test('list rendering includes all four SQL rows even when model text truncates on row two', async () => {
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool();
+  sqlTool.run = async args => ({ sql: args.sql, rows: [105, 57, 11, 246].map(id => ({ ContractID: id, ContractNo: `Contract-${id}` })), rowCount: 4 });
+  toolManager.registerTool(sqlTool);
+  let calls = 0;
+  const harness = new LocalModelHarness({ toolManager, maxIterations: 2, dispatch: async () => ++calls === 1
+    ? { content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: 'SELECT TOP 10 * FROM T_Contract' } } }] }
+    : { content: 'Có 4 hợp đồng:\n| ContractID | ContractNo |\n| --- | --- |\n| 105 | Contract-105 |\n| 57 | Contract-' } });
+  const result = await harness.run({ userMessage: 'ds hợp đồng', provider: localProvider,
+    messages: [{ role: 'user', content: 'ds hợp đồng' }], enabledToolNames: ['execute_sql_query'],
+    context: { requestPlan: { intent: 'list', table: 'T_Contract', requiredColumns: [], outputs: { data: true } } } });
+  for (const id of [105, 57, 11, 246]) assert.ok(result.replyText.includes(`Contract-${id}`));
+  assert.ok(result.trace.steps.some(step => step.type === 'GROUNDED_LIST_RENDER'));
 });
 
 test('local fallback does not dispatch to cloud when disabled', async () => {

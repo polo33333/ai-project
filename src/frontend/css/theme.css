@@ -287,7 +287,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(.dashboard-log-content strong,.dictionary-row-main strong,.chat-ai-answer,.chat-markdown-table td) { color: var(--text-primary) !important; }
 :root[data-theme="dark"] :is(.dashboard-log-content p,.dashboard-log-item time,.dictionary-row-main p,.dictionary-row-meta,.chat-embedded-thinking-step,.chat-feedback,.chat-feedback button) { color: var(--text-secondary); }
 :root[data-theme="dark"] :is(.dictionary-drawer-header,.chat-technical-details,.chat-token-usage span,.chat-markdown-table th,.chat-inline-code,.dictionary-column-meta code,#quick-prompts-bar button) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; color: var(--text-secondary) !important; }
-:root[data-theme="dark"] :is(.chat-technical-details > summary,.chat-tool-result > summary,.chat-embedded-thinking-title,.dictionary-drawer-kicker,.chat-answer-link) { color: #b9aff0; }
+:root[data-theme="dark"] :is(.chat-technical-details > summary,.chat-tool-result > summary,.chat-embedded-thinking-title,.dictionary-drawer-kicker,.chat-answer-link) { color: #b9aff0; background: var(--dark-raised) !important; border-color: var(--border-color) !important; }
 :root[data-theme="dark"] :is(.chat-feedback,.chat-markdown-table td,.chat-markdown-table th,.chat-technical-content) { border-color: var(--border-color); }
 :root[data-theme="dark"] .chat-markdown-table tbody tr:nth-child(even) { background: #192538; }
 :root[data-theme="dark"] :is(.chat-markdown-table tbody tr:hover,.dictionary-table-row:hover,#quick-prompts-bar button:hover) { background: var(--bg-hover) !important; }
@@ -381,6 +381,9 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .domain-manager-toolbar > div:first-child span { color:#c0b5ff; background:#30294f; }
 :root[data-theme="dark"] .domain-manager-hint { color:#e8c976; background:#3e321d; }
 :root[data-theme="dark"] .domain-manager-item:hover { border-color:#514579 !important; box-shadow:0 8px 20px #0003; }
+:root[data-theme="dark"] .domain-manager-form-icon { color:#bcb3f4; background:#302b4d; box-shadow:inset 0 0 0 1px #494168; }
+:root[data-theme="dark"] .domain-manager-form-close { color:#9eabc0; background:#253247; box-shadow:inset 0 0 0 1px #35445b; }
+:root[data-theme="dark"] .domain-manager-form-close:hover { color:#d4cef8; background:#343052; }
 :root[data-theme="dark"] .router-status-card > div[style] > div { background: var(--dark-raised); border-color: var(--border-color); }
 :root[data-theme="dark"] .router-status-card > div[style] span { color: var(--text-secondary); }
 :root[data-theme="dark"] .router-status-card > div[style] :is(strong,span i) { background: #30294f; color: #c0b5ff !important; }
@@ -410,6 +413,17 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .api-integration-card.featured { background: #171f33 !important; border-color: #3e4163 !important; }
 :root[data-theme="dark"] .api-endpoint-row code { color: #c8d4e7; }
 :root[data-theme="dark"] :is(.chat-session-item,.page-chat-model-trigger,.btn-input-new-chat,.banner-dismiss-btn,.modal-close-btn,.copilot-modal-header,.copilot-chat-input-area,.relationship-toolbar,.relationship-canvas-toolbar,.chat-session-menu button) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; color: var(--text-secondary); }
+:root[data-theme="dark"] #copilot-modal .copilot-modal-close {
+  background: #243149 !important;
+  border-color: #3b4b66 !important;
+  color: #cbd5e6 !important;
+  box-shadow: 0 2px 8px #00000024;
+}
+:root[data-theme="dark"] #copilot-modal .copilot-modal-close:hover {
+  background: #39345b !important;
+  border-color: #675f91 !important;
+  color: #ffffff !important;
+}
 :root[data-theme="dark"] .chat-thinking-card {
   background: linear-gradient(180deg, #1c283b 0%, #182337 100%) !important;
   border-color: #35445d !important;
@@ -422,6 +436,12 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .chat-thinking-step { color: var(--text-secondary); }
 :root[data-theme="dark"] .chat-thinking-toggle { color: #9eacc5; }
 :root[data-theme="dark"] .chat-thinking-toggle:hover { color: #c0b5ff; background: #30294f; }
+:root[data-theme="dark"] .chat-thinking-total { background:#202b3e; color:#9eacc5; }
+:root[data-theme="dark"] .chat-thinking-total b { color:#d7deea; }
+:root[data-theme="dark"] .chat-thinking-steps { border-color:#303d52; background:#182235; }
+:root[data-theme="dark"] .chat-thinking-step-copy strong { color:#d7deea; }
+:root[data-theme="dark"] .chat-thinking-step-copy code { background:#243047; color:#aab5c8; }
+:root[data-theme="dark"] :is(.chat-process-total,.chat-tool-duration) { background:#202b3e; color:#b4bfd1; border-color:#303d52; }
 :root[data-theme="dark"] .copilot-technical-details {
   background: var(--dark-surface) !important;
   border-color: #35445d !important;
@@ -479,6 +499,11 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] body.login-page { background: radial-gradient(ellipse at 12% 15%, #33295155, transparent 50%), #0d1422; }
 :root[data-theme="dark"] :is(.login-brand-panel > p,.login-feature-list span,.login-card-head p,.login-default-note) { color: var(--text-secondary); }
 :root[data-theme="dark"] .login-default-note { background: var(--dark-raised); border-color: var(--border-color); }
+
+:root[data-theme="dark"] .chat-tool-pipeline>div>div {
+    border-bottom: 0;
+    border-bottom: 1px solid #433e3e;
+}
 @media (max-width: 620px) {
   .theme-toggle { width: 32px; height: 34px; }
   .top-bar-actions { gap: 5px; }

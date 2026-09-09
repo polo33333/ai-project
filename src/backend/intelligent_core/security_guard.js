@@ -104,9 +104,19 @@ class SecurityGuard {
       }
     }
 
-    // Tự động giới hạn TOP 100 nếu chưa có TOP để bảo vệ tài nguyên Server
-    if (upper.startsWith('SELECT') && !upper.includes('SELECT TOP')) {
-      cleaned = cleaned.replace(/^SELECT\s+/i, 'SELECT TOP 100 ');
+    // Giới hạn tập kết quả ngoài cùng. Với CTE, chèn TOP vào SELECT sau CTE.
+    if (!/\bSELECT\s+TOP\s*\(?\s*\d+/i.test(cleaned)) {
+      if (upper.startsWith('SELECT')) {
+        cleaned = cleaned.replace(/^SELECT\s+/i, 'SELECT TOP 100 ');
+      } else {
+        const outerSelect = cleaned.match(/\)\s*SELECT\s+/ig);
+        if (!outerSelect?.length) {
+          return { safe: false, error: 'Bảo mật: Không xác định được truy vấn SELECT ngoài cùng của CTE.' };
+        }
+        const marker = outerSelect[outerSelect.length - 1];
+        const index = cleaned.lastIndexOf(marker);
+        cleaned = `${cleaned.slice(0, index)}${marker.replace(/SELECT\s+/i, 'SELECT TOP 100 ')}${cleaned.slice(index + marker.length)}`;
+      }
     }
 
     return { safe: true, cleanedSql: cleaned };
