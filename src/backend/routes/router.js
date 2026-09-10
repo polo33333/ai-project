@@ -338,11 +338,31 @@ async function handleRequest(req, res) {
     }
     try {
       if (req.method === 'GET') { res.end(JSON.stringify(settingsService.get())); return; }
-      res.writeHead(405, { Allow: 'GET' }); res.end(JSON.stringify({ message: 'Trang cấu hình chỉ hỗ trợ xem.' }));
+      if (req.method === 'PUT') {
+        const result = settingsService.save(await readJsonBody(req));
+        res.end(JSON.stringify(result));
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, PUT' }); res.end(JSON.stringify({ message: 'Phương thức không được hỗ trợ.' }));
     } catch (error) {
       res.writeHead(error.statusCode || 500);
       res.end(JSON.stringify({ message: error.statusCode ? error.message : 'Không thể lưu cấu hình. Kiểm tra quyền ghi file trên máy chủ.' }));
     }
+    return;
+  }
+
+  if (pathname === '/api/settings/restart' && req.method === 'POST') {
+    res.setHeader('Content-Type', 'application/json; charset=UTF-8');
+    res.setHeader('Cache-Control', 'no-store');
+    if (currentAccount?.role !== 'admin') {
+      res.writeHead(403); res.end(JSON.stringify({ message: 'Chỉ quản trị viên được khởi động lại ứng dụng.' })); return;
+    }
+    if (process.env.KNOWLEDGEHUB_SUPERVISED !== 'true' || typeof process.send !== 'function') {
+      res.writeHead(409); res.end(JSON.stringify({ message: 'Ứng dụng chưa chạy bằng Node supervisor. Hãy khởi động lại một lần bằng npm start.' })); return;
+    }
+    res.writeHead(202);
+    res.end(JSON.stringify({ status: 'success', message: 'Đã lên lịch khởi động lại.' }));
+    setTimeout(() => process.send?.({ type: 'restart' }), 150).unref();
     return;
   }
 

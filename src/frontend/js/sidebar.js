@@ -130,6 +130,11 @@
     hideTooltip();
     if (compactScreen.matches && event.target.closest('.nav-item a, .btn-copilot')) closeDrawer();
   });
+  sidebar.addEventListener('dragstart', event => {
+    if (event.target.closest('.nav-item a, .btn-copilot, .sidebar-toggle-btn, .sidebar-footer-card, .account-menu-trigger')) {
+      event.preventDefault();
+    }
+  });
   backdrop.addEventListener('click', () => closeDrawer(true));
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {

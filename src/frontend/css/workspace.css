@@ -92,6 +92,12 @@ aside.sidebar.collapsed .nav-section + .nav-section::before { content: ''; displ
 aside.sidebar.collapsed .nav-list { gap: 4px; align-items: center; }
 aside.sidebar.collapsed .nav-item { width: 100%; flex-shrink: 0; }
 aside.sidebar.collapsed .nav-item a { width: 35px; height: 35px; min-height: 35px; margin: 0 auto; padding: 0; gap: 0; justify-content: center; border-radius: 12px; }
+aside.sidebar.collapsed :is(.nav-item a,.btn-copilot,.sidebar-toggle-btn,.sidebar-footer-card,.account-menu-trigger),
+aside.sidebar.collapsed :is(.nav-icon,.sidebar-outline-icon,.copilot-btn-icon) {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+aside.sidebar.collapsed :is(.nav-icon,.sidebar-outline-icon,.copilot-btn-icon) { pointer-events: none; }
 aside.sidebar.collapsed .nav-icon { display: grid; place-items: center; width: 20px; font-size: 16px; }
 aside.sidebar.collapsed .nav-item.active a {
   width: calc(100% + 20px);

@@ -25,7 +25,7 @@ module.exports = {
   AI_MEMORY_SUMMARY_CHARS: ['Độ dài tóm tắt hội thoại', 'Ngân sách ký tự dự kiến cho tóm tắt. Chưa thấy mã backend hiện tại đọc biến này; thay đổi có thể chưa có tác dụng.'],
   AI_MEMORY_MAX_SESSIONS: ['Số phiên hội thoại tối đa', 'Giới hạn số phiên được bộ nhớ hội thoại lưu giữ. Tăng khi cần phục vụ nhiều phiên đồng thời.'],
   QDRANT_URL: ['Địa chỉ Qdrant', 'URL dịch vụ vector, ví dụ http://127.0.0.1:6333. Đây là nơi lưu chỉ mục để tìm schema và tài liệu liên quan.'],
-  QDRANT_EXE: ['Chương trình Qdrant', 'Đường dẫn file chạy Qdrant trên máy chủ Windows. Chỉ đọc tại đây; chỉnh trực tiếp trên máy chủ khi cần thay chương trình.'],
+  QDRANT_EXE: ['Chương trình Qdrant', 'Đường dẫn file chạy Qdrant trên máy chủ Windows. Sau khi thay đổi, lưu và khởi động lại để supervisor sử dụng đường dẫn mới.'],
   QDRANT_COLLECTION: ['Collection cấu trúc CSDL', 'Tên tập vector dành cho schema. Đổi tên sẽ trỏ sang tập dữ liệu khác; cần có chỉ mục tương ứng.'],
   QDRANT_VECTOR_SIZE: ['Số chiều vector schema', 'Phải khớp kích thước vector của model và collection schema. Không đổi riêng giá trị này nếu chưa chuẩn bị collection phù hợp.'],
   LIBRARY_MAX_FILE_MB: ['Dung lượng tài liệu tối đa', 'Giới hạn kích thước mỗi tài liệu tải lên, tính bằng MB. Tăng cho file lớn hơn nhưng cần thêm tài nguyên xử lý.'],

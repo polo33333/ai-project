@@ -61,13 +61,19 @@ function findDictionaryTable(tableName) {
 
 async function fetchDataDictionary() {
   try {
-    const [res, domainsRes] = await Promise.all([fetch('/api/dictionary'), fetch('/api/dictionary/domains')]);
+    const [res, domainsRes, relationshipsRes] = await Promise.all([
+      fetch('/api/dictionary'),
+      fetch('/api/dictionary/domains'),
+      fetch('/api/dictionary/relationships')
+    ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (domainsRes.ok) window.businessDomainsData = await domainsRes.json();
+    if (relationshipsRes.ok) window.tableRelationshipsData = await relationshipsRes.json();
     window.groupedTablesData = Array.isArray(data) ? data : (data.tables || []);
     renderDictionaryDomainOptions();
     renderDataDictionary();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
   } catch (err) {
     console.error('Lỗi nạp Lược đồ CSDL:', err);
     if (typeof showToast === 'function') showToast('Không thể nạp Lược đồ CSDL.', 'error');
@@ -319,6 +325,7 @@ async function saveBusinessDomain() {
     window.businessDomainsData = data.domains || {};
     renderBusinessDomains();
     renderDictionaryDomainOptions();
+    if (typeof fetchDataDictionary === 'function') await fetchDataDictionary();
     resetBusinessDomainForm();
     showToast?.('Đã lưu nhóm nghiệp vụ và đồng bộ cho AI.', 'success');
   } catch (err) {
@@ -338,6 +345,7 @@ async function deleteBusinessDomain(encodedDomain) {
     window.businessDomainsData = data.domains || {};
     renderBusinessDomains();
     renderDictionaryDomainOptions();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     showToast?.('Đã xóa nhóm nghiệp vụ.', 'success');
   } catch (err) {
     showToast?.(`Không thể xóa nhóm nghiệp vụ: ${err.message}`, 'error');
@@ -389,6 +397,7 @@ async function toggleSelectedDictionaryTableActive(isActive) {
     const table = findDictionaryTable(tableName);
     if (table) table.isActive = isActive;
     renderDataDictionary();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     renderDictionaryDrawer(table);
     if (typeof showToast === 'function') showToast(isActive ? 'Đã bật bảng cho AI.' : 'Đã tắt bảng khỏi ngữ cảnh AI.', 'success');
   } catch (err) {
@@ -413,6 +422,7 @@ async function toggleDictionaryTableActiveFromList(encodedTableName, checkbox) {
     const table = findDictionaryTable(tableName);
     if (table) table.isActive = isActive;
     renderDataDictionary();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     if (typeof showToast === 'function') showToast(isActive ? `Đã bật bảng ${tableName} cho AI.` : `Đã tắt bảng ${tableName}.`, 'success');
   } catch (err) {
     checkbox.checked = !isActive;
@@ -439,6 +449,7 @@ async function saveSelectedTableDescription() {
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     window.groupedTablesData = Array.isArray(data.tables) ? data.tables : getDictionaryTables();
     renderDataDictionary();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     renderDictionaryDrawer(findDictionaryTable(tableName));
     if (typeof showToast === 'function') showToast('Đã lưu cấu hình nghiệp vụ của bảng.', 'success');
   } catch (err) {
@@ -474,6 +485,7 @@ async function saveDictionaryColumnDescription(encodedColumnName) {
 function filterDictionaryTables() {
   window.paginationState.dictionary.currentPage = 1;
   renderDataDictionary();
+  if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
 }
 
 function filterTableStatus(status) {
@@ -484,6 +496,7 @@ function filterTableStatus(status) {
     if (btn) btn.classList.toggle('active', s === status);
   });
   renderDataDictionary();
+  if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
 }
 
 async function triggerAiGenerateDictionary() {
@@ -874,6 +887,7 @@ async function createRelationshipFromPorts(source, target) {
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     window.tableRelationshipsData = data.relationships || [];
     renderRelationshipDiagram();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     if (typeof showToast === 'function') showToast(`${payload.sourceTable}.${payload.sourceColumn} → ${payload.targetTable}.${payload.targetColumn}`, 'success', 'Đã tạo quan hệ');
   } catch (err) {
     if (typeof showToast === 'function') showToast(err.message, 'error', 'Không thể tạo quan hệ');
@@ -912,6 +926,7 @@ async function createTableRelationship() {
     document.getElementById('relation-description').value = '';
     cancelEditTableRelationship();
     renderRelationshipDiagram();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     if (typeof showToast === 'function') showToast(isEditing ? 'Đã cập nhật quan hệ bảng.' : 'Đã tạo quan hệ giữa hai bảng.', 'success');
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể tạo quan hệ: ${err.message}`, 'error');
@@ -964,6 +979,7 @@ async function deleteTableRelationship(encodedId) {
     delete window.relationshipLineStyles[relationshipId];
     saveRelationshipDiagramState();
     renderRelationshipDiagram();
+    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể xóa quan hệ: ${err.message}`, 'error');
   }

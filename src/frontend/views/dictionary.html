@@ -18,18 +18,27 @@
   </section>
 
   <section class="system-tools-card dictionary-content-card">
+  <div class="dictionary-overview-strip" aria-label="Tổng quan lược đồ">
+    <div><span class="dictionary-overview-icon green"><i class="fa-solid fa-circle-check"></i></span><strong id="dict-stat-active">0</strong><small>bảng active</small></div>
+    <div><span class="dictionary-overview-icon indigo"><i class="fa-solid fa-layer-group"></i></span><strong id="dict-stat-domains">0</strong><small>domain nghiệp vụ</small></div>
+    <div><span class="dictionary-overview-icon amber"><i class="fa-solid fa-circle-question"></i></span><strong id="dict-stat-unassigned">0</strong><small>chưa phân loại</small></div>
+  </div>
   <div class="dictionary-controls">
     <div class="dictionary-controls-left">
       <div class="search-input-wrapper dictionary-search">
         <i class="fa-solid fa-magnifying-glass search-icon"></i>
         <input type="text" class="search-input" id="dict-search-input" placeholder="Tìm tên bảng hoặc cột..." oninput="filterDictionaryTables()">
       </div>
-      <div class="dictionary-filter-group">
+      <div class="dictionary-filter-group" id="dictionary-status-filters">
         <button class="btn-secondary-sm active" id="btn-filter-all" onclick="filterTableStatus('all')">Tất cả bảng</button>
         <button class="btn-secondary-sm" id="btn-filter-active" onclick="filterTableStatus('active')">
           <i class="fa-solid fa-circle-check"></i> Đang Active
         </button>
         <button class="btn-secondary-sm" id="btn-filter-inactive" onclick="filterTableStatus('inactive')">Đã tắt</button>
+      </div>
+      <div class="dictionary-view-switch" role="group" aria-label="Chế độ hiển thị">
+        <button class="btn-secondary-sm" id="btn-dict-view-graph" onclick="setDictionaryView('graph')"><i class="fa-solid fa-share-nodes"></i> Graph</button>
+        <button class="btn-secondary-sm active" id="btn-dict-view-list" onclick="setDictionaryView('list')"><i class="fa-solid fa-list"></i> Danh sách</button>
       </div>
     </div>
     <div class="dictionary-controls-right">
@@ -48,9 +57,29 @@
     </div>
   </div>
 
-  <div id="dictionary-tables-accordion" class="dictionary-table-list"></div>
+  <div id="dictionary-graph-panel" class="dictionary-graph-panel" hidden>
+    <div class="dictionary-graph-help"><i class="fa-regular fa-lightbulb"></i> Lăn chuột để zoom; chọn bảng để xem chi tiết và làm nổi bật quan hệ.</div>
+    <div id="dictionary-graph-viewport" class="dictionary-graph-viewport">
+      <div id="dictionary-domain-graph" class="dictionary-domain-graph">
+        <svg id="dictionary-domain-edges" class="dictionary-domain-edges" aria-hidden="true"></svg>
+        <div id="dictionary-db-root" class="dictionary-db-root"></div>
+        <div id="dictionary-domain-groups"></div>
+      </div>
+      <div id="dictionary-graph-empty" class="dictionary-graph-empty" hidden><i class="fa-solid fa-share-nodes"></i><strong>Chưa có bảng active phù hợp</strong><span>Hãy bật bảng cho AI hoặc thay đổi từ khóa tìm kiếm.</span></div>
+    </div>
+    <div class="dictionary-graph-controls" aria-label="Điều khiển graph">
+      <button onclick="zoomDictionaryGraph(-0.1)" title="Thu nhỏ"><i class="fa-solid fa-minus"></i></button>
+      <span id="dictionary-graph-zoom">100%</span>
+      <button onclick="zoomDictionaryGraph(0.1)" title="Phóng to"><i class="fa-solid fa-plus"></i></button>
+      <button onclick="fitDictionaryGraph()" title="Vừa màn hình"><i class="fa-solid fa-expand"></i></button>
+    </div>
+  </div>
 
-  <div class="pagination-wrapper" id="dict-pagination"></div>
+  <div id="dictionary-list-panel" class="dictionary-list-panel">
+    <div id="dictionary-tables-accordion" class="dictionary-table-list"></div>
+
+    <div class="pagination-wrapper" id="dict-pagination"></div>
+  </div>
   </section>
 
   <div class="dictionary-drawer-backdrop" id="dictionary-drawer-backdrop" onclick="closeDictionaryDrawer()"></div>

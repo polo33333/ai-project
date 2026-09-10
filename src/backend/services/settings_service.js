@@ -12,7 +12,11 @@ function parse(text) {
   }
   return values;
 }
-const defaults = parse(fs.readFileSync(path.join(root, '.env.example'), 'utf8'));
+const envPathAtStartup = path.join(root, '.env');
+const envValuesAtStartup = fs.existsSync(envPathAtStartup) ? parse(fs.readFileSync(envPathAtStartup, 'utf8')) : {};
+const safeServerKeys = ['HOST', 'SHUTDOWN_TIMEOUT_MS', 'CORS_ALLOWED_ORIGINS', 'SESSION_TOUCH_INTERVAL_MS', 'KNOWLEDGEHUB_BACKUP_DIR'];
+const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])];
+const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? '']));
 Object.assign(defaults, { AI_MAX_TOOL_ITERATIONS: '10', LOCAL_AI_MODEL: 'qwen3.5:9b' });
 const choices = {
   EMBEDDING_PROVIDER: ['ollama', 'openai'],
@@ -37,7 +41,7 @@ const schema = Object.entries(defaults).map(([key, value]) => ({
           : key === 'PORT' ? 'Máy chủ' : 'Kho tri thức và embedding',
   type: choices[key] ? 'select' : /^(true|false)$/.test(value) ? 'boolean'
     : /^\d+(\.\d+)?$/.test(value) ? 'number' : /^https?:/.test(value) ? 'url' : 'text',
-  options: choices[key], readOnly: key === 'QDRANT_EXE',
+  options: choices[key], readOnly: false,
   description: help[key]?.[1] || descriptions[key] || 'Áp dụng sau khi khởi động lại máy chủ.'
 }));
 

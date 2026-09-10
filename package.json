@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1",
-    "dev": "node server.js",
+    "dev": "node scripts/supervisor.js",
     "test": "node --test \"tests/*.test.js\"",
     "test:ci": "npm test && npm run eval:local && npm run eval:sql",
     "eval:sql": "node --test tests/sql_security_corpus.test.js",

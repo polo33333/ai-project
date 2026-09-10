@@ -1,20 +1,54 @@
 (() => {
   let loading = false;
+  let saving = false;
+  let currentRevision = '';
+  let pendingRestart = false;
   const el = id => document.getElementById(id);
   const normalize = text => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   const showMessage = (text, tone = '') => { const node = el('settings-message'); if (node) { node.textContent = text; node.dataset.tone = tone; } };
 
   function createValue(field) {
-    const value = document.createElement('div'); value.className = 'settings-value';
+    if (field.readOnly) {
+      const value = document.createElement('div'); value.className = 'settings-value';
+      value.textContent = field.value || 'Chưa cấu hình'; if (!field.value) value.classList.add('is-empty');
+      return value;
+    }
     if (field.type === 'boolean') {
-      const enabled = field.value === 'true'; value.classList.add('is-status', enabled ? 'enabled' : 'disabled');
-      const dot = document.createElement('i'); dot.className = 'fa-solid fa-circle';
-      const text = document.createElement('span'); text.textContent = enabled ? 'Bật' : 'Tắt'; value.append(dot, text);
-    } else { value.textContent = field.value || 'Chưa cấu hình'; if (!field.value) value.classList.add('is-empty'); }
-    return value;
+      const wrapper = document.createElement('label'); wrapper.className = 'settings-switch';
+      const control = document.createElement('input'); control.type = 'checkbox'; control.className = 'settings-input';
+      control.dataset.key = field.key; control.dataset.initial = field.value; control.checked = field.value === 'true'; control.setAttribute('aria-label', field.label);
+      const track = document.createElement('span'); track.className = 'settings-switch-track'; track.append(document.createElement('i'));
+      const status = document.createElement('span'); status.className = 'settings-switch-status';
+      control.addEventListener('change', updateDirtyState); wrapper.append(control, track, status);
+      return wrapper;
+    }
+    const control = field.type === 'select' ? document.createElement('select') : document.createElement('input');
+    control.className = 'form-control settings-input'; control.dataset.key = field.key; control.dataset.initial = field.value;
+    if (control.tagName === 'SELECT') {
+      const options = (field.options || []).map(option => [option, option]);
+      options.forEach(([optionValue, label]) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = label; control.append(option); });
+    } else {
+      control.type = field.type === 'number' ? 'number' : field.type === 'url' ? 'url' : 'text';
+      if (field.type === 'number') control.step = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE'].includes(field.key) ? 'any' : '1';
+    }
+    control.value = field.value; control.addEventListener('input', updateDirtyState); control.addEventListener('change', updateDirtyState);
+    return control;
+  }
+
+  function changedValues() {
+    return Object.fromEntries([...document.querySelectorAll('.settings-input')]
+      .map(control => [control, control.type === 'checkbox' ? String(control.checked) : control.value])
+      .filter(([control, value]) => value !== control.dataset.initial)
+      .map(([control, value]) => [control.dataset.key, value]));
+  }
+
+  function updateDirtyState() {
+    const button = el('settings-save'); if (button) button.disabled = saving || Object.keys(changedValues()).length === 0;
+    const restartButton = el('settings-save-restart'); if (restartButton) restartButton.disabled = saving;
   }
 
   function renderSettings(data) {
+    currentRevision = data.revision;
     const groups = [...new Set(data.fields.map(field => field.group))];
     el('settings-total').textContent = `${data.fields.length} thuộc tính`;
     const root = el('settings-fields');
@@ -41,6 +75,7 @@
       root.append(section);
     });
     filterSettings(el('settings-search').value);
+    updateDirtyState();
   }
 
   window.fetchSettings = async function (force = false) {
@@ -49,7 +84,7 @@
     try {
       const response = await fetch('/api/settings', { cache: 'no-store' }); const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Không thể tải cấu hình.');
-      renderSettings(data); showMessage('Cấu hình đang hiển thị ở chế độ chỉ xem.', 'success');
+      renderSettings(data); showMessage('Có thể chỉnh sửa các thuộc tính bên dưới. Các thay đổi sẽ có hiệu lực sau khi khởi động lại.', 'success');
       window.checkSettingsConnection(true);
     } catch (error) { el('settings-fields')?.replaceChildren(); showMessage(error.message, 'error'); }
     finally { loading = false; }
@@ -64,6 +99,66 @@
     el('settings-empty').hidden = Boolean(document.querySelector('.settings-section:not([hidden])'));
   };
   window.reloadSettings = () => window.fetchSettings(true);
+
+  window.requestSettingsSave = function (restart = false) {
+    if (saving) return;
+    pendingRestart = Boolean(restart);
+    const count = Object.keys(changedValues()).length;
+    const title = el('settings-confirm-title');
+    const message = el('settings-confirm-message');
+    const icon = el('settings-confirm-icon');
+    const submit = el('settings-confirm-submit');
+    if (title) title.textContent = pendingRestart ? 'Lưu và khởi động lại server?' : 'Xác nhận lưu cấu hình?';
+    if (message) message.textContent = pendingRestart
+      ? `${count ? `${count} thay đổi sẽ được lưu. ` : ''}Server sẽ ngắt kết nối trong giây lát rồi tự khởi động lại với cấu hình mới.`
+      : `${count} thay đổi sẽ được ghi vào file .env và có hiệu lực sau lần khởi động lại tiếp theo.`;
+    icon?.classList.toggle('is-restart', pendingRestart);
+    const iconNode = icon?.querySelector('i'); if (iconNode) iconNode.className = pendingRestart ? 'fa-solid fa-power-off' : 'fa-solid fa-floppy-disk';
+    if (submit) submit.innerHTML = pendingRestart ? '<i class="fa-solid fa-power-off"></i> Lưu & restart' : '<i class="fa-solid fa-check"></i> Xác nhận lưu';
+    if (typeof openModal === 'function') openModal('settings-confirm-modal');
+  };
+
+  window.closeSettingsConfirm = function () {
+    if (typeof closeModal === 'function') closeModal('settings-confirm-modal');
+  };
+
+  window.handleSettingsConfirmBackdrop = function (event) {
+    if (event.target.id === 'settings-confirm-modal') window.closeSettingsConfirm();
+  };
+
+  window.confirmSettingsSave = function () {
+    const restart = pendingRestart;
+    window.closeSettingsConfirm();
+    window.saveSettings(restart);
+  };
+
+  window.saveSettings = async function (restart = false) {
+    const values = changedValues();
+    if (saving || (!restart && !Object.keys(values).length)) return;
+    saving = true; updateDirtyState(); showMessage('Đang lưu cấu hình…');
+    try {
+      let changed = 0;
+      if (Object.keys(values).length) {
+        const response = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: currentRevision, values }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Không thể lưu cấu hình.');
+        changed = data.changed || 0;
+      }
+      if (restart) {
+        const response = await fetch('/api/settings/restart', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Không thể khởi động lại ứng dụng.');
+        showMessage(`Đã lưu ${changed} thay đổi. Server đang khởi động lại, trang sẽ tự kết nối lại…`, 'success');
+        setTimeout(() => window.location.reload(), 1800);
+        return;
+      }
+      await window.fetchSettings(true);
+      showMessage(`Đã lưu ${changed} thay đổi. Hãy khởi động lại ứng dụng để áp dụng.`, 'success');
+    } catch (error) {
+      showMessage(error.message, 'error');
+      if (/thay đổi|changed/i.test(error.message)) await window.fetchSettings(true);
+    } finally { saving = false; updateDirtyState(); }
+  };
 
   window.checkSettingsConnection = async function (silent = false) {
     const button = el('settings-check'); const card = document.querySelector('.settings-qdrant-card');

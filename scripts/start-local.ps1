@@ -433,7 +433,7 @@ Write-Host '[Startup] Starting KnowledgeHub...'
 Set-Location -LiteralPath $projectRoot
 
 
-& node server.js
+& node scripts/supervisor.js
 
 
 exit $LASTEXITCODE
