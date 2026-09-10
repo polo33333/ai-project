@@ -9,7 +9,7 @@
   "scripts": {
     "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1",
     "dev": "node scripts/supervisor.js",
-    "test": "node --test \"tests/*.test.js\"",
+    "test": "node --require ./tests/helpers/setup_isolated_data.js --test \"tests/*.test.js\"",
     "test:ci": "npm test && npm run eval:local && npm run eval:sql",
     "eval:sql": "node --test tests/sql_security_corpus.test.js",
     "benchmark:http": "node scripts/benchmark_http.js",
@@ -17,6 +17,10 @@
     "restore": "node scripts/backup_restore.js restore",
     "eval:retrieval": "node scripts/evaluate_retrieval.js",
     "eval:local": "node scripts/evaluate_local_harness.js",
+    "eval:local:semantic": "node scripts/evaluate_local_sql.js --validate",
+    "eval:local:semantic:live": "node scripts/evaluate_local_sql.js --live",
+    "migrate:dictionary-identity": "node scripts/migrate_dictionary_identity.js",
+    "sanitize:chat-data": "node scripts/sanitize_persisted_chat_data.js",
     "training:collect": "node scripts/training_collect.js",
     "training:evaluate": "node scripts/training_evaluate.js"
   },

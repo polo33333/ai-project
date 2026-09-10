@@ -76,7 +76,7 @@ function isShortContextualFollowup(questionText) {
   if (!text || text.split(/\s+/).length > 8) return false;
   if (/^(?:hi|hello|hey|xin chao|chao|cam on|thanks?)\b/.test(text)) return false;
   return /\b(?:ntn|nhu the nao|the nao|ra sao|ket qua sao|ti so|ty so|bao nhieu|chi tiet|cu the|con hom nay|con hom qua|doi nao|tran nao)\b/.test(text)
-    || /^(?:con|va|the)\b/.test(text);
+    || /^(?:con|va|vay|vay con|the|the con)\b/.test(text);
 }
 
 function isPlanSelfContained(plan = {}) {

@@ -4,10 +4,11 @@
  */
 
 const StorageHelper = require('../utils/storage_helper');
+const { withIdentity, sameTable } = require('./schema_identity');
 
 class DictionaryService {
   constructor() {
-    this.tablesStore = StorageHelper.loadJson('dictionary.json', []);
+    this.tablesStore = StorageHelper.loadJson('dictionary.json', []).map(withIdentity);
     this.tableRelationships = StorageHelper.loadJson('table_relationships.json', []);
     this.businessGlossary = StorageHelper.loadJson('glossary.json', []);
   }
@@ -20,7 +21,8 @@ class DictionaryService {
 
   saveDictionaryItems(tables) {
     tables.forEach(t => {
-      const existing = this.tablesStore.find(tbl => tbl.tableName === t.tableName);
+      const identified = withIdentity(t);
+      const existing = this.tablesStore.find(tbl => sameTable(tbl, identified));
       const formattedCols = t.columns.map(c => ({
         columnName: c.columnName,
         dataType: c.dataType,
@@ -29,20 +31,22 @@ class DictionaryService {
       }));
 
       if (existing) {
-        existing.columns = formattedCols;
+        Object.assign(existing, withIdentity({ ...existing, ...identified, columns: formattedCols }));
         existing.dbName = t.dbName || existing.dbName;
         if (t.domain !== undefined) existing.domain = this.normalizeDomain(t.domain);
         if (existing.defaultMetric && !formattedCols.some(column => column.columnName === existing.defaultMetric)) delete existing.defaultMetric;
         if (existing.defaultTimeColumn && !formattedCols.some(column => column.columnName === existing.defaultTimeColumn)) delete existing.defaultTimeColumn;
       } else {
-        this.tablesStore.push({
+        this.tablesStore.push(withIdentity({
           tableName: t.tableName,
           dbName: t.dbName || "SQLServer_DB",
+          dbSourceId: t.dbSourceId || null,
+          schemaName: t.schemaName || 'dbo',
           domain: this.normalizeDomain(t.domain),
           isActive: true,
           tableDescription: `Bảng dữ liệu ${t.tableName} thuộc CSDL ${t.dbName || ''}`,
           columns: formattedCols
-        });
+        }));
       }
     });
     this.persist();

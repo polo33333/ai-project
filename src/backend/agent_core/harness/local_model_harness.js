@@ -8,7 +8,9 @@ const { isLocalProvider } = require('./provider_classifier');
 const { normalizeAssistantResponse } = require('./tool_call_normalizer');
 const { validateToolCall } = require('./tool_argument_validator');
 const { buildLocalMessages } = require('./local_prompt_builder');
+const skillCore = require('../../skill_core');
 const { compactToolResult } = require('./local_result_compactor');
+const { RequestExecutionBudget } = require('./request_execution_budget');
 const { getRequestPolicy, validateCallAgainstPolicy, hasSuccessfulTool, sanitizeFinalText } = require('./local_execution_policy');
 const { emitProgress, toolLabel } = require('./progress_events');
 const { trainingService } = require('../../training_core');
@@ -326,6 +328,12 @@ function buildSqlRowsFallbackReply(sqlCall) {
   return `Tìm thấy **${rows.length}** kết quả:\n\n${header}\n${separator}\n${body}${remainder}`;
 }
 
+function hasTemporalGroundingMismatch(text, grounding = {}) {
+  if (!grounding?.required || !grounding.year) return false;
+  const years = [...new Set(String(text || '').match(/\b20\d{2}\b/g) || [])];
+  return years.length > 0 && !years.includes(String(grounding.year));
+}
+
 class LocalModelHarness {
   constructor({ toolManager, maxIterations, maxRepairs, dispatch = dispatchToProvider } = {}) {
     this.toolManager = toolManager;
@@ -334,19 +342,25 @@ class LocalModelHarness {
     this.dispatch = dispatch;
   }
 
-  async _dispatch(provider, candidates, messages, tools, trace, collectUsage, externalSignal = null) {
+  async _dispatch(provider, candidates, messages, tools, trace, collectUsage, externalSignal = null, executionBudget = null) {
     let lastError;
     for (const candidate of [provider, ...candidates.filter(item => item.id !== provider?.id)]) {
+      executionBudget?.consumeModelCall();
       const controller = new AbortController();
       const abortFromCaller = () => controller.abort();
       if (externalSignal?.aborted) controller.abort();
       else externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-      const timeoutMs = Number(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS);
+      const configuredTimeoutMs = Number(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS);
+      const timeoutMs = executionBudget
+        ? Math.min(configuredTimeoutMs, executionBudget.remainingMs())
+        : configuredTimeoutMs;
       const timer = Number.isFinite(timeoutMs) && timeoutMs > 0
         ? setTimeout(() => controller.abort(), timeoutMs)
         : null;
       try {
         const response = await this.dispatch(candidate, messages, tools, controller.signal);
+        const internalRetries = Math.max(0, (Number(response?.usage?.calls) || 1) - 1);
+        for (let index = 0; index < internalRetries; index += 1) executionBudget?.consumeModelCall();
         collectUsage(response?.usage);
         if (candidate.id !== provider?.id) trace.providerFallbacks.push({
           fromProviderId: provider?.id || null,
@@ -372,6 +386,10 @@ class LocalModelHarness {
       if (context.signal?.aborted) throw Object.assign(new Error('Request aborted'), { name: 'AbortError' });
     };
     throwIfAborted();
+    const executionBudget = context.executionBudget || new RequestExecutionBudget({
+      maxModelCalls: Math.max(this.maxIterations + 2, Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 0)),
+      maxSqlAttempts: Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3)
+    });
     let activeProvider = provider || aiProviderManager.getActiveProvider();
     const candidates = localCandidates(activeProvider);
     const toolContext = { ...context, allowedToolNames: enabledToolNames };
@@ -389,13 +407,19 @@ class LocalModelHarness {
     const isQualifiedBusinessSqlCall = call => isBusinessSqlCall(call, explicitSchemaRefs)
       && trainingService.evaluateSql(call.args?.sql || call.result?.sql || '', requestPlan).valid;
     const knowledgeGrounding = context.knowledgeGrounding;
-    const conversation = buildLocalMessages(messages, toolDefs, requestPolicy);
+    const skillEnabled = process.env.LOCAL_MODEL_SKILL_CORE_ENABLED === 'true';
+    const fewShotEnabled = skillEnabled && process.env.LOCAL_MODEL_FEW_SHOT_ENABLED === 'true';
+    const skillSelection = skillEnabled ? skillCore.selectSkill({ requestPlan, question: effectiveUserMessage }) : { matched: false, skill: null, reason: 'disabled' };
+    const examples = fewShotEnabled && skillSelection.matched ? skillCore.selectExamples(skillSelection.skill, requestPlan) : [];
+    const conversation = buildLocalMessages(messages, toolDefs, requestPolicy, { skill: skillSelection.skill, examples });
     const trace = {
       harness: 'local', startTime: Date.now(), iterations: 0, steps: [], toolCalls: [], providerFallbacks: [],
       tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false },
       training: { plan: requestPlan, sqlEvaluations: [] },
+      skill: { enabled: skillEnabled, fewShotEnabled, matched: skillSelection.matched, skillId: skillSelection.skill?.id || null, reason: skillSelection.reason, exampleCount: examples.length },
       memoryDecision: context.memoryDecision ? { ...context.memoryDecision, fallbackHistory: undefined, accountId: undefined } : null
     };
+    trace.executionBudget = executionBudget.snapshot();
     const collectUsage = usage => {
       if (!usage) return;
       const input = Number(usage.inputTokens) || 0;
@@ -403,7 +427,7 @@ class LocalModelHarness {
       trace.tokenUsage.inputTokens += input;
       trace.tokenUsage.outputTokens += output;
       trace.tokenUsage.totalTokens += Number(usage.totalTokens) || input + output;
-      trace.tokenUsage.calls += 1;
+      trace.tokenUsage.calls += Math.max(1, Number(usage.calls) || 0);
       trace.tokenUsage.available = true;
     };
     const seen = new Set();
@@ -415,9 +439,10 @@ class LocalModelHarness {
     const toolEnabled = name => !Array.isArray(enabledToolNames) || enabledToolNames.includes(name);
     const executeDeterministicTool = async (name, args, reason) => {
       throwIfAborted();
+      executionBudget.assertTimeRemaining();
       if (!this.toolManager || !toolEnabled(name)) return null;
       if (name === 'execute_sql_query') {
-        const structuralValidation = validateCallAgainstPolicy({ name }, args, requestPolicy, []);
+        const structuralValidation = validateCallAgainstPolicy({ name }, args, requestPolicy, toolCalls);
         const sqlEvaluation = trainingService.evaluateSql(args.sql, requestPlan);
         const violatesPlannedTable = sqlEvaluation.violations.some(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY' || violation.startsWith('UNKNOWN_COLUMN:') || violation === 'UNREQUESTED_FILTER');
         const referencesWrongData = explicitSchemaRefs.tables.length > 0 && !explicitSchemaRefs.tables.some(table =>
@@ -426,6 +451,12 @@ class LocalModelHarness {
         const metadataQuery = /\b(?:information_schema|sys\.(?:tables|columns|objects|schemas))\b/i.test(String(args.sql || ''));
         if (!structuralValidation.valid || violatesPlannedTable || referencesWrongData || metadataQuery) {
           trace.steps.push({ type: 'DETERMINISTIC_SQL_REJECTED', toolName: name, reason, error: structuralValidation.error || `SQL does not match the planned table ${requestPlan.table || ''}.`.trim() });
+          return null;
+        }
+        try {
+          executionBudget.consumeSqlAttempt();
+        } catch (error) {
+          trace.steps.push({ type: error.code, toolName: name, reason, error: error.message });
           return null;
         }
       }
@@ -447,7 +478,7 @@ class LocalModelHarness {
       emitProgress(onProgress, { type: 'model_started', label: `Model đang phân tích · vòng ${trace.iterations}`, status: 'running', icon: 'brain', iteration: trace.iterations, providerName: activeProvider?.name });
       let dispatched;
       try {
-        dispatched = await this._dispatch(activeProvider, candidates, conversation, toolDefs, trace, collectUsage, context.signal);
+        dispatched = await this._dispatch(activeProvider, candidates, conversation, toolDefs, trace, collectUsage, context.signal, executionBudget);
       } catch (error) {
         trace.steps.push({ iteration: trace.iterations, type: 'DISPATCH_ERROR', error: error.message });
         lastDispatchError = error;
@@ -463,6 +494,15 @@ class LocalModelHarness {
       if (normalized.kind === 'final') {
         conversation.push({ role: 'assistant', content: dispatched.response.content || '' });
         finalText = String(normalized.content || '').trim();
+        if (hasTemporalGroundingMismatch(finalText, context.webTemporalGrounding) && trace.iterations < this.maxIterations) {
+          trace.steps.push({ iteration: trace.iterations, type: 'TEMPORAL_WEB_GROUNDING_MISMATCH', expectedYear: context.webTemporalGrounding.year });
+          finalText = null;
+          conversation.push({
+            role: 'user',
+            content: `The answer used the wrong year. “Năm nay” is ${context.webTemporalGrounding.year} in timezone ${context.webTemporalGrounding.timezone}. Answer again for ${context.webTemporalGrounding.year}; do not call another year “năm nay” and ignore sources that only describe another year.`
+          });
+          continue;
+        }
         if (knowledgeGrounding?.required && isUngroundedKnowledgeAnswer(finalText) && trace.iterations < this.maxIterations) {
           trace.steps.push({ iteration: trace.iterations, type: 'UNGROUNDED_KNOWLEDGE_RESPONSE' });
           finalText = null;
@@ -529,6 +569,7 @@ class LocalModelHarness {
           break;
         }
         repairs += 1;
+        executionBudget.recordRepair();
         if (call) {
           conversation.push({
             role: 'tool',
@@ -595,6 +636,17 @@ class LocalModelHarness {
         conversation.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: JSON.stringify({ success: false, error }) });
         emitProgress(onProgress, { type: 'policy_repair', label: 'Chưa có dữ liệu nghiệp vụ hợp lệ, đang sửa truy vấn', status: 'warning', icon: 'shield-halved', iteration: trace.iterations, toolName: call.name });
         continue;
+      }
+
+      if (call.name === 'execute_sql_query') {
+        try {
+          executionBudget.consumeSqlAttempt();
+        } catch (error) {
+          trace.steps.push({ iteration: trace.iterations, type: error.code, toolName: call.name, error: error.message });
+          conversation.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: JSON.stringify({ success: false, error: error.message }) });
+          forceSynthesis = true;
+          break;
+        }
       }
 
       emitProgress(onProgress, { type: 'tool_started', label: toolLabel(call.name), status: 'running', icon: call.name === 'execute_sql_query' ? 'database' : call.name === 'render_chart' ? 'chart-column' : 'gear', iteration: trace.iterations, toolName: call.name });
@@ -715,7 +767,7 @@ class LocalModelHarness {
           ].join('\n')
           }
         ];
-        const synthesis = await this._dispatch(activeProvider, candidates, synthesisConversation, [], trace, collectUsage, context.signal);
+        const synthesis = await this._dispatch(activeProvider, candidates, synthesisConversation, [], trace, collectUsage, context.signal, executionBudget);
         activeProvider = synthesis.provider;
         finalText = sanitizeFinalText(synthesis.response.content || '', hasSuccessfulTool(toolCalls, 'render_chart'));
       } catch (error) {
@@ -765,6 +817,7 @@ class LocalModelHarness {
     emitProgress(onProgress, { type: 'request_completed', label: 'Đã hoàn thành câu trả lời', status: 'done', icon: 'check', durationMs: Date.now() - trace.startTime });
 
     trace.durationMs = Date.now() - trace.startTime;
+    trace.executionBudget = executionBudget.snapshot();
     return {
       replyText: securityGuard.maskSensitiveData(finalText || ''),
       toolCalls,
@@ -793,6 +846,7 @@ module.exports.buildPlannedTimeSeriesSql = buildPlannedTimeSeriesSql;
 module.exports.buildEmployeeLookupSql = buildEntityLookupSql;
 module.exports.isUngroundedKnowledgeAnswer = isUngroundedKnowledgeAnswer;
 module.exports.isInsufficientSqlAnswer = isInsufficientSqlAnswer;
+module.exports.hasTemporalGroundingMismatch = hasTemporalGroundingMismatch;
 module.exports.isListRequest = isListRequest;
 module.exports.listAnswerMentionsRowValue = listAnswerMentionsRowValue;
 module.exports.buildSqlRowsFallbackReply = buildSqlRowsFallbackReply;

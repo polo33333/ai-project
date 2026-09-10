@@ -10,6 +10,9 @@ const qdrantService = require('../services/qdrant_service');
 const libraryService = require('../knowledge_core/services/library_service');
 const retrievalService = require('../knowledge_core/services/retrieval_service');
 const securityGuard = require('./security_guard');
+const fs = require('fs');
+const path = require('path');
+const { getExportsDirectory } = require('../utils/export_paths');
 
 // ============================================================================
 // TOOL DEFINITIONS
@@ -264,11 +267,9 @@ class ToolRegistry {
       return { success: false, error: 'Không có dữ liệu để xuất file.' };
     }
 
-    const fs = require('fs');
-    const path = require('path');
     const fmt = (format || 'csv').toLowerCase();
     const cleanFilename = (filename || `Export_Data_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const exportDir = path.join(__dirname, '../../../data/exports');
+    const exportDir = getExportsDirectory();
 
     if (!fs.existsSync(exportDir)) {
       fs.mkdirSync(exportDir, { recursive: true });

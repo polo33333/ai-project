@@ -1,0 +1,67 @@
+[
+  {
+    "tableName": "M_Employee",
+    "dbName": "IPMS",
+    "domain": "employee",
+    "isActive": true,
+    "tableDescription": "Danh mục nhân viên ẩn danh dùng cho kiểm thử",
+    "columns": [
+      { "columnName": "EmployeeID", "dataType": "INT", "isPrimaryKey": true },
+      { "columnName": "EmployeeName", "dataType": "NVARCHAR", "isPrimaryKey": false },
+      { "columnName": "DepartmentID", "dataType": "INT", "isPrimaryKey": false }
+    ]
+  },
+  {
+    "tableName": "T_Contract",
+    "dbName": "IPMS",
+    "domain": "contract",
+    "isActive": true,
+    "tableDescription": "Hợp đồng ẩn danh dùng cho kiểm thử",
+    "columns": [
+      { "columnName": "ContractID", "dataType": "INT", "isPrimaryKey": true },
+      { "columnName": "ContractNo", "dataType": "NVARCHAR", "isPrimaryKey": false },
+      { "columnName": "ContractDate", "dataType": "DATETIME", "isPrimaryKey": false },
+      { "columnName": "CustomerID", "dataType": "INT", "isPrimaryKey": false }
+    ]
+  },
+  {
+    "tableName": "T_ElectricityOutput",
+    "dbName": "IPMS",
+    "domain": "electricity",
+    "isActive": true,
+    "tableDescription": "Sản lượng điện bán ra ẩn danh dùng cho kiểm thử",
+    "defaultMetric": "TotalQty",
+    "defaultTimeColumn": "ElectricityOutputDate",
+    "defaultAggregation": "SUM",
+    "columns": [
+      { "columnName": "ElectricityOutputID", "dataType": "INT", "isPrimaryKey": true },
+      { "columnName": "ElectricityOutputDate", "dataType": "DATETIME", "isPrimaryKey": false },
+      { "columnName": "TotalQty", "dataType": "FLOAT", "isPrimaryKey": false },
+      { "columnName": "PaymentDate", "dataType": "DATETIME", "isPrimaryKey": false }
+    ]
+  },
+  {
+    "tableName": "T_ElectricityInput",
+    "dbName": "IPMS",
+    "domain": "electricity_input",
+    "isActive": true,
+    "tableDescription": "Sản lượng điện mua vào ẩn danh dùng cho kiểm thử",
+    "columns": [
+      { "columnName": "ElectricityInputID", "dataType": "INT", "isPrimaryKey": true },
+      { "columnName": "ElectricityInputDate", "dataType": "DATETIME", "isPrimaryKey": false },
+      { "columnName": "TotalQty", "dataType": "FLOAT", "isPrimaryKey": false }
+    ]
+  },
+  {
+    "tableName": "T_GarbageOutput",
+    "dbName": "IPMS",
+    "domain": "waste",
+    "isActive": true,
+    "tableDescription": "Sản lượng chất thải ẩn danh dùng cho kiểm thử",
+    "columns": [
+      { "columnName": "GarbageOutputID", "dataType": "INT", "isPrimaryKey": true },
+      { "columnName": "GarbageOutputDate", "dataType": "DATETIME", "isPrimaryKey": false },
+      { "columnName": "QtyTon", "dataType": "FLOAT", "isPrimaryKey": false }
+    ]
+  }
+]

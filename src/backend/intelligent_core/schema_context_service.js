@@ -3,6 +3,7 @@
 const dictionaryService = require('../services/dictionary_service');
 const qdrantService = require('../services/qdrant_service');
 const domainAliasService = require('./domain_alias_service');
+const { tableIdentity } = require('../services/schema_identity');
 
 const MAX_TABLES = Math.max(1, parseInt(process.env.AI_SCHEMA_MAX_TABLES || '6', 10));
 const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COLUMNS_PER_TABLE || '40', 10));
@@ -86,7 +87,10 @@ function selectColumns(table, expandedQuery, vectorColumnNames = new Set()) {
 
 async function buildSchemaContext(query, options = {}) {
   const dbName = options.dbName || null;
-  const activeTables = dictionaryService.getGroupedTables().filter(table => table.isActive && (!dbName || table.dbName === dbName));
+  const dbSourceId = options.dbSourceId || null;
+  const activeTables = dictionaryService.getGroupedTables().filter(table => table.isActive
+    && (!dbName || table.dbName === dbName)
+    && (!dbSourceId || !table.dbSourceId || table.dbSourceId === dbSourceId));
   const expandedQuery = expandWithGlossary(query);
   const queryTokens = tokens(expandedQuery);
   if (isGeneralConversation(query, queryTokens, activeTables, normalize(expandedQuery) !== normalize(query))) {
@@ -94,7 +98,7 @@ async function buildSchemaContext(query, options = {}) {
   }
 
   const expandedTokens = tokens(expandedQuery);
-  const lexicalScores = new Map(activeTables.map(table => [table.tableName, lexicalScore(expandedTokens, tableText(table))]));
+  const lexicalScores = new Map(activeTables.map(table => [tableIdentity(table), lexicalScore(expandedTokens, tableText(table))]));
   const scores = new Map(lexicalScores);
   const vectorColumnNames = new Set();
   let vectorResults = [];
@@ -103,21 +107,24 @@ async function buildSchemaContext(query, options = {}) {
   vectorResults.forEach((result, index) => {
     const payload = result.payload || {};
     const rankBoost = Math.max(0.1, (vectorResults.length - index) / Math.max(1, vectorResults.length));
-    const names = [payload.tableName, payload.sourceTable, payload.targetTable].filter(Boolean);
-    names.forEach(name => {
-      if (scores.has(name)) scores.set(name, (scores.get(name) || 0) + rankBoost + Math.max(0, Number(result.score) || 0));
+    const candidates = payload.tableId
+      ? activeTables.filter(table => tableIdentity(table) === payload.tableId)
+      : activeTables.filter(table => [payload.tableName, payload.sourceTable, payload.targetTable].includes(table.tableName));
+    candidates.forEach(table => {
+      const key = tableIdentity(table);
+      scores.set(key, (scores.get(key) || 0) + rankBoost + Math.max(0, Number(result.score) || 0));
     });
-    if (payload.type === 'column' && payload.tableName && payload.columnName) {
+    if (payload.type === 'column' && payload.tableName && payload.columnName && candidates.length > 0) {
       vectorColumnNames.add(`${payload.tableName}.${payload.columnName}`);
     }
   });
 
   const rankedTables = activeTables
-    .map((table, index) => ({ table, index, score: scores.get(table.tableName) || 0 }))
+    .map((table, index) => ({ table, index, score: scores.get(tableIdentity(table)) || 0 }))
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const maxLexicalScore = Math.max(0, ...lexicalScores.values());
   const tablePool = maxLexicalScore >= 4
-    ? rankedTables.filter(item => (lexicalScores.get(item.table.tableName) || 0) > 0)
+    ? rankedTables.filter(item => (lexicalScores.get(tableIdentity(item.table)) || 0) > 0)
     : rankedTables;
   const selected = tablePool.slice(0, Math.min(MAX_TABLES, tablePool.length)).map(item => item.table);
   const selectedNames = new Set(selected.map(table => table.tableName));
@@ -151,6 +158,7 @@ async function buildSchemaContext(query, options = {}) {
     mode: 'data',
     schemaContext: lines.join('\n').slice(0, MAX_CONTEXT_CHARS),
     selectedTables: selected.map(table => table.tableName),
+    selectedTableIds: selected.map(table => tableIdentity(table)),
     useTools: true,
     retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length },
     needsModelSelection: maxLexicalScore < 4,
@@ -160,7 +168,10 @@ async function buildSchemaContext(query, options = {}) {
 
 function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   const dbName = options.dbName || null;
-  const activeTables = dictionaryService.getGroupedTables().filter(table => table.isActive && (!dbName || table.dbName === dbName));
+  const dbSourceId = options.dbSourceId || null;
+  const activeTables = dictionaryService.getGroupedTables().filter(table => table.isActive
+    && (!dbName || table.dbName === dbName)
+    && (!dbSourceId || !table.dbSourceId || table.dbSourceId === dbSourceId));
   const requested = new Set(requestedTableNames.map(name => String(name).toLowerCase()));
   const selected = activeTables.filter(table => requested.has(table.tableName.toLowerCase())).slice(0, MAX_TABLES);
   if (selected.length === 0) return null;
@@ -192,6 +203,7 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
     mode: 'data', useTools: true,
     schemaContext: lines.join('\n').slice(0, MAX_CONTEXT_CHARS),
     selectedTables: selected.map(table => table.tableName),
+    selectedTableIds: selected.map(table => tableIdentity(table)),
     retrieval: { strategy: 'model_table_selector', activeTableCount: activeTables.length }
   };
 }

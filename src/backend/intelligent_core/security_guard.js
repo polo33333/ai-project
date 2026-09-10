@@ -164,10 +164,52 @@ class SecurityGuard {
     masked = masked.replace(/(sk-[a-zA-Z0-9]{20,})/g, 'sk-••••••••••••••••');
     masked = masked.replace(/(AQ\.[a-zA-Z0-9_-]{20,})/g, 'AQ.••••••••••••••••');
 
+    // Long hexadecimal values commonly contain password/token hashes. Do not
+    // let a value already copied into prose bypass field-name filtering.
+    masked = masked.replace(/\b[a-f0-9]{40,128}\b/gi, '[REDACTED_SECRET]');
+
     // Che bớt mật khẩu trong chuỗi Connection String nếu có
     masked = masked.replace(/(Password|Pwd|secret)=([^;]+)/gi, '$1=******');
 
     return masked;
+  }
+
+  isSensitiveFieldName(name) {
+    const normalized = String(name || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    return /^(?:password|passwd|pwd|passwordhash|passwordsalt|secret|clientsecret|apikey|accesstoken|refreshtoken|privatekey|connectionstring|credential|createuser|createdate|updateuser|updatedate)$/.test(normalized)
+      || /(?:password|passwd|clientsecret|privatekey)$/.test(normalized);
+  }
+
+  sanitizeTabularRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows.map(row => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+      return Object.fromEntries(Object.entries(row)
+        .filter(([key]) => !this.isSensitiveFieldName(key))
+        .map(([key, value]) => [key, typeof value === 'string' ? this.maskSensitiveData(value) : value]));
+    });
+  }
+
+  sanitizeStructuredData(value) {
+    if (typeof value === 'string') return this.maskSensitiveData(value);
+    if (Array.isArray(value)) return value.map(item => this.sanitizeStructuredData(item));
+    if (!value || typeof value !== 'object') return value;
+
+    if (Array.isArray(value.columns) && Array.isArray(value.rows) && value.rows.every(row => Array.isArray(row))) {
+      const safeIndexes = value.columns.map((column, index) => ({ column, index }))
+        .filter(item => !this.isSensitiveFieldName(item.column));
+      return {
+        ...Object.fromEntries(Object.entries(value)
+          .filter(([key]) => !['columns', 'rows'].includes(key) && !this.isSensitiveFieldName(key))
+          .map(([key, item]) => [key, this.sanitizeStructuredData(item)])),
+        columns: safeIndexes.map(item => item.column),
+        rows: value.rows.map(row => safeIndexes.map(item => this.sanitizeStructuredData(row[item.index])))
+      };
+    }
+
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !this.isSensitiveFieldName(key))
+      .map(([key, item]) => [key, this.sanitizeStructuredData(item)]));
   }
 }
 

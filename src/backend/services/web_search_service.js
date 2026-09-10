@@ -23,6 +23,50 @@ function buildContextualQuery(query, history = [], contextualize = false) {
   return previous && previous !== current ? `${previous}\n${current}` : current;
 }
 
+function getVietnamDateContext(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+  const value = type => parts.find(part => part.type === type)?.value || '';
+  return { year: Number(value('year')), month: Number(value('month')), day: Number(value('day')), timezone: 'Asia/Ho_Chi_Minh' };
+}
+
+function getTemporalGrounding(query, now = new Date()) {
+  const current = getVietnamDateContext(now);
+  const text = String(query || '');
+  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+  const relativeYear = /\bnam nay\b/.test(normalized);
+  const relativeMonth = /\bthang nay\b/.test(normalized);
+  const relativeDay = /\b(?:hom nay|h nay|hnay)\b/.test(normalized);
+  return { ...current, relativeYear, relativeMonth, relativeDay, required: relativeYear || relativeMonth || relativeDay };
+}
+
+function groundTemporalQuery(query, grounding) {
+  if (!grounding?.required) return String(query || '').trim();
+  let result = String(query || '').trim();
+  if (grounding.relativeYear) result = result.replace(/năm nay/giu, `năm ${grounding.year}`);
+  if (grounding.relativeMonth) result = result.replace(/tháng này/giu, `tháng ${grounding.month} năm ${grounding.year}`);
+  if (grounding.relativeDay) {
+    const date = `${String(grounding.day).padStart(2, '0')}/${String(grounding.month).padStart(2, '0')}/${grounding.year}`;
+    result = result.replace(/(?:hôm nay|h nay|hnay)/giu, `ngày ${date}`);
+  }
+  return result;
+}
+
+function rankResultsForTemporalGrounding(results = [], grounding = {}) {
+  if (!grounding?.required || !grounding.year) return results;
+  const target = String(grounding.year);
+  const score = item => {
+    const text = `${item?.title || ''} ${item?.snippet || ''}`;
+    if (new RegExp(`\\b${target}\\b`).test(text)) return 2;
+    if (/\b20\d{2}\b/.test(text)) return 0;
+    return 1;
+  };
+  return results.map((item, index) => ({ item, index, score: score(item) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(entry => entry.item);
+}
+
 function parseResults(html = '', limit = 5) {
   return String(html).split(/class="result\s+results_links[^\"]*"/i).slice(1).map(block => {
     const link = block.match(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i)
@@ -55,4 +99,7 @@ async function search(query, { signal = null } = {}) {
   }
 }
 
-module.exports = { search, parseResults, buildContextualQuery };
+module.exports = {
+  search, parseResults, buildContextualQuery, getVietnamDateContext,
+  getTemporalGrounding, groundTemporalQuery, rankResultsForTemporalGrounding
+};

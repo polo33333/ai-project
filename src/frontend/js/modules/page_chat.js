@@ -370,6 +370,16 @@ function parseMarkdownInline(value) {
     '<a class="chat-download-link" href="$2" download><i class="fa-solid fa-download"></i>$1</a>');
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a class="chat-answer-link" href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/(^|[\s:(])(https?:\/\/[^\s<>()`]+)(?=$|[\s,.!?<])/gi, (_, prefix, rawUrl) => {
+    const trailing = rawUrl.match(/[.,!?;:]+$/)?.[0] || '';
+    const url = rawUrl.slice(0, rawUrl.length - trailing.length);
+    const decodedUrl = url.replace(/&amp;/g, '&');
+    try {
+      const parsed = new URL(decodedUrl);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return `${prefix}${rawUrl}`;
+    } catch (_) { return `${prefix}${rawUrl}`; }
+    return `${prefix}<a class="chat-answer-link" href="${escapeChatMarkdown(decodedUrl)}" target="_blank" rel="noopener noreferrer">${url}</a>${trailing}`;
+  });
   return html
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')

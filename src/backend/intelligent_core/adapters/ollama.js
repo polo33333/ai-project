@@ -78,10 +78,19 @@ async function callOllama(provider, messages, tools, signal) {
     return res.json();
   };
 
+  const usage = { promptEvalCount: 0, evalCount: 0, requests: 0 };
+  const addUsage = data => {
+    usage.promptEvalCount += Number(data?.prompt_eval_count) || 0;
+    usage.evalCount += Number(data?.eval_count) || 0;
+    usage.requests += 1;
+  };
+
   let data = await request(body);
+  addUsage(data);
   let msg = data.message || {};
   if (!String(msg.content || '').trim() && !msg.tool_calls?.length && msg.thinking && body.think !== false) {
     data = await request({ ...body, think: false });
+    addUsage(data);
     msg = data.message || {};
   }
   if (!String(msg.content || '').trim() && !msg.tool_calls?.length) {
@@ -96,13 +105,15 @@ async function callOllama(provider, messages, tools, signal) {
     role: 'assistant',
     content: msg.content || null,
     tool_calls: msg.tool_calls || null,
-    usage: (data.prompt_eval_count != null || data.eval_count != null) ? {
-      inputTokens: data.prompt_eval_count || 0,
-      outputTokens: data.eval_count || 0,
-      totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+    usage: (usage.promptEvalCount || usage.evalCount) ? {
+      inputTokens: usage.promptEvalCount,
+      outputTokens: usage.evalCount,
+      totalTokens: usage.promptEvalCount + usage.evalCount,
+      calls: usage.requests
     } : null,
     metadata: {
       doneReason: data.done_reason || null,
+      requestCount: usage.requests,
       thinkingLength: String(msg.thinking || '').length,
       contentLength: String(msg.content || '').length
     }

@@ -8,7 +8,7 @@ function toolSummary(definitions) {
   }).join('\n');
 }
 
-function buildLocalMessages(messages = [], definitions = [], requestPolicy = {}) {
+function buildLocalMessages(messages = [], definitions = [], requestPolicy = {}, guidance = {}) {
   const protocol = definitions.length ? `
 
 # Local tool protocol
@@ -21,7 +21,9 @@ Never invent a tool or argument. After receiving a tool result, either call the 
 ${requestPolicy.chartRequired ? 'This request requires a real chart. You must call execute_sql_query and then render_chart. Never create image URLs or chart placeholders. Do not finish before render_chart succeeds.' : ''}
 ${requestPolicy.exportRequired ? 'This request requires a real downloadable file. After obtaining rows, call export_data with those rows. Do not finish before export_data succeeds.' : ''}
 ${requestPolicy.dataRequired ? 'For a data request, execute the query with execute_sql_query. Do not merely print SQL or ask for confirmation.' : ''}
-${requestPolicy.temporalMonths ? `For the latest ${requestPolicy.temporalMonths} months, use the latest date present in the database as the anchor, not the current system date. Aggregate rows into year/month buckets; TOP ${requestPolicy.temporalMonths} raw database rows is not a valid monthly result.` : ''}` : '';
+${requestPolicy.temporalMonths ? `For the latest ${requestPolicy.temporalMonths} months, use the latest date present in the database as the anchor, not the current system date. Aggregate rows into year/month buckets; TOP ${requestPolicy.temporalMonths} raw database rows is not a valid monthly result.` : ''}
+${guidance.skill ? `\n# Business skill (${guidance.skill.id}@${guidance.skill.version})\n${guidance.skill.instructions}` : ''}
+${guidance.examples?.length ? `\n# Reviewed examples\n${guidance.examples.join('\n\n')}` : ''}` : '';
 
   let systemSeen = false;
   return messages.map(message => {

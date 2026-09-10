@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { getExportsDirectory } = require('../utils/export_paths');
 
 const sqlConnector = require('../services/sql_connector');
 const dictionaryService = require('../services/dictionary_service');
@@ -31,7 +32,7 @@ const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } 
 
 
 const FRONTEND_DIR = path.join(__dirname, '../../frontend');
-const EXPORTS_DIR = path.join(__dirname, '../../../data/exports');
+const EXPORTS_DIR = getExportsDirectory();
 const LEGACY_EXPORTS_DIR = path.join(__dirname, '../../data/exports');
 
 const FRONTEND_ROUTES = new Set([
@@ -442,6 +443,21 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({ status: 'success' }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/sql/test-source' && req.method === 'POST') {
+    try {
+      const { id } = await readJsonBody(req);
+      const result = await sqlConnector.testDbSource(id);
+      loggerService.addLog('SUCCESS', 'SQL Connector', `Kiểm tra kết nối '${result.dbName}' thành công (${result.latencyMs}ms).`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', ...result }));
+    } catch (err) {
+      loggerService.addLog('ERROR', 'SQL Connector', `Kiểm tra kết nối thất bại: ${err.message}`);
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
     }
     return;

@@ -35,8 +35,8 @@ function postJson(url, body, timeoutMs = 30000) {
 class QdrantService {
   constructor() {
     this.qdrantUrl = process.env.QDRANT_URL || 'http://127.0.0.1:6333';
-    this.collectionName = process.env.QDRANT_COLLECTION || 'database_schema';
-    this.vectorSize = parseInt(process.env.QDRANT_VECTOR_SIZE || '384', 10); // Standard embedding size
+    this.collectionName = process.env.QDRANT_COLLECTION || 'database_schema_v2';
+    this.vectorSize = parseInt(process.env.QDRANT_VECTOR_SIZE || '1024', 10);
     this.documentVectorSize = parseInt(process.env.QDRANT_DOCUMENT_VECTOR_SIZE || '1024', 10);
     this.embeddingModel = process.env.EMBEDDING_MODEL || 'bge-m3';
     this.embeddingProvider = (process.env.EMBEDDING_PROVIDER || 'ollama').toLowerCase();
@@ -115,7 +115,7 @@ class QdrantService {
     return vector.map(value => value / magnitude);
   }
 
-  async embedTexts(texts) {
+  async embedTexts(texts, expectedSize = this.documentVectorSize) {
     const input = (Array.isArray(texts) ? texts : [texts]).map(value => String(value || ''));
     try {
       let response;
@@ -123,16 +123,18 @@ class QdrantService {
         response = await postJson(`${this.embeddingBaseUrl}/v1/embeddings`, { model: this.embeddingModel, input });
         const vectors = (response.data || []).sort((a, b) => a.index - b.index).map(item => item.embedding);
         if (vectors.length !== input.length) throw new Error('Embedding response is incomplete');
+        if (vectors.some(vector => !Array.isArray(vector) || vector.length !== expectedSize)) throw new Error(`Embedding dimension does not match collection (${expectedSize})`);
         return vectors;
       }
       response = await postJson(`${this.embeddingBaseUrl}/api/embed`, { model: this.embeddingModel, input });
       const vectors = response.embeddings || (response.embedding ? [response.embedding] : []);
       if (vectors.length !== input.length) throw new Error('Embedding response is incomplete');
+      if (vectors.some(vector => !Array.isArray(vector) || vector.length !== expectedSize)) throw new Error(`Embedding dimension does not match collection (${expectedSize})`);
       return vectors;
     } catch (error) {
       if ((process.env.EMBEDDING_FALLBACK_MODE || 'error') !== 'deterministic') throw error;
       console.warn(`[Embedding] ${this.embeddingModel} unavailable; deterministic fallback is active: ${error.message}`);
-      return input.map(text => this.generateDeterministicVector(text));
+      return input.map(text => this.generateDeterministicVector(text, expectedSize));
     }
   }
 
@@ -189,15 +191,18 @@ class QdrantService {
         const defaultsText = table.defaultMetric || table.defaultTimeColumn
           ? ` Mặc định: metric ${table.defaultMetric || 'không có'}, thời gian ${table.defaultTimeColumn || 'không có'}, tổng hợp ${table.defaultAggregation || 'SUM'}.` : '';
         const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText}${defaultsText} ${table.tableDescription || ''}. Các cột: ${table.columns.map(c => c.columnName).join(', ')}`;
-        const tableVector = this.generateVector(tableText);
+        const [tableVector] = await this.embedTexts([tableText], this.vectorSize);
 
         points.push({
           id: pointId++,
           vector: tableVector,
           payload: {
             type: 'table',
+            tableId: table.tableId || null,
+            dbSourceId: table.dbSourceId || null,
             tableName: table.tableName,
             dbName: table.dbName || 'SQLServer_DB',
+            schemaName: table.schemaName || 'dbo',
             domain: table.domain || null,
             description: table.tableDescription || '',
             columnCount: table.columns.length,
@@ -209,14 +214,19 @@ class QdrantService {
         // Column level metadata
         for (const col of table.columns) {
           const colText = `Bảng ${table.tableName} Cột ${col.columnName} (${col.dataType}): ${col.description || ''} PrimaryKey: ${col.isPrimaryKey ? 'Yes' : 'No'}`;
-          const colVector = this.generateVector(colText);
+          const [colVector] = await this.embedTexts([colText], this.vectorSize);
 
           points.push({
             id: pointId++,
             vector: colVector,
             payload: {
               type: 'column',
+              tableId: table.tableId || null,
+              columnId: col.columnId || null,
+              dbSourceId: table.dbSourceId || null,
               tableName: table.tableName,
+              dbName: table.dbName || 'SQLServer_DB',
+              schemaName: table.schemaName || 'dbo',
               columnName: col.columnName,
               dataType: col.dataType,
               isPrimaryKey: !!col.isPrimaryKey,
@@ -232,7 +242,7 @@ class QdrantService {
         const relationText = `Quan hệ bảng: ${relation.sourceTable}.${relation.sourceColumn} ${relation.relationType || 'liên kết'} ${relation.targetTable}.${relation.targetColumn}. ${relation.description || ''}`;
         points.push({
           id: pointId++,
-          vector: this.generateVector(relationText),
+          vector: (await this.embedTexts([relationText], this.vectorSize))[0],
           payload: {
             type: 'relationship',
             sourceTable: relation.sourceTable,
@@ -250,7 +260,7 @@ class QdrantService {
       if (glossaryStore && Array.isArray(glossaryStore)) {
         for (const item of glossaryStore) {
           const termText = `Thuật ngữ Business Glossary '${item.term}': ${item.fullMeaning} (Phân loại: ${item.category || 'Chung'})`;
-          const termVector = this.generateVector(termText);
+          const [termVector] = await this.embedTexts([termText], this.vectorSize);
 
           points.push({
             id: pointId++,
@@ -304,7 +314,7 @@ class QdrantService {
   async searchSchema(queryText, limit = 5) {
     try {
       await this.ensureCollection();
-      const queryVector = this.generateVector(queryText);
+      const [queryVector] = await this.embedTexts([queryText], this.vectorSize);
 
       const searchRes = await this.request(`/collections/${this.collectionName}/points/search`, 'POST', {
         vector: queryVector,

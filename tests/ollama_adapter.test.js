@@ -28,8 +28,8 @@ test('Ollama adapter retries without thinking when the first response has only t
     return {
       ok: true,
       json: async () => bodies.length === 1
-        ? { message: { content: '', thinking: 'reasoning' }, done_reason: 'length', eval_count: 100 }
-        : { message: { content: 'final answer' }, done_reason: 'stop', eval_count: 12 }
+        ? { message: { content: '', thinking: 'reasoning' }, done_reason: 'length', prompt_eval_count: 20, eval_count: 100 }
+        : { message: { content: 'final answer' }, done_reason: 'stop', prompt_eval_count: 8, eval_count: 12 }
     };
   };
 
@@ -38,6 +38,8 @@ test('Ollama adapter retries without thinking when the first response has only t
   assert.equal(bodies[0].think, true);
   assert.equal(bodies[1].think, false);
   assert.equal(result.content, 'final answer');
+  assert.deepEqual(result.usage, { inputTokens: 28, outputTokens: 112, totalTokens: 140, calls: 2 });
+  assert.equal(result.metadata.requestCount, 2);
 });
 
 test('Ollama adapter exposes diagnostics when the final response is still empty', async t => {

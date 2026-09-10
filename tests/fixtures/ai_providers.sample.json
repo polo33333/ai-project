@@ -1,0 +1,17 @@
+[
+  {
+    "id": "provider-test-local",
+    "name": "Fixture local provider",
+    "type": "local",
+    "apiFormat": "ollama",
+    "executionClass": "local",
+    "baseUrl": "http://127.0.0.1:11434",
+    "apiKey": "fixture-secret-not-for-production",
+    "model": "fixture-model",
+    "supportsToolCalling": true,
+    "priority": 1,
+    "isActive": true,
+    "status": "configured",
+    "tokenCost": 0
+  }
+]

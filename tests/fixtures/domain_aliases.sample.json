@@ -1,0 +1,7 @@
+{
+  "employee": ["nhan vien", "nhan su", "staff"],
+  "contract": ["hop dong", "thoa thuan", "agreement"],
+  "electricity": ["dien", "dien ban ra", "san luong dien", "power"],
+  "electricity_input": ["dien mua vao"],
+  "waste": ["rac", "chat thai", "garbage"]
+}

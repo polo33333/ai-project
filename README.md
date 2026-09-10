@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Pipeline tài liệu `Import/Watch Folder -> Parse -> Chunk -> BGE-M3 -> Qdrant -> Hybrid Retrieval -> LLM` đã có lát cắt chạy thật, nhưng metadata vẫn dùng JSON, ingestion chạy trong tiến trình Node.js và chưa có queue/DLQ production. Xem [Trạng thái triển khai](#trạng-thái-triển-khai) trước khi sử dụng với dữ liệu thật.
 
-Rà soát backend ngày **08/09/2026**: xem [Đánh giá tổng quan, lỗi tồn đọng và kế hoạch phát triển](docs/Backend_Review_Development_Plan.md). Tài liệu phân biệt vấn đề xác nhận từ mã nguồn với rủi ro cần integration/load test, kèm ưu tiên và tiêu chí nghiệm thu.
+Rà soát backend và local model gần nhất ngày **10/09/2026**. Xem [kế hoạch tối ưu Local Model v2](docs/LOCAL_MODEL_OPTIMIZATION_MASTER_PLAN_v2.md) và [đánh giá backend](docs/Backend_Review_Development_Plan-080926.md).
 
 ## Tính năng hiện có
 
@@ -25,6 +25,8 @@ Rà soát backend ngày **08/09/2026**: xem [Đánh giá tổng quan, lỗi tồ
 - Persona, lịch sử hội thoại, audit log và model selector.
 - Công cụ tích hợp: kiểm tra/sửa/thực thi SQL, tìm schema/glossary/Qdrant, tính toán, biểu đồ và export.
 - Local Model Harness: kiểm tra tham số công cụ, phục hồi lỗi, tổng hợp kết quả và kiểm tra yêu cầu biểu đồ/export.
+- `skill_core`: chọn contract `record_lookup` hoặc `aggregate_report` theo request plan; hỗ trợ few-shot tương thích với schema và được kiểm soát bằng feature flag.
+- Request budget dùng chung cho model call, SQL attempt và deadline; truyền abort signal xuống SQL connector.
 - Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
 - Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
 - Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
@@ -51,7 +53,10 @@ Rà soát backend ngày **08/09/2026**: xem [Đánh giá tổng quan, lỗi tồ
 | Text-to-SQL | Khả dụng có giới hạn | Cần dùng SQL account read-only ở môi trường thật |
 | AI Provider adapters | Khả dụng | Có fallback tuần tự theo priority giữa các provider đã cấu hình |
 | Intelligent Core/tools | Khả dụng | Single-agent tool-calling loop |
-| Qdrant schema search | Khả dụng khi có Qdrant | Schema vẫn dùng vector deterministic 384 chiều |
+| Qdrant schema search | Khả dụng khi có Qdrant/BGE-M3 | Collection schema v2 dùng embedding thật 1024 chiều; fallback deterministic mặc định tắt |
+| Dictionary identity | Đã triển khai | Phân biệt nguồn kết nối, database, schema, table và column; backup migration nằm trong `data/backup/` |
+| Local skill/few-shot | Đã triển khai, có feature flag | Hai skill nền đã nối vào Local Harness; cần semantic eval trước khi chọn cấu hình mặc định cho môi trường khác |
+| Semantic SQL eval | Runner offline khả dụng | Logic chấm điểm ở `scripts/eval/`; corpus hiện có 12 case, live baseline phụ thuộc data source eval phù hợp |
 | Library | Khả dụng ở mức MVP | Upload/parse/chunk/index thật; chống upload trùng nội dung bằng SHA-256 |
 | Watch Folder | Khả dụng ở mức MVP | Theo dõi filesystem, debounce, retry và cập nhật idempotent theo file nguồn |
 | MCP Sources | Prototype | CRUD cấu hình; chưa có MCP handshake/discovery/execution thật |
@@ -103,8 +108,8 @@ PORT=3000
 
 # Qdrant
 QDRANT_URL=http://127.0.0.1:6333
-QDRANT_COLLECTION=database_schema
-QDRANT_VECTOR_SIZE=384
+QDRANT_COLLECTION=database_schema_v2
+QDRANT_VECTOR_SIZE=1024
 QDRANT_DOCUMENT_COLLECTION=knowledge_documents_bge_m3_v1
 QDRANT_DOCUMENT_VECTOR_SIZE=1024
 
@@ -131,6 +136,11 @@ KNOWLEDGE_REINDEX_ON_START=false
 # Intelligent Core
 AI_MAX_TOOL_ITERATIONS=10
 AI_DEFAULT_TIMEOUT_MS=30000
+LOCAL_MODEL_HARNESS_ENABLED=true
+LOCAL_MODEL_SKILL_CORE_ENABLED=false
+LOCAL_MODEL_FEW_SHOT_ENABLED=false
+LOCAL_MODEL_MAX_MODEL_CALLS=9
+LOCAL_MODEL_MAX_SQL_CALLS=3
 
 # Local JSON log retention
 MAX_CHAT_HISTORY=5000
@@ -198,6 +208,14 @@ Sau khi đăng nhập:
 
 Với live SQL Server, nên tạo tài khoản database riêng chỉ có quyền `SELECT` trên đúng schema cần thiết. Guard trong ứng dụng không thay thế quyền read-only ở cấp database.
 
+Khi nâng dictionary cũ sang identity v1, chạy:
+
+```powershell
+npm run migrate:dictionary-identity
+```
+
+Script tạo bản sao trước migration trong `data/backup/`. Sau migration, đồng bộ lại schema sang collection `database_schema_v2`. Có thể bật skill và few-shot bằng `.env`; few-shot chỉ hoạt động khi skill cũng bật.
+
 ## Kiến trúc hiện tại
 
 ```text
@@ -243,12 +261,16 @@ Backend hiện dùng `node:http`, chưa dùng Fastify. Metadata đang lưu bằn
 |       |-- routes/router.js          # REST và static-file router
 |       |-- intelligent_core/         # Agent loop, tools, adapters, guardrails
 |       |-- agent_core/               # Local Harness, tools và workflow engine
+|       |-- skill_core/               # Skill registry, selector và few-shot theo schema
 |       |-- memory_core/              # Memory router, references và quality gate
 |       |-- training_core/            # Case collection, evaluation và đề xuất
 |       |-- knowledge_core/           # Library, Watch Folder và hybrid retrieval
 |       |-- services/                 # SQL, Qdrant, provider, auth, logs...
 |       `-- utils/storage_helper.js   # JSON persistence
 |-- data/                             # Local runtime data; có thể chứa secret
+|   `-- backup/                       # Backup migration cục bộ, không dùng ở runtime
+|-- scripts/
+|   `-- eval/                         # Semantic evaluator và logic benchmark
 |-- docs/                             # Master plan và implementation plans
 |-- .agents/                          # Quy tắc dành cho coding agents
 |-- package.json
@@ -267,6 +289,7 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 | `GET` | `/api/sql/sources` | Danh sách SQL sources |
 | `POST` | `/api/sql/ingest-ddl` | Nạp schema từ DDL |
 | `POST` | `/api/sql/add-live` | Thêm live SQL Server source |
+| `POST` | `/api/sql/test-source` | Kiểm tra đúng một live SQL source bằng truy vấn read-only |
 | `GET` | `/api/dictionary` | Data Dictionary |
 | `GET` | `/api/glossary` | Business Glossary |
 | `POST` | `/api/qdrant/sync` | Đồng bộ schema sang Qdrant |
@@ -290,13 +313,24 @@ Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embe
 
 ## Kiểm tra mã nguồn
 
-Project có tests cho Local Harness, Memory Core, Training Core, workflow engine, adapters, settings, SQL/schema context, export và retrieval. Lần rà soát ngày 08/09/2026 chạy **95 tests đạt, 0 thất bại**. Kết quả này chưa chứng minh hoạt động end-to-end với SQL Server/Qdrant/LLM thật hoặc khả năng chịu tải:
+Project có tests cho Local Harness, Memory Core, Training Core, `skill_core`, semantic evaluator, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context, export và retrieval. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
 
 ```powershell
 npm test
 ```
 
-Các script bổ sung: `npm run eval:local`, `npm run training:collect`, `npm run training:evaluate`. Kiểm tra đầu vào và môi trường trong `scripts/` trước khi chạy; các lệnh này có thể gọi dịch vụ hoặc ghi kết quả đánh giá.
+Các script bổ sung:
+
+```powershell
+npm run eval:local                    # smoke eval protocol/format
+npm run eval:local:semantic           # validate corpus semantic offline
+npm run eval:local:semantic:live      # chạy model + SQL source eval riêng
+npm run eval:retrieval                # Recall@K/MRR retrieval
+npm run migrate:dictionary-identity   # migration identity + backup
+npm run sanitize:chat-data            # loại secret khỏi lịch sử chat đã lưu
+npm run training:collect
+npm run training:evaluate
+```
 
 Có thể kiểm tra cú pháp toàn bộ JavaScript bằng PowerShell:
 
@@ -322,12 +356,13 @@ Các kế hoạch Phase 1-2 đã xác định unit test, integration test, secur
 Phiên bản hiện tại là prototype và **không nên expose trực tiếp ra Internet**.
 
 - API key của AI Provider hiện được lưu plaintext trong `data/ai_providers.json`.
-- `getProviders()` hiện vẫn trả `apiKey` gốc cùng `apiKeyMasked`; cần loại secret bằng DTO trước khi mở rộng quyền truy cập (BE-01).
-- Password hiện hash SHA-256 không salt; chưa dùng Argon2id/bcrypt.
+- DTO provider không trả API key gốc; credential thực thi chỉ được đọc trong backend.
+- Password tài khoản mới dùng scrypt; hash SHA-256 cũ được nâng cấp sau lần đăng nhập hợp lệ.
 - Có tài khoản admin mặc định.
 - Chưa có RBAC theo Library/folder/document.
 - Chưa có CSRF protection hoàn chỉnh và cookie production hardening.
 - SQL Connector phải sử dụng database account read-only riêng.
+- Kết quả SQL loại các trường password/secret/token và các cột audit `CreateUser`, `CreateDate`, `UpdateUser`, `UpdateDate` trước khi gửi model hoặc UI.
 - Các file `data/*.json`, `.env`, archive và log có thể chứa secret hoặc dữ liệu nghiệp vụ.
 - `server.listen(PORT)` hiện không chỉ định host; URL localhost trong log không có nghĩa server chỉ lắng nghe localhost.
 - JSON persistence đang ghi đồng bộ và chỉ log lỗi ghi; session cũng được persist sau mỗi request hợp lệ. Cần xử lý độ bền dữ liệu và đo hiệu năng trước khi triển khai nhiều người dùng.
@@ -342,7 +377,7 @@ Trước khi chia sẻ repo hoặc triển khai:
 
 ## Roadmap
 
-Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Xem backlog BE-01–BE-11 và tiêu chí nghiệm thu trong [kế hoạch backend](docs/Backend_Review_Development_Plan.md). Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành.
+Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Xem backlog BE-01–BE-11 và tiêu chí nghiệm thu trong [kế hoạch backend](docs/Backend_Review_Development_Plan-080926.md). Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành.
 
 ### Phase 1 - Nền tảng MVP
 
@@ -371,7 +406,7 @@ Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ
 
 ## Tài liệu
 
-- [Đánh giá backend và kế hoạch phát triển — 08/09/2026](docs/Backend_Review_Development_Plan.md)
+- [Đánh giá backend và kế hoạch phát triển — 08/09/2026](docs/Backend_Review_Development_Plan-080926.md)
 
 - [KnowledgeHub Master Plan v3](docs/KnowledgeHub_Master_Plan_v3.docx)
 - [Kế hoạch triển khai Phase 1-2 - bản nháp](docs/KnowledgeHub_Phase1_Phase2_Implementation_Plan_Draft.md)

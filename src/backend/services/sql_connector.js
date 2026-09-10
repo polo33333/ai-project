@@ -83,6 +83,17 @@ class SqlConnector {
     return target;
   }
 
+  async testDbSource(id, signal = null) {
+    const source = this.dbSources.find(item => item.id === id);
+    if (!source) throw Object.assign(new Error('Nguồn CSDL không tồn tại.'), { statusCode: 404 });
+    if (source.mode !== 'live' && source.type !== 'Direct Live Connection') {
+      throw Object.assign(new Error('Nguồn này không phải kết nối SQL trực tiếp.'), { statusCode: 400 });
+    }
+    const startedAt = Date.now();
+    await this.executeSqlQuery('SELECT 1 AS ConnectionHealth', source.id, signal);
+    return { sourceId: source.id, dbName: source.dbName, latencyMs: Date.now() - startedAt };
+  }
+
   /**
    * Parse DDL SQL Script string (CREATE TABLE statements)
    */
@@ -190,6 +201,7 @@ class SqlConnector {
       if (!isNaN(parsedPort)) port = parsedPort;
     }
 
+    const resolvedSourceId = currentSource?.id || `db-src-${Date.now()}`;
     let liveTables = [];
 
     if (Connection) {
@@ -231,7 +243,7 @@ class SqlConnector {
     let totalCols = liveTables.reduce((acc, t) => acc + t.columns.length, 0);
 
     const newSrc = {
-      id: currentSource?.id || `db-src-${Date.now()}`,
+      id: resolvedSourceId,
       dbName: dbName,
       type: "Direct Live Connection",
       host: `${rawHost}${instanceName ? '\\' + instanceName : ''}:${port}`,
@@ -249,6 +261,7 @@ class SqlConnector {
     this.dbSources = this.dbSources.filter(s => s.id !== newSrc.id && s.dbName !== dbName);
     this.dbSources.unshift(newSrc);
     this.ensureSingleDefault(newSrc.isDefault ? newSrc.id : null);
+    liveTables = liveTables.map(table => ({ ...table, dbSourceId: resolvedSourceId }));
     this.schemas.push(...liveTables);
     this.persist();
 
@@ -304,6 +317,7 @@ class SqlConnector {
 
         const sqlQuery = `
           SELECT 
+            t.TABLE_SCHEMA,
             t.TABLE_NAME, 
             c.COLUMN_NAME, 
             c.DATA_TYPE, 
@@ -335,11 +349,12 @@ class SqlConnector {
             return reject(reqErr);
           }
 
-          const result = Object.keys(tablesMap).map(tableName => ({
-            tableName: tableName,
+          const result = Object.values(tablesMap).map(entry => ({
+            tableName: entry.tableName,
+            schemaName: entry.schemaName,
             dbName: opts.dbName,
-            columnCount: tablesMap[tableName].length,
-            columns: tablesMap[tableName]
+            columnCount: entry.columns.length,
+            columns: entry.columns
           }));
 
           resolve(result);
@@ -352,11 +367,13 @@ class SqlConnector {
           });
 
           const tableName = row.TABLE_NAME;
-          if (!tablesMap[tableName]) {
-            tablesMap[tableName] = [];
+          const schemaName = row.TABLE_SCHEMA || 'dbo';
+          const tableKey = `${schemaName}.${tableName}`;
+          if (!tablesMap[tableKey]) {
+            tablesMap[tableKey] = { tableName, schemaName, columns: [] };
           }
 
-          tablesMap[tableName].push({
+          tablesMap[tableKey].columns.push({
             columnName: row.COLUMN_NAME,
             dataType: row.DATA_TYPE ? row.DATA_TYPE.toUpperCase() : 'NVARCHAR',
             isPrimaryKey: row.IS_PRIMARY_KEY === 1,
@@ -378,7 +395,7 @@ class SqlConnector {
   /**
    * Execute real SELECT SQL query on connected live database
    */
-  executeSqlQuery(sqlString, dbSourceId = null) {
+  executeSqlQuery(sqlString, dbSourceId = null, signal = null) {
     return new Promise((resolve, reject) => {
       const liveSource = (dbSourceId && this.dbSources.find(s => s.id === dbSourceId && (s.mode === 'live' || s.type === 'Direct Live Connection')))
         || this.dbSources.find(s => s.isDefault && (s.mode === 'live' || s.type === 'Direct Live Connection'))
@@ -424,14 +441,30 @@ class SqlConnector {
       };
 
       const connection = new Connection(connectionConfig);
+      let request = null;
+      let settled = false;
+      const finish = (error, rows) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', abortRequest);
+        try { connection.close(); } catch (_) {}
+        if (error) reject(error); else resolve(rows);
+      };
+      const abortRequest = () => {
+        try { request?.cancel(); } catch (_) {}
+        const error = Object.assign(new Error('SQL request aborted.'), { name: 'AbortError', code: 'SQL_REQUEST_ABORTED' });
+        finish(error);
+      };
+      if (signal?.aborted) return abortRequest();
+      signal?.addEventListener('abort', abortRequest, { once: true });
       connection.on('connect', (err) => {
-        if (err) return reject(err);
+        if (err) return finish(err);
+        if (settled) return;
 
         const rows = [];
-        const request = new Request(sqlString, (reqErr) => {
-          connection.close();
-          if (reqErr) return reject(reqErr);
-          resolve(rows);
+        request = new Request(sqlString, (reqErr) => {
+          if (reqErr) return finish(reqErr);
+          finish(null, rows);
         });
 
         request.on('row', (columns) => {
@@ -446,7 +479,7 @@ class SqlConnector {
       });
 
       connection.on('error', (err) => {
-        reject(err);
+        finish(err);
       });
 
       connection.connect();

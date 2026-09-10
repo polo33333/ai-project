@@ -26,6 +26,14 @@
       } catch (_) {}
       return href ? `<a class="kh-embed-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>` : `${label} (${rawUrl})`;
     })
+    .replace(/(^|[\s:])(https?:\/\/[^\s<>()`]+)(?=$|[\s,.!?<])/gi, (_, prefix, rawUrl) => {
+      const trailing = rawUrl.match(/[.,!?;:]+$/)?.[0] || '';
+      const candidate = rawUrl.slice(0, rawUrl.length - trailing.length).replace(/&amp;/g, '&');
+      try {
+        const href = new URL(candidate).href;
+        return `${prefix}<a class="kh-embed-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(candidate)}</a>${trailing}`;
+      } catch (_) { return `${prefix}${rawUrl}`; }
+    })
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>');

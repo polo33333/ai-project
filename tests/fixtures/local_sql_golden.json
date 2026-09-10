@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "name": "knowledgehub-local-sql-golden-v1",
+  "schemaRevision": "local-sql-eval-v1",
+  "cases": [
+    {
+      "id": "lookup-customer-name",
+      "category": "lookup",
+      "question": "Tìm khách hàng có mã C002",
+      "expectedTables": ["KH_EvalCustomer"],
+      "expected": { "kind": "rows", "rows": [{ "CustomerCode": "C002", "CustomerName": "Công ty Bình Minh" }] }
+    },
+    {
+      "id": "lookup-active-north",
+      "category": "filter",
+      "question": "Liệt kê khách hàng đang hoạt động ở miền Bắc",
+      "expectedTables": ["KH_EvalCustomer"],
+      "expected": { "kind": "rows", "rows": [{ "CustomerCode": "C001", "CustomerName": "Công ty An Phát" }, { "CustomerCode": "C004", "CustomerName": "Công ty Đông Á" }] }
+    },
+    {
+      "id": "count-active-customers",
+      "category": "aggregate",
+      "question": "Có bao nhiêu khách hàng đang hoạt động?",
+      "expectedTables": ["KH_EvalCustomer"],
+      "expected": { "kind": "rows", "rows": [{ "TotalCustomers": 3 }] }
+    },
+    {
+      "id": "contracts-by-status",
+      "category": "group_by",
+      "question": "Thống kê số hợp đồng theo trạng thái",
+      "expectedTables": ["KH_EvalContract"],
+      "expected": { "kind": "rows", "rows": [{ "Status": "active", "ContractCount": 3 }, { "Status": "expired", "ContractCount": 1 }] }
+    },
+    {
+      "id": "active-contract-value",
+      "category": "aggregate",
+      "question": "Tổng giá trị các hợp đồng đang hiệu lực là bao nhiêu?",
+      "expectedTables": ["KH_EvalContract"],
+      "expected": { "kind": "rows", "rows": [{ "TotalValue": 4500000 }], "numericTolerance": 0.01 }
+    },
+    {
+      "id": "contracts-with-customer",
+      "category": "join",
+      "question": "Liệt kê số hợp đồng và tên khách hàng tương ứng",
+      "expectedTables": ["KH_EvalContract", "KH_EvalCustomer"],
+      "expected": { "kind": "rows", "rows": [{ "ContractNo": "HD-001", "CustomerName": "Công ty An Phát" }, { "ContractNo": "HD-002", "CustomerName": "Công ty Bình Minh" }, { "ContractNo": "HD-003", "CustomerName": "Công ty Đông Á" }, { "ContractNo": "HD-004", "CustomerName": "Công ty An Phát" }] }
+    },
+    {
+      "id": "electricity-2026-total",
+      "category": "temporal",
+      "question": "Tổng sản lượng điện năm 2026",
+      "expectedTables": ["KH_EvalElectricity"],
+      "expected": { "kind": "rows", "rows": [{ "TotalQty": 4200 }], "numericTolerance": 0.01 }
+    },
+    {
+      "id": "electricity-monthly",
+      "category": "temporal_group",
+      "question": "Sản lượng điện từng tháng trong quý 1 năm 2026",
+      "expectedTables": ["KH_EvalElectricity"],
+      "expected": { "kind": "rows", "ordered": true, "rows": [{ "Month": 1, "TotalQty": 2200 }, { "Month": 2, "TotalQty": 1300 }, { "Month": 3, "TotalQty": 700 }] }
+    },
+    {
+      "id": "top-customer-output",
+      "category": "join_aggregate",
+      "question": "Khách hàng nào có tổng sản lượng điện cao nhất năm 2026?",
+      "expectedTables": ["KH_EvalElectricity", "KH_EvalCustomer"],
+      "expected": { "kind": "rows", "rows": [{ "CustomerName": "Công ty An Phát", "TotalQty": 2500 }] }
+    },
+    {
+      "id": "no-contract-customer",
+      "category": "anti_join",
+      "question": "Khách hàng nào chưa có hợp đồng?",
+      "expectedTables": ["KH_EvalCustomer", "KH_EvalContract"],
+      "expected": { "kind": "rows", "rows": [{ "CustomerCode": "C003", "CustomerName": "Công ty Cửu Long" }] }
+    },
+    {
+      "id": "empty-future-contract",
+      "category": "empty",
+      "question": "Liệt kê hợp đồng bắt đầu trong năm 2035",
+      "expectedTables": ["KH_EvalContract"],
+      "expected": { "kind": "empty" }
+    },
+    {
+      "id": "clarify-ambiguous-total",
+      "category": "clarification",
+      "question": "Cho tôi tổng số",
+      "live": false,
+      "expected": { "kind": "clarification", "replyPattern": "(muốn|cần|đối tượng|dữ liệu)" }
+    }
+  ]
+}

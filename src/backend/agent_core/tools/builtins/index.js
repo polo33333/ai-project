@@ -20,6 +20,7 @@ const retrievalService = require('../../../knowledge_core/services/retrieval_ser
 const securityGuard = require('../../../intelligent_core/security_guard');
 const fs = require('fs');
 const path = require('path');
+const { getExportsDirectory } = require('../../../utils/export_paths');
 
 // ─── 1. Get Current DateTime ────────────────────────────────────────────────
 class GetDateTimeTool extends BaseTool {
@@ -120,7 +121,7 @@ class ExportDataTool extends BaseTool {
 
     const fmt = (format || 'csv').toLowerCase();
     const cleanFilename = (filename || `Export_Data_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const exportDir = path.join(__dirname, '../../../../../data/exports');
+    const exportDir = getExportsDirectory();
 
     if (!fs.existsSync(exportDir)) {
       fs.mkdirSync(exportDir, { recursive: true });
@@ -210,7 +211,8 @@ class ExecuteSqlTool extends BaseTool {
       throw new Error(check.error || 'Câu lệnh SQL không an toàn.');
     }
 
-    const rows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null);
+    const rawRows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
+    const rows = securityGuard.sanitizeTabularRows(rawRows);
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
     return {
       rows,

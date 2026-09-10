@@ -17,7 +17,11 @@ const envValuesAtStartup = fs.existsSync(envPathAtStartup) ? parse(fs.readFileSy
 const safeServerKeys = ['HOST', 'SHUTDOWN_TIMEOUT_MS', 'CORS_ALLOWED_ORIGINS', 'SESSION_TOUCH_INTERVAL_MS', 'KNOWLEDGEHUB_BACKUP_DIR'];
 const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])];
 const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? '']));
-Object.assign(defaults, { AI_MAX_TOOL_ITERATIONS: '10', LOCAL_AI_MODEL: 'qwen3.5:9b' });
+Object.assign(defaults, {
+  AI_MAX_TOOL_ITERATIONS: '10', LOCAL_AI_MODEL: 'qwen3.5:9b',
+  LOCAL_MODEL_SKILL_CORE_ENABLED: envValuesAtStartup.LOCAL_MODEL_SKILL_CORE_ENABLED ?? 'false',
+  LOCAL_MODEL_FEW_SHOT_ENABLED: envValuesAtStartup.LOCAL_MODEL_FEW_SHOT_ENABLED ?? 'false'
+});
 const choices = {
   EMBEDDING_PROVIDER: ['ollama', 'openai'],
   EMBEDDING_FALLBACK_MODE: ['error', 'deterministic']

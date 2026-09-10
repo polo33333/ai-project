@@ -1,0 +1,5 @@
+{
+  "kind": "knowledgehub-local-sql-eval",
+  "schemaRevision": "local-sql-eval-v1",
+  "database": "KnowledgeHubLocalEval"
+}

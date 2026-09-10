@@ -160,9 +160,24 @@ function cancelEditDbSource() {
   if (cancel) cancel.style.display = 'none';
 }
 
-function testDbConnection(id) {
+async function testDbConnection(id) {
   const source = (window.dbSourcesData || []).find(item => item.id === id);
-  showToast(`Chưa có API kiểm tra kết nối cho ${source?.dbName || 'nguồn dữ liệu này'}.`, 'warn');
+  if (!source) {
+    showToast('Không tìm thấy nguồn dữ liệu cần kiểm tra.', 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/api/sql/test-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    showToast(`Kết nối ${source.dbName} thành công (${Number(data.latencyMs || 0)} ms).`, 'success');
+  } catch (err) {
+    showToast(`Không thể kết nối ${source.dbName}: ${err.message}`, 'error');
+  }
 }
 
 async function deleteDbSource(id) {

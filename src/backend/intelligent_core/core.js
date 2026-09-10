@@ -19,6 +19,8 @@ const { emitProgress } = require('../agent_core/harness/progress_events');
 const { trainingService } = require('../training_core');
 const webSearchService = require('../services/web_search_service');
 const { memoryService, policy: memoryPolicy } = require('../memory_core');
+const { RequestExecutionBudget } = require('../agent_core/harness/request_execution_budget');
+const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
 const REQUEST_TIMEOUT_MS  = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
@@ -39,20 +41,26 @@ function getProviderCandidates(selectedProvider) {
   return [selectedProvider, ...fallbacks].filter(Boolean);
 }
 
-async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, externalSignal = null) {
+async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, externalSignal = null, executionBudget = null) {
   const ordered = [currentProvider, ...candidates.filter(candidate => candidate.id !== currentProvider?.id)];
   let lastError = null;
   for (const candidate of ordered) {
+    executionBudget?.consumeModelCall();
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort();
     if (externalSignal?.aborted) controller.abort();
     else externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-    const timeoutMs = providerTimeoutMs(candidate);
+    const configuredTimeoutMs = providerTimeoutMs(candidate);
+    const timeoutMs = executionBudget
+      ? Math.min(configuredTimeoutMs, executionBudget.remainingMs())
+      : configuredTimeoutMs;
     const timer = Number.isFinite(timeoutMs) && timeoutMs > 0
       ? setTimeout(() => controller.abort(), timeoutMs)
       : null;
     try {
       const response = await dispatchToProvider(candidate, messages, tools, controller.signal);
+      const internalRetries = Math.max(0, (Number(response?.usage?.calls) || 1) - 1);
+      for (let index = 0; index < internalRetries; index += 1) executionBudget?.consumeModelCall();
       if (candidate.id !== currentProvider?.id) {
         fallbackLog.push({
           fromProviderId: currentProvider?.id || null,
@@ -113,6 +121,10 @@ class IntelligentCore {
       if (found) provider = found;
     }
     const providerCandidates = getProviderCandidates(provider);
+    const executionBudget = isLocalProvider(provider) ? new RequestExecutionBudget({
+      maxModelCalls: Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 9),
+      maxSqlAttempts: Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3)
+    }) : null;
     emitProgress(options.onProgress, { type: 'request_started', label: 'Đang phân tích yêu cầu', status: 'running', icon: 'brain', providerName: provider?.name });
     const providerFallbacks = [];
     const tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false };
@@ -123,7 +135,7 @@ class IntelligentCore {
       tokenUsage.inputTokens += input;
       tokenUsage.outputTokens += output;
       tokenUsage.totalTokens += Number(usage.totalTokens) || (input + output);
-      tokenUsage.calls += 1;
+      tokenUsage.calls += Math.max(1, Number(usage.calls) || 0);
       tokenUsage.available = true;
     };
 
@@ -140,7 +152,7 @@ class IntelligentCore {
       ? sqlConnector.getDbSources().find(source => source.id === options.dbSourceId)
       : sqlConnector.getDefaultDbSource();
     emitProgress(options.onProgress, { type: 'context_started', label: 'Đang chọn ngữ cảnh và cấu trúc dữ liệu', status: 'running', icon: 'book-open' });
-    let contextSelection = await schemaContextService.buildSchemaContext(userMessage, { dbName: selectedDb?.dbName || null });
+    let contextSelection = await schemaContextService.buildSchemaContext(userMessage, { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
     if (webSearch) {
       contextSelection.mode = 'general';
       contextSelection.selectedTables = [];
@@ -161,10 +173,10 @@ class IntelligentCore {
           { role: 'system', content: 'Select the database tables relevant to the user request. Return only JSON: {"tables":["TableName"]}. Choose at most 6 exact names from the catalog. Do not invent names.' },
           { role: 'user', content: `Request: ${userMessage}\n\nTable catalog:\n${contextSelection.tableCatalog}` }
         ];
-        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, selectorMessages, [], providerFallbacks, options.signal);
+        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, selectorMessages, [], providerFallbacks, options.signal, executionBudget);
         provider = dispatched.provider;
         collectUsage(dispatched.response.usage);
-        const refined = schemaContextService.refineSchemaContext(userMessage, parseSelectedTableNames(dispatched.response.content), { dbName: selectedDb?.dbName || null });
+        const refined = schemaContextService.refineSchemaContext(userMessage, parseSelectedTableNames(dispatched.response.content), { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
         if (refined) contextSelection = refined;
       } catch (error) {
         if (options.signal?.aborted || error?.name === 'AbortError') throw error;
@@ -178,15 +190,23 @@ class IntelligentCore {
     contextSelection.dbName = selectedDb?.dbName || null;
     let documentContext = '';
     let webContext = '';
+    let webTemporalGrounding = null;
     if (webSearch) {
       emitProgress(options.onProgress, { type: 'web_search_started', label: 'Đang tìm kiếm trên web', status: 'running', icon: 'globe' });
       try {
         const contextualizeWebSearch = memoryPolicy.isShortContextualFollowup(userMessage);
-        const webSearchQuery = webSearchService.buildContextualQuery(userMessage, history, contextualizeWebSearch);
-        const webResults = await webSearchService.search(webSearchQuery, { signal: options.signal });
+        webTemporalGrounding = webSearchService.getTemporalGrounding(userMessage);
+        const contextualQuery = webSearchService.buildContextualQuery(userMessage, history, contextualizeWebSearch);
+        const webSearchQuery = webSearchService.groundTemporalQuery(contextualQuery, webTemporalGrounding);
+        const rawWebResults = await webSearchService.search(webSearchQuery, { signal: options.signal });
+        const webResults = webSearchService.rankResultsForTemporalGrounding(rawWebResults, webTemporalGrounding);
         if (!webResults.length) throw new Error('Không tìm thấy kết quả web phù hợp.');
         webContext = webResults.map((item, index) => `[Web ${index + 1}] ${item.title}\nURL: ${item.url}\n${item.snippet}`).join('\n\n');
-        contextSelection.webSearch = { enabled: true, contextualized: webSearchQuery !== userMessage, resultCount: webResults.length, sources: webResults.map(item => ({ title: item.title, url: item.url })) };
+        contextSelection.webSearch = {
+          enabled: true, contextualized: contextualQuery !== userMessage,
+          query: webSearchQuery, temporalGrounding: webTemporalGrounding?.required ? webTemporalGrounding : null,
+          resultCount: webResults.length, sources: webResults.map(item => ({ title: item.title, url: item.url }))
+        };
         emitProgress(options.onProgress, { type: 'web_search_completed', label: `Đã tìm thấy ${webResults.length} kết quả web`, status: 'done', icon: 'globe' });
       } catch (error) {
         if (options.signal?.aborted) throw error;
@@ -259,12 +279,16 @@ ${strictSelectedKnowledge
       currentPlan: requestPlan,
       fallbackHistory: history
     });
-    const memoryHistory = strictSelectedKnowledge
-      ? history.filter(item => item?.role === 'user').slice(-3)
-      : memoryService.getContext(memoryDecision);
+    // A selected document is an explicit scope for the current question.
+    // Replaying only old user turns makes them look unanswered and causes the
+    // model to answer earlier questions again.
+    const memoryHistory = strictSelectedKnowledge ? [] : memoryService.getContext(memoryDecision);
     const memorySystemContext = memoryHistory.filter(item => item?.role === 'system').map(item => item.content).filter(Boolean).join('\n');
+    const temporalWebInstruction = webTemporalGrounding?.required
+      ? `\nMốc thời gian bắt buộc: hiện tại là ngày ${String(webTemporalGrounding.day).padStart(2, '0')}/${String(webTemporalGrounding.month).padStart(2, '0')}/${webTemporalGrounding.year}, múi giờ ${webTemporalGrounding.timezone}. Các từ “hôm nay”, “tháng này”, “năm nay” phải bám mốc này. Không gọi năm khác là năm nay; bỏ qua nguồn xung đột năm khi đã có nguồn đúng ${webTemporalGrounding.year}.`
+      : '';
     const webPrompt = webContext
-      ? `\n\n# Chế độ tìm kiếm web — ƯU TIÊN CAO\nNgười dùng đã chủ động bật tìm kiếm web. Với yêu cầu này, thông tin từ các kết quả web dưới đây nằm trong phạm vi được phép và ghi đè giới hạn chỉ dùng dữ liệu doanh nghiệp. Không được từ chối chỉ vì thông tin không có trong CSDL nội bộ.\n\n${webContext}\n\nTrả lời trực tiếp từ các kết quả trên, đính kèm URL nguồn liên quan. Chỉ khẳng định dữ kiện xuất hiện trong kết quả và không tự tạo số liệu thời gian thực.`
+      ? `\n\n# Chế độ tìm kiếm web — ƯU TIÊN CAO\nNgười dùng đã chủ động bật tìm kiếm web. Với yêu cầu này, thông tin từ các kết quả web dưới đây nằm trong phạm vi được phép và ghi đè giới hạn chỉ dùng dữ liệu doanh nghiệp. Không được từ chối chỉ vì thông tin không có trong CSDL nội bộ.${temporalWebInstruction}\n\n${webContext}\n\nTrả lời trực tiếp từ các kết quả trên, đính kèm URL nguồn liên quan. Chỉ khẳng định dữ kiện xuất hiện trong kết quả và không tự tạo số liệu thời gian thực.`
       : (webSearch ? '\n\n# Tìm kiếm web\nKhông lấy được kết quả web cho yêu cầu này. Hãy nói rõ rằng dữ liệu web hiện không khả dụng; không được giả vờ đã tìm thấy nguồn hoặc tự tạo URL.' : '');
     const systemPrompt = `${aiPersonaService.buildSystemPrompt(
       schemaContext,
@@ -272,13 +296,13 @@ ${strictSelectedKnowledge
     )}${knowledgePrompt}${webPrompt}${memorySystemContext && !strictSelectedKnowledge ? `\n\n# Memory hội thoại\n${memorySystemContext}` : ''}`;
 
     // ── Build messages array (OpenAI-compat) ──────────────────────────────
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...(strictSelectedKnowledge
-        ? memoryHistory
-        : memoryHistory.filter(item => item?.role !== 'system')),
-      { role: 'user', content: userMessage }
-    ];
+    const messages = strictSelectedKnowledge
+      ? buildSelectedKnowledgeMessages(systemPrompt, userMessage)
+      : [
+          { role: 'system', content: systemPrompt },
+          ...memoryHistory.filter(item => item?.role !== 'system'),
+          { role: 'user', content: userMessage }
+        ];
 
     // ── Giai đoạn chuyển tiếp: Feature Flag AGENT_CORE_ENABLED (Mặc định: true) ──
     const isAgentCoreEnabled = process.env.AGENT_CORE_ENABLED !== 'false';
@@ -300,7 +324,9 @@ ${strictSelectedKnowledge
             memoryDecision,
             webSearch: Boolean(webSearch),
             webSearchResultCount: contextSelection.webSearch?.resultCount || 0,
+            webTemporalGrounding,
             signal: options.signal || null,
+            executionBudget,
             knowledgeGrounding: strictSelectedKnowledge ? {
               required: true,
               sourceTitles: contextSelection.documentSources || [],
@@ -358,7 +384,7 @@ ${strictSelectedKnowledge
 
       let assistantMsg;
       try {
-        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, tools, providerFallbacks, options.signal);
+        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, tools, providerFallbacks, options.signal, executionBudget);
         assistantMsg = dispatched.response;
         provider = dispatched.provider;
       } catch (llmErr) {
@@ -408,7 +434,7 @@ ${strictSelectedKnowledge
 
     if (finalText === null && toolCallsLog.length > 0) {
       try {
-        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, [], providerFallbacks, options.signal);
+        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, [], providerFallbacks, options.signal, executionBudget);
         provider = dispatched.provider;
         collectUsage(dispatched.response.usage);
         finalText = dispatched.response.content || '';
@@ -455,12 +481,12 @@ ${strictSelectedKnowledge
       executionMode: 'live_llm',
       toolCalls: toolCallsLog,
       sqlQuery:        sqlEntry   ? (sqlEntry.result?.sql || sqlEntry.args?.sql) : null,
-      executionResult: sqlEntry   ? sqlEntry.result?.rows         : null,
+      executionResult: sqlEntry   ? securityGuard.sanitizeTabularRows(sqlEntry.result?.rows) : null,
       sqlExecutions: sqlEntries.map((entry, index) => ({
         index: index + 1,
         sql: entry.result?.sql || entry.args?.sql || null,
-        rows: entry.result?.rows || [],
-        columns: entry.result?.columns || [],
+        rows: securityGuard.sanitizeTabularRows(entry.result?.rows),
+        columns: (entry.result?.columns || []).filter(column => !securityGuard.isSensitiveFieldName(column)),
         rowCount: entry.result?.rowCount ?? entry.result?.rows?.length ?? 0
       })),
       chartSpec:       chartEntry ? chartEntry.result?.chartSpec  : null,
@@ -471,6 +497,7 @@ ${strictSelectedKnowledge
       contextSelection: contextSelection ? {
         mode: contextSelection.mode,
         selectedTables: contextSelection.selectedTables,
+        selectedTableIds: contextSelection.selectedTableIds || [],
         retrieval: contextSelection.retrieval || null,
         documentSources: contextSelection.documentSources || [],
         knowledgeMode: contextSelection.knowledgeMode || 'auto',
