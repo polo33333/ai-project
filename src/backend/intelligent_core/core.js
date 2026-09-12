@@ -20,6 +20,7 @@ const { trainingService } = require('../training_core');
 const webSearchService = require('../services/web_search_service');
 const { memoryService, policy: memoryPolicy } = require('../memory_core');
 const { RequestExecutionBudget } = require('../agent_core/harness/request_execution_budget');
+const { fitOptionalMessages, measureMessages } = require('../agent_core/harness/context_budget');
 const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
@@ -268,7 +269,8 @@ ${strictSelectedKnowledge
     // ── Prepare tools and system prompt ───────────────────────────────────
     // General conversation does not need database tools, but utility tools must
     // remain available (for example, current date/time questions).
-    const generalToolNames = ['get_current_datetime', 'calculate_expression', 'calculate_stats'];
+    const generalToolNames = ['get_current_datetime', 'calculate_expression', 'calculate_stats',
+      ...toolRegistry.listTools().map(tool => tool.name).filter(name => name.startsWith('mcp_'))];
     const enabledToolNames = contextSelection.mode === 'knowledge' ? [] : (contextSelection.mode === 'general' ? generalToolNames : null);
     const effectiveUseTools = contextSelection.mode !== 'knowledge' && useTools && (contextSelection.useTools || enabledToolNames?.length > 0);
     const requestPlan = trainingService.plan({ question: userMessage, selectedTables: contextSelection.selectedTables || [] });
@@ -282,7 +284,15 @@ ${strictSelectedKnowledge
     // A selected document is an explicit scope for the current question.
     // Replaying only old user turns makes them look unanswered and causes the
     // model to answer earlier questions again.
-    const memoryHistory = strictSelectedKnowledge ? [] : memoryService.getContext(memoryDecision);
+    let memoryHistory = strictSelectedKnowledge ? [] : memoryService.getContext(memoryDecision);
+    if (process.env.MEMORY_CONTEXT_BUDGET_ENABLED === 'true' && memoryHistory.length) {
+      const budgeted = fitOptionalMessages(memoryHistory, {
+        contextWindow: provider?.numCtx || process.env.LOCAL_MODEL_NUM_CTX,
+        requiredTokens: measureMessages([{ role: 'system', content: schemaContext || '' }, { role: 'user', content: userMessage }])
+      });
+      memoryHistory = budgeted.messages;
+      memoryDecision.contextBudget = budgeted.estimate;
+    }
     const memorySystemContext = memoryHistory.filter(item => item?.role === 'system').map(item => item.content).filter(Boolean).join('\n');
     const temporalWebInstruction = webTemporalGrounding?.required
       ? `\nMốc thời gian bắt buộc: hiện tại là ngày ${String(webTemporalGrounding.day).padStart(2, '0')}/${String(webTemporalGrounding.month).padStart(2, '0')}/${webTemporalGrounding.year}, múi giờ ${webTemporalGrounding.timezone}. Các từ “hôm nay”, “tháng này”, “năm nay” phải bám mốc này. Không gọi năm khác là năm nay; bỏ qua nguồn xung đột năm khi đã có nguồn đúng ${webTemporalGrounding.year}.`

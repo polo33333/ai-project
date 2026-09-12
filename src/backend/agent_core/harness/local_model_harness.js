@@ -231,8 +231,8 @@ function buildToolFallbackReply(toolCalls = []) {
   }
   if (last.toolName === 'get_current_datetime' && last.result?.display) return last.result.display;
   if (last.toolName === 'execute_sql_query') {
-    const count = last.result?.rowCount ?? last.result?.rows?.length ?? 0;
-    return `Đã truy vấn dữ liệu thành công và tìm thấy **${count}** dòng kết quả.`;
+    if (Array.isArray(last.result?.rows) && last.result.rows.length) return buildSqlRowsFallbackReply(last);
+    return 'Đã chạy truy vấn nhưng chưa thể xác minh nội dung dữ liệu trả về. Vui lòng thử lại.';
   }
   if (last.toolName === 'search_schema') {
     const count = last.result?.totalMatched ?? last.result?.tables?.length ?? 0;
@@ -416,7 +416,15 @@ class LocalModelHarness {
       harness: 'local', startTime: Date.now(), iterations: 0, steps: [], toolCalls: [], providerFallbacks: [],
       tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false },
       training: { plan: requestPlan, sqlEvaluations: [] },
-      skill: { enabled: skillEnabled, fewShotEnabled, matched: skillSelection.matched, skillId: skillSelection.skill?.id || null, reason: skillSelection.reason, exampleCount: examples.length },
+      skill: {
+        enabled: skillEnabled, fewShotEnabled, matched: skillSelection.matched,
+        status: skillEnabled ? (skillSelection.status || (skillSelection.matched ? 'matched' : 'no_match')) : 'disabled',
+        skillId: skillSelection.skill?.id || skillSelection.candidateSkillId || null,
+        skillVersion: skillSelection.skill?.version || null,
+        reason: skillSelection.reason, missingInputs: skillSelection.missingInputs || [],
+        exampleCount: examples.length,
+        injected: Boolean(skillEnabled && skillSelection.matched && toolDefs.length)
+      },
       memoryDecision: context.memoryDecision ? { ...context.memoryDecision, fallbackHistory: undefined, accountId: undefined } : null
     };
     trace.executionBudget = executionBudget.snapshot();

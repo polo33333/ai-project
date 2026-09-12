@@ -311,7 +311,6 @@ const featureSearchItems = [
   { key: 'chat-history', title: 'Lịch sử trò chuyện', group: 'Giám sát & Audit', icon: 'fa-clock-rotate-left', keywords: 'history gọi ai prompt json' },
   { key: 'chat-feedback', title: 'Đánh giá AI', group: 'Giám sát & Audit', icon: 'fa-thumbs-up', keywords: 'feedback chất lượng thích không thích kiểm duyệt ai' },
   { key: 'training-core', title: 'Training Core', group: 'Giám sát & Audit', icon: 'fa-graduation-cap', keywords: 'training report đề xuất cải tiến harness regression lỗi ai' },
-  { key: 'workflows', title: 'Quy trình tự động', group: 'Tích hợp & Phát triển', icon: 'fa-diagram-project', keywords: 'workflow automation quy trình luồng tự động hóa tác vụ' },
   { key: 'mcp-sources', title: 'Nguồn MCP Server', group: 'Tích hợp & Phát triển', icon: 'fa-cube', keywords: 'mcp tools server integration' },
   { key: 'system-tools', title: 'Công cụ hệ thống', group: 'Tích hợp & Phát triển', icon: 'fa-screwdriver-wrench', keywords: 'tool function calling schema công cụ hệ thống' },
   { key: 'api-docs', title: 'API tích hợp & Embed Chat', group: 'Tích hợp & Phát triển', icon: 'fa-code-branch', keywords: 'api key developer embed website widget tài liệu lập trình' },

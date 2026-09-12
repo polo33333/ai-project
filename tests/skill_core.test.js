@@ -19,10 +19,30 @@ test('skill selector routes lookup and aggregate plans and fails closed without 
 test('few-shot selector renders only examples compatible with the selected schema', () => {
   const selected = skillCore.selectSkill({ requestPlan: reportPlan });
   const examples = skillCore.selectExamples(selected.skill, reportPlan);
-  assert.equal(examples.length, 2);
+  assert.equal(examples.length, 1);
   assert.match(examples[0], /Electricity/);
   assert.match(examples[0], /TotalQty/);
   assert.doesNotMatch(examples.join('\n'), /Customer/);
+});
+
+test('skill configuration is validated, persisted and used by the selector', () => {
+  const updated = skillCore.saveSkill({
+    id: 'record_lookup', name: 'Tra cứu tùy chỉnh', enabled: false,
+    instructions: 'Chỉ trả dữ liệu đã được xác minh.', exampleIds: ['lookup_by_code']
+  });
+  assert.equal(updated.name, 'Tra cứu tùy chỉnh');
+  assert.equal(skillCore.getSkill('record_lookup').instructions, 'Chỉ trả dữ liệu đã được xác minh.');
+  const selection = skillCore.selectSkill({ requestPlan: { intent: 'record_lookup', table: 'Customer', outputs: { data: true } } });
+  assert.equal(selection.matched, false);
+  assert.equal(selection.reason, 'skill_disabled');
+  assert.throws(() => skillCore.saveSkill({ id: 'record_lookup', name: 'x', enabled: true, instructions: 'ok', exampleIds: ['unknown'] }), /không thuộc skill/i);
+});
+
+test('aggregate skill is ambiguous when required time-series inputs are missing', () => {
+  const selection = skillCore.selectSkill({ requestPlan: { intent: 'aggregate_timeseries', table: 'Electricity', schemaColumns: [], outputs: { data: true } } });
+  assert.equal(selection.matched, false);
+  assert.equal(selection.status, 'ambiguous');
+  assert.deepEqual(selection.missingInputs, ['metric', 'timeColumn']);
 });
 
 test('prompt includes skill and examples only when guidance is supplied', () => {

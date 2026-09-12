@@ -38,6 +38,7 @@ defaultToolManager.registerTools([
   new GetGlossaryTermTool(),
   new SearchKnowledgeTool()
 ]);
+require('../services/mcp_service').bindToolManager(defaultToolManager, BaseTool);
 
 // Khởi tạo một Harness mặc định
 const defaultHarness = new AgentHarness({

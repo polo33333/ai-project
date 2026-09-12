@@ -120,29 +120,13 @@ class LoggerService {
     this.chatHistory.unshift(auditItem);
     if (this.chatHistory.length > this.maxChatHistory) this.chatHistory.length = this.maxChatHistory;
 
-    if (status === 'ERROR') {
-      this.addLog('ERROR', 'AI Assistant', `Lỗi khi gọi model [${auditItem.modelName}]`, { errorReason });
-    } else if (status === 'PARTIAL') {
-      this.addLog('WARN', 'AI Assistant', `Yêu cầu chưa hoàn thành đầy đủ [${auditItem.modelName}] trong ${latencyMs}ms`);
-    } else {
-      this.addLog('SUCCESS', 'AI Assistant', `Hoàn thành yêu cầu [${auditItem.modelName}] trong ${latencyMs}ms`);
-    }
-
     this.persist();
     return auditItem;
   }
 
   getLogs() {
-    const chatModules = new Set(['AI Chat', 'AI Assistant', 'Embed Chat']);
-    return this.systemLogs.map(log => {
-      if (!chatModules.has(log.module)) return log;
-      const isError = ['ERROR', 'WARN'].includes(String(log.level || '').toUpperCase());
-      return {
-        ...log,
-        message: isError ? 'Không thể xử lý yêu cầu AI.' : 'Đã xử lý yêu cầu AI.',
-        details: null
-      };
-    });
+    const chatModules = new Set(['AI Chat', 'AI Chat Stream', 'AI Assistant', 'Embed Chat', 'Intelligent Core']);
+    return this.systemLogs.filter(log => !chatModules.has(log.module));
   }
 
   getChatHistory() {

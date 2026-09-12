@@ -8,6 +8,7 @@ const { routeMemory } = require('../src/backend/memory_core/memory_router');
 const { resolveReference } = require('../src/backend/memory_core/reference_store');
 const { getDomain, hasReferencePronoun, isShortContextualFollowup } = require('../src/backend/memory_core/memory_policy');
 const { buildContextualQuery } = require('../src/backend/services/web_search_service');
+const { fitOptionalMessages } = require('../src/backend/agent_core/harness/context_budget');
 
 function plan(table, overrides = {}) {
   return {
@@ -156,4 +157,79 @@ test('memory router fails closed to none', () => {
   const decision = routeMemory({ question: 'test', currentPlan: throwingPlan, session: { lastPlan: plan('M_Employee') } });
   assert.equal(decision.mode, 'none');
   assert.equal(decision.reason, 'memory_core_error');
+});
+
+test('multi-row SQL results do not invent a selected entity reference', () => {
+  const memory = service();
+  memory.persistSuccessfulExchange({
+    sessionId: 'many', question: 'danh sách nhân viên', reply: 'Có A và B', currentPlan: plan('M_Employee'),
+    completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] },
+    toolCalls: [{ toolName: 'execute_sql_query', success: true, result: { rows: [{ EmployeeName: 'A' }, { EmployeeName: 'B' }] } }]
+  });
+  assert.equal(memory.getSession('many').references.lastEntity, null);
+  assert.equal(memory.getSession('many').references.lastDataset.table, 'M_Employee');
+});
+
+test('future-dated references are invalid', () => {
+  const now = Date.now();
+  assert.equal(resolveReference('người đó', {
+    lastEntity: { filters: { EmployeeName: 'Future' }, updatedAt: new Date(now + 60000).toISOString() }
+  }, now).type, null);
+});
+
+test('pending turn is isolated from successful messages and cleared on success', () => {
+  const previous = process.env.MEMORY_PENDING_TURN_ENABLED;
+  process.env.MEMORY_PENDING_TURN_ENABLED = 'true';
+  try {
+    const memory = service();
+    const pending = memory.recordPendingTurn({
+      sessionId: 'pending', question: 'lọc phòng kỹ thuật', currentPlan: plan('M_Employee'),
+      completionStatus: 'PARTIAL', responseEvaluation: { failures: ['MISSING_SQL'] }
+    });
+    assert.equal(pending.recorded, true);
+    assert.equal(memory.getSession('pending').messages.length, 0);
+    assert.match(memory.getContext({ mode: 'recent', sessionId: 'pending', currentScope: 'employee' })[0].content, /chưa hoàn tất/);
+    memory.persistSuccessfulExchange({
+      sessionId: 'pending', question: 'thử lại', reply: 'xong', currentPlan: plan('M_Employee'),
+      completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] }
+    });
+    assert.equal(memory.getSession('pending').pendingTurn, null);
+  } finally {
+    if (previous === undefined) delete process.env.MEMORY_PENDING_TURN_ENABLED;
+    else process.env.MEMORY_PENDING_TURN_ENABLED = previous;
+  }
+});
+
+test('context budget keeps newest optional messages within the available estimate', () => {
+  const result = fitOptionalMessages([
+    { role: 'user', content: 'a'.repeat(100) },
+    { role: 'assistant', content: 'b'.repeat(100) },
+    { role: 'user', content: 'new' }
+  ], { contextWindow: 100, outputReserve: 20, requiredTokens: 20, margin: 10 });
+  assert.equal(result.messages.at(-1).content, 'new');
+  assert.ok(result.estimate.used <= result.estimate.available);
+  assert.ok(result.estimate.dropped > 0);
+});
+
+test('context budget never separates a user and assistant turn', () => {
+  const result = fitOptionalMessages([
+    { role: 'user', content: 'old question' },
+    { role: 'assistant', content: 'x'.repeat(200) },
+    { role: 'user', content: 'new question' },
+    { role: 'assistant', content: 'new answer' }
+  ], { contextWindow: 80, outputReserve: 20, requiredTokens: 20, margin: 10 });
+  assert.deepEqual(result.messages.map(item => item.content), ['new question', 'new answer']);
+});
+
+test('recent context excludes stored messages from another explicit scope', () => {
+  const memory = service({ sessions: { scoped: {
+    id: 'scoped', lastPlan: plan('T_ElectricityOutput'), activeScope: 'electricity', references: {}, messages: [
+      { role: 'user', content: 'nhân viên A', scope: 'employee' },
+      { role: 'assistant', content: 'A', scope: 'employee' },
+      { role: 'user', content: 'sản lượng điện', scope: 'electricity' },
+      { role: 'assistant', content: '10', scope: 'electricity' }
+    ]
+  } } });
+  const context = memory.getContext({ mode: 'recent', sessionId: 'scoped', currentScope: 'electricity', maxMessages: 4 });
+  assert.deepEqual(context.map(item => item.content), ['sản lượng điện', '10']);
 });

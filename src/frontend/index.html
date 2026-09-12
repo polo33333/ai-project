@@ -31,16 +31,16 @@
 
   <link rel="stylesheet" href="css/styles.css?v=20260912-empty-recent-chats">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
-  <link rel="stylesheet" href="css/audit-logs.css">
+  <link rel="stylesheet" href="css/audit-logs.css?v=20260912-review-panel">
   <link rel="stylesheet" href="css/provider-management.css">
   <link rel="stylesheet" href="css/knowledge-library.css?v=20260905-tab-actions-centered">
   <link rel="stylesheet" href="css/relationship-diagram.css">
-  <link rel="stylesheet" href="css/dictionary-graph.css?v=20260909-domain-graph">
+  <link rel="stylesheet" href="css/dictionary-graph.css?v=20260912-dark-overview-icons">
   <link rel="stylesheet" href="css/api-docs.css?v=20260904-left-align-api-keys">
   <link rel="stylesheet" href="css/system-tools.css?v=20260906-hero-glow">
   <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
   <link rel="stylesheet" href="css/workspace.css?v=20260908-synced-brand-icon">
-  <link rel="stylesheet" href="css/module-workspaces.css?v=20260909-summary-accessibility">
+  <link rel="stylesheet" href="css/module-workspaces.css?v=20260912-skill-equal-height">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
   <link rel="stylesheet" href="css/theme.css?v=20260912-composer-search-chips">
   <link rel="stylesheet" href="css/settings.css?v=20260912-qdrant-metrics-wrap">
@@ -175,7 +175,7 @@
         <div class="nav-section">
           <div class="nav-section-title">TÍCH HỢP & PHÁT TRIỂN</div>
           <ul class="nav-list">
-            <li class="nav-item" id="nav-workflows">
+            <li class="nav-item" id="nav-workflows" hidden aria-hidden="true" style="display:none;">
               <a href="#" onclick="switchMainTab('workflows'); return false;" title="Quy trình tự động">
                 <span class="nav-icon"><i class="fa-solid fa-diagram-project"></i></span> <span class="nav-label">Quy trình tự động</span>
               </a>
@@ -612,10 +612,10 @@
   <script src="js/modules/page_chat.js?v=20260912-empty-recent-chats"></script>
   <script src="js/modules/sql_connector.js"></script>
   <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
-  <script src="js/modules/chat_history.js"></script>
+  <script src="js/modules/chat_history.js?v=20260912-chat-source"></script>
   <script src="js/modules/chat_feedback.js"></script>
-  <script src="js/modules/training_core.js?v=20260909-summary-accessibility"></script>
-  <script src="js/modules/mcp_api.js"></script>
+  <script src="js/modules/training_core.js?v=20260912-skill-workspace"></script>
+  <script src="js/modules/mcp_api.js?v=20260912-embed-title"></script>
   <script src="js/modules/analytics.js?v=20260906-visible-chart-animation"></script>
   <script src="js/modules/library.js?v=20260905-tab-actions"></script>
   <script src="js/modules/watchfolder.js"></script>
@@ -627,5 +627,4 @@
   <script src="js/notifications.js?v=1.0.1"></script>
   <script src="js/app.js?v=20260912-hide-empty-thinking"></script>
 </body>
-
 </html>

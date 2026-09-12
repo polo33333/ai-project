@@ -24,9 +24,12 @@ const examples = {
     }
   }
 };
+const labels = { lookup_by_code: 'Tra cứu theo mã', monthly_aggregate: 'Tổng hợp theo tháng', list_rows: 'Liệt kê dữ liệu' };
+function getExampleCatalog() { return Object.values(examples).map(example => ({ id: example.id, skillId: example.skillId, version: example.version, name: labels[example.id] || example.id })); }
 
 function selectExamples(skill, plan, limit = 2) {
-  return (skill?.exampleIds || []).map(id => examples[id]?.render(plan)).filter(Boolean).slice(0, limit);
+  return (skill?.exampleIds || []).filter(id => id === 'monthly_aggregate' ? plan.intent === 'aggregate_timeseries' : id === 'list_rows' ? plan.intent === 'list' : plan.intent === 'record_lookup')
+    .map(id => examples[id]?.render(plan)).filter(Boolean).slice(0, Math.min(2, Math.max(0, Number(limit) || 0)));
 }
 
-module.exports = { selectExamples };
+module.exports = { getExampleCatalog, selectExamples };

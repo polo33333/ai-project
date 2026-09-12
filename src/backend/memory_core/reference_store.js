@@ -12,7 +12,8 @@ function timestamp(value) {
 
 function isValid(reference, now = Date.now(), ttlMinutes = policy.referenceTtlMinutes()) {
   if (!reference || !reference.updatedAt) return false;
-  return now - timestamp(reference.updatedAt) <= ttlMinutes * 60 * 1000;
+  const updatedAt = timestamp(reference.updatedAt);
+  return updatedAt > 0 && updatedAt <= now && now - updatedAt <= ttlMinutes * 60 * 1000;
 }
 
 function resolveReference(questionText, references = {}, now = Date.now()) {
@@ -52,7 +53,7 @@ function deriveReferences({ currentPlan = {}, toolCalls = [], now = new Date().t
       requiredColumns: currentPlan.requiredColumns || [],
       updatedAt: now
     });
-    const firstRow = sqlCall.result.rows[0];
+    const firstRow = sqlCall.result.rows.length === 1 ? sqlCall.result.rows[0] : null;
     const filters = firstRow && pickEntityFilters(firstRow);
     if (filters && Object.keys(filters).length) {
       updates.lastEntity = sanitizeObject({ table: currentPlan.table, filters, updatedAt: now });

@@ -22,6 +22,8 @@ function collectCases({ historyFile, feedbackFile, reviewStatus = null } = {}) {
       selectedTables: record.requestPayload?.contextSelection?.selectedTables || [],
       memoryDecision: record.requestPayload?.memoryDecision || null,
       memoryPersisted: record.requestPayload?.memoryPersisted === true,
+      pendingTurnRecorded: record.requestPayload?.pendingTurnRecorded === true,
+      skill: record.requestPayload?.diagnostics?.skill || null,
       completionStatus: record.status,
       rating: review?.rating || null,
       reviewStatus: review?.reviewStatus || null

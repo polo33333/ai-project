@@ -2,6 +2,9 @@
 
 window.trainingReportData = null;
 window.trainingStatusTab = 'pending';
+window.trainingPageTab = 'cases';
+window.skillEditorData = null;
+window.selectedSkillId = null;
 
 function escapeTrainingHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -22,6 +25,103 @@ window.fetchTrainingReport = async function fetchTrainingReport() {
     renderTrainingReport();
   } catch (error) {
     if (root) root.innerHTML = `<div class="training-empty"><i class="fa-solid fa-triangle-exclamation"></i> Không tải được báo cáo: ${escapeTrainingHtml(error.message)}</div>`;
+  }
+};
+
+window.refreshTrainingView = function refreshTrainingView() {
+  return window.trainingPageTab === 'skills' ? fetchSkillEditorData() : fetchTrainingReport();
+};
+
+window.setTrainingPageTab = function setTrainingPageTab(tab) {
+  window.trainingPageTab = tab === 'skills' ? 'skills' : 'cases';
+  document.getElementById('training-page-tab-cases')?.classList.toggle('active', window.trainingPageTab === 'cases');
+  document.getElementById('training-page-tab-skills')?.classList.toggle('active', window.trainingPageTab === 'skills');
+  const casesView = document.getElementById('training-cases-view');
+  const skillsView = document.getElementById('training-skills-view');
+  const summary = document.getElementById('training-summary');
+  if (casesView) casesView.hidden = window.trainingPageTab !== 'cases';
+  if (skillsView) skillsView.hidden = window.trainingPageTab !== 'skills';
+  if (summary) summary.hidden = window.trainingPageTab !== 'cases';
+  if (window.trainingPageTab === 'skills' && !window.skillEditorData) fetchSkillEditorData();
+};
+
+window.fetchSkillEditorData = async function fetchSkillEditorData() {
+  const list = document.getElementById('skill-editor-items');
+  if (list) list.innerHTML = '<div class="training-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải skills...</div>';
+  try {
+    const response = await fetch('/api/training/skills', { cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+    window.skillEditorData = data;
+    if (!data.skills?.some(skill => skill.id === window.selectedSkillId)) window.selectedSkillId = data.skills?.[0]?.id || null;
+    renderSkillEditor();
+  } catch (error) {
+    if (list) list.innerHTML = `<div class="training-empty"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeTrainingHtml(error.message)}</div>`;
+  }
+};
+
+window.selectSkillForEditing = function selectSkillForEditing(skillId) {
+  window.selectedSkillId = skillId;
+  renderSkillEditor();
+};
+
+function selectedSkill() {
+  return window.skillEditorData?.skills?.find(skill => skill.id === window.selectedSkillId) || null;
+}
+
+window.renderSkillEditor = function renderSkillEditor() {
+  const data = window.skillEditorData;
+  if (!data) return;
+  const list = document.getElementById('skill-editor-items');
+  if (list) list.innerHTML = (data.skills || []).map(skill => `<button type="button" class="skill-editor-item ${skill.id === window.selectedSkillId ? 'active' : ''}" onclick="selectSkillForEditing(decodeURIComponent('${encodeURIComponent(skill.id)}'))"><span>${escapeTrainingHtml(skill.name)}</span><small>${escapeTrainingHtml(skill.id)}</small><i class="fa-solid ${skill.enabled ? 'fa-circle-check' : 'fa-circle-pause'}"></i></button>`).join('') || '<div class="training-empty">Chưa có skill.</div>';
+  const skill = selectedSkill();
+  const form = document.getElementById('skill-editor-form');
+  if (form) form.hidden = !skill;
+  if (!skill) return;
+  document.getElementById('skill-editor-name').value = skill.name || '';
+  document.getElementById('skill-editor-id').value = skill.id;
+  document.getElementById('skill-editor-enabled').checked = skill.enabled === true;
+  document.getElementById('skill-editor-intents').value = (skill.intents || []).join(', ');
+  document.getElementById('skill-editor-instructions').value = skill.instructions || '';
+  const examples = (data.examples || []).filter(example => example.skillId === skill.id);
+  document.getElementById('skill-editor-examples').innerHTML = examples.map(example => `<label><input type="checkbox" value="${escapeTrainingHtml(example.id)}" ${(skill.exampleIds || []).includes(example.id) ? 'checked' : ''}><span>${escapeTrainingHtml(example.name)}</span></label>`).join('') || '<small>Skill này chưa có template ví dụ.</small>';
+  const enabled = data.flags?.skillCoreEnabled;
+  const fewShot = data.flags?.fewShotEnabled;
+  document.getElementById('skill-editor-status').innerHTML = `<i class="fa-solid ${enabled ? 'fa-circle-check' : 'fa-circle-info'}"></i><span>${enabled ? 'Skill Core đang bật.' : 'Skill Core đang tắt; cấu hình vẫn được lưu nhưng chưa áp dụng cho chat.'}${enabled && !fewShot ? ' Few-shot đang tắt.' : ''}</span>`;
+  updateSkillCharacterCount();
+};
+
+window.updateSkillCharacterCount = function updateSkillCharacterCount() {
+  const input = document.getElementById('skill-editor-instructions');
+  const count = document.getElementById('skill-editor-char-count');
+  const preview = document.getElementById('skill-editor-preview');
+  if (count) count.textContent = `${input?.value.length || 0}/6000`;
+  if (preview) preview.textContent = input?.value || '';
+};
+
+window.resetSelectedSkill = function resetSelectedSkill() { renderSkillEditor(); };
+
+window.saveSelectedSkill = async function saveSelectedSkill(event) {
+  event?.preventDefault();
+  const skill = selectedSkill();
+  if (!skill) return;
+  const button = document.getElementById('skill-editor-save');
+  if (button) button.disabled = true;
+  const exampleIds = [...document.querySelectorAll('#skill-editor-examples input:checked')].map(input => input.value);
+  try {
+    const response = await fetch('/api/training/skills/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: skill.id, name: document.getElementById('skill-editor-name').value, enabled: document.getElementById('skill-editor-enabled').checked, instructions: document.getElementById('skill-editor-instructions').value, exampleIds })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+    Object.assign(skill, data.skill);
+    renderSkillEditor();
+    if (typeof showToast === 'function') showToast('Đã lưu skill. Lượt chat mới sẽ dùng cấu hình này.', 'success');
+  } catch (error) {
+    if (typeof showToast === 'function') showToast(error.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
   }
 };
 
@@ -116,6 +216,7 @@ window.renderTrainingCases = function renderTrainingCases() {
           <section><h4>Câu trả lời hiện tại</h4><pre>${escapeTrainingHtml(item.reply || '—')}</pre></section>
           <section><h4>SQL</h4><pre>${escapeTrainingHtml(item.sql || 'Chưa có SQL')}</pre></section>
           <section><h4>Memory decision</h4><pre>${escapeTrainingHtml(item.memoryDecision ? JSON.stringify(item.memoryDecision, null, 2) : 'Không có trace memory')}</pre></section>
+          <section><h4>Skill</h4><pre>${escapeTrainingHtml(item.skill ? JSON.stringify(item.skill, null, 2) : 'Không có trace skill')}</pre></section>
           <section class="training-suggestions"><h4>Đề xuất cải tiến</h4>${(item.suggestions || []).map(suggestion => `<article><span class="training-target">${escapeTrainingHtml(suggestion.target)}</span><div><strong>${escapeTrainingHtml(suggestion.title)}</strong><p>${escapeTrainingHtml(suggestion.message)}</p><code>${escapeTrainingHtml(suggestion.action)}</code></div></article>`).join('')}</section>
         </div>
       </details>

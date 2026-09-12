@@ -672,6 +672,16 @@ test('list answers must mention actual SQL row values instead of only row count'
   assert.equal(listAnswerMentionsRowValue('Khách hàng: LJIP — Công ty Long Giang.', sqlCall), true);
 });
 
+test('SQL tool fallback renders row values instead of only a row count', () => {
+  const reply = LocalModelHarness.buildToolFallbackReply([{
+    toolName: 'execute_sql_query', success: true,
+    result: { rows: [{ EmployeeID: 7, EmployeeName: 'Yên Duy' }], rowCount: 1 }
+  }]);
+  assert.match(reply, /EmployeeID/);
+  assert.match(reply, /Yên Duy/);
+  assert.doesNotMatch(reply, /^Đã truy vấn dữ liệu thành công/);
+});
+
 test('contract detail requests and truncated model text trigger the SQL rows fallback', () => {
   assert.equal(isListRequest('chi tiết các hợp đồng'), true);
   assert.equal(isInsufficientSqlAnswer('D'), true);

@@ -49,8 +49,8 @@ function renderMcpServersTable() {
   }
 
   tbody.innerHTML = servers.map(server => {
-    const status = String(server.status || 'connected').toUpperCase();
-    const statusClass = ['CONNECTED', 'ACTIVE'].includes(status) ? 'green' : 'yellow';
+    const status = String(server.status || 'disconnected').toUpperCase();
+    const statusClass = status === 'CONNECTED' ? 'green' : status === 'ERROR' ? 'red' : 'yellow';
     return `
       <tr>
         <td><strong>${escapeMcpApiHtml(server.name)}</strong></td>
@@ -58,9 +58,12 @@ function renderMcpServersTable() {
         <td><code class="table-code">${escapeMcpApiHtml(server.endpoint || '-')}</code></td>
         <td><span class="metric-tag gray">${server.toolsCount || 0} tools</span> <span class="metric-tag gray">${server.resourcesCount || 0} res</span></td>
         <td>${escapeMcpApiHtml(server.scope || '-')}</td>
-        <td><span class="metric-tag ${statusClass}"><i class="fa-solid fa-circle-check"></i> ${escapeMcpApiHtml(status)}</span></td>
+        <td><span class="metric-tag ${statusClass}" title="${escapeMcpApiHtml(server.lastError || '')}"><i class="fa-solid ${status === 'CONNECTED' ? 'fa-circle-check' : status === 'ERROR' ? 'fa-circle-xmark' : 'fa-circle-pause'}"></i> ${escapeMcpApiHtml(status)}</span></td>
         <td>
           <div class="table-actions">
+            <button class="icon-action-btn" onclick="connectMcpServer('${escapeMcpApiHtml(server.id)}')" title="Kết nối lại và quét Tools/Resources">
+              <i class="fa-solid fa-plug-circle-bolt"></i>
+            </button>
             <button class="icon-action-btn danger-soft" onclick="deleteMcpServer('${escapeMcpApiHtml(server.id)}')" title="Xóa MCP Server">
               <i class="fa-solid fa-trash-can"></i>
             </button>
@@ -87,16 +90,33 @@ async function submitNewMcpServer() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, protocol, endpoint, scope })
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
     ['mcp-new-name', 'mcp-new-endpoint', 'mcp-new-scope'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
     await fetchMcpServers();
+    if (data.server?.status !== 'connected') throw new Error(data.server?.lastError || 'MCP Server chưa kết nối được.');
     if (typeof showToast === 'function') showToast('Đã thêm MCP Server.', 'success');
   } catch (err) {
     console.error('Không thể thêm MCP Server:', err);
-    if (typeof showToast === 'function') showToast('Không thể thêm MCP Server.', 'error');
+    if (typeof showToast === 'function') showToast(err.message || 'Không thể thêm MCP Server.', 'error');
+  }
+}
+
+async function connectMcpServer(id) {
+  try {
+    const res = await fetch('/api/mcp/connect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    await fetchMcpServers();
+    if (typeof showToast === 'function') showToast(`Đã kết nối: ${data.server.toolsCount} tools, ${data.server.resourcesCount} resources.`, 'success');
+  } catch (err) {
+    await fetchMcpServers();
+    if (typeof showToast === 'function') showToast(err.message, 'error', 'Kết nối MCP thất bại');
   }
 }
 
@@ -232,11 +252,45 @@ function renderEmbedConfigs() {
       <div class="embed-config-meta"><span>${escapeMcpApiHtml(config.rateLimit)} req/phút</span><span>Tối đa ${escapeMcpApiHtml(config.maxRows)} dòng</span></div>
       <div class="embed-config-actions">
         <label class="embed-status-toggle" title="Bật/tắt Embed"><input type="checkbox" ${config.isActive ? 'checked' : ''} onchange="toggleEmbedConfig('${escapeMcpApiHtml(config.id)}',this.checked)"><span class="embed-toggle-track"><i></i></span><span class="embed-status-text"></span></label>
+        <button class="icon-action-btn embed-preview-btn" onclick="openEmbedPreview('${escapeMcpApiHtml(config.id)}')" title="Mở Embed Chat để thử" aria-label="Mở Embed Chat để thử"><i class="fa-solid fa-up-right-from-square"></i></button>
         <button class="icon-action-btn" onclick="copyEmbedSnippet('${escapeMcpApiHtml(config.id)}')" title="Sao chép mã nhúng"><i class="fa-solid fa-code"></i></button>
         <button class="icon-action-btn" onclick="openEmbedConfigModal('${escapeMcpApiHtml(config.id)}')" title="Sửa cấu hình"><i class="fa-solid fa-pen"></i></button>
         <button class="icon-action-btn danger-soft" onclick="openEmbedDeleteModal('${escapeMcpApiHtml(config.id)}')" title="Xóa"><i class="fa-solid fa-trash-can"></i></button>
       </div>
     </article>`).join('');
+}
+
+function openEmbedPreview(id) {
+  const config = (window.embedConfigsData || []).find(item => item.id === id);
+  if (!config) return;
+
+  const currentHost = document.getElementById('knowledgehub-embed-host');
+  if (currentHost?.dataset.embedId === config.id) {
+    if (typeof currentHost.destroyEmbed === 'function') currentHost.destroyEmbed();
+    else currentHost.remove();
+    document.querySelectorAll('script[data-kh-embed-preview]').forEach(script => script.remove());
+    window.KnowledgeHubEmbedLoaded = false;
+    return;
+  }
+
+  if (typeof currentHost?.destroyEmbed === 'function') currentHost.destroyEmbed();
+  else currentHost?.remove();
+  document.querySelectorAll('script[data-kh-embed-preview]').forEach(script => script.remove());
+
+  const script = document.createElement('script');
+  script.src = `/embed/knowledgehub-chat.js?v=20260912-theme-${Date.now()}`;
+  script.dataset.khEmbedPreview = 'true';
+  script.dataset.embedId = config.id;
+  script.dataset.title = 'Trợ lý AI';
+  script.dataset.color = '#4f46e5';
+  script.dataset.position = 'right';
+  script.dataset.preview = 'true';
+  script.dataset.theme = 'auto';
+  script.onload = () => {
+    const toggle = document.getElementById('knowledgehub-embed-host')?.shadowRoot?.querySelector('.kh-embed-toggle');
+    if (toggle) toggle.click();
+  };
+  document.body.appendChild(script);
 }
 
 function openEmbedConfigModal(id = '') {
@@ -308,7 +362,7 @@ async function confirmDeleteEmbedConfig() {
 }
 
 async function copyEmbedSnippet(id) {
-  const snippet = `<script src="${location.origin}/embed/knowledgehub-chat.js" data-embed-id="${id}" data-title="Trợ lý AI" data-color="#4f46e5" data-position="right"><\/script>`;
+  const snippet = `<script src="${location.origin}/embed/knowledgehub-chat.js?v=20260912-theme" data-embed-id="${id}" data-title="Trợ lý AI" data-color="#4f46e5" data-position="right" data-theme="auto"><\/script>`;
   await copyMcpText(snippet);
   if (typeof showToast === 'function') showToast('Đã sao chép mã nhúng.', 'success');
 }
@@ -423,6 +477,7 @@ window.fetchMcpServers = fetchMcpServers;
 window.renderMcpServersTable = renderMcpServersTable;
 window.submitNewMcpServer = submitNewMcpServer;
 window.deleteMcpServer = deleteMcpServer;
+window.connectMcpServer = connectMcpServer;
 window.fetchApiKeys = fetchApiKeys;
 window.renderApiKeysTable = renderApiKeysTable;
 window.generateNewApiKey = generateNewApiKey;
@@ -443,3 +498,4 @@ window.openEmbedDeleteModal = openEmbedDeleteModal;
 window.closeEmbedDeleteModal = closeEmbedDeleteModal;
 window.confirmDeleteEmbedConfig = confirmDeleteEmbedConfig;
 window.copyEmbedSnippet = copyEmbedSnippet;
+window.openEmbedPreview = openEmbedPreview;

@@ -14,6 +14,7 @@ function routeMemory({ currentPlan, session, question, fallbackHistory = [], now
       ...base,
       previousScope: session?.activeScope || policy.getDomain(session?.lastPlan?.table),
       currentScope: policy.getDomain(currentPlan?.table),
+      confidence: base.confidence || 'medium',
       sessionId: session?.id || null,
       fallbackHistory
     };

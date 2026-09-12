@@ -131,6 +131,16 @@ test('training response evaluator rejects a truncated data answer', () => {
   assert.deepEqual(result.failures, ['INSUFFICIENT_DATA_ANSWER']);
 });
 
+test('training response evaluator rejects an answer that reports only SQL row count', () => {
+  const result = evaluateResponse({
+    reply: 'Đã truy vấn dữ liệu thành công và tìm thấy **1** dòng kết quả.',
+    plan: { outputs: { data: true } },
+    toolCalls: [{ toolName: 'execute_sql_query', success: true }]
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.failures.includes('INSUFFICIENT_DATA_ANSWER'));
+});
+
 test('failure classifier detects history contamination', () => {
   const failures = classifyCase({
     question: 'vẽ biểu đồ sản lượng điện',

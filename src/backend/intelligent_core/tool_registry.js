@@ -13,6 +13,7 @@ const securityGuard = require('./security_guard');
 const fs = require('fs');
 const path = require('path');
 const { getExportsDirectory } = require('../utils/export_paths');
+const mcpService = require('../services/mcp_service');
 
 // ============================================================================
 // TOOL DEFINITIONS
@@ -178,9 +179,10 @@ const TOOL_DEFINITIONS = [
 
 class ToolRegistry {
   listTools(toolNames = null) {
-    if (!Array.isArray(toolNames)) return TOOL_DEFINITIONS;
+    const definitions = [...TOOL_DEFINITIONS, ...mcpService.getToolSpecs()];
+    if (!Array.isArray(toolNames)) return definitions;
     const allowed = new Set(toolNames);
-    return TOOL_DEFINITIONS.filter(tool => allowed.has(tool.name));
+    return definitions.filter(tool => allowed.has(tool.name));
   }
 
   getOpenAiToolsFormat(toolNames = null) {
@@ -200,6 +202,11 @@ class ToolRegistry {
 
   async executeTool(toolName, args) {
     try {
+      const mcpTool = mcpService.getToolSpecs().find(tool => tool.name === toolName);
+      if (mcpTool) {
+        const result = await mcpService.executeSpec(mcpTool, args);
+        return result?.success === false ? result : { success: true, result };
+      }
       switch (toolName) {
         case 'get_current_datetime': return this._getCurrentDateTime(args);
         case 'export_data': return await this._exportData(args);

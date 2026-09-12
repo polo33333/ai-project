@@ -33,6 +33,10 @@ class ToolManager {
     }
   }
 
+  unregisterTool(name) {
+    return this.tools.delete(name);
+  }
+
   /**
    * Lấy instance của một tool theo tên
    * @param {string} name 

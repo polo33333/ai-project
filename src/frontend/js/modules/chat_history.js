@@ -66,6 +66,22 @@ function getAuditPayload(item) {
   };
 }
 
+function getChatSource(item) {
+  const payload = item.requestPayload || item.aiRequestData || item.payload || {};
+  const endpoint = String(payload.endpoint || '');
+  if (endpoint === '/api/embed/chat' || payload.embedId) {
+    return { label: 'Embed Chat', icon: 'fa-window-restore', tone: 'embed', detail: payload.embedId || '' };
+  }
+  if (endpoint.startsWith('/api/intelligent-core/chat')) {
+    return { label: 'Page Chat', icon: 'fa-comments', tone: 'page', detail: '' };
+  }
+  if (endpoint === '/api/v1/chat/completions') {
+    return { label: 'OpenAI API', icon: 'fa-code', tone: 'api', detail: endpoint };
+  }
+  if (endpoint) return { label: 'API', icon: 'fa-plug', tone: 'api', detail: endpoint };
+  return { label: 'Không xác định', icon: 'fa-circle-question', tone: 'unknown', detail: '' };
+}
+
 function renderChatHistoryStats(history) {
   const totalEl = document.getElementById('chat-stat-total');
   const successEl = document.getElementById('chat-stat-success');
@@ -101,7 +117,7 @@ function renderChatHistoryTable() {
   if (history.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="chat-history-empty">
+        <td colspan="8" class="chat-history-empty">
           <i class="fa-solid fa-clock-rotate-left"></i>
           <strong>Chưa có lịch sử gọi AI nào.</strong>
         </td>
@@ -122,6 +138,7 @@ function renderChatHistoryTable() {
     const status = String(item.status || 'SUCCESS').toUpperCase();
     const isError = status === 'ERROR';
     const latency = item.latencyMs != null ? `${item.latencyMs}ms` : (item.latency || '0ms');
+    const source = getChatSource(item);
     const model = item.modelName || item.model || 'Chưa rõ model';
 
     const tr = document.createElement('tr');
@@ -136,6 +153,13 @@ function renderChatHistoryTable() {
           <i class="fa-solid fa-wand-magic-sparkles"></i>
           ${escapeHtml(model)}
         </span>
+      </td>
+      <td>
+        <span class="chat-source-tag ${source.tone}" title="${escapeHtml(source.detail || source.label)}">
+          <i class="fa-solid ${source.icon}"></i>
+          <span>${escapeHtml(source.label)}</span>
+        </span>
+        ${source.detail && source.tone === 'embed' ? `<code class="chat-source-detail">${escapeHtml(source.detail)}</code>` : ''}
       </td>
       <td><span class="chat-latency">${escapeHtml(latency)}</span></td>
       <td>

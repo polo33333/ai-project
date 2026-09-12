@@ -23,6 +23,7 @@ const knowledgeCore = require('../knowledge_core');
 const { selectUserFacingSqlExecutions } = require('../utils/chat_result_selector');
 const { buildTrainingReport } = require('../training_core');
 const trainingResolutionService = require('../training_core/resolution_service');
+const skillCore = require('../skill_core');
 const domainAliasService = require('../intelligent_core/domain_alias_service');
 const crypto = require('crypto');
 const { buildChatDiagnostics } = require('../utils/chat_diagnostics');
@@ -126,7 +127,7 @@ function checkChatRateLimit(key) {
 }
 
 function permissionsForAccount(account, isEmbed = false) {
-  if (isEmbed) return ['knowledge:read'];
+  if (isEmbed) return ['knowledge:read', 'sql:read'];
   if (account?.role === 'admin') return ['admin'];
   return ['knowledge:read', 'sql:read'];
 }
@@ -748,15 +749,16 @@ async function handleRequest(req, res) {
   if (pathname === '/api/embed/chat' && req.method === 'POST') {
     const startTime = Date.now();
     try {
-      const { question, message, history, embedId, sessionId } = await readJsonBody(req);
+      const { question, message, history, embedId, sessionId, preview } = await readJsonBody(req);
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp);
+      const isAdminPreview = preview === true && currentAccount?.role === 'admin';
+      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview });
       if (!authorization.ok) {
         res.writeHead(authorization.status, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: authorization.message }));
         return;
       }
-      res.setHeader('Access-Control-Allow-Origin', authorization.origin);
+      if (authorization.origin) res.setHeader('Access-Control-Allow-Origin', authorization.origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Cache-Control', 'no-store');
       const queryText = String(question || message || '').trim();
@@ -785,21 +787,25 @@ async function handleRequest(req, res) {
       const activeProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
       if (!coreResult.success) throw new Error(coreResult.error || 'AI provider không phản hồi.');
 
-      let toolResult = null;
-      if (Array.isArray(coreResult.executionResult) && coreResult.executionResult.length > 0) {
-        const columns = Object.keys(coreResult.executionResult[0]);
-        toolResult = { columns, rows: coreResult.executionResult.slice(0, authorization.config.maxRows).map(row => columns.map(column => row[column] ?? '')) };
-      }
-      loggerService.addChatAudit(queryText, coreResult.replyText, coreResult.sqlQuery || null, activeProvider, execMs, 'SUCCESS', null, {
-        endpoint: '/api/embed/chat', embedId: authorization.config.id, origin: authorization.origin, historyCount: safeHistory.length, sessionId: safeSessionId
+      const payload = buildChatClientPayload(coreResult, execMs);
+      if (payload.toolResult?.rows) payload.toolResult.rows = payload.toolResult.rows.slice(0, authorization.config.maxRows);
+      const auditStatus = coreResult.trace?.completionStatus || 'SUCCESS';
+      const audit = loggerService.addChatAudit(queryText, coreResult.replyText, payload.generatedSql, activeProvider, execMs, auditStatus, null, {
+        endpoint: '/api/embed/chat', embedId: authorization.config.id, origin: authorization.origin, preview: isAdminPreview,
+        historyCount: safeHistory.length, sessionId: safeSessionId, toolCalls: payload.toolCalls,
+        executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null,
+        contextSelection: coreResult.contextSelection || null, diagnostics: buildChatDiagnostics(coreResult.trace)
       });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({
-        status: 'success',
-        reply: coreResult.replyText,
-        chartSpec: coreResult.chartSpec || null,
-        toolResult,
-        executionTime: `${execMs}ms`,
+        status: payload.status,
+        reply: payload.reply,
+        chartSpec: payload.chartSpec,
+        toolResult: payload.toolResult,
+        downloadUrl: payload.downloadUrl,
+        executionTime: payload.executionTime,
+        auditId: audit.id,
+        completionStatus: auditStatus,
         sessionId: safeSessionId
       }));
     } catch (err) {
@@ -871,6 +877,12 @@ async function handleRequest(req, res) {
         completionStatus: auditStatus,
         responseEvaluation: coreResult.trace?.training?.responseEvaluation
       });
+      const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
+        : conversationMemoryService.recordPendingTurn({
+          sessionId: normalizedSessionId, accountId: currentAccount?.id || null, question: queryText,
+          currentPlan: coreResult.trace?.training?.plan, completionStatus: auditStatus,
+          responseEvaluation: coreResult.trace?.training?.responseEvaluation
+        });
       const audit = loggerService.addChatAudit(queryText, coreResult.replyText, payload.generatedSql, auditProvider, execMs, auditStatus, null, {
         endpoint: '/api/intelligent-core/chat/stream', providerId: auditProvider?.id || providerId || null,
         providerName: auditProvider?.name || null, model: auditProvider?.model || null, historyCount: memoryHistory.length,
@@ -879,6 +891,7 @@ async function handleRequest(req, res) {
         sessionId: normalizedSessionId, toolCalls: payload.toolCalls, executionMode: coreResult.executionMode,
         tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null,
         memoryDecision: coreResult.trace?.memoryDecision || null, memoryPersisted: memoryPersistence.persisted,
+        pendingTurnRecorded: pendingPersistence.recorded,
         diagnostics: buildChatDiagnostics(coreResult.trace)
       });
       payload.auditId = audit.id;
@@ -1046,6 +1059,13 @@ async function handleRequest(req, res) {
         completionStatus: coreResult.trace?.completionStatus,
         responseEvaluation: coreResult.trace?.training?.responseEvaluation
       });
+      const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
+        : conversationMemoryService.recordPendingTurn({
+          sessionId: conversationMemoryService.normalizeSessionId(sessionId), accountId: currentAccount?.id || null,
+          question: queryText, currentPlan: coreResult.trace?.training?.plan,
+          completionStatus: coreResult.trace?.completionStatus,
+          responseEvaluation: coreResult.trace?.training?.responseEvaluation
+        });
       const chatAudit = loggerService.addChatAudit(
         queryText,
         coreResult.replyText,
@@ -1054,7 +1074,7 @@ async function handleRequest(req, res) {
         execMs,
         coreResult.trace?.completionStatus || 'SUCCESS',
         null,
-        { ...auditPayloadBase, toolCalls: toolCallsSummary, executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, memoryPersisted: memoryPersistence.persisted, diagnostics: buildChatDiagnostics(coreResult.trace) }
+        { ...auditPayloadBase, toolCalls: toolCallsSummary, executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, memoryDecision: coreResult.trace?.memoryDecision || null, memoryPersisted: memoryPersistence.persisted, pendingTurnRecorded: pendingPersistence.recorded, diagnostics: buildChatDiagnostics(coreResult.trace) }
       );
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -1133,6 +1153,32 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/training/skills' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      skills: skillCore.getSkills(),
+      examples: skillCore.getExampleCatalog(),
+      flags: {
+        skillCoreEnabled: process.env.LOCAL_MODEL_SKILL_CORE_ENABLED === 'true',
+        fewShotEnabled: process.env.LOCAL_MODEL_FEW_SHOT_ENABLED === 'true'
+      }
+    }));
+    return;
+  }
+
+  if (pathname === '/api/training/skills/save' && req.method === 'POST') {
+    try {
+      const skill = skillCore.saveSkill(await readJsonBody(req));
+      loggerService.addLog('INFO', 'Skill Core', `Cập nhật skill '${skill.id}' từ Training Core.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', skill }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
   if (pathname === '/api/chat-feedback' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify(loggerService.getChatFeedback()));
@@ -1190,10 +1236,11 @@ async function handleRequest(req, res) {
   if (pathname === '/api/mcp/add' && req.method === 'POST') {
     try {
       const serverData = await readJsonBody(req);
-      const created = mcpService.addServer(serverData);
+      const created = await mcpService.addServer(serverData);
+      const publicServer = mcpService.getServers().find(item => item.id === created.id);
       loggerService.addLog('SUCCESS', 'MCP Engine', `Khai báo MCP Data Source mới: '${created.name}' (${created.protocol}).`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({ status: 'success', server: created }));
+      res.end(JSON.stringify({ status: 'success', server: publicServer }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
@@ -1204,12 +1251,27 @@ async function handleRequest(req, res) {
   if (pathname === '/api/mcp/delete' && req.method === 'POST') {
     try {
       const { id } = await readJsonBody(req);
-      mcpService.deleteServer(id);
+      await mcpService.deleteServer(id);
       loggerService.addLog('WARN', 'MCP Engine', `Đã gỡ bỏ MCP Server #${id}.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success' }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/mcp/connect' && req.method === 'POST') {
+    try {
+      const { id } = await readJsonBody(req);
+      const connected = await mcpService.connectServer(id);
+      const server = mcpService.getServers().find(item => item.id === connected.id);
+      loggerService.addLog('SUCCESS', 'MCP Engine', `Đã kết nối MCP Server '${connected.name}': ${connected.tools.length} tools, ${connected.resources.length} resources.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', server }));
+    } catch (err) {
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
     }
     return;
@@ -1763,7 +1825,11 @@ async function handleRequest(req, res) {
         res.end(`Server Error: ${err.code}`);
       }
     } else {
-      res.writeHead(200, { 'Content-Type': contentType });
+      const headers = { 'Content-Type': contentType };
+      if (pathname === '/embed/knowledgehub-chat.js') {
+        headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      }
+      res.writeHead(200, headers);
       res.end(content);
     }
   });

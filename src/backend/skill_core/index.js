@@ -1,7 +1,7 @@
 'use strict';
 
-const { getSkills, getSkill } = require('./registry');
+const { getSkills, getSkill, saveSkill } = require('./registry');
 const { selectSkill } = require('./selector');
-const { selectExamples } = require('./examples');
+const { getExampleCatalog, selectExamples } = require('./examples');
 
-module.exports = { getSkills, getSkill, selectSkill, selectExamples };
+module.exports = { getSkills, getSkill, saveSkill, selectSkill, selectExamples, getExampleCatalog };

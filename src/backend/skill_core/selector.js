@@ -1,13 +1,15 @@
 'use strict';
 
 const { getSkills } = require('./registry');
+const { inspectSkill } = require('./skill_contract');
 
 function selectSkill({ requestPlan = {}, question = '' } = {}) {
-  if (!requestPlan.table || requestPlan.outputs?.data === false) return { matched: false, skill: null, reason: 'no_data_plan' };
   const skill = getSkills().find(item => item.intents.includes(requestPlan.intent));
-  return skill
-    ? { matched: true, skill, reason: `intent:${requestPlan.intent}`, question }
-    : { matched: false, skill: null, reason: `unsupported_intent:${requestPlan.intent || 'none'}` };
+  if (!skill) return { matched: false, status: 'no_match', skill: null, missingInputs: [], reason: `unsupported_intent:${requestPlan.intent || 'none'}` };
+  const inspection = inspectSkill(skill, requestPlan);
+  return inspection.status === 'matched'
+    ? { matched: true, ...inspection, skill, question }
+    : { matched: false, ...inspection, skill: null, candidateSkillId: skill.id, question };
 }
 
 module.exports = { selectSkill };

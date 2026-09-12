@@ -32,6 +32,9 @@ function isShadowMode() { return process.env.MEMORY_CORE_SHADOW_MODE === 'true';
 function recentMaxMessages() { return Math.min(4, envNumber('MEMORY_RECENT_MAX_MESSAGES', 4, 1)); }
 function referenceTtlMinutes() { return envNumber('MEMORY_REFERENCE_TTL_MINUTES', 120, 1); }
 function traceEnabled() { return process.env.MEMORY_TRACE_ENABLED !== 'false'; }
+function pendingTurnEnabled() { return process.env.MEMORY_PENDING_TURN_ENABLED === 'true'; }
+function summaryEnabled() { return process.env.MEMORY_SUMMARY_ENABLED === 'true'; }
+function pendingTtlMinutes() { return envNumber('MEMORY_PENDING_TURN_TTL_MINUTES', 30, 1); }
 
 function normalizeDomain(value) {
   return normalize(value).replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || null;
@@ -104,9 +107,12 @@ module.exports = {
   isShortContextualFollowup,
   isPlanSelfContained,
   isShadowMode,
+  pendingTurnEnabled,
+  pendingTtlMinutes,
   matchesReferenceKeyword,
   normalizeDomain,
   recentMaxMessages,
   referenceTtlMinutes,
+  summaryEnabled,
   traceEnabled
 };

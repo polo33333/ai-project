@@ -36,6 +36,7 @@ class MemoryService {
       activeScope: value.activeScope || null,
       lastPlan: value.lastPlan || null,
       references: { ...emptyReferences(), ...(value.references || {}) },
+      pendingTurn: value.pendingTurn && typeof value.pendingTurn === 'object' ? value.pendingTurn : null,
       createdAt: value.createdAt || new Date().toISOString(),
       updatedAt: value.updatedAt || value.createdAt || new Date().toISOString()
     };
@@ -90,9 +91,49 @@ class MemoryService {
       }];
     }
     const session = this.getSession(decision.sessionId, false, decision.accountId);
-    const source = session?.messages?.length ? session.messages : decision.fallbackHistory;
+    const stored = session?.messages?.length ? session.messages : null;
+    const source = stored && decision.currentScope
+      ? stored.filter(message => !message.scope || message.scope === decision.currentScope)
+      : (stored || decision.fallbackHistory);
     const limit = Math.max(1, Number(decision.maxMessages) || policy.recentMaxMessages());
-    return sanitizeMessages(Array.isArray(source) ? source.slice(-limit) : []);
+    const messages = sanitizeMessages(Array.isArray(source) ? source.slice(-limit) : []);
+    if (policy.summaryEnabled() && session?.summary && decision.currentScope
+        && session.summary.scope === decision.currentScope) {
+      messages.unshift({ role: 'system', content: `Verified conversation state: ${JSON.stringify(sanitizeObject(session.summary))}` });
+    }
+    if (policy.pendingTurnEnabled() && this.isPendingTurnValid(session?.pendingTurn)
+        && (!session.pendingTurn.scope || session.pendingTurn.scope === decision.currentScope)) {
+      messages.unshift({ role: 'system', content: `Yêu cầu trước chưa hoàn tất: ${session.pendingTurn.question}` });
+    }
+    return messages;
+  }
+
+  isPendingTurnValid(pendingTurn, now = Date.now()) {
+    if (!pendingTurn?.updatedAt) return false;
+    const updatedAt = Date.parse(pendingTurn.updatedAt);
+    return Number.isFinite(updatedAt) && updatedAt <= now
+      && now - updatedAt <= policy.pendingTtlMinutes() * 60 * 1000;
+  }
+
+  recordPendingTurn({ sessionId, accountId = null, question, currentPlan, completionStatus, responseEvaluation } = {}) {
+    if (!policy.pendingTurnEnabled()) return { recorded: false, reason: 'pending_turn_disabled' };
+    const userMessage = sanitizeMessage({ role: 'user', content: question }, 4000);
+    if (!userMessage) return { recorded: false, reason: 'sanitizer_rejected' };
+    const session = this.getSession(sessionId, true, accountId);
+    if (!session) return { recorded: false, reason: 'invalid_session' };
+    const now = new Date().toISOString();
+    session.pendingTurn = sanitizeObject({
+      question: userMessage.content,
+      completionStatus: String(completionStatus || 'UNKNOWN').slice(0, 40),
+      failures: Array.isArray(responseEvaluation?.failures)
+        ? responseEvaluation.failures.filter(item => typeof item === 'string').slice(0, 10) : [],
+      scope: policy.getDomain(currentPlan?.table),
+      updatedAt: now
+    });
+    session.updatedAt = now;
+    this.pruneSessions();
+    this.persist();
+    return { recorded: true, pendingTurn: session.pendingTurn };
   }
 
   getLegacyContext(sessionId, fallbackHistory = [], limit = 10, accountId = null) {
@@ -112,11 +153,24 @@ class MemoryService {
     const now = new Date().toISOString();
     userMessage.timestamp = now;
     assistantMessage.timestamp = now;
+    const messageScope = policy.getDomain(currentPlan?.table);
+    userMessage.scope = messageScope;
+    assistantMessage.scope = messageScope;
     session.messages.push(userMessage, assistantMessage);
     if (session.messages.length > this.maxStored) session.messages = session.messages.slice(-this.maxStored);
     session.lastPlan = sanitizeObject(currentPlan || null);
-    session.activeScope = policy.getDomain(currentPlan?.table);
+    session.activeScope = messageScope;
     session.references = { ...emptyReferences(), ...session.references, ...deriveReferences({ currentPlan, toolCalls, now }) };
+    session.pendingTurn = null;
+    if (policy.summaryEnabled()) {
+      session.summary = sanitizeObject({
+        scope: session.activeScope,
+        table: currentPlan?.table || null,
+        metric: currentPlan?.metric || null,
+        timeColumn: currentPlan?.timeColumn || null,
+        updatedAt: now
+      });
+    }
     session.updatedAt = now;
     this.pruneSessions();
     this.persist();

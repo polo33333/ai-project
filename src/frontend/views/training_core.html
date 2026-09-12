@@ -2,10 +2,11 @@
   <div class="system-tools-hero training-hero">
     <div class="system-tools-hero-icon audit-training-icon"><i class="fa-solid fa-graduation-cap"></i></div>
     <div><span class="training-eyebrow"><i class="fa-solid fa-graduation-cap"></i> LOCAL MODEL IMPROVEMENT</span><h2>Training Core</h2><p>Chỉ hiển thị các phản hồi được kiểm duyệt ở trạng thái “Cần xem lại”.</p></div>
-    <button class="btn-primary" type="button" onclick="fetchTrainingReport()"><i class="fa-solid fa-rotate"></i> Làm mới báo cáo</button>
+    <button class="btn-primary" type="button" onclick="refreshTrainingView()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
   </div>
+  <div class="training-page-tabs" role="tablist"><button id="training-page-tab-cases" class="active" type="button" onclick="setTrainingPageTab('cases')"><i class="fa-solid fa-list-check"></i> Case cải tiến</button><button id="training-page-tab-skills" type="button" onclick="setTrainingPageTab('skills')"><i class="fa-solid fa-wand-magic-sparkles"></i> Skills</button></div>
   <div id="training-summary" class="training-summary"></div>
-  <div class="training-layout audit-data-panel">
+  <div id="training-cases-view" class="training-layout audit-data-panel">
     <main class="training-cases-panel">
       <div class="training-toolbar">
         <div class="training-panel-title"><span><i class="fa-solid fa-list-check"></i> Case cải tiến</span><small id="training-case-count"></small></div>
@@ -18,5 +19,16 @@
       </div>
       <div id="training-cases" class="training-cases"><div class="training-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải báo cáo...</div></div>
     </main>
+  </div>
+  <div id="training-skills-view" class="skill-editor-layout audit-data-panel" hidden>
+    <aside class="skill-editor-list"><div class="training-panel-title"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Skills</span></div><div id="skill-editor-items"></div></aside>
+    <main class="skill-editor-form"><div class="skill-editor-form-inner"><header class="skill-editor-heading"><div><span>CẤU HÌNH SKILL</span><h3>Chỉnh hướng dẫn cho model</h3><p>Chọn skill bên trái, chỉnh nội dung rồi lưu để áp dụng cho lượt chat mới.</p></div><div id="skill-editor-status" class="skill-editor-status"></div></header><form id="skill-editor-form" onsubmit="saveSelectedSkill(event)">
+      <div class="skill-form-row"><label>Tên hiển thị<input id="skill-editor-name" maxlength="100" required></label><label>Mã skill<input id="skill-editor-id" readonly></label></div>
+      <div class="skill-editor-work-grid">
+        <section class="skill-editor-main-field"><label>Hướng dẫn xử lý<textarea id="skill-editor-instructions" maxlength="6000" rows="12" required oninput="updateSkillCharacterCount()" placeholder="Mô tả cách model cần xử lý yêu cầu thuộc skill này..."></textarea><small id="skill-editor-char-count">0/6000</small></label><p><i class="fa-solid fa-circle-info"></i> Hướng dẫn này được thêm vào prompt hệ thống. Nên viết ngắn, rõ và không chứa dữ liệu mẫu nhạy cảm.</p></section>
+        <aside class="skill-editor-options"><div class="skill-editor-option-head"><span>Thiết lập</span><label class="skill-toggle"><input id="skill-editor-enabled" type="checkbox"><span>Bật skill</span></label></div><label>Áp dụng cho<input id="skill-editor-intents" readonly></label><fieldset><legend>Ví dụ gợi ý</legend><div id="skill-editor-examples"></div></fieldset></aside>
+      </div>
+      <div class="skill-editor-actions"><span><i class="fa-regular fa-circle-check"></i> Chỉ các lượt chat mới nhận thay đổi</span><div><button class="btn-secondary-sm" type="button" onclick="resetSelectedSkill()"><i class="fa-solid fa-rotate-left"></i> Hoàn tác</button><button id="skill-editor-save" class="btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi</button></div></div>
+    </form></div></main>
   </div>
 </section>

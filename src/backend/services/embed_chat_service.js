@@ -79,11 +79,11 @@ class EmbedChatService {
     this.persist();
   }
 
-  authorize(embedId, origin, ipAddress) {
+  authorize(embedId, origin, ipAddress, options = {}) {
     const config = this.configs.find(item => item.id === String(embedId || '') && item.isActive);
     if (!config) return { ok: false, status: 401, message: 'Embed ID không hợp lệ hoặc đã bị tắt.' };
     const normalizedOrigin = this.normalizeOrigin(origin);
-    if (!normalizedOrigin || !config.allowedOrigins.includes(normalizedOrigin)) {
+    if (!options.skipOrigin && (!normalizedOrigin || !config.allowedOrigins.includes(normalizedOrigin))) {
       return { ok: false, status: 403, message: 'Domain này không được phép sử dụng Embed Chat.' };
     }
     const minute = Math.floor(Date.now() / 60000);

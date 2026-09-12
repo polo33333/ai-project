@@ -1,0 +1,16 @@
+[
+  {
+    "name": "same table follow-up",
+    "lastPlan": { "intent": "list", "table": "M_Employee", "requiredColumns": ["Name"], "outputs": { "data": true } },
+    "question": "chỉ lấy phòng kỹ thuật",
+    "currentPlan": { "intent": "list", "table": "M_Employee", "requiredColumns": ["Name"], "outputs": { "data": true } },
+    "expectedMode": "recent"
+  },
+  {
+    "name": "clear topic change",
+    "lastPlan": { "intent": "list", "table": "M_Employee", "requiredColumns": ["Name"], "outputs": { "data": true } },
+    "question": "sản lượng điện theo tháng",
+    "currentPlan": { "intent": "aggregate", "table": "T_ElectricityOutput", "requiredColumns": ["TotalQty"], "metric": "TotalQty", "outputs": { "data": true } },
+    "expectedMode": "none"
+  }
+]

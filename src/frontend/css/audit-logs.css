@@ -150,6 +150,24 @@
   margin-top: 2px;
 }
 
+.chat-source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 750;
+}
+.chat-source-tag.page { color:#4338ca; border-color:#c7d2fe; background:#eef2ff; }
+.chat-source-tag.embed { color:#6d28d9; border-color:#ddd6fe; background:#f5f3ff; }
+.chat-source-tag.api { color:#0369a1; border-color:#bae6fd; background:#f0f9ff; }
+.chat-source-tag.unknown { color:#64748b; border-color:#e2e8f0; background:#f8fafc; }
+.chat-source-detail { display:block; max-width:120px; margin-top:5px; overflow:hidden; color:#7c3aed; background:transparent; text-overflow:ellipsis; white-space:nowrap; font-size:9.5px; }
+
 .chat-payload-card {
   overflow: hidden;
   border: 1px solid #dbeafe;
@@ -323,6 +341,68 @@
 .feedback-review-actions button { padding:5px 8px; border:1px solid #dbe3ef; border-radius:7px; background:#fff; color:#475569; cursor:pointer; font-size:11px; font-weight:700; }
 .feedback-review-actions button:hover { color:#4f46e5; border-color:#a5b4fc; background:#eef2ff; }
 @media (max-width:900px) { .feedback-toolbar { flex-wrap:wrap; } .feedback-toolbar input { flex-basis:100%; } }
+
+/* Feedback review panel */
+.feedback-table td:last-child {
+  padding: 14px;
+  background: #f8fafc;
+  vertical-align: top;
+}
+
+.feedback-review-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+
+.feedback-review-status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.feedback-review-status.pending { color:#9a6700; border-color:#f5d67a; background:#fff7d6; }
+.feedback-review-status.approved { color:#087a55; border-color:#9ee1c6; background:#e8faf2; }
+.feedback-review-status.needs_review { color:#b5473c; border-color:#f3b7b0; background:#fff0ee; }
+
+.feedback-table textarea {
+  display:block;
+  box-sizing:border-box;
+  min-height:72px;
+  padding:10px 11px;
+  border-color:#cbd6e5;
+  border-radius:9px;
+  color:#25344b;
+  background:#fff;
+  line-height:1.45;
+  transition:border-color .18s ease, box-shadow .18s ease;
+}
+
+.feedback-table textarea:focus { border-color:#8176df; outline:0; box-shadow:0 0 0 3px #7568dc18; }
+.feedback-review-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:9px; }
+.feedback-review-actions button { min-height:34px; padding:7px 10px; border-radius:8px; transition:.18s ease; }
+.feedback-review-actions button:first-child { color:#087a55; border-color:#aadfca; background:#edf9f4; }
+.feedback-review-actions button:first-child:hover { color:#066447; border-color:#69c5a2; background:#dcf5e9; }
+.feedback-review-actions button:last-child { color:#a85b12; border-color:#efd09b; background:#fff8e8; }
+.feedback-review-actions button:last-child:hover { color:#884608; border-color:#dfa954; background:#ffefc8; }
+
+:root[data-theme="dark"] .feedback-table td:last-child { background:#152033; }
+:root[data-theme="dark"] .feedback-review-status.pending { color:#f1c76b; border-color:#66542d; background:#332d1d; }
+:root[data-theme="dark"] .feedback-review-status.approved { color:#70d8b0; border-color:#326653; background:#19382f; }
+:root[data-theme="dark"] .feedback-review-status.needs_review { color:#f19b92; border-color:#75443f; background:#3d2527; }
+:root[data-theme="dark"] .feedback-table textarea { color:#e5ecf7 !important; border-color:#42536d !important; background:#0f1928 !important; }
+:root[data-theme="dark"] .feedback-table textarea:focus { border-color:#9386dc !important; box-shadow:0 0 0 3px #9c8bee20 !important; }
+:root[data-theme="dark"] .feedback-review-actions button:first-child { color:#79dcb7; border-color:#356c58; background:#193a30; }
+:root[data-theme="dark"] .feedback-review-actions button:first-child:hover { color:#a3efd2; border-color:#4c997c; background:#214b3e; }
+:root[data-theme="dark"] .feedback-review-actions button:last-child { color:#efc071; border-color:#725b32; background:#392f20; }
+:root[data-theme="dark"] .feedback-review-actions button:last-child:hover { color:#ffda91; border-color:#9a783c; background:#493b26; }
 
 .system-logs-table th {
   padding: 11px 12px;

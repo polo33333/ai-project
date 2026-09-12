@@ -181,6 +181,8 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
   border: 1px solid #3c4c66;
 }
 :root[data-theme="dark"] .embed-config-meta { color: var(--text-secondary) !important; }
+:root[data-theme="dark"] .embed-config-actions .embed-preview-btn { color:#c4b5fd !important; background:#2b2949 !important; border-color:#514b7d !important; }
+:root[data-theme="dark"] .embed-config-actions .embed-preview-btn:hover { color:#fff !important; background:#5b4fc4 !important; border-color:#7568dc !important; }
 :root[data-theme="dark"] .embed-status-toggle {
   color: var(--text-secondary) !important;
   background: #1c283b !important;
@@ -271,6 +273,11 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] ::selection { color: #f0ebff; background: #56467f; }
 :root[data-theme="dark"] * { scrollbar-color: #465671 #111a2a; }
 :root[data-theme="dark"] #view-chat-history .chat-history-table-wrap { --history-scroll-track: #111a2a; --history-scroll-thumb: #465671; --history-scroll-hover: #6c7f9d; }
+:root[data-theme="dark"] .chat-source-tag.page { color:#c7d2fe; border-color:#474a78; background:#252944; }
+:root[data-theme="dark"] .chat-source-tag.embed { color:#d8b4fe; border-color:#594575; background:#302743; }
+:root[data-theme="dark"] .chat-source-tag.api { color:#bae6fd; border-color:#31566d; background:#1c3547; }
+:root[data-theme="dark"] .chat-source-tag.unknown { color:#a9b6ca; border-color:#3b4a62; background:#1a2638; }
+:root[data-theme="dark"] .chat-source-detail { color:#c4b5fd; }
 
 /* Populated data surfaces must share the theme, including saved chat HTML. */
 :root[data-theme="dark"] :is(.dashboard-log-item,.dictionary-table-row,.dictionary-column-card,.chat-markdown-table-wrap,.chat-tool-result) { background: var(--dark-surface) !important; border-color: var(--border-color) !important; }
@@ -531,6 +538,11 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
     border-bottom: 0;
     border-bottom: 1px solid #433e3e;
 }
+:root[data-theme="dark"] .api-key-modal-actions {
+    background:  #1C283B ;
+}
+
+
 @media (max-width: 620px) {
   .theme-toggle { width: 32px; height: 34px; }
   .top-bar-actions { gap: 5px; }
