@@ -107,7 +107,23 @@ function getFilteredDictionaryTables() {
   );
 }
 
+function renderDictionaryOverview() {
+  const activeTables = getDictionaryTables().filter(table => table.isActive);
+  const domains = [...new Set(activeTables.map(table => table.domain).filter(Boolean))];
+  const counts = {
+    'dict-stat-active': activeTables.length,
+    'dict-stat-domains': domains.length,
+    'dict-stat-unassigned': activeTables.filter(table => !table.domain).length
+  };
+  Object.entries(counts).forEach(([id, count]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = count;
+  });
+  return { activeTables, domains };
+}
+
 function renderDataDictionary() {
+  renderDictionaryOverview();
   const container = document.getElementById('dictionary-tables-accordion');
   if (!container) return;
 

@@ -5567,6 +5567,18 @@ body.dictionary-modal-open {
   padding: 8px 10px !important;
 }
 
+.chat-sessions-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  box-sizing: border-box;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .chat-session-group-title {
   display: flex;
   align-items: center;

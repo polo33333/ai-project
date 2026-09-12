@@ -58,6 +58,7 @@ function buildDictionaryAliasAssignments(tables) {
 }
 
 function renderDictionaryGraph() {
+  const { domains } = renderDictionaryOverview();
   const graph = document.getElementById('dictionary-domain-graph');
   const nodesRoot = document.getElementById('dictionary-domain-groups');
   const dbRoot = document.getElementById('dictionary-db-root');
@@ -65,11 +66,7 @@ function renderDictionaryGraph() {
   const empty = document.getElementById('dictionary-graph-empty');
   if (!graph || !nodesRoot || !dbRoot || !viewport) return;
   ensureDictionaryGraphInteractions(viewport);
-  const allActive = getDictionaryTables().filter(table => table.isActive);
   const tables = getDictionaryGraphTables().sort((a, b) => (!!a.domain !== !!b.domain ? (a.domain ? -1 : 1) : String(a.domain || '').localeCompare(String(b.domain || ''), 'vi') || String(a.tableName).localeCompare(String(b.tableName), 'vi')));
-  const domains = [...new Set(allActive.map(table => table.domain).filter(Boolean))];
-  const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
-  setText('dict-stat-active', allActive.length); setText('dict-stat-domains', domains.length); setText('dict-stat-unassigned', allActive.filter(table => !table.domain).length);
   empty.hidden = tables.length > 0;
   nodesRoot.innerHTML = '';
   graph.classList.toggle('has-selection', Boolean(window.dictionaryGraphSelection));

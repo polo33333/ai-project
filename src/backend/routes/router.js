@@ -152,6 +152,8 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
   const toolResult = rawRows.length ? { columns, rows: rawRows.map(row => columns.map(column => row?.[column] ?? '')) } : null;
   const toolCalls = (coreResult.toolCalls || []).map(item => ({
     name: item.toolName, success: item.success, rowCount: item.result?.rowCount ?? item.result?.rows?.length ?? null,
+    ...(item.toolName === 'execute_sql_query' && item.success === false && typeof item.args?.sql === 'string'
+      ? { sql: item.args.sql } : {}),
     downloadUrl: item.toolName === 'export_data' ? item.result?.downloadUrl || null : null, error: item.error || null,
     durationMs: Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null
   }));
@@ -1023,6 +1025,8 @@ async function handleRequest(req, res) {
       const toolCallsSummary = (coreResult.toolCalls || []).map(t => ({
         name: t.toolName,
         success: t.success,
+        ...(t.toolName === 'execute_sql_query' && t.success === false && typeof t.args?.sql === 'string'
+          ? { sql: t.args.sql } : {}),
         rowCount: t.result?.rows?.length ?? null,
         downloadUrl: t.toolName === 'export_data' ? t.result?.downloadUrl || null : null,
         error: t.error || null,

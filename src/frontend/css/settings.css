@@ -22,10 +22,10 @@ main.main-content.settings-workspace { overflow-y:hidden; }
 .settings-qdrant-main > span { color:var(--q-color); font-size:11px; font-weight:800; letter-spacing:.8px; }
 .settings-qdrant-main h3 { margin:4px 0 5px; color:var(--text-primary); font-size:17px; }
 .settings-qdrant-main p { min-height:40px; margin:0; color:var(--text-secondary); font-size:13px; line-height:1.55; overflow-wrap:anywhere; }
-.settings-qdrant-metrics { display:grid; grid-template-columns:repeat(3,minmax(95px,1fr)); gap:8px; }
+.settings-qdrant-metrics { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr); gap:8px; min-width:0; }
 .settings-qdrant-metrics > div { min-width:0; padding:9px 12px; border-radius:9px; background:#f7f8fb; }
 .settings-qdrant-card[data-state="checking"] .settings-qdrant-metrics > div { background:linear-gradient(100deg,#f4f5f9 20%,#e5e7ff 42%,#f4f5f9 64%); background-size:220% 100%; animation:qdrant-metric-scan 1.35s linear infinite; }
-.settings-qdrant-metrics span, .settings-qdrant-metrics strong { display:block; white-space:nowrap; }
+.settings-qdrant-metrics span, .settings-qdrant-metrics strong { display:block; white-space:normal; overflow-wrap:anywhere; }
 .settings-qdrant-metrics span { color:var(--text-muted); font-size:11px; }
 .settings-qdrant-metrics strong { margin-top:4px; color:var(--text-primary); font-size:13px; }
 .settings-qdrant-card[data-state="online"] #settings-qdrant-state, .settings-qdrant-card[data-state="offline"] #settings-qdrant-state { color:var(--q-color); }

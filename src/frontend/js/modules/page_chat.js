@@ -1181,7 +1181,7 @@ async function sendPageChatMessage() {
       </div>
     ` : '';
 
-    const technicalHtml = (thinkingTimelineHtml || sqlHtml || toolStepsHtml || toolResultHtml) ? `
+    const technicalHtml = (sqlHtml || toolStepsHtml || toolResultHtml) ? `
       <details class="chat-technical-details">
         <summary>
           <span><i class="fa-solid fa-brain"></i> Thinking · Quá trình xử lý</span>
@@ -1222,6 +1222,7 @@ async function sendPageChatMessage() {
         </div>
         <div class="chat-ai-answer">${renderedAnswerHtml}</div>
         ${downloadActionHtml}
+        ${renderCopilotRetrievalContext(data.contextSelection)}
         ${chartHtml}
         ${technicalHtml}
         ${renderChatFeedback(data, data.tokenUsage)}
@@ -1416,10 +1417,6 @@ function renderChatSessionsList() {
   const sessions = (window.chatSessions || []).map(normalizeStoredChatSession)
     .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
   window.chatSessions = sessions;
-  if (sessions.length === 0) {
-    container.innerHTML = `<div style="text-align:center;padding:20px 10px;color:var(--text-muted);font-size:12.5px;">Chưa có cuộc trò chuyện.<br>Bấm <strong>"+ Tạo đoạn chat mới"</strong> để bắt đầu. </div>`;
-    return;
-  }
   const formatSessionTime = timestamp => {
     const date = new Date(Number(timestamp));
     if (Number.isNaN(date.getTime())) return '';
@@ -1458,9 +1455,11 @@ function renderChatSessionsList() {
   const recentSessions = sessions.filter(session => !session.pinned);
   const pinnedSessions = sessions.filter(session => session.pinned)
     .sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0));
+  container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title"><i class="fa-regular fa-clock"></i> Gần đây</div>');
   if (recentSessions.length) {
-    container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title"><i class="fa-regular fa-clock"></i> Gần đây</div>');
     recentSessions.forEach(renderSession);
+  } else {
+    container.insertAdjacentHTML('beforeend', '<div class="chat-sessions-empty" role="status">Chưa có cuộc trò chuyện gần đây.</div>');
   }
   if (pinnedSessions.length) {
     container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title is-pinned"><i class="fa-solid fa-thumbtack"></i> Ghim</div>');

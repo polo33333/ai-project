@@ -939,8 +939,9 @@ function renderCopilotTechnicalDetails(toolCalls, sqlQuery, toolResult, sqlExecu
         }).join('')}
       </div>
     </div>` : '';
-  const content = `${thinkingTimeline}${renderCopilotToolCalls(toolCalls)}${resultPanels}${executionPanels}`;
-  if (!content) return '';
+  const toolPanels = renderCopilotToolCalls(toolCalls);
+  if (!toolPanels && !resultPanels && !executionPanels) return '';
+  const content = `${thinkingTimeline}${toolPanels}${resultPanels}${executionPanels}`;
   return `
     <details class="copilot-technical-details">
       <summary><span><i class="fa-solid fa-brain"></i> Thinking · Quá trình xử lý</span><i class="fa-solid fa-chevron-down"></i></summary>
@@ -1150,7 +1151,16 @@ function renderCopilotAttachments() {
 }
 
 function renderCopilotRetrievalContext(contextSelection) {
-  if (!contextSelection || contextSelection.knowledgeMode === 'disabled') return '';
+  if (!contextSelection) return '';
+  const webSearch = contextSelection.webSearch;
+  if (webSearch?.enabled) {
+    const sources = Array.isArray(webSearch.sources) ? webSearch.sources : [];
+    const resultCount = Number(webSearch.resultCount) || sources.length;
+    const status = webSearch.error ? 'Không thể lấy kết quả web' : resultCount > 0 ? `${resultCount} kết quả` : 'Không có kết quả';
+    const sourceNames = sources.map(source => source.title || source.url).filter(Boolean);
+    return `<div class="copilot-rag-context"><div><i class="fa-solid fa-globe"></i><span>Web Search</span><span>${escapeCopilotHtml(status)}</span></div>${sourceNames.length ? `<small><i class="fa-solid fa-link"></i> ${escapeCopilotHtml(sourceNames.join(' · '))}</small>` : ''}</div>`;
+  }
+  if (contextSelection.knowledgeMode === 'disabled') return '';
   const pipeline = contextSelection.retrievalPipeline || {};
   const sources = Array.isArray(contextSelection.documentSources) ? contextSelection.documentSources : [];
   if (!sources.length) return '';
