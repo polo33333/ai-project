@@ -365,13 +365,13 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 }
 :root[data-theme="dark"] .page-chat-character-count { color: #7888a2; }
 :root[data-theme="dark"] .chat-workspace .chat-user-message-bubble {
-  border-color: #3c4267;
-  color: #e1e6f2;
-  background: linear-gradient(135deg, #292b49, #252a42);
-  box-shadow: 0 4px 12px #00000020;
+  border-color: #3b82f6;
+  color: #fff;
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
+  box-shadow: 0 4px 14px rgba(2, 6, 23, .28);
 }
-:root[data-theme="dark"] .chat-user-message-meta { color: #d8def0; }
-:root[data-theme="dark"] .chat-message-time { color: #8997b0; }
+:root[data-theme="dark"] .chat-user-message-meta { color: rgba(255,255,255,.9); }
+:root[data-theme="dark"] .chat-user-message-meta .chat-message-time { color: rgba(255,255,255,.7); }
 :root[data-theme="dark"] .chat-user-message-avatar {
   border: 1px solid #45476d;
   color: #c5bcff;

@@ -2237,7 +2237,8 @@ code {
 
 #sql-sources-table {
   table-layout: fixed;
-  min-width: 960px;
+  width: 1510px;
+  min-width: 1510px;
 }
 
 .sql-sources-card .data-table-container {
@@ -2253,6 +2254,18 @@ code {
 
 #sql-sources-table td:last-child {
   text-align: right;
+}
+
+#sql-sources-table th:nth-child(6),
+#sql-sources-table td:nth-child(6) {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+#sql-sources-table th:last-child,
+#sql-sources-table td:last-child {
+  width: 320px;
+  min-width: 320px;
 }
 
 #sql-pagination {
@@ -5669,11 +5682,11 @@ body.dictionary-modal-open {
 }
 
 .chat-workspace .chat-user-message-bubble {
-  border: 1px solid #e3e6fb;
+  border: 1px solid #2563eb;
   border-radius: 14px 14px 3px 14px;
-  color: #27324a;
-  background: linear-gradient(135deg, #f2f1ff, #faf9ff);
-  box-shadow: 0 3px 10px rgba(79, 70, 229, .06);
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, .18);
 }
 
 .chat-user-message-meta,
@@ -5685,7 +5698,7 @@ body.dictionary-modal-open {
 
 .chat-user-message-meta {
   margin-bottom: 4px;
-  color: #283557;
+  color: rgba(255, 255, 255, .88);
   font-size: 11.5px;
 }
 
@@ -5912,6 +5925,8 @@ body.dictionary-modal-open {
 @media (max-width: 900px) {
   .chat-workspace .chat-sidebar { width: 290px !important; min-width: 290px !important; flex-basis:290px !important; }
 }
+
+.chat-user-message-meta .chat-message-time { color: rgba(255, 255, 255, .72); }
 
 /* ==========================================================================
  * SIDE RIGHT PANEL DRAWER (SLIDE-IN FROM RIGHT)

@@ -19,7 +19,7 @@ Mục tiêu là tăng tỷ lệ hoàn thành đúng yêu cầu dữ liệu, SQL,
 | --- | --- | --- |
 | Eval chỉ đo format | `scripts/evaluate_local_harness.js` kiểm tra kind/tool; có rule SQL score, regression và eval document retrieval nhưng chưa có benchmark SQL end-to-end với đáp án chuẩn | Xây golden set và execution-match trên SQL Server fixture |
 | Schema chỉ chọn bằng regex | Chưa đúng: `core.js` gọi retrieval kết hợp lexical, glossary và Qdrant; cờ schema selector chỉ tắt lượt LLM chọn lại bảng | Cải thiện pipeline hiện có, không tạo pipeline trùng |
-| Schema chưa có embedding thật | `qdrantService.generateVector()` tạo vector từ ký tự và `sin(charCode + i)` cho cả index/query schema, không có bảo đảm tương đồng ngữ nghĩa hoặc khớp chuỗi con. Document search dùng `embedTexts`, nhưng hàm này cũng có thể fallback deterministic theo cấu hình | Migration schema sang embedding thật với chế độ strict và provenance (Giai đoạn 2) |
+| Schema đã dùng embedding provider | Index và query schema hiện dùng chung `embedTexts()`. Hàm pseudo-vector `generateVector()` của bản cũ đã được loại bỏ; `generateDeterministicVector()` chỉ còn là fallback khi cấu hình cho phép | Tiếp tục bổ sung chế độ strict và provenance cho fallback (Giai đoạn 2) |
 | Planner có thể khóa vào bảng sai | Planner chọn một bảng chính; evaluator/harness có thể ép SQL về bảng đó | Phân biệt lựa chọn rõ ràng với suy luận, hỗ trợ tập bảng JOIN và chọn lại có giới hạn |
 | Context 16K chưa tối ưu | `.env.example` đặt 16K, adapter ưu tiên provider; compaction và schema có giới hạn riêng | Đo cấu hình hiệu lực và lượng thông tin mất; thử budget/context theo từng yếu tố |
 | Thiếu few-shot nghiệp vụ | Prompt có mẫu JSON protocol và hướng dẫn SQL/chart/export, chưa có ví dụ SQL theo schema | Kho ví dụ kiểm duyệt, chọn theo skill/schema và giới hạn token |
@@ -251,7 +251,7 @@ Trạng thái triển khai: đã thêm identity ổn định `dbSourceId + dbNam
 
 ### 7.2. Embedding và migration
 
-- Tái sử dụng `embedTexts` cho index và query schema, thay cho `generateVector` (hash ký tự không mang ngữ nghĩa — mục 1). Kiểm tra đường fallback trước khi dùng. Không gọi `generateVector` cho query gửi vào collection embedding thật.
+- Index và query schema đã dùng chung `embedTexts`; `generateVector` cũ đã được loại bỏ. Tiếp tục kiểm tra đường fallback trước khi dùng và không trộn deterministic vector với collection embedding thật.
 - Tạo collection schema có version mới. Đo dimension thực tế, lưu embedding model/version/dimension/schema revision; không trộn không gian vector dù cùng số chiều.
 - Index bảng, cột, mô tả nghiệp vụ, glossary và relationships. Payload có DB/schema/table/column identity, trạng thái active và phạm vi truy cập cần thiết.
 - Backfill collection mới, kiểm tra số lượng/metadata, chạy shadow retrieval và golden set, sau đó mới chuyển cấu hình/alias có kiểm soát.

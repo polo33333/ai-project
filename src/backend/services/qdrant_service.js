@@ -85,24 +85,6 @@ class QdrantService {
     });
   }
 
-  /**
-   * Simple, fast deterministic embedding generator (384 dimensions)
-   */
-  generateVector(text) {
-    const vector = new Array(this.vectorSize).fill(0);
-    const str = String(text).toLowerCase();
-    
-    for (let i = 0; i < str.length; i++) {
-      const charCode = str.charCodeAt(i);
-      const index = (charCode * (i + 1) * 31) % this.vectorSize;
-      vector[index] += Math.sin(charCode + i) * 0.1;
-    }
-
-    // Normalize vector
-    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0)) || 1;
-    return vector.map(val => Number((val / magnitude).toFixed(6)));
-  }
-
   generateDeterministicVector(text, size = this.documentVectorSize) {
     const vector = new Array(size).fill(0);
     const tokens = String(text || '').toLowerCase().match(/[\p{L}\p{N}_]+/gu) || [];

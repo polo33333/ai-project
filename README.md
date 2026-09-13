@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Pipeline tài liệu `Import/Watch Folder -> Parse -> Chunk -> BGE-M3 -> Qdrant -> Hybrid Retrieval -> LLM` đã có lát cắt chạy thật, nhưng metadata vẫn dùng JSON, ingestion chạy trong tiến trình Node.js và chưa có queue/DLQ production. Xem [Trạng thái triển khai](#trạng-thái-triển-khai) trước khi sử dụng với dữ liệu thật.
 
-Rà soát backend và local model gần nhất ngày **10/09/2026**. Xem [kế hoạch tối ưu Local Model v2](docs/LOCAL_MODEL_OPTIMIZATION_MASTER_PLAN_v2.md) và [đánh giá backend](docs/Backend_Review_Development_Plan-080926.md).
+README đối chiếu với mã nguồn ngày **13/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -30,18 +30,21 @@ Rà soát backend và local model gần nhất ngày **10/09/2026**. Xem [kế h
 - Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
 - Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
 - Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
-- Workflow engine: thực thi bước tự động, điều kiện, retry và trace.
+- Workflow engine: thực thi bước tự động, điều kiện, retry và trace; tab Workflow Automation hiện tạm ẩn trên giao diện.
+- Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu tại `data/skills.json`.
+- Memory Core v2 có pending turn, context budget, summary và semantic routing; các cờ v2 mặc định tắt trong `.env.example`.
 
 ### API và quản trị
 
 - Giao diện dashboard bằng HTML/CSS/JavaScript thuần, không có build step frontend.
 - Session authentication và tài khoản có role.
 - API key nội bộ, embed-chat configuration và endpoint OpenAI-compatible cơ bản.
-- System logs, chat audit, analytics và system tools.
+- System logs, chat audit, analytics và system tools. Lịch sử chat có cột nguồn (Page Chat, Embed Chat, API); log xử lý chat được lọc khỏi System Logs.
 - Library hỗ trợ upload, parse PDF/DOCX/XLSX/CSV/TXT/SQL/Markdown, chunk, index, preview và xóa tài liệu.
 - Watch Folder theo dõi filesystem thật, quét file ban đầu, chống trùng bằng `sourcePath` + SHA-256 và cập nhật lại document khi file đổi.
 - UI Chat hiển thị mode retrieval, RRF/reranker, số chunk và nguồn tài liệu.
-- MCP Sources vẫn ở mức prototype cấu hình.
+- MCP client kết nối server qua stdio, Streamable HTTP hoặc SSE; có handshake, discovery tools/resources và thực thi tool qua Agent Core/registry.
+- Embed Chat hiển thị bảng Markdown, biểu đồ, link xuất file; hỗ trợ `data-theme="auto|light|dark"` và preview theo Embed ID từ trang quản trị.
 
 ## Trạng thái triển khai
 
@@ -59,7 +62,11 @@ Rà soát backend và local model gần nhất ngày **10/09/2026**. Xem [kế h
 | Semantic SQL eval | Runner offline khả dụng | Logic chấm điểm ở `scripts/eval/`; corpus hiện có 12 case, live baseline phụ thuộc data source eval phù hợp |
 | Library | Khả dụng ở mức MVP | Upload/parse/chunk/index thật; chống upload trùng nội dung bằng SHA-256 |
 | Watch Folder | Khả dụng ở mức MVP | Theo dõi filesystem, debounce, retry và cập nhật idempotent theo file nguồn |
-| MCP Sources | Prototype | CRUD cấu hình; chưa có MCP handshake/discovery/execution thật |
+| MCP Sources | Đã triển khai kết nối thật | SDK MCP, handshake/discovery/execution; cần khai báo server riêng, test stdio không chứng minh mọi server bên ngoài tương thích |
+| Embed Chat | Đã triển khai | Endpoint JSON, domain allowlist, giới hạn theo cấu hình; admin preview bỏ kiểm tra domain |
+| Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
+| Memory Core v2 | Triển khai theo feature flag | Các cờ pending turn/budget/summary/semantic routing mặc định tắt trong cấu hình mẫu |
+| Workflow Automation | Backend có, tab tạm ẩn | Chưa đưa lại vào điều hướng UI |
 | PostgreSQL/Redis/BullMQ | Chưa triển khai | Đang nằm trong kế hoạch hoàn thiện Phase 1 |
 | Document Hybrid Search | Đã triển khai, phụ thuộc dịch vụ | BGE-M3 dense + BM25 + RRF; khi BGE-M3 lỗi vẫn tra cứu BM25 nhưng chất lượng semantic giảm |
 | BGE Reranker | Sẵn sàng tích hợp | Bật bằng `RERANKER_ENABLED=true` khi reranker HTTP hoạt động |
@@ -105,6 +112,9 @@ Các biến đang được hỗ trợ:
 ```dotenv
 # HTTP server
 PORT=3000
+HOST=127.0.0.1
+BOOTSTRAP_ADMIN_PASSWORD=replace-with-your-password
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
 
 # Qdrant
 QDRANT_URL=http://127.0.0.1:6333
@@ -144,7 +154,19 @@ LOCAL_MODEL_MAX_SQL_CALLS=3
 
 # Local JSON log retention
 MAX_CHAT_HISTORY=5000
+
+# Memory Core v2: bật theo nhu cầu sau khi kiểm tra
+MEMORY_PENDING_TURN_ENABLED=false
+MEMORY_CONTEXT_BUDGET_ENABLED=false
+MEMORY_SUMMARY_ENABLED=false
+MEMORY_SEMANTIC_ROUTING_ENABLED=false
+
+# MCP
+MCP_CONNECT_TIMEOUT_MS=15000
+MCP_CALL_TIMEOUT_MS=30000
 ```
+
+Danh sách cấu hình đầy đủ và mặc định nằm trong [.env.example](.env.example). Thay `BOOTSTRAP_ADMIN_PASSWORD` trước lần chạy đầu; biến này chỉ tạo admin khi chưa có `accounts.json`, không đổi mật khẩu tài khoản đã tồn tại.
 
 Không lưu API key, password hoặc connection string thật vào Git. AI Provider hiện được cấu hình qua giao diện quản trị và đang lưu trong local JSON; xem phần [Cảnh báo bảo mật](#cảnh-báo-bảo-mật).
 
@@ -173,7 +195,7 @@ Trên Windows, `npm start` gọi `scripts/start-local.ps1` và tự động:
 3. Tải `EMBEDDING_MODEL` nếu model chưa có trên máy.
 4. Warm-up endpoint embedding để model sẵn sàng trước khi nhận tài liệu.
 5. Khởi động Qdrant từ `QDRANT_EXE` nếu Qdrant chưa chạy.
-6. Khởi động KnowledgeHub bằng `node server.js`.
+6. Kiểm tra/tải local chat model (`LOCAL_AI_MODEL`, mặc định trong script là `qwen3.5:9b`) và khởi động KnowledgeHub qua `scripts/supervisor.js`.
 
 Các lần chạy sau không tải lại model vì Ollama đã lưu model cục bộ. Nếu Ollama hoặc Qdrant đã chạy, script chỉ kiểm tra và sử dụng tiến trình hiện có.
 
@@ -182,14 +204,14 @@ Mở:
 - Dashboard: <http://localhost:3000>
 - Login: <http://localhost:3000/login.html>
 
-Tài khoản khởi tạo của bản prototype:
+Tài khoản khởi tạo lần đầu:
 
 ```text
 Username: admin
-Password: admin123
+Password: giá trị BOOTSTRAP_ADMIN_PASSWORD đã đặt trong .env
 ```
 
-**Phải đổi thông tin đăng nhập này trước khi cho phép máy khác truy cập.** Phiên bản hiện tại chưa có quy trình bắt buộc đổi password lần đầu.
+Nếu chưa có tài khoản và thiếu biến này, backend dừng với thông báo yêu cầu cấu hình. Supervisor hỗ trợ yêu cầu khởi động lại từ Settings; không tự restart khi server thoát bất ngờ.
 
 ## Thiết lập nhanh
 
@@ -218,6 +240,14 @@ Script tạo bản sao trước migration trong `data/backup/`. Sau migration, �
 
 ## Kiến trúc hiện tại
 
+### Embed Chat và MCP
+
+Tại **API tích hợp & Embed Chat**, tạo cấu hình rồi sao chép mã nhúng với `data-embed-id` tương ứng. `data-title` đặt tên hiển thị, độc lập với ID/tên cấu hình. `data-theme="auto"` theo `data-theme` trên `<html>`, nếu không có thì theo hệ điều hành; không tự nhận biết mọi quy ước theme của website khác.
+
+Nút **Mở thử** bật preview theo ID đã chọn; nhấn lại ẩn cả khung và nút nổi. Preview của admin đăng nhập bỏ qua domain allowlist, vẫn kiểm tra ID/trạng thái và giới hạn yêu cầu. Widget công khai vẫn kiểm tra domain. Embed dùng `/api/embed/chat`, trả kết quả một lần; Page Chat dùng stream tiến trình. Hai luồng cùng gọi Intelligent Core nhưng khác quyền và giới hạn lịch sử/kết quả.
+
+Tại **Nguồn MCP Server**, thêm endpoint HTTP/SSE hoặc command stdio. Hệ thống thử kết nối, lấy tools/resources và đăng ký tools vào luồng agent; dùng nút **Kết nối** để thử lại khi lỗi. Cấu hình lưu trong `data/mcp_servers.json`. Đây là MCP client kết nối dịch vụ ngoài, không phải endpoint MCP server do KnowledgeHub tự cung cấp. Khả năng gọi tool còn phụ thuộc model, quyền và trạng thái server.
+
 ```text
 Browser
   |
@@ -239,6 +269,7 @@ Node.js HTTP Server
   |-- Library/Watch Folder ---------> Local files + extracted text
   |-- SQL Server Connector ------> Microsoft SQL Server
   |-- Qdrant Service ------------> Qdrant
+  |-- MCP Client ---------------> MCP servers (stdio/HTTP/SSE)
   `-- Storage Helper ------------> data/*.json
 ```
 
@@ -308,6 +339,15 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 | `POST` | `/api/library/delete` | Xóa tài liệu, nội dung và vector |
 | `GET` | `/api/watchfolder` | Danh sách thư mục được giám sát |
 | `GET` | `/api/watchfolder/logs` | Live Audit Logs của Watch Folder |
+| `GET` | `/api/training/skills` | Danh sách skill và trạng thái cấu hình |
+| `POST` | `/api/training/skills/save` | Lưu chỉnh sửa skill |
+| `GET` | `/api/mcp/servers` | Danh sách và trạng thái MCP |
+| `POST` | `/api/mcp/add` | Thêm và thử kết nối MCP |
+| `POST` | `/api/mcp/connect` | Kết nối lại MCP theo ID |
+| `POST` | `/api/mcp/delete` | Gỡ MCP server |
+| `GET` | `/api/embed/configs` | Danh sách cấu hình Embed |
+| `POST` | `/api/embed/chat` | Chat qua Embed ID; public có kiểm tra domain |
+| `GET` | `/health/live`, `/health/ready` | Endpoint health cơ bản, không xác nhận mọi dịch vụ phụ trợ |
 
 Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embed chat. Endpoint `/api/v1/chat/completions` hiện chỉ tương thích một phần với OpenAI API; chưa hỗ trợ đầy đủ streaming và toàn bộ tham số chuẩn.
 
@@ -330,6 +370,11 @@ npm run migrate:dictionary-identity   # migration identity + backup
 npm run sanitize:chat-data            # loại secret khỏi lịch sử chat đã lưu
 npm run training:collect
 npm run training:evaluate
+npm run eval:memory                   # đánh giá Memory Core
+npm run eval:sql                      # SQL security corpus
+npm run benchmark:http               # benchmark HTTP
+npm run backup                       # backup dữ liệu
+npm run restore -- <backup-path>      # xem yêu cầu/tham số trong scripts/backup_restore.js
 ```
 
 Có thể kiểm tra cú pháp toàn bộ JavaScript bằng PowerShell:
@@ -358,14 +403,14 @@ Phiên bản hiện tại là prototype và **không nên expose trực tiếp r
 - API key của AI Provider hiện được lưu plaintext trong `data/ai_providers.json`.
 - DTO provider không trả API key gốc; credential thực thi chỉ được đọc trong backend.
 - Password tài khoản mới dùng scrypt; hash SHA-256 cũ được nâng cấp sau lần đăng nhập hợp lệ.
-- Có tài khoản admin mặc định.
+- Admin được bootstrap bằng `BOOTSTRAP_ADMIN_PASSWORD`; dữ liệu cũ có thể vẫn chứa tài khoản/mật khẩu từ bản trước.
 - Chưa có RBAC theo Library/folder/document.
 - Chưa có CSRF protection hoàn chỉnh và cookie production hardening.
 - SQL Connector phải sử dụng database account read-only riêng.
 - Kết quả SQL loại các trường password/secret/token và các cột audit `CreateUser`, `CreateDate`, `UpdateUser`, `UpdateDate` trước khi gửi model hoặc UI.
 - Các file `data/*.json`, `.env`, archive và log có thể chứa secret hoặc dữ liệu nghiệp vụ.
-- `server.listen(PORT)` hiện không chỉ định host; URL localhost trong log không có nghĩa server chỉ lắng nghe localhost.
-- JSON persistence đang ghi đồng bộ và chỉ log lỗi ghi; session cũng được persist sau mỗi request hợp lệ. Cần xử lý độ bền dữ liệu và đo hiệu năng trước khi triển khai nhiều người dùng.
+- Server bind `HOST`, mặc định `127.0.0.1`.
+- JSON persistence ghi đồng bộ qua file tạm, `fsync` và rename; lỗi đọc/ghi được ném lên caller. Chưa có transaction giữa nhiều file hoặc cơ chế database đa tiến trình. Session touch được ghi theo khoảng `SESSION_TOUCH_INTERVAL_MS` (mặc định 5 phút).
 
 Trước khi chia sẻ repo hoặc triển khai:
 
@@ -387,7 +432,7 @@ Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ 
 - Nâng chunking hiện tại lên semantic/token-aware chunking có locator theo page/sheet/section.
 - Hoàn thiện citation validation và khả năng mở đúng vị trí nguồn.
 - Hoàn thiện sensitivity-aware routing và circuit breaker cho AI Provider.
-- Docker Compose, backup/restore và automated tests.
+- Docker Compose và mở rộng kiểm thử triển khai; script backup/restore và automated tests đã có trong repository.
 
 ### Phase 2 - Chất lượng tìm kiếm
 
@@ -399,12 +444,16 @@ Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ 
 
 ### Phase 3-4
 
-- Phase 3: RBAC, persistent Knowledge Graph, LLM entity/relation extraction, community summary, Wiki, MCP Server thật và SDK/API.
+- Phase 3: RBAC chi tiết, persistent Knowledge Graph, LLM entity/relation extraction, community summary, Wiki và mở rộng SDK/API. MCP client kết nối server ngoài đã triển khai.
 - Phase 4: OCR, Cloud Sync, Multi-user, AI Agents, plugin sandbox và enterprise operations.
 
 Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ chi tiết để giao tự động cho coding agents. Phase 5 chưa được định nghĩa trong master plan hiện hành.
 
 ## Tài liệu
+
+- [Memory Core Upgrade v2](docs/MEMORY_CORE_UPGRADE_PLAN_v2_120926.md)
+- [Skill Core Upgrade](docs/SKILL_CORE_UPGRADE_PLAN_120926.md)
+- [Local Model Optimization v2](docs/LOCAL_MODEL_OPTIMIZATION_MASTER_PLAN_v2.md)
 
 - [Đánh giá backend và kế hoạch phát triển — 08/09/2026](docs/Backend_Review_Development_Plan-080926.md)
 
