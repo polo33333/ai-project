@@ -236,7 +236,7 @@ async function saveGlossaryTermFromModal() {
 
 async function deleteGlossaryTermItem(encodedTerm) {
   const term = decodeURIComponent(encodedTerm);
-  if (!confirm(`Bạn có chắc muốn xóa thuật ngữ "${term}"?`)) return;
+  if (!await showUiConfirm(`Bạn có chắc muốn xóa thuật ngữ "${term}"?`, { title: 'Xóa thuật ngữ', confirmText: 'Xóa thuật ngữ', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/glossary/delete', {
       method: 'POST',

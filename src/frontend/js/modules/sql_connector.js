@@ -181,7 +181,7 @@ async function testDbConnection(id) {
 }
 
 async function deleteDbSource(id) {
-  if (!confirm('Xóa nguồn CSDL này khỏi danh sách?')) return;
+  if (!await showUiConfirm('Xóa nguồn CSDL này khỏi danh sách?', { title: 'Xóa nguồn dữ liệu', confirmText: 'Xóa nguồn', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/sql/delete-source', {
       method: 'POST',

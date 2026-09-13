@@ -81,6 +81,23 @@ test('same-table follow-ups use at most four recent messages', () => {
   assert.equal(memory.getContext(decision).length, 4);
 });
 
+test('frontend history is retained before a backend session exists', () => {
+  const memory = service();
+  const fallbackHistory = [
+    { role: 'user', content: 'tìm nhân viên tên Duy' },
+    { role: 'assistant', content: 'Yên Duy là nhân viên NV004, giới tính Nam.' }
+  ];
+  const decision = memory.route({
+    sessionId: 'new-embed-session',
+    question: 'nhân viên này có giới tính gì',
+    currentPlan: plan('M_Employee'),
+    fallbackHistory
+  });
+  assert.equal(decision.mode, 'recent');
+  assert.equal(decision.reason, 'fallback_history');
+  assert.deepEqual(memory.getContext(decision), fallbackHistory);
+});
+
 test('short web follow-ups reuse recent context and expand the search query', () => {
   const previousPlan = { intent: 'general', table: null, requiredColumns: [], outputs: {} };
   const currentPlan = { intent: 'general', table: null, requiredColumns: [], outputs: {} };

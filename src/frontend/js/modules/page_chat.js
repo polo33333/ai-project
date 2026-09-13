@@ -1501,11 +1501,11 @@ function togglePinChatSession(id, event) {
   showToast(session.pinned ? 'Đã ghim đoạn chat.' : 'Đã bỏ ghim đoạn chat.', 'info');
 }
 
-function renameChatSession(id, event) {
+async function renameChatSession(id, event) {
   event?.stopPropagation();
   const session = window.chatSessions.find(item => item.id === id);
   if (!session) return;
-  const nextTitle = prompt('Đổi tên đoạn chat:', session.title);
+  const nextTitle = await showUiPrompt('Nhập tên mới cho cuộc trò chuyện.', session.title, { title: 'Đổi tên cuộc trò chuyện', confirmText: 'Lưu tên', icon: 'fa-pen' });
   if (nextTitle === null) return;
   const cleanTitle = nextTitle.trim().slice(0, 200);
   if (!cleanTitle) return showToast('Tên đoạn chat không được để trống.', 'warn');
@@ -1538,11 +1538,11 @@ function createNewChatSession() {
   renderChatSessionsList();
 }
 
-function deleteSingleChatSession(id, event) {
+async function deleteSingleChatSession(id, event) {
   event?.stopPropagation();
   const session = window.chatSessions.find(s => s.id === id);
   const title = session ? session.title : 'đoạn chat';
-  if (!confirm(`Xóa "${title}"? Hành động này không thể hoàn tác.`)) return;
+  if (!await showUiConfirm(`Xóa "${title}"? Hành động này không thể hoàn tác.`, { title: 'Xóa cuộc trò chuyện', confirmText: 'Xóa cuộc trò chuyện', tone: 'danger' })) return;
   window.chatSessions = window.chatSessions.filter(s => s.id !== id);
   clearBackendConversationMemory(id);
   if (window.currentChatSessionId === id) {
@@ -1573,8 +1573,8 @@ function selectChatSession(id) {
   renderChatSessionsList();
 }
 
-function clearAllChatSessions() {
-  if (confirm('Bạn có chắc muốn xóa tất cả các cuộc trò chuyện?')) {
+async function clearAllChatSessions() {
+  if (await showUiConfirm('Bạn có chắc muốn xóa tất cả các cuộc trò chuyện?', { title: 'Xóa toàn bộ cuộc trò chuyện', confirmText: 'Xóa tất cả', tone: 'danger' })) {
     window.chatSessions.forEach(session => clearBackendConversationMemory(session.id));
     window.chatSessions = [];
     saveChatSessions();

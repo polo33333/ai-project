@@ -353,7 +353,7 @@ async function deleteBusinessDomain(encodedDomain) {
   const domain = decodeURIComponent(encodedDomain);
   const usedCount = getDictionaryTables().filter(table => table.domain === domain).length;
   const warning = usedCount ? `Nhóm "${domain}" đang được ${usedCount} bảng sử dụng. Chỉ xóa bộ từ khóa, domain trên bảng vẫn được giữ. Tiếp tục?` : `Xóa nhóm nghiệp vụ "${domain}"?`;
-  if (!confirm(warning)) return;
+  if (!await showUiConfirm(warning, { title: 'Xóa nhóm nghiệp vụ', confirmText: 'Xóa nhóm', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/dictionary/domains/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain }) });
     const data = await res.json();
@@ -985,7 +985,7 @@ function cancelEditTableRelationship() {
 }
 
 async function deleteTableRelationship(encodedId) {
-  if (!confirm('Xóa quan hệ bảng này?')) return;
+  if (!await showUiConfirm('Xóa quan hệ bảng này?', { title: 'Xóa quan hệ bảng', confirmText: 'Xóa quan hệ', tone: 'danger' })) return;
   const relationshipId = decodeURIComponent(encodedId);
   try {
     const res = await fetch('/api/dictionary/relationships/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: relationshipId }) });

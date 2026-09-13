@@ -143,7 +143,7 @@ async function toggleWatchFolder(id) {
 
 async function deleteWatchFolder(id) {
   const folder = window.watchFoldersData.find(item => item.id === id);
-  if (!folder || !confirm(`Xóa cấu hình giám sát "${folder.path}"?`)) return;
+  if (!folder || !await showUiConfirm(`Xóa cấu hình giám sát "${folder.path}"?`, { title: 'Xóa Watch Folder', confirmText: 'Xóa cấu hình', tone: 'danger' })) return;
   try {
     await mutateWatchFolder('/api/watchfolder/delete', id);
     if (typeof showToast === 'function') showToast('Đã xóa thư mục giám sát.', 'info');

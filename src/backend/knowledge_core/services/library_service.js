@@ -8,7 +8,7 @@ const { parse: parseCsv } = require('csv-parse/sync');
 const StorageHelper = require('../../utils/storage_helper');
 const qdrantService = require('../../services/qdrant_service');
 
-const DATA_DIR = path.join(__dirname, '../../../../data');
+const DATA_DIR = StorageHelper.getDataDirectory();
 const FILES_DIR = path.join(DATA_DIR, 'library_files');
 const CONTENT_DIR = path.join(DATA_DIR, 'library_content');
 for (const dir of [FILES_DIR, CONTENT_DIR]) fs.mkdirSync(dir, { recursive: true });
@@ -17,6 +17,37 @@ class LibraryService {
   constructor() {
     this.documents = StorageHelper.loadJson('library.json', []);
     this.maxFileBytes = Math.max(1024 * 1024, Number(process.env.LIBRARY_MAX_FILE_MB || 20) * 1024 * 1024);
+    if (this.repairManagedPaths()) this.persist();
+  }
+
+  repairManagedPaths() {
+    let changed = false;
+    const managedFiles = fs.readdirSync(FILES_DIR);
+    for (const document of this.documents) {
+      if (!document?.id) continue;
+
+      if (!document.storagePath || !fs.existsSync(document.storagePath)) {
+        const storedName = document.storagePath ? path.basename(document.storagePath) : '';
+        const matchingName = (storedName && managedFiles.includes(storedName) ? storedName : null)
+          || managedFiles.find(name => name.startsWith(`${document.id}-`));
+        if (matchingName) {
+          const repairedStoragePath = path.join(FILES_DIR, matchingName);
+          if (document.storagePath !== repairedStoragePath) {
+            document.storagePath = repairedStoragePath;
+            changed = true;
+          }
+        }
+      }
+
+      if (!document.contentPath || !fs.existsSync(document.contentPath)) {
+        const repairedContentPath = path.join(CONTENT_DIR, `${document.id}.txt`);
+        if (fs.existsSync(repairedContentPath) && document.contentPath !== repairedContentPath) {
+          document.contentPath = repairedContentPath;
+          changed = true;
+        }
+      }
+    }
+    return changed;
   }
 
   persist() { StorageHelper.saveJson('library.json', this.documents); }

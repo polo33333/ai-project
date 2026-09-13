@@ -9,6 +9,19 @@ function routeMemory({ currentPlan, session, question, fallbackHistory = [], now
     return { mode: 'recent', reason: 'memory_core_disabled', maxMessages: 10, fallbackHistory };
   }
   try {
+    // Public/embed clients can already have a valid in-browser conversation
+    // before the server has persisted a memory session. Keep that context for
+    // follow-up questions instead of treating every turn as independent.
+    if (!session && Array.isArray(fallbackHistory) && fallbackHistory.length) {
+      return {
+        mode: 'recent',
+        reason: 'fallback_history',
+        maxMessages: policy.recentMaxMessages(),
+        confidence: 'medium',
+        sessionId: null,
+        fallbackHistory
+      };
+    }
     const base = detectTopic({ currentPlan, lastPlan: session?.lastPlan, questionText: question, references: session?.references, now });
     const decision = {
       ...base,

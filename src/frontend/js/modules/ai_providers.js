@@ -233,7 +233,7 @@ async function activateAiProvider(id) {
 }
 
 async function deleteAiProvider(id) {
-  if (!confirm('Xóa Provider này khỏi Router?')) return;
+  if (!await showUiConfirm('Xóa Provider này khỏi Router?', { title: 'Xóa AI Provider', confirmText: 'Xóa Provider', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/ai-providers/delete', {
       method: 'POST',

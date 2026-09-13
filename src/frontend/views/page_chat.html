@@ -78,8 +78,30 @@
       <!-- Messages Container -->
       <div id="page-chat-messages-container"
         style="flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 18px; background: #f8fafc;">
-        <!-- Chat bubbles populated dynamically -->
       </div>
+
+      <section class="chat-welcome" aria-labelledby="chat-welcome-title">
+        <div class="chat-welcome-content">
+          <div class="chat-welcome-brand" aria-hidden="true"><i class="fa-solid fa-wand-magic-sparkles"></i><span>KAI</span></div>
+          <h2 id="chat-welcome-title">Bạn muốn khám phá dữ liệu gì hôm nay?</h2>
+          <p>Đặt câu hỏi bằng ngôn ngữ tự nhiên để khám phá dữ liệu, viết SQL hoặc tạo biểu đồ.</p>
+          <div class="chat-welcome-suggestions">
+            <button type="button" onclick="useQuickPrompt('Liệt kê các bảng dữ liệu hiện có và mô tả ngắn nội dung của từng bảng.')">
+              <i class="fa-solid fa-database" aria-hidden="true"></i><span><strong>Khám phá bảng dữ liệu</strong><small>Tìm hiểu dữ liệu đang có</small></span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+            <button type="button" onclick="useQuickPrompt('Phân tích doanh thu theo tháng từ dữ liệu hiện có và vẽ biểu đồ xu hướng. Nếu thiếu thông tin, hãy hỏi tôi trước.')">
+              <i class="fa-solid fa-chart-column" aria-hidden="true"></i><span><strong>Phân tích doanh thu</strong><small>Nhìn rõ xu hướng qua biểu đồ</small></span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+            <button type="button" onclick="useQuickPrompt('Tôi muốn tính tổng, giá trị nhỏ nhất, lớn nhất và trung bình. Hãy giúp tôi chọn bảng và cột phù hợp từ dữ liệu hiện có.')">
+              <i class="fa-solid fa-calculator" aria-hidden="true"></i><span><strong>Tính toán thống kê</strong><small>Tổng hợp các con số cần quan tâm</small></span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+            <button type="button" onclick="useQuickPrompt('Giúp tôi viết truy vấn SQL từ dữ liệu hiện có. Hãy hỏi tôi muốn lấy thông tin gì và giải thích truy vấn đề xuất.')">
+              <i class="fa-solid fa-code" aria-hidden="true"></i><span><strong>Viết truy vấn SQL</strong><small>Biến câu hỏi thành truy vấn</small></span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+          <small class="chat-welcome-hint">Chọn một gợi ý để chỉnh sửa, hoặc nhập câu hỏi của bạn bên dưới.</small>
+        </div>
+      </section>
 
       <!-- Quick Suggestion Prompts Bar -->
       <div id="quick-prompts-bar"

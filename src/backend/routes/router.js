@@ -777,11 +777,16 @@ async function handleRequest(req, res) {
         .slice(-authorization.config.maxHistory)
         .map(item => ({ role: item.role, content: item.content.slice(0, authorization.config.maxQuestionLength) })) : [];
       const safeSessionId = String(sessionId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100) || null;
+      // Scope public memory by embed configuration so two widgets cannot read
+      // each other's state even if a client-provided session id collides.
+      const memorySessionId = safeSessionId
+        ? conversationMemoryService.normalizeSessionId(`${authorization.config.id}-${safeSessionId}`)
+        : null;
       const coreResult = await intelligentCore.chat(queryText, {
         history: safeHistory,
         useTools: true,
         permissions: permissionsForAccount(null, true),
-        session: safeSessionId ? { id: safeSessionId, source: 'embed' } : undefined
+        session: memorySessionId ? { id: memorySessionId, source: 'embed' } : undefined
       });
       const execMs = Date.now() - startTime;
       const activeProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
@@ -790,11 +795,32 @@ async function handleRequest(req, res) {
       const payload = buildChatClientPayload(coreResult, execMs);
       if (payload.toolResult?.rows) payload.toolResult.rows = payload.toolResult.rows.slice(0, authorization.config.maxRows);
       const auditStatus = coreResult.trace?.completionStatus || 'SUCCESS';
+      const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
+        sessionId: memorySessionId,
+        question: queryText,
+        reply: coreResult.replyText,
+        currentPlan: coreResult.trace?.training?.plan,
+        toolCalls: coreResult.toolCalls || [],
+        completionStatus: auditStatus,
+        responseEvaluation: coreResult.trace?.training?.responseEvaluation
+      });
+      const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
+        : conversationMemoryService.recordPendingTurn({
+          sessionId: memorySessionId,
+          question: queryText,
+          currentPlan: coreResult.trace?.training?.plan,
+          completionStatus: auditStatus,
+          responseEvaluation: coreResult.trace?.training?.responseEvaluation
+        });
       const audit = loggerService.addChatAudit(queryText, coreResult.replyText, payload.generatedSql, activeProvider, execMs, auditStatus, null, {
         endpoint: '/api/embed/chat', embedId: authorization.config.id, origin: authorization.origin, preview: isAdminPreview,
         historyCount: safeHistory.length, sessionId: safeSessionId, toolCalls: payload.toolCalls,
         executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null,
-        contextSelection: coreResult.contextSelection || null, diagnostics: buildChatDiagnostics(coreResult.trace)
+        contextSelection: coreResult.contextSelection || null,
+        memoryDecision: coreResult.trace?.memoryDecision || null,
+        memoryPersisted: memoryPersistence.persisted,
+        pendingTurnRecorded: pendingPersistence.recorded,
+        diagnostics: buildChatDiagnostics(coreResult.trace)
       });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({

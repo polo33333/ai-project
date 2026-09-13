@@ -161,6 +161,38 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 }
 :root[data-theme="dark"] .watchfolder-status.active { color: #86e4bd !important; background: #14382e !important; }
 :root[data-theme="dark"] .watchfolder-status.paused { color: #f0c985 !important; background: #3e321d !important; }
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-filter-fieldset {
+  background: #172337;
+  border-color: #3b4a62;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-filter-fieldset legend {
+  color: #b8c6dc;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-filter-fieldset label {
+  color: #aebbd0;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-filter-fieldset input {
+  accent-color: #7567d8;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-notice {
+  color: #e7bd7a;
+  background: #352b1d;
+  border: 1px solid #5a472b;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-notice i {
+  color: #d99a4e;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .form-control:focus {
+  border-color: #8175c9 !important;
+  outline: none;
+  box-shadow: 0 0 0 2px #8175c91f;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .watchfolder-form > div:first-child small {
+  color: #8e9db7;
+}
+:root[data-theme="dark"] #watchfolder-add-modal .copilot-modal-title > i {
+  color: #9d8df1 !important;
+}
 :root[data-theme="dark"] :is(.glossary-term-cell strong,.glossary-meaning,.log-module) {
   color: var(--text-primary) !important;
 }
@@ -215,6 +247,48 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(.training-issue-row:hover,.workflow-run-row:hover) { background: var(--dark-raised); }
 :root[data-theme="dark"] .workflow-run-row { background: var(--dark-surface); border-color: var(--border-color); }
 :root[data-theme="dark"] :is(.training-case,.system-tool-schema > div,.library-drop-zone) { border-color: var(--border-color); background: var(--dark-surface); }
+:root[data-theme="dark"] #library-upload-modal .library-drop-zone {
+  color: #93a3bb;
+  background: #152135;
+  border-color: #40506b;
+}
+:root[data-theme="dark"] #library-upload-modal .library-drop-zone:hover,
+:root[data-theme="dark"] #library-upload-modal .library-drop-zone.has-file {
+  background: #222746;
+  border-color: #7567c7;
+}
+:root[data-theme="dark"] #library-upload-modal .library-drop-zone > i {
+  color: #9184eb;
+}
+:root[data-theme="dark"] #library-upload-modal .library-drop-zone strong {
+  color: #cbd6e7;
+}
+:root[data-theme="dark"] #library-upload-modal .library-drop-zone span {
+  color: #8797b0;
+}
+:root[data-theme="dark"] #library-upload-modal .library-upload-note {
+  color: #a9c8f4;
+  background: #1b304b;
+  border: 1px solid #315177;
+}
+:root[data-theme="dark"] #library-upload-modal .library-upload-note i {
+  color: #73a6eb;
+}
+:root[data-theme="dark"] #library-upload-modal .form-control:focus {
+  border-color: #8175c9 !important;
+  outline: none;
+  box-shadow: 0 0 0 2px #8175c91f;
+}
+:root[data-theme="dark"] #library-upload-modal .form-control[readonly] {
+  color: #91a0b7 !important;
+  background: #142033 !important;
+}
+:root[data-theme="dark"] #library-upload-modal .copilot-modal-title > i {
+  color: #9d8df1 !important;
+}
+:root[data-theme="dark"] .library-preview-content pre::-webkit-scrollbar-thumb {
+  background: #52627d;
+}
 :root[data-theme="dark"] .training-case-body h4 { color: #dce6f5 !important; }
 :root[data-theme="dark"] .training-case-body pre {
   color: #b9c7dc !important;
@@ -272,6 +346,13 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(.chat-input-wrapper,.drawer-header,.modal-header,.modal-footer,.workflow-dialog header,.workflow-dialog footer) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; }
 :root[data-theme="dark"] ::selection { color: #f0ebff; background: #56467f; }
 :root[data-theme="dark"] * { scrollbar-color: #465671 #111a2a; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap) { scrollbar-width:thin; scrollbar-color:#66758e #172235; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar { width:8px; height:8px; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar-track { background:#172235; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar-thumb { border:2px solid #172235; border-radius:999px; background:#66758e; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar-thumb:hover { background:#8290a8; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar-button { display:none; width:0; height:0; }
+:root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar-corner { background:#172235; }
 :root[data-theme="dark"] #view-chat-history .chat-history-table-wrap { --history-scroll-track: #111a2a; --history-scroll-thumb: #465671; --history-scroll-hover: #6c7f9d; }
 :root[data-theme="dark"] .chat-source-tag.page { color:#c7d2fe; border-color:#474a78; background:#252944; }
 :root[data-theme="dark"] .chat-source-tag.embed { color:#d8b4fe; border-color:#594575; background:#302743; }
@@ -537,6 +618,27 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .chat-tool-pipeline>div>div {
     border-bottom: 0;
     border-bottom: 1px solid #433e3e;
+}
+:root[data-theme="dark"] #api-key-modal .api-key-rate-row {
+  background: #101b2b;
+  border-color: #3b4a62;
+}
+:root[data-theme="dark"] #api-key-modal .api-key-rate-unit {
+  background: #243247;
+  color: #b8c6dc;
+  border-color: #3b4a62;
+}
+:root[data-theme="dark"] #api-key-modal .form-control:focus {
+  border-color: #8175c9 !important;
+  outline: none;
+  box-shadow: 0 0 0 2px #8175c91f;
+}
+:root[data-theme="dark"] #api-key-modal .api-key-rate-row:focus-within {
+  border-color: #8175c9;
+  box-shadow: 0 0 0 2px #8175c91f;
+}
+:root[data-theme="dark"] #api-key-modal .api-key-rate-row .form-control:focus {
+  box-shadow: none;
 }
 :root[data-theme="dark"] .api-key-modal-actions {
     background:  #1C283B ;

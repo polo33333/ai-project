@@ -16,7 +16,7 @@ async function fetchLogs() {
 }
 
 async function clearSystemLogs() {
-  if (!confirm('Xóa toàn bộ nhật ký hệ thống?')) return;
+  if (!await showUiConfirm('Xóa toàn bộ nhật ký hệ thống?', { title: 'Xóa nhật ký', confirmText: 'Xóa tất cả', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/logs/clear', { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

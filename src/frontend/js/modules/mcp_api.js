@@ -121,7 +121,7 @@ async function connectMcpServer(id) {
 }
 
 async function deleteMcpServer(id) {
-  if (!confirm('Gỡ MCP Server này?')) return;
+  if (!await showUiConfirm('Gỡ MCP Server này?', { title: 'Gỡ MCP Server', confirmText: 'Gỡ server', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/mcp/delete', {
       method: 'POST',
@@ -457,7 +457,7 @@ async function submitNewApiKeyFromModal() {
 }
 
 async function revokeApiKey(id) {
-  if (!confirm('Thu hồi API Key này?')) return;
+  if (!await showUiConfirm('API Key sẽ ngừng hoạt động ngay sau khi thu hồi.', { title: 'Thu hồi API Key', confirmText: 'Thu hồi key', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/keys/revoke', {
       method: 'POST',
