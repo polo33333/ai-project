@@ -96,10 +96,12 @@ async function dispatchWithProviderFallback(currentProvider, candidates, message
 }
 
 class AgentHarness {
-  constructor({ toolManager, maxIterations = 8, timeoutMs = 45000 } = {}) {
+  constructor({ toolManager, maxIterations = 8, timeoutMs = 45000, dispatch = dispatchToProvider, maxRepairs } = {}) {
     this.toolManager = toolManager;
     this.maxIterations = maxIterations;
     this.timeoutMs = timeoutMs;
+    this.dispatch = dispatch;
+    this.maxRepairs = maxRepairs;
   }
 
   /**
@@ -112,6 +114,10 @@ class AgentHarness {
    * @param {object} [params.context]
    */
   async run({ userMessage, messages = [], provider, enabledToolNames = null, context = {}, onProgress = null }) {
+    if (process.env.AI_PROVIDER_GUARDS_ENABLED !== 'false') {
+      const GuardedAgentHarness = require('./guarded_agent_harness');
+      return new GuardedAgentHarness(this).run({ userMessage, messages, provider, enabledToolNames, context, onProgress });
+    }
     const trace = {
       startTime: Date.now(),
       iterations: 0,

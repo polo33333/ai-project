@@ -51,6 +51,9 @@ function deriveReferences({ currentPlan = {}, toolCalls = [], now = new Date().t
       metric: currentPlan.metric || null,
       timeColumn: currentPlan.timeColumn || null,
       requiredColumns: currentPlan.requiredColumns || [],
+      dbSourceId: currentPlan.dbSourceId || null,
+      queryScope: { question: currentPlan.question || null, unfilteredList: currentPlan.unfilteredList === true,
+        temporalMonths: currentPlan.temporalMonths || null },
       updatedAt: now
     });
     const firstRow = sqlCall.result.rows.length === 1 ? sqlCall.result.rows[0] : null;

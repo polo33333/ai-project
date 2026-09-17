@@ -1019,8 +1019,10 @@ async function sendPageChatMessage() {
     const aiRole = persona.role || 'Intelligent Copilot';
 
     // Save to history for next turn
-    session.history.push({ role: 'user', content: requestMessage });
-    session.history.push({ role: 'assistant', content: aiResponseText });
+    if (data.completionStatus === 'SUCCESS') {
+      session.history.push({ role: 'user', content: requestMessage });
+      session.history.push({ role: 'assistant', content: aiResponseText });
+    }
     saveChatSessions();
 
     // Auto-update session title from first message
@@ -1234,7 +1236,8 @@ async function sendPageChatMessage() {
       chartSpec: chartSpec && typeof chartSpec === 'object' ? chartSpec : null,
       chartId: chartSpec && typeof chartSpec === 'object' ? chartId : null
     });
-    window.updatePageChatMiniPanel({ status: 'complete', label: 'Đã hoàn thành câu trả lời' });
+    window.updatePageChatMiniPanel({ status: data.completionStatus === 'PARTIAL' ? 'error' : 'complete',
+      label: data.completionStatus === 'PARTIAL' ? 'Một phần yêu cầu chưa hoàn tất' : 'Đã hoàn thành câu trả lời' });
     if (typeof fetchChatHistory === 'function') fetchChatHistory();
 
     // Render chart after DOM insert (Chart.js needs canvas in DOM)

@@ -159,7 +159,7 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
     durationMs: Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null
   }));
   return {
-    status: coreResult.success ? 'success' : 'error', reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
+    status: coreResult.success ? 'success' : 'error', completionStatus: coreResult.trace?.completionStatus || (coreResult.success ? 'PARTIAL' : 'ERROR'), reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
     executionTime: `${execMs}ms`, executionMode: coreResult.executionMode, auditId, tokenUsage: coreResult.tokenUsage || null,
     providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, provider: coreResult.usedProvider,
     message: coreResult.error || null
@@ -794,7 +794,7 @@ async function handleRequest(req, res) {
 
       const payload = buildChatClientPayload(coreResult, execMs);
       if (payload.toolResult?.rows) payload.toolResult.rows = payload.toolResult.rows.slice(0, authorization.config.maxRows);
-      const auditStatus = coreResult.trace?.completionStatus || 'SUCCESS';
+      const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
         sessionId: memorySessionId,
         question: queryText,
@@ -892,7 +892,7 @@ async function handleRequest(req, res) {
       if (!coreResult.success) throw new Error(coreResult.error || 'Mô hình AI không phản hồi.');
       const payload = buildChatClientPayload(coreResult, execMs);
       payload.memoryDecision = coreResult.trace?.memoryDecision || null;
-      const auditStatus = coreResult.trace?.completionStatus || 'SUCCESS';
+      const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
         sessionId: normalizedSessionId,
         accountId: currentAccount?.id || null,
@@ -1098,7 +1098,7 @@ async function handleRequest(req, res) {
         generatedSql,
         auditProvider,
         execMs,
-        coreResult.trace?.completionStatus || 'SUCCESS',
+        coreResult.trace?.completionStatus || 'PARTIAL',
         null,
         { ...auditPayloadBase, toolCalls: toolCallsSummary, executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null, providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, memoryDecision: coreResult.trace?.memoryDecision || null, memoryPersisted: memoryPersistence.persisted, pendingTurnRecorded: pendingPersistence.recorded, diagnostics: buildChatDiagnostics(coreResult.trace) }
       );
@@ -1107,6 +1107,7 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({
         status: 'success',
         reply: coreResult.replyText,
+        completionStatus: coreResult.trace?.completionStatus || 'PARTIAL',
         generatedSql,
         toolResult,
         sqlExecutions,
@@ -1366,7 +1367,7 @@ async function handleRequest(req, res) {
         useTools: useTools !== false
       };
       loggerService.addChatAudit(message, result.replyText, result.sqlQuery, provider, latencyMs,
-        result.success ? 'SUCCESS' : 'ERROR', result.error || null, requestPayload);
+        result.success ? (result.trace?.completionStatus || 'PARTIAL') : 'ERROR', result.error || null, requestPayload);
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify(result));
@@ -1463,7 +1464,7 @@ async function handleRequest(req, res) {
         result.sqlQuery,
         activeProvider,
         latencyMs,
-        'SUCCESS',
+        result.trace?.completionStatus || 'PARTIAL',
         null,
         {
           endpoint: '/api/v1/chat/completions',
@@ -1484,7 +1485,7 @@ async function handleRequest(req, res) {
             index: 0,
             message: {
               role: "assistant",
-              content: result.sqlQuery ? `${result.replyText}\n\`\`\`sql\n${result.sqlQuery}\n\`\`\`` : result.replyText
+              content: result.replyText
             },
             finish_reason: "stop"
           }
@@ -1494,7 +1495,8 @@ async function handleRequest(req, res) {
           completion_tokens: (result.replyText || '').length,
           total_tokens: userPrompt.length + (result.replyText || '').length
         },
-        sqlResult: result.executionResult || null
+        sqlResult: result.executionResult || null,
+        completionStatus: result.trace?.completionStatus || (result.success ? 'PARTIAL' : 'ERROR')
       }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });

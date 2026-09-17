@@ -7,7 +7,8 @@ async function callOpenAI(provider, messages, tools, signal) {
   const body = {
     model: provider.model || 'gpt-4o-mini',
     messages,
-    temperature: 0.3
+    temperature: 0.3,
+    max_tokens: Math.max(256, Number(provider.outputReserve || process.env.AI_PROVIDER_OUTPUT_RESERVE) || 2048)
   };
 
   if (provider.supportsToolCalling && tools && tools.length > 0) {
@@ -44,7 +45,7 @@ async function callOpenAI(provider, messages, tools, signal) {
       const compactBody = errText.replace(/\s+/g, ' ').trim().slice(0, 500);
       if (compactBody) errMsg = compactBody;
     }
-    throw new Error(`OpenAI/compat API HTTP ${res.status}: ${errMsg}`);
+    throw Object.assign(new Error(`OpenAI/compat API HTTP ${res.status}: ${errMsg}`), { status: res.status });
   }
 
   const data = await res.json();

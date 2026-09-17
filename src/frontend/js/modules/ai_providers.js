@@ -164,7 +164,10 @@ function editAiProvider(id) {
     'page-new-prov-url': provider.baseUrl || '',
     'page-new-prov-key': '',
     'page-new-prov-priority': String(provider.priority || 1),
-    'page-new-prov-cost': String(provider.tokenCost || 0)
+    'page-new-prov-cost': String(provider.tokenCost || 0),
+    'page-new-prov-tools': provider.supportsToolCalling ? 'native' : provider.supportsJsonToolCalling ? 'json' : 'none',
+    'page-new-prov-context': String(provider.contextWindow || provider.numCtx || 16384),
+    'page-new-prov-reserve': String(provider.outputReserve || 2048)
   };
   Object.entries(values).forEach(([fieldId, value]) => {
     const field = document.getElementById(fieldId);
@@ -292,7 +295,13 @@ async function savePageNewAiProvider() {
 
   const apiFormat = getProviderFormat(type);
   try {
-    const payload = { name, type, apiFormat, baseUrl, model, supportsToolCalling: apiFormat !== 'ollama', priority, tokenCost };
+    const capability = document.getElementById('page-new-prov-tools')?.value || 'auto';
+    const contextWindow = Number(document.getElementById('page-new-prov-context')?.value || 16384);
+    const outputReserve = Number(document.getElementById('page-new-prov-reserve')?.value || 2048);
+    if (outputReserve >= contextWindow) throw new Error('Tokens dành cho câu trả lời phải nhỏ hơn dung lượng ngữ cảnh.');
+    const payload = { name, type, apiFormat, baseUrl, model,
+      supportsToolCalling: capability === 'native' || (capability === 'auto' && apiFormat !== 'ollama'),
+      supportsJsonToolCalling: capability === 'json', contextWindow, outputReserve, priority, tokenCost };
     if (apiKey) payload.apiKey = apiKey;
     if (editingId) payload.providerId = editingId;
     const res = await fetch(editingId ? '/api/ai-providers/update' : '/api/ai-providers/add', {

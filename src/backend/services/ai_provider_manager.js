@@ -5,6 +5,14 @@
 
 const StorageHelper = require('../utils/storage_helper');
 
+function validateContextLimits(provider) {
+  const window = Number(provider.contextWindow || provider.numCtx || 16384);
+  const reserve = Number(provider.outputReserve || 2048);
+  if (!Number.isFinite(window) || !Number.isFinite(reserve) || window < 1024 || reserve < 256 || reserve >= window) {
+    throw new Error('Dung lượng ngữ cảnh phải lớn hơn tokens dành cho câu trả lời (tối thiểu 1024/256).');
+  }
+}
+
 class AiProviderManager {
   constructor() {
     const defaultProviders = [
@@ -65,7 +73,7 @@ class AiProviderManager {
   publicProvider(provider) {
     if (!provider) return null;
     const allowed = ['id', 'name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'model',
-      'supportsToolCalling', 'priority', 'isActive', 'status', 'tokenCost'];
+      'supportsToolCalling', 'supportsJsonToolCalling', 'contextWindow', 'outputReserve', 'priority', 'isActive', 'status', 'tokenCost'];
     const result = {};
     for (const key of allowed) result[key] = provider[key];
     result.hasApiKey = Boolean(provider.apiKey);
@@ -129,12 +137,16 @@ class AiProviderManager {
       apiKey: data.apiKey || "",
       model: data.model || "custom-model",
       supportsToolCalling: data.supportsToolCalling === true || data.supportsToolCalling === 'true',
+      supportsJsonToolCalling: data.supportsJsonToolCalling === true || data.supportsJsonToolCalling === 'true',
+      contextWindow: Math.max(1024, Number.parseInt(data.contextWindow, 10) || 16384),
+      outputReserve: Math.max(256, Number.parseInt(data.outputReserve, 10) || 2048),
       priority: parseInt(data.priority) || (this.providers.length + 1),
       isActive: false,
       status: "connected",
       tokenCost: parseFloat(data.tokenCost) || 0
     };
 
+    validateContextLimits(newProvider);
     this.providers.push(newProvider);
     this.persist();
     return this.publicProvider(newProvider);
@@ -144,14 +156,19 @@ class AiProviderManager {
     const target = this.providers.find(p => p.id === providerId);
     if (!target) throw new Error('Provider không tồn tại!');
 
-    const allowed = ['name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'apiKey', 'model', 'supportsToolCalling', 'priority', 'tokenCost'];
+    const pending = { ...target };
+
+    const allowed = ['name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'apiKey', 'model', 'supportsToolCalling', 'supportsJsonToolCalling', 'contextWindow', 'outputReserve', 'priority', 'tokenCost'];
     for (const key of allowed) {
       if (data[key] !== undefined) {
-        target[key] = key === 'supportsToolCalling'
+        pending[key] = ['supportsToolCalling', 'supportsJsonToolCalling'].includes(key)
           ? (data[key] === true || data[key] === 'true')
-          : (key === 'priority' ? parseInt(data[key]) : (key === 'tokenCost' ? parseFloat(data[key]) : data[key]));
+          : (['contextWindow', 'outputReserve'].includes(key) ? Math.max(key === 'contextWindow' ? 1024 : 256, parseInt(data[key]) || (key === 'contextWindow' ? 16384 : 2048))
+            : (key === 'priority' ? parseInt(data[key]) : (key === 'tokenCost' ? parseFloat(data[key]) : data[key])));
       }
     }
+    if (data.contextWindow !== undefined || data.outputReserve !== undefined) validateContextLimits(pending);
+    Object.assign(target, pending);
     this.persist();
     return this.publicProvider(target);
   }

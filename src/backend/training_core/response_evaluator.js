@@ -11,7 +11,7 @@ function evaluateResponse({ reply = '', plan = {}, toolCalls = [] } = {}) {
   const reportsOnlyRowCount = /da truy van du lieu thanh cong[^\n]*tim thay[^\n]*dong ket qua/.test(normalized)
     || /^(?:tim thay|co)\s+\*{0,2}\d+\*{0,2}\s+(?:dong\s+)?ket qua[.!]?$/.test(normalized.trim());
   if (plan.outputs?.data && reportsOnlyRowCount) failures.push('INSUFFICIENT_DATA_ANSWER');
-  if (/^\s*(?:```\s*)?(?:select|with)\b/i.test(text)) failures.push('SQL_ONLY_ANSWER');
+  if (!plan.codeOnly && /^\s*(?:```(?:sql|tsql)?\s*)?(?:select|with)\b/i.test(text)) failures.push('SQL_ONLY_ANSWER');
   if (/schema|số cột|khóa chính/i.test(text) && plan.outputs?.data) failures.push('SCHEMA_ONLY_ANSWER');
   if (plan.outputs?.data && !success('execute_sql_query')) failures.push('MISSING_SQL');
   if (plan.outputs?.chart && !success('render_chart')) failures.push('MISSING_CHART');

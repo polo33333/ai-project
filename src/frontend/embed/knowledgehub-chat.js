@@ -221,7 +221,9 @@
         result += `<details class="kh-embed-data"><summary style="padding:7px 8px;cursor:pointer">Xem dữ liệu (${data.toolResult.rows.length} dòng)</summary><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></details>`;
       }
       thinking.remove(); append(result, 'ai', hasMarkdownTable ? 'kh-embed-has-table' : '');
-      history.push({ role: 'user', content: question }, { role: 'assistant', content: data.reply || '' });
+      if (data.completionStatus === 'SUCCESS') {
+        history.push({ role: 'user', content: question }, { role: 'assistant', content: data.reply || '' });
+      }
     } catch (error) {
       if (error.name === 'AbortError' || requestVersion !== conversationVersion) return;
       thinking.remove(); append(escapeHtml(error.message), 'ai', 'kh-embed-error');

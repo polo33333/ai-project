@@ -73,6 +73,23 @@
         <label class="form-label">Chi phí / 1k tokens (USD)</label>
         <input type="number" class="form-control" id="page-new-prov-cost" value="0" min="0" step="0.0001">
       </div>
+      <div>
+        <label class="form-label" for="page-new-prov-tools">Khả năng gọi công cụ</label>
+        <select class="form-control" id="page-new-prov-tools">
+          <option value="auto">Theo loại kết nối</option>
+          <option value="native">Có hỗ trợ tool calling</option>
+          <option value="json">Tương thích qua JSON</option>
+          <option value="none">Chỉ trả lời văn bản</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label" for="page-new-prov-context">Dung lượng ngữ cảnh (tokens)</label>
+        <input type="number" class="form-control" id="page-new-prov-context" value="16384" min="1024" step="1">
+      </div>
+      <div>
+        <label class="form-label" for="page-new-prov-reserve">Tokens dành cho câu trả lời</label>
+        <input type="number" class="form-control" id="page-new-prov-reserve" value="2048" min="256" step="1">
+      </div>
       <div class="provider-form-actions">
         <button class="btn-primary" id="page-provider-save-btn" onclick="savePageNewAiProvider()">
           <i class="fa-solid fa-floppy-disk"></i> <span id="page-provider-save-label">Lưu provider</span>

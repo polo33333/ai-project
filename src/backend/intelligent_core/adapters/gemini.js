@@ -75,14 +75,15 @@ async function callGemini(provider, messages, tools, signal) {
   }
 
   const model = provider.model || 'gemini-1.5-flash';
-  const systemMsg = messages.find(m => m.role === 'system');
+  const systemMessages = messages.filter(m => m.role === 'system');
+  const systemMsg = systemMessages.length ? { content: systemMessages.map(m => m.content).join('\n\n') } : null;
   const nonSystemMessages = messages.filter(m => m.role !== 'system');
 
   const contents = convertMessagesToGeminiContents(nonSystemMessages);
 
   const body = {
     contents,
-    generationConfig: { temperature: 0.3 }
+    generationConfig: { temperature: 0.3, maxOutputTokens: Math.max(256, Number(provider.outputReserve || process.env.AI_PROVIDER_OUTPUT_RESERVE) || 2048) }
   };
 
   if (systemMsg) {
@@ -113,7 +114,7 @@ async function callGemini(provider, messages, tools, signal) {
     const errText = await res.text();
     let errMsg = `HTTP ${res.status}`;
     try { errMsg = JSON.parse(errText).error?.message || errMsg; } catch (_) { }
-    throw new Error(`Gemini API: ${errMsg}`);
+    throw Object.assign(new Error(`Gemini API: ${errMsg}`), { status: res.status });
   }
 
   const data = await res.json();
@@ -122,32 +123,33 @@ async function callGemini(provider, messages, tools, signal) {
   if (!content) throw new Error('Gemini không trả về candidate.');
 
   // Parse function call từ Gemini
-  const funcPart = content.parts?.find(p => p.functionCall);
-  if (funcPart) {
+  const funcParts = content.parts?.filter(p => p.functionCall) || [];
+  if (funcParts.length) {
     return {
       role: 'assistant',
-      content: content.parts?.find(p => p.text)?.text || null,
+      content: content.parts?.filter(p => p.text && !p.thought).map(p => p.text).join('\n') || null,
+      finish_reason: candidate.finishReason,
       rawParts: content.parts, // Lưu nguyên vẹn parts gốc chứa thought & thought_signature
       usage: data.usageMetadata ? {
         inputTokens: data.usageMetadata.promptTokenCount || 0,
         outputTokens: data.usageMetadata.candidatesTokenCount || 0,
         totalTokens: data.usageMetadata.totalTokenCount || 0
       } : null,
-      tool_calls: [{
-        id: `gemini-tool-${Date.now()}`,
+      tool_calls: funcParts.map((funcPart, index) => ({
+        id: `gemini-tool-${Date.now()}-${index}`,
         type: 'function',
         function: {
           name: funcPart.functionCall.name,
           arguments: JSON.stringify(funcPart.functionCall.args || {})
         }
-      }]
+      }))
     };
   }
 
-  const textPart = content.parts?.find(p => p.text);
   return {
     role: 'assistant',
-    content: textPart?.text || null,
+    content: content.parts?.filter(p => p.text && !p.thought).map(p => p.text).join('\n') || null,
+    finish_reason: candidate.finishReason,
     tool_calls: null,
     usage: data.usageMetadata ? {
       inputTokens: data.usageMetadata.promptTokenCount || 0,

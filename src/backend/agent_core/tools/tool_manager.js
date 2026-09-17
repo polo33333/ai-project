@@ -80,6 +80,10 @@ class ToolManager {
    * @param {object} context 
    */
   async executeTool(toolName, args, context = {}) {
+    if (context.signal?.aborted) throw Object.assign(new Error('Request aborted'), { name: 'AbortError' });
+    if (Array.isArray(context.allowedToolNames) && !context.allowedToolNames.includes(toolName)) {
+      return { success: false, tool: toolName, error: `Tool "${toolName}" is not enabled for this request.`, durationMs: 0 };
+    }
     const tool = this.getTool(toolName);
     if (!tool) {
       return {

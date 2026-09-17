@@ -1436,8 +1436,10 @@ window.sendChatMessage = async function sendChatMessage() {
       <div class="chat-bubble ai">${richHtml}${typeof renderChatFeedback === 'function' ? renderChatFeedback(data, data.tokenUsage) : ''}</div>
     `);
 
-    window.copilotPopupHistory.push({ role: 'user', content: requestMessage });
-    window.copilotPopupHistory.push({ role: 'assistant', content: reply });
+    if (data.completionStatus === 'SUCCESS') {
+      window.copilotPopupHistory.push({ role: 'user', content: requestMessage });
+      window.copilotPopupHistory.push({ role: 'assistant', content: reply });
+    }
     if (typeof fetchChatHistory === 'function') fetchChatHistory();
   } catch (err) {
     document.getElementById(thinkingId)?.remove();

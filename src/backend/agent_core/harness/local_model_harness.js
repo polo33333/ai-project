@@ -14,9 +14,11 @@ const { RequestExecutionBudget } = require('./request_execution_budget');
 const { getRequestPolicy, validateCallAgainstPolicy, hasSuccessfulTool, sanitizeFinalText } = require('./local_execution_policy');
 const { emitProgress, toolLabel } = require('./progress_events');
 const { trainingService } = require('../../training_core');
+const { ensureDownloadLink, buildSqlRowsFallbackReply, isUngroundedKnowledgeAnswer } = require('./grounded_reply');
+const { blockingSqlViolation, evaluateCompletion, stableFingerprint } = require('./completion_policy');
 
 function fingerprint(name, args) {
-  return `${name}:${JSON.stringify(args, Object.keys(args || {}).sort())}`;
+  return stableFingerprint(name, args);
 }
 
 function extractSql(text = '') {
@@ -204,11 +206,6 @@ function repairInvalidColumnSql(toolCalls, userMessage = '') {
   return sql.replace(new RegExp(`\\b${invalid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), replacement.columnName);
 }
 
-function isUngroundedKnowledgeAnswer(text = '') {
-  const normalized = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
-  return /khong co thong tin(?: cu the)?|khong phai ung dung|neu co ung dung|app nao cu the|ung dung nao cu the|hay cho (?:toi|minh) biet them/.test(normalized);
-}
-
 function localCandidates(selected) {
   const allowCloud = process.env.LOCAL_MODEL_ALLOW_CLOUD_FALLBACK === 'true';
   return [selected, ...aiProviderManager.getProvidersForExecution()
@@ -244,20 +241,6 @@ function buildToolFallbackReply(toolCalls = []) {
   }
   if (last.toolName === 'export_data' && last.result?.downloadUrl) return `Đã xuất file thành công: [Tải file tại đây](${last.result.downloadUrl}).`;
   return `Đã thực thi công cụ **${last.toolName}** thành công.`;
-}
-
-function ensureDownloadLink(text, downloadUrl) {
-  const reply = String(text || '').trim();
-  const url = String(downloadUrl || '').trim();
-  if (!url) return reply;
-  const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (new RegExp(`\\[[^\\]]+\\]\\(\\s*${escapedUrl}\\s*\\)`, 'i').test(reply)) return reply;
-  const link = `[Tải file tại đây](${url})`;
-  const codeUrlPattern = new RegExp('`' + escapedUrl + '`', 'i');
-  if (codeUrlPattern.test(reply)) return reply.replace(codeUrlPattern, link);
-  const plainUrlPattern = new RegExp(escapedUrl, 'i');
-  if (plainUrlPattern.test(reply)) return reply.replace(plainUrlPattern, link);
-  return `${reply}\n\n${link}.`.trim();
 }
 
 function isInsufficientSqlAnswer(text = '') {
@@ -302,30 +285,6 @@ function listAnswerMentionsRowValue(text = '', sqlCall = null) {
   // Prefer names, codes, addresses and other descriptive values over IDs/counts.
   if (meaningfulValues.length) return meaningfulValues.some(value => answer.includes(value));
   return Object.values(rows[0] || {}).some(value => answer.includes(normalizeForComparison(value)));
-}
-
-function markdownCell(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  const normalized = value instanceof Date ? value.toISOString() : String(value);
-  return normalized.replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
-}
-
-function buildSqlRowsFallbackReply(sqlCall) {
-  const rows = Array.isArray(sqlCall?.result?.rows) ? sqlCall.result.rows : [];
-  if (!rows.length) return 'Không tìm thấy dữ liệu phù hợp.';
-
-  const columns = Object.keys(rows[0] || {}).slice(0, 10);
-  if (rows.length === 1) {
-    const details = columns.map(column => `- **${markdownCell(column)}:** ${markdownCell(rows[0]?.[column])}`).join('\n');
-    return `Tìm thấy **1** dòng kết quả:\n\n${details}`;
-  }
-
-  const visibleRows = rows.slice(0, 10);
-  const header = `| ${columns.map(markdownCell).join(' | ')} |`;
-  const separator = `| ${columns.map(() => '---').join(' | ')} |`;
-  const body = visibleRows.map(row => `| ${columns.map(column => markdownCell(row?.[column])).join(' | ')} |`).join('\n');
-  const remainder = rows.length > visibleRows.length ? `\n\nHiển thị ${visibleRows.length}/${rows.length} kết quả.` : '';
-  return `Tìm thấy **${rows.length}** kết quả:\n\n${header}\n${separator}\n${body}${remainder}`;
 }
 
 function hasTemporalGroundingMismatch(text, grounding = {}) {
@@ -399,7 +358,7 @@ class LocalModelHarness {
     // Web-grounded "bao nhiêu" questions are not requests for records from
     // the configured business database. SQL tools are intentionally disabled
     // for Web Search, so do not discard a valid web answer for missing SQL.
-    const requestPolicy = context.webSearch
+    const requestPolicy = context.webSearch || context.requestPlan?.codeOnly || ['general', 'knowledge'].includes(context.mode)
       ? { ...inferredPolicy, chartRequired: false, exportRequired: false, dataRequired: false, temporalMonths: null }
       : inferredPolicy;
     const explicitSchemaRefs = getExplicitSchemaRefs(effectiveUserMessage);
@@ -618,7 +577,7 @@ class LocalModelHarness {
       if (call.name === 'execute_sql_query') {
         const sqlEvaluation = trainingService.evaluateSql(validation.args.sql, requestPlan);
         trace.training.sqlEvaluations.push(sqlEvaluation);
-        const blockingViolation = sqlEvaluation.violations.find(violation => violation === 'WRONG_TABLE' || violation === 'SCHEMA_QUERY' || violation.startsWith('UNKNOWN_COLUMN:') || violation === 'UNREQUESTED_FILTER');
+        const blockingViolation = blockingSqlViolation(sqlEvaluation);
         if (blockingViolation) {
           const expectedTable = requestPlan.table || 'the highest-ranked business table';
           const error = blockingViolation.startsWith('UNKNOWN_COLUMN:')
@@ -811,7 +770,7 @@ class LocalModelHarness {
     }
     if (!String(finalText || '').trim()) throw lastDispatchError || new Error('Local model returned an empty response.');
     finalText = sanitizeFinalText(finalText, hasSuccessfulTool(toolCalls, 'render_chart'));
-    const responseEvaluation = trainingService.evaluateResponse({ reply: finalText, plan: requestPlan, toolCalls });
+    const responseEvaluation = evaluateCompletion({ reply: finalText, plan: requestPlan, toolCalls, context });
     trace.training.responseEvaluation = responseEvaluation;
     const requirementState = {
       data: !requestPolicy.dataRequired || toolCalls.some(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call)),

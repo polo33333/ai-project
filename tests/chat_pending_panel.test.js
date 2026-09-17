@@ -18,7 +18,8 @@ test('returning to the request session restores the same pending panel after his
     window: { pageChatPendingThinking: { sessionId: 'owner', node } },
     document: { getElementById: () => container },
     getCurrentChatSession: () => session,
-    appendChatMessage: record => children.push(record)
+    appendChatMessage: record => children.push(record),
+    saveChatSessions: () => {}
   });
   vm.runInContext(extract('renderCurrentChatMessages', 'async function submitChatFeedback'), context);
   vm.runInContext('renderCurrentChatMessages()', context);

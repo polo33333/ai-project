@@ -1,0 +1,7 @@
+{
+  "sourceChatId": "chat-1789455879618",
+  "question": "ds hợp đồng",
+  "response": { "content": "```sql\nSELECT TOP 20 ContractID, ContractNo FROM T_Contract\n```" },
+  "plan": { "intent": "list", "table": "T_Contract", "schemaColumns": ["ContractID", "ContractNo"], "unfilteredList": true, "requiredColumns": [], "outputs": { "data": true, "chart": false, "export": false } },
+  "rows": [{ "ContractID": 1, "ContractNo": "HD-TEST-001" }]
+}

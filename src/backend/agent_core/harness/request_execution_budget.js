@@ -7,6 +7,9 @@ function positiveNumber(value, fallback) {
 
 class RequestExecutionBudget {
   constructor(options = {}) {
+    this.executionClass = options.executionClass || 'local';
+    this.toolCalls = 0;
+    this.maxToolCalls = positiveNumber(options.maxToolCalls, 20);
     const timeoutMs = positiveNumber(options.timeoutMs, positiveNumber(process.env.AI_LOCAL_TIMEOUT_MS, 180000));
     this.startedAt = options.startedAt || Date.now();
     this.deadlineAt = options.deadlineAt || this.startedAt + timeoutMs;
@@ -23,8 +26,8 @@ class RequestExecutionBudget {
 
   assertTimeRemaining() {
     if (this.remainingMs() <= 0) {
-      const error = new Error('Local request deadline exceeded.');
-      error.code = 'LOCAL_REQUEST_DEADLINE_EXCEEDED';
+      const error = new Error('Request deadline exceeded.');
+      error.code = this.executionClass === 'local' ? 'LOCAL_REQUEST_DEADLINE_EXCEEDED' : 'REQUEST_DEADLINE_EXCEEDED';
       throw error;
     }
   }
@@ -32,8 +35,8 @@ class RequestExecutionBudget {
   consumeModelCall() {
     this.assertTimeRemaining();
     if (this.modelCalls >= this.maxModelCalls) {
-      const error = new Error(`Local model call budget (${this.maxModelCalls}) is exhausted.`);
-      error.code = 'LOCAL_MODEL_CALL_BUDGET_EXCEEDED';
+      const error = new Error(`Model call budget (${this.maxModelCalls}) is exhausted.`);
+      error.code = this.executionClass === 'local' ? 'LOCAL_MODEL_CALL_BUDGET_EXCEEDED' : 'MODEL_CALL_BUDGET_EXCEEDED';
       throw error;
     }
     this.modelCalls += 1;
@@ -53,6 +56,16 @@ class RequestExecutionBudget {
     this.repairAttempts += 1;
   }
 
+  consumeToolCall() {
+    this.assertTimeRemaining();
+    if (this.toolCalls >= this.maxToolCalls) {
+      const error = new Error(`Tool call budget (${this.maxToolCalls}) is exhausted.`);
+      error.code = 'TOOL_BUDGET_EXCEEDED';
+      throw error;
+    }
+    this.toolCalls += 1;
+  }
+
   snapshot() {
     return {
       startedAt: this.startedAt,
@@ -62,7 +75,8 @@ class RequestExecutionBudget {
       maxModelCalls: this.maxModelCalls,
       sqlAttempts: this.sqlAttempts,
       maxSqlAttempts: this.maxSqlAttempts,
-      repairAttempts: this.repairAttempts
+      repairAttempts: this.repairAttempts,
+      toolCalls: this.toolCalls, maxToolCalls: this.maxToolCalls
     };
   }
 }

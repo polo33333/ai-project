@@ -7,6 +7,9 @@ function buildChatDiagnostics(trace) {
   return {
     iterations: trace.iterations,
     completionStatus: trace.completionStatus,
+    harness: trace.harness,
+    executionBudget: trace.executionBudget,
+    stopReason: trace.stopReason,
     plan: { table: plan.table, intent: plan.intent, unfilteredList: plan.unfilteredList,
       requiredColumns: plan.requiredColumns, schemaColumns: plan.schemaColumns, outputs: plan.outputs },
     sqlEvaluations: (trace.training?.sqlEvaluations || []).slice(-20).map(item => ({ valid: item.valid, violations: item.violations })),
@@ -18,7 +21,8 @@ function buildChatDiagnostics(trace) {
       reason: trace.skill.reason, missingInputs: trace.skill.missingInputs,
       exampleCount: trace.skill.exampleCount, injected: trace.skill.injected
     } : null,
-    steps: (trace.steps || []).slice(-50).map(step => ({ type: step.type, iteration: step.iteration, toolName: step.toolName, success: step.success }))
+    steps: (trace.steps || []).slice(-50).map(step => ({ type: step.type, iteration: step.iteration, toolName: step.toolName, success: step.success,
+      ...(step.failures ? { failures: step.failures } : {}) }))
   };
 }
 

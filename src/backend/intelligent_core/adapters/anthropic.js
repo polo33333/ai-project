@@ -61,12 +61,13 @@ function convertMessagesToAnthropicFormat(messages) {
 }
 
 async function callAnthropic(provider, messages, tools, signal) {
-  const systemMsg = messages.find(m => m.role === 'system');
+  const systemMessages = messages.filter(m => m.role === 'system');
+  const systemMsg = systemMessages.length ? { content: systemMessages.map(m => m.content).join('\n\n') } : null;
   const nonSystemMessages = messages.filter(m => m.role !== 'system');
 
   const body = {
     model: provider.model || 'claude-3-5-sonnet-20241022',
-    max_tokens: 4096,
+    max_tokens: Math.max(256, Number(provider.outputReserve || process.env.AI_PROVIDER_OUTPUT_RESERVE) || 2048),
     messages: convertMessagesToAnthropicFormat(nonSystemMessages),
     temperature: 0.3
   };
@@ -97,37 +98,38 @@ async function callAnthropic(provider, messages, tools, signal) {
     const errText = await res.text();
     let errMsg = `HTTP ${res.status}`;
     try { errMsg = JSON.parse(errText).error?.message || errMsg; } catch (_) {}
-    throw new Error(`Anthropic API: ${errMsg}`);
+    throw Object.assign(new Error(`Anthropic API: ${errMsg}`), { status: res.status });
   }
 
   const data = await res.json();
 
   // Parse tool_use block
-  const toolUseBlock = data.content?.find(b => b.type === 'tool_use');
-  if (toolUseBlock) {
+  const toolUseBlocks = data.content?.filter(b => b.type === 'tool_use') || [];
+  if (toolUseBlocks.length) {
     return {
       role: 'assistant',
-      content: data.content?.find(b => b.type === 'text')?.text || null,
+      content: data.content?.filter(b => b.type === 'text').map(b => b.text).join('\n') || null,
+      finish_reason: data.stop_reason,
       usage: data.usage ? {
         inputTokens: data.usage.input_tokens || 0,
         outputTokens: data.usage.output_tokens || 0,
         totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0)
       } : null,
-      tool_calls: [{
-        id: toolUseBlock.id || `claude-tool-${Date.now()}`,
+      tool_calls: toolUseBlocks.map((toolUseBlock, index) => ({
+        id: toolUseBlock.id || `claude-tool-${Date.now()}-${index}`,
         type: 'function',
         function: {
           name: toolUseBlock.name,
           arguments: JSON.stringify(toolUseBlock.input || {})
         }
-      }]
+      }))
     };
   }
 
-  const textBlock = data.content?.find(b => b.type === 'text');
   return {
     role: 'assistant',
-    content: textBlock?.text || null,
+    content: data.content?.filter(b => b.type === 'text').map(b => b.text).join('\n') || null,
+    finish_reason: data.stop_reason,
     tool_calls: null,
     usage: data.usage ? {
       inputTokens: data.usage.input_tokens || 0,

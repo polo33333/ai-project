@@ -18,6 +18,7 @@
     "eval:retrieval": "node scripts/evaluate_retrieval.js",
     "eval:local": "node scripts/evaluate_local_harness.js",
     "eval:memory": "node scripts/evaluate_memory.js",
+    "eval:provider": "node scripts/evaluate_provider_harness.js",
     "eval:local:semantic": "node scripts/evaluate_local_sql.js --validate",
     "eval:local:semantic:live": "node scripts/evaluate_local_sql.js --live",
     "migrate:dictionary-identity": "node scripts/migrate_dictionary_identity.js",

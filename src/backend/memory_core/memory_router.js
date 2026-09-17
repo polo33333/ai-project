@@ -9,6 +9,9 @@ function routeMemory({ currentPlan, session, question, fallbackHistory = [], now
     return { mode: 'recent', reason: 'memory_core_disabled', maxMessages: 10, fallbackHistory };
   }
   try {
+    if (currentPlan?.dbSourceId && session?.lastPlan?.dbSourceId && currentPlan.dbSourceId !== session.lastPlan.dbSourceId) {
+      return { mode: 'none', reason: 'database_source_changed', sessionId: session.id, fallbackHistory: [] };
+    }
     // Public/embed clients can already have a valid in-browser conversation
     // before the server has persisted a memory session. Keep that context for
     // follow-up questions instead of treating every turn as independent.

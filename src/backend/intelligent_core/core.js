@@ -22,6 +22,8 @@ const { memoryService, policy: memoryPolicy } = require('../memory_core');
 const { RequestExecutionBudget } = require('../agent_core/harness/request_execution_budget');
 const { fitOptionalMessages, measureMessages } = require('../agent_core/harness/context_budget');
 const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
+const { resolvePlan } = require('../agent_core/harness/completion_policy');
+const { createProviderBudget } = require('../agent_core/harness/guarded_agent_harness');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
 const REQUEST_TIMEOUT_MS  = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
@@ -125,7 +127,7 @@ class IntelligentCore {
     const executionBudget = isLocalProvider(provider) ? new RequestExecutionBudget({
       maxModelCalls: Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 9),
       maxSqlAttempts: Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3)
-    }) : null;
+    }) : (process.env.AI_PROVIDER_GUARDS_ENABLED !== 'false' ? createProviderBudget() : null);
     emitProgress(options.onProgress, { type: 'request_started', label: 'Đang phân tích yêu cầu', status: 'running', icon: 'brain', providerName: provider?.name });
     const providerFallbacks = [];
     const tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false };
@@ -273,7 +275,8 @@ ${strictSelectedKnowledge
       ...toolRegistry.listTools().map(tool => tool.name).filter(name => name.startsWith('mcp_'))];
     const enabledToolNames = contextSelection.mode === 'knowledge' ? [] : (contextSelection.mode === 'general' ? generalToolNames : null);
     const effectiveUseTools = contextSelection.mode !== 'knowledge' && useTools && (contextSelection.useTools || enabledToolNames?.length > 0);
-    const requestPlan = trainingService.plan({ question: userMessage, selectedTables: contextSelection.selectedTables || [] });
+    const requestPlan = resolvePlan(userMessage, { ...trainingService.plan({ question: userMessage, selectedTables: contextSelection.selectedTables || [] }), dbSourceId: selectedDb?.id || null },
+      { mode: contextSelection.mode, webSearch });
     const memoryDecision = memoryService.route({
       sessionId: options.session?.id,
       accountId: options.session?.accountId || null,
@@ -287,7 +290,8 @@ ${strictSelectedKnowledge
     let memoryHistory = strictSelectedKnowledge ? [] : memoryService.getContext(memoryDecision);
     if (process.env.MEMORY_CONTEXT_BUDGET_ENABLED === 'true' && memoryHistory.length) {
       const budgeted = fitOptionalMessages(memoryHistory, {
-        contextWindow: provider?.numCtx || process.env.LOCAL_MODEL_NUM_CTX,
+        contextWindow: provider?.contextWindow || provider?.numCtx || (isLocalProvider(provider) ? process.env.LOCAL_MODEL_NUM_CTX : Number(process.env.AI_PROVIDER_CONTEXT_WINDOW || 16384)),
+        outputReserve: provider?.outputReserve || (isLocalProvider(provider) ? process.env.LOCAL_MODEL_NUM_PREDICT : Number(process.env.AI_PROVIDER_OUTPUT_RESERVE || 2048)),
         requiredTokens: measureMessages([{ role: 'system', content: schemaContext || '' }, { role: 'user', content: userMessage }])
       });
       memoryHistory = budgeted.messages;
@@ -306,13 +310,24 @@ ${strictSelectedKnowledge
     )}${knowledgePrompt}${webPrompt}${memorySystemContext && !strictSelectedKnowledge ? `\n\n# Memory hội thoại\n${memorySystemContext}` : ''}`;
 
     // ── Build messages array (OpenAI-compat) ──────────────────────────────
-    const messages = strictSelectedKnowledge
+    let messages = strictSelectedKnowledge
       ? buildSelectedKnowledgeMessages(systemPrompt, userMessage)
       : [
           { role: 'system', content: systemPrompt },
           ...memoryHistory.filter(item => item?.role !== 'system'),
           { role: 'user', content: userMessage }
         ];
+
+    if (!isLocalProvider(provider) && process.env.AI_PROVIDER_GUARDS_ENABLED !== 'false' && !strictSelectedKnowledge) {
+      const required = [messages[0], messages.at(-1)];
+      const fit = fitOptionalMessages(messages.slice(1, -1), {
+        contextWindow: provider.contextWindow || Number(process.env.AI_PROVIDER_CONTEXT_WINDOW || 16384),
+        outputReserve: provider.outputReserve || Number(process.env.AI_PROVIDER_OUTPUT_RESERVE || 2048),
+        requiredTokens: measureMessages(required) + Math.ceil(JSON.stringify(effectiveUseTools ? toolRegistry.getOpenAiToolsFormat(enabledToolNames) : []).length / 3.2) + 256
+      });
+      messages = [required[0], ...fit.messages, required[1]];
+      memoryDecision.contextBudget = fit.estimate;
+    }
 
     // ── Giai đoạn chuyển tiếp: Feature Flag AGENT_CORE_ENABLED (Mặc định: true) ──
     const isAgentCoreEnabled = process.env.AGENT_CORE_ENABLED !== 'false';
@@ -326,11 +341,12 @@ ${strictSelectedKnowledge
           userMessage,
           messages,
           provider,
-          enabledToolNames: effectiveUseTools ? enabledToolNames : [],
+          enabledToolNames: effectiveUseTools && !requestPlan.codeOnly ? enabledToolNames : [],
           context: {
             permissions: options.permissions || [], session: options.session, dbSourceId: selectedDb?.id || null,
             selectedTables: contextSelection.selectedTables || [],
             requestPlan,
+            mode: contextSelection.mode,
             memoryDecision,
             webSearch: Boolean(webSearch),
             webSearchResultCount: contextSelection.webSearch?.resultCount || 0,
@@ -485,6 +501,7 @@ ${strictSelectedKnowledge
 
     return {
       success: true,
+      completionStatus: trace?.completionStatus || 'PARTIAL',
       question,
       replyText: securityGuard.maskSensitiveData(cleanReplyText),
       type: hasSql ? 'sql_query' : hasChart ? 'chart' : hasCalc ? 'calculation' : 'general_chat',
@@ -530,6 +547,7 @@ ${strictSelectedKnowledge
   _buildErrorResponse(question, provider, errMsg) {
     return {
       success: false,
+      completionStatus: 'ERROR',
       question,
       replyText: null,
       type: 'error',
