@@ -75,6 +75,7 @@ class AuthService {
       id: account.id,
       username: account.username,
       displayName: account.displayName || account.username,
+      email: account.email || '',
       role: account.role || 'user',
       createdAt: account.createdAt || null,
       lastLoginAt: account.lastLoginAt || null
@@ -103,6 +104,14 @@ class AuthService {
     this.persistAccounts();
     this.persistSessions();
     return { token, account: this.publicAccount(account), maxAge: Math.floor(SESSION_TTL_MS / 1000) };
+  }
+
+  updateProfile(accountId,{displayName,email}={}) {
+    if(typeof displayName!=='string'||!displayName.trim()||displayName.trim().length>100||typeof email!=='string'||email.length>254||(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw Object.assign(new Error('Tên hoặc email không hợp lệ.'),{statusCode:400});
+    const account=this.accounts.find(item=>item.id===accountId&&item.isActive!==false);
+    if(!account) throw Object.assign(new Error('Tài khoản không tồn tại.'),{statusCode:404});
+    account.displayName=displayName.trim();account.email=email.trim();this.persistAccounts();
+    return this.publicAccount(account);
   }
 
   changePassword(accountId, currentPassword, newPassword) {

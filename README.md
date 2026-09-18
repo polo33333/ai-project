@@ -239,7 +239,7 @@ Trên Windows, `npm start` gọi `scripts/start-local.ps1` và tự động:
 3. Khởi động Ollama native nếu API `11434` chưa hoạt động.
 4. Tải `EMBEDDING_MODEL` nếu model chưa có trên máy.
 5. Warm-up endpoint embedding để model sẵn sàng trước khi nhận tài liệu.
-6. Khởi động Qdrant từ `QDRANT_EXE` nếu Qdrant chưa chạy.
+6. Kiểm tra/bật container `knowledgehub-qdrant` (Qdrant 1.18.3), tạo qua Compose stack `ai-project` nếu chưa có, và chờ API sẵn sàng. Không dùng `QDRANT_EXE`; Qdrant remote chỉ kiểm tra API.
 7. Kiểm tra/tải local chat model (`LOCAL_AI_MODEL`, mặc định trong script là `qwen3.5:9b`) và chạy KnowledgeHub qua supervisor. `[Startup] Completed.` chỉ in sau HTTP listen thành công.
 
 Các lần chạy sau không tải lại model vì Ollama đã lưu model cục bộ. Nếu Ollama hoặc Qdrant đã chạy, script chỉ kiểm tra và sử dụng tiến trình hiện có.

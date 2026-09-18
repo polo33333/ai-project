@@ -260,17 +260,42 @@ async function loadCurrentAccount() {
   }
 }
 
-function openChangePassword() {
+function selectAccountTab(tab) {
+  document.querySelectorAll('[data-account-panel]').forEach(panel=>{panel.hidden=panel.dataset.accountPanel!==tab;});
+  document.querySelectorAll('[data-account-tab]').forEach(button=>{const active=button.dataset.accountTab===tab;button.classList.toggle('active',active);button.setAttribute('aria-current',active?'page':'false');});
+}
+async function openChangePassword() {
   const modal=document.getElementById('change-password-modal');
-  modal.querySelector('form').reset();document.getElementById('password-change-error').textContent='';
+  modal.querySelectorAll('form').forEach(form=>form.reset());document.getElementById('password-change-error').textContent='';
+  selectAccountTab('profile');
   modal.classList.add('show');modal.setAttribute('aria-hidden','false');
-  document.getElementById('password-current').focus();
+  modal.querySelector('.account-settings-close').focus();
+  const fields=[...document.getElementById('account-profile-form').elements];fields.forEach(field=>field.disabled=true);
+  const message=document.getElementById('account-profile-message');message.textContent='Đang tải thông tin...';
+  try {
+    const response=await fetch('/api/auth/me',{cache:'no-store'});const data=await response.json();if(!response.ok||!data.account)throw new Error('Không tải được tài khoản. Hãy đăng nhập lại.');
+    document.getElementById('account-profile-username').textContent='@'+data.account.username;
+    document.getElementById('account-profile-role').textContent=data.account.role==='admin'?'Quản trị viên':'Người dùng';
+    document.getElementById('account-profile-name').value=data.account.displayName||'';document.getElementById('account-profile-email').value=data.account.email||'';
+    message.textContent='';fields.forEach(field=>field.disabled=false);
+  }catch(error){message.textContent=error.message;}
+}
+async function saveAccountProfile(event) {
+  event.preventDefault();const button=event.target.querySelector('[type="submit"]');const message=document.getElementById('account-profile-message');button.disabled=true;
+  try {
+    const response=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:document.getElementById('account-profile-name').value,email:document.getElementById('account-profile-email').value.trim()})});
+    const data=await response.json();if(!response.ok)throw new Error(data.message||'Không lưu được tài khoản.');
+    message.textContent='Đã lưu thông tin tài khoản.';await loadCurrentAccount();
+  }catch(error){message.textContent=error.message;}finally{button.disabled=false;}
 }
 function closeChangePassword() {
   const modal=document.getElementById('change-password-modal');
-  modal.classList.remove('show');modal.setAttribute('aria-hidden','true');modal.querySelector('form').reset();
+  modal.classList.remove('show');modal.setAttribute('aria-hidden','true');modal.querySelectorAll('form').forEach(form=>form.reset());
   document.getElementById('user-profile-btn')?.focus();
 }
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&document.getElementById('change-password-modal')?.classList.contains('show')) closeChangePassword();
+});
 async function submitChangePassword(event) {
   event.preventDefault();
   const button=document.getElementById('password-change-submit'),error=document.getElementById('password-change-error');

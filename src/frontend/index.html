@@ -583,8 +583,50 @@
   </div>
 
   <div class="modal-backdrop logout-confirm-backdrop" id="change-password-modal" aria-hidden="true" onclick="if(event.target===this) closeChangePassword()">
+    <section class="account-settings-dialog" role="dialog" aria-modal="true" aria-label="Cài đặt tài khoản">
+      <aside class="account-settings-nav">
+        <button type="button" class="account-settings-close" onclick="closeChangePassword()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
+        <h3>Cài đặt tài khoản</h3>
+        <nav aria-label="Các mục tài khoản">
+          <button type="button" data-account-tab="profile" onclick="selectAccountTab('profile')"><i class="fa-regular fa-user"></i>Tài khoản</button>
+          <button type="button" data-account-tab="security" onclick="selectAccountTab('security')"><i class="fa-solid fa-shield-halved"></i>Bảo mật và đăng nhập</button>
+          <button type="button" data-account-tab="appearance" onclick="selectAccountTab('appearance')"><i class="fa-solid fa-palette"></i>Giao diện</button>
+          <button type="button" data-account-tab="data" onclick="selectAccountTab('data')"><i class="fa-solid fa-database"></i>Dữ liệu và bộ nhớ</button>
+        </nav>
+      </aside>
+      <div class="account-settings-content">
+        <section data-account-panel="profile">
+          <h2>Tài khoản</h2>
+          <div class="account-detail-row"><span>Tên người dùng</span><strong id="account-profile-username"></strong></div>
+          <div class="account-detail-row"><span>Vai trò</span><strong id="account-profile-role"></strong></div>
+          <form id="account-profile-form" onsubmit="saveAccountProfile(event)" class="account-profile-form">
+            <label for="account-profile-name">Tên hiển thị</label><input id="account-profile-name" autocomplete="name" required maxlength="100">
+            <label for="account-profile-email">Email liên hệ</label><input id="account-profile-email" type="email" autocomplete="email" maxlength="254" placeholder="Chưa thêm email">
+            <small>Email chỉ dùng làm thông tin liên hệ, chưa dùng để đăng nhập hoặc khôi phục mật khẩu.</small>
+            <p id="account-profile-message" role="status"></p>
+            <button class="logout-submit-btn" type="submit">Lưu thông tin</button>
+          </form>
+        </section>
+        <section data-account-panel="appearance" hidden>
+          <h2>Giao diện</h2>
+          <p class="account-section-intro">Chọn không gian làm việc phù hợp với bạn.</p>
+          <h3 class="account-section-label">Chủ đề</h3>
+          <div class="account-theme-options" role="group" aria-label="Chủ đề giao diện">
+            <button type="button" class="account-theme-option" data-theme-choice="light" aria-pressed="false"><span class="account-theme-preview is-light" aria-hidden="true"><span></span><span></span><span></span></span><span class="account-theme-caption"><i class="fa-regular fa-sun"></i>Sáng<i class="fa-solid fa-circle-check account-theme-check"></i></span></button>
+            <button type="button" class="account-theme-option" data-theme-choice="dark" aria-pressed="false"><span class="account-theme-preview is-dark" aria-hidden="true"><span></span><span></span><span></span></span><span class="account-theme-caption"><i class="fa-regular fa-moon"></i>Tối<i class="fa-solid fa-circle-check account-theme-check"></i></span></button>
+            <button type="button" class="account-theme-option" data-theme-choice="auto" aria-pressed="false"><span class="account-theme-preview is-auto" aria-hidden="true"><span></span><span></span><span></span></span><span class="account-theme-caption"><i class="fa-solid fa-desktop"></i>Hệ thống<i class="fa-solid fa-circle-check account-theme-check"></i></span></button>
+          </div>
+          <div class="account-info-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>Lựa chọn được lưu trên trình duyệt này. Chế độ Hệ thống tự đổi theo thiết bị của bạn.</span></div>
+        </section>
+        <section data-account-panel="data" hidden>
+          <h2>Dữ liệu và bộ nhớ</h2>
+          <p class="account-section-intro">Quản lý cuộc trò chuyện và hiểu cách AI sử dụng ngữ cảnh của bạn.</p>
+          <div class="account-data-card"><span class="account-card-icon"><i class="fa-regular fa-comments"></i></span><div><h3>Lịch sử trò chuyện</h3><p>Các phiên chat được lưu theo tài khoản. Mở trang trò chuyện để xem, đổi tên hoặc xóa từng phiên.</p><button type="button" class="account-card-action" onclick="closeChangePassword();switchMainTab('page_chat')">Quản lý trò chuyện <i class="fa-solid fa-arrow-right"></i></button></div></div>
+          <div class="account-data-card"><span class="account-card-icon"><i class="fa-solid fa-brain"></i></span><div><h3>Bộ nhớ AI</h3><p>AI dùng ngữ cảnh của phiên để hiểu câu hỏi tiếp nối. Bộ nhớ được tách khỏi lịch sử hiển thị; câu trả lời chưa hoàn tất không được ghi vào bộ nhớ thành công.</p><span class="account-data-badge"><i class="fa-solid fa-check"></i>Ứng dụng kiểm soát việc ghi nhớ</span></div></div>
+          <div class="account-info-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Xóa phiên trên trang trò chuyện sẽ xóa lịch sử hiển thị và bộ nhớ tương ứng. Audit hệ thống được quản lý riêng.</span></div>
+        </section>
+        <section data-account-panel="security" hidden>
     <form class="logout-confirm-dialog account-password-dialog" role="dialog" aria-modal="true" aria-labelledby="change-password-title" aria-describedby="password-change-description" onsubmit="submitChangePassword(event)">
-      <button type="button" class="logout-confirm-close" onclick="closeChangePassword()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
       <div class="account-password-icon" aria-hidden="true"><i class="fa-solid fa-lock"></i></div>
       <h3 id="change-password-title">Đổi mật khẩu</h3>
       <p id="password-change-description">Bảo vệ tài khoản bằng mật khẩu mới. Sau khi lưu, bạn cần đăng nhập lại trên các thiết bị.</p>
@@ -600,6 +642,9 @@
       <p id="password-change-error" role="alert"></p>
       <div class="logout-confirm-actions"><button type="button" class="logout-cancel-btn" onclick="closeChangePassword()">Hủy</button><button id="password-change-submit" type="submit" class="logout-submit-btn">Đổi mật khẩu</button></div>
     </form>
+        </section>
+      </div>
+    </section>
   </div>
   <!-- Side Right Drawer Panel Component -->
   <div id="side-drawer-backdrop" class="drawer-backdrop" onclick="closeSideDrawer()"></div>

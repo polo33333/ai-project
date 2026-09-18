@@ -300,6 +300,10 @@ test('PostgreSQL runtime stores app mutations and protects concurrent chat write
       }finally{await runtime.end();}
     });
     await t.test('password change verifies current password and atomically revokes all sessions',async()=>{
+      const invalidProfile=await post('/api/auth/profile',{displayName:'',email:'invalid'});assert.equal(invalidProfile.status,400);
+      const profile=await post('/api/auth/profile',{displayName:'Updated profile',email:'contact@example.test',role:'user'});assert.equal(profile.status,200);
+      const saved=(await profile.json()).account;assert.equal(saved.displayName,'Updated profile');assert.equal(saved.email,'contact@example.test');assert.equal(saved.role,'admin');
+      const me=await fetch(base+'/api/auth/me',{headers:{Cookie:cookie}});assert.equal((await me.json()).account.email,'contact@example.test');
       const change=body=>post('/api/auth/change-password',body);
       const wrong=await change({currentPassword:'wrong',newPassword:'new-test-password'});assert.equal(wrong.status,400);
       const short=await change({currentPassword:'test-password-only',newPassword:'short'});assert.equal(short.status,400);

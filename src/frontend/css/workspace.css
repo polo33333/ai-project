@@ -65,12 +65,12 @@ aside.sidebar.collapsed .brand-title-wrapper { display: flex; }
 aside.sidebar.collapsed .brand-logo { width: 34px; height: 34px; border-radius: 11px; }
 aside.sidebar.collapsed .sidebar-toggle-btn { width: 32px; height: 26px; font-size: 12px; }
 aside.sidebar.collapsed #btn-open-copilot {
-  width: 42px !important;
-  min-width: 42px;
-  max-width: 42px;
-  height: 42px !important;
-  min-height: 42px;
-  max-height: 42px;
+  width: 37px !important;
+  min-width: 37px;
+  max-width: 37px;
+  height: 37px !important;
+  min-height: 37px;
+  max-height: 37px;
   padding: 0;
   margin: 0 auto 18px;
   justify-content: center;
@@ -79,8 +79,8 @@ aside.sidebar.collapsed #btn-open-copilot {
   clip-path: circle(50% at 50% 50%);
 }
 aside.sidebar.collapsed #btn-open-copilot .copilot-btn-icon {
-  width: 42px;
-  height: 42px;
+  width: 37px;
+  height: 37px;
   border-radius: 9999px !important;
   background: transparent;
   font-size: 16px;

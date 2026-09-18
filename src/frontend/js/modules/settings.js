@@ -24,8 +24,10 @@
     }
     const control = field.type === 'select' ? document.createElement('select') : document.createElement('input');
     control.className = 'form-control settings-input'; control.dataset.key = field.key; control.dataset.initial = field.value;
+    control.setAttribute('aria-label', field.label);
     if (control.tagName === 'SELECT') {
-      const options = (field.options || []).map(option => [option, option]);
+      const labels = {ollama:'Ollama · chạy nội bộ',openai:'API tương thích OpenAI',error:'Dừng và báo lỗi',deterministic:'Vector dự phòng'};
+      const options = (field.options || []).map(option => [option, labels[option] || option]);
       options.forEach(([optionValue, label]) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = label; control.append(option); });
     } else {
       control.type = field.type === 'number' ? 'number' : field.type === 'url' ? 'url' : 'text';
@@ -43,6 +45,12 @@
   }
 
   function updateDirtyState() {
+    document.querySelectorAll('.settings-property').forEach(item=>{
+      const control=item.querySelector('.settings-input');
+      const dirty=control&&(control.type==='checkbox'?String(control.checked):control.value)!==control.dataset.initial;
+      item.classList.toggle('is-dirty',Boolean(dirty));
+      const reset=item.querySelector('.settings-field-reset');if(reset)reset.hidden=!dirty;
+    });
     const button = el('settings-save'); if (button) button.disabled = saving || Object.keys(changedValues()).length === 0;
     const restartButton = el('settings-save-restart'); if (restartButton) restartButton.disabled = saving;
   }
@@ -70,6 +78,11 @@
         information.append(name, key, description);
         const result = document.createElement('div'); result.className = 'settings-property-result'; result.append(createValue(field));
         const meta = document.createElement('small'); meta.textContent = `${field.source}${field.environmentOverride ? ' · Tiến trình đang chạy dùng giá trị khác' : ''}`;
+        if(!field.readOnly) {
+          const reset=document.createElement('button');reset.type='button';reset.className='settings-field-reset';reset.hidden=true;reset.textContent='Hoàn tác';reset.setAttribute('aria-label',`Hoàn tác ${field.label}`);
+          reset.onclick=()=>{const control=result.querySelector('.settings-input');if(control.type==='checkbox')control.checked=control.dataset.initial==='true';else control.value=control.dataset.initial;updateDirtyState();};
+          result.append(reset);
+        }
         result.append(meta); item.append(information, result); list.append(item);
       });
       root.append(section);

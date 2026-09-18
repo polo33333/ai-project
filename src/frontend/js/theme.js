@@ -29,6 +29,9 @@
   function apply() {
     const dark = preference === 'dark' || (preference !== 'light' && system.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.querySelectorAll('[data-theme-choice]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.themeChoice === (['light', 'dark'].includes(preference) ? preference : 'auto')));
+    });
     document.querySelectorAll('[data-theme-toggle]').forEach(button => {
       button.setAttribute('aria-label', dark ? 'Tắt giao diện tối' : 'Bật giao diện tối');
       button.title = button.getAttribute('aria-label');
@@ -55,6 +58,13 @@
     apply();
   });
   document.addEventListener('click', event => {
+    const choice = event.target.closest('[data-theme-choice]');
+    if (choice && ['light', 'dark', 'auto'].includes(choice.dataset.themeChoice)) {
+      preference = choice.dataset.themeChoice;
+      try { localStorage.setItem(key, preference); } catch { /* Keep in-memory selection. */ }
+      apply();
+      return;
+    }
     if (!event.target.closest('[data-theme-toggle]')) return;
     preference = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     try { localStorage.setItem(key, preference); } catch { /* Keep selection for this page. */ }

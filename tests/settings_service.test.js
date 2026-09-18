@@ -24,10 +24,13 @@ test('settings reject unknown keys, injection and invalid ranges atomically', t 
     assert.equal(fs.readFileSync(file, 'utf8'), 'PORT=3000\n');
   }
 });
-test('settings allow administrators to update the Qdrant executable path', t => {
+test('settings hide and reject the obsolete Qdrant executable while allowing its Docker endpoint', t => {
   const { service, file } = fixture(t, 'QDRANT_EXE=D:\\Qdrant\\qdrant.exe\n');
-  service.save({ revision: service.get().revision, values: { QDRANT_EXE: 'E:\\Apps\\Qdrant\\qdrant.exe' } });
-  assert.equal(fs.readFileSync(file, 'utf8'), 'QDRANT_EXE=E:\\Apps\\Qdrant\\qdrant.exe\n');
+  assert.ok(!JSON.stringify(service.get()).includes('QDRANT_EXE'));
+  assert.throws(() => service.save({ revision: service.get().revision, values: { QDRANT_EXE: 'E:\\Apps\\Qdrant\\qdrant.exe' } }), error => error.statusCode === 400);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'QDRANT_EXE=D:\\Qdrant\\qdrant.exe\n');
+  service.save({ revision: service.get().revision, values: { QDRANT_URL: 'http://127.0.0.1:6333' } });
+  assert.ok(fs.readFileSync(file, 'utf8').includes('QDRANT_URL=http://127.0.0.1:6333'));
 });
 test('settings reject stale revisions and redact credentials in URLs', t => {
   const { service, file } = fixture(t, 'QDRANT_URL=http://user:secret@localhost\n');

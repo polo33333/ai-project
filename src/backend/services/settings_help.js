@@ -1,5 +1,10 @@
 // Human-readable help for every setting exposed by the settings API.
 module.exports = {
+  HOST: ['Địa chỉ máy chủ', 'Địa chỉ backend lắng nghe. 127.0.0.1 chỉ cho phép truy cập từ máy hiện tại.'],
+  SHUTDOWN_TIMEOUT_MS: ['Thời gian chờ tắt máy chủ', 'Thời gian tối đa chờ request và worker kết thúc trước khi tắt, tính bằng mili giây.'],
+  CORS_ALLOWED_ORIGINS: ['Website được phép kết nối', 'Danh sách origin được phép gọi API, phân cách bằng dấu phẩy. Ví dụ http://localhost:3000.'],
+  SESSION_TOUCH_INTERVAL_MS: ['Chu kỳ cập nhật phiên đăng nhập', 'Khoảng cách giữa các lần lưu thời hạn phiên, tính bằng mili giây. 300000 tương đương 5 phút.'],
+  KNOWLEDGEHUB_BACKUP_DIR: ['Thư mục sao lưu', 'Nơi lưu backup dữ liệu và manifest. Đường dẫn tương đối tính từ thư mục dự án.'],
   PORT: ['Cổng truy cập ứng dụng', 'Cổng HTTP của máy chủ, từ 1 đến 65535. Ví dụ 3000 tương ứng http://localhost:3000; đổi cổng sẽ đổi địa chỉ truy cập.'],
   AI_DEFAULT_TIMEOUT_MS: ['Thời gian chờ AI mặc định', 'Giới hạn chờ mỗi yêu cầu AI, tính bằng mili giây. 30000 = 30 giây; tăng nếu model trả lời chậm.'],
   AI_LOCAL_TIMEOUT_MS: ['Thời gian chờ AI local', 'Giới hạn chờ model chạy nội bộ. 180000 = 3 phút; tăng giúp model chậm có thêm thời gian nhưng người dùng phải chờ lâu hơn.'],

@@ -331,6 +331,13 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if(pathname==='/api/auth/profile'&&req.method==='POST') {
+    try {
+      const account=authService.updateProfile(currentAccount.id,await readJsonBody(req));
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({account}));
+    }catch(error){res.writeHead(error.statusCode||503,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode?error.message:'Không lưu được tài khoản.'}));}
+    return;
+  }
   if (pathname === '/api/auth/change-password' && req.method === 'POST') {
     try {
       if(!checkChatRateLimit('password-change:'+currentAccount.id)) throw Object.assign(new Error('Bạn thao tác quá nhanh. Hãy thử lại sau.'),{statusCode:429});

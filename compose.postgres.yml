@@ -1,4 +1,17 @@
+name: ai-project
+
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.3
+    container_name: knowledgehub-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+      - qdrant_snapshots:/qdrant/snapshots
+
   postgres:
     image: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     container_name: knowledgehub-postgres
@@ -25,4 +38,8 @@ services:
       start_period: 20s
 
 volumes:
+  qdrant_storage:
+    name: knowledgehub_qdrant_storage
+  qdrant_snapshots:
+    name: knowledgehub_qdrant_snapshots
   postgres_data:

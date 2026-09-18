@@ -365,65 +365,8 @@ Write-Host "           QDRANT STARTUP"
 Write-Host "========================================"
 
 
-if (-not (Test-HttpEndpoint "$qdrantUrl/collections")) {
-
-    $qdrantExe = if ($env:QDRANT_EXE) {
-
-        $env:QDRANT_EXE
-
-    } else {
-
-        'E:\Qdrant\qdrant.exe'
-    }
-
-
-    if (Test-Path -LiteralPath $qdrantExe) {
-
-        Write-Host '[Startup] Qdrant is offline.'
-        Write-Host '[Startup] Starting Qdrant...'
-
-
-        Start-Process `
-            -FilePath $qdrantExe `
-            -WorkingDirectory (Split-Path -Parent $qdrantExe) `
-            -WindowStyle Hidden
-
-
-        $qdrantReady = $false
-
-
-        for ($attempt = 1; $attempt -le 20; $attempt++) {
-
-            Start-Sleep -Milliseconds 500
-
-
-            if (Test-HttpEndpoint "$qdrantUrl/collections") {
-
-                $qdrantReady = $true
-                break
-            }
-        }
-
-
-        if ($qdrantReady) {
-
-            Write-Host '[OK] Qdrant is ready.'
-
-        } else {
-
-            Write-Warning 'Qdrant was started but did not become ready within 10 seconds.'
-        }
-
-    } else {
-
-        Write-Warning "Qdrant is offline and $qdrantExe was not found."
-        Write-Warning "Dense retrieval will be unavailable."
-    }
-
-} else {
-
-    Write-Host '[OK] Qdrant is already running.'
-}
+. (Join-Path $PSScriptRoot 'ensure-qdrant.ps1')
+Ensure-QdrantDocker -ProjectRoot $projectRoot -QdrantUrl $qdrantUrl
 
 
 # ============================================

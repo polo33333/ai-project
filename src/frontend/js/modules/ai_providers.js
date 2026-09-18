@@ -51,7 +51,7 @@ function renderActiveProvider(activeProv) {
     if (titleEl) titleEl.textContent = 'Chưa có provider active';
     if (urlEl) urlEl.textContent = '-';
     if (secEl) secEl.textContent = '-';
-    if (costEl) costEl.textContent = '$0 / 1k tokens';
+    if (costEl) costEl.textContent = '$0 /M tokens';
     return;
   }
 
@@ -59,7 +59,7 @@ function renderActiveProvider(activeProv) {
   if (titleEl) titleEl.textContent = `${activeProv.name} (${activeProv.model || 'Default'})`;
   if (urlEl) urlEl.textContent = activeProv.baseUrl || 'On-Premise Local';
   if (secEl) secEl.textContent = isLocal ? 'On-Premise, không gửi dữ liệu ra cloud' : 'Cloud API qua TLS';
-  if (costEl) costEl.textContent = `$${activeProv.tokenCost || 0} / 1k tokens`;
+  if (costEl) costEl.textContent = `$${Number((Number(activeProv.tokenCost || 0) * 1000).toPrecision(12))} /M tokens`;
 }
 
 function renderAiProvidersTable() {
@@ -108,7 +108,7 @@ function renderAiProvidersTable() {
           <div class="provider-model">${escapeProviderHtml(prov.model || '-')}</div>
           <div class="provider-url">${escapeProviderHtml(prov.baseUrl || '-')}</div>
         </td>
-        <td><strong>$${escapeProviderHtml(prov.tokenCost || 0)} / 1k</strong></td>
+        <td><strong>$${escapeProviderHtml(Number((Number(prov.tokenCost || 0) * 1000).toPrecision(12)))} /M</strong></td>
         <td>
           <div class="provider-status-stack">
             <span class="metric-tag ${isActive ? 'green' : 'purple'} provider-routing-status">
@@ -164,7 +164,7 @@ function editAiProvider(id) {
     'page-new-prov-url': provider.baseUrl || '',
     'page-new-prov-key': '',
     'page-new-prov-priority': String(provider.priority || 1),
-    'page-new-prov-cost': String(provider.tokenCost || 0),
+    'page-new-prov-cost': String(Number((Number(provider.tokenCost || 0) * 1000).toPrecision(12))),
     'page-new-prov-tools': provider.supportsToolCalling ? 'native' : provider.supportsJsonToolCalling ? 'json' : 'none',
     'page-new-prov-context': String(provider.contextWindow || provider.numCtx || 16384),
     'page-new-prov-reserve': String(provider.outputReserve || 2048)
@@ -285,7 +285,8 @@ async function savePageNewAiProvider() {
   const model = document.getElementById('page-new-prov-model')?.value.trim();
   const apiKey = document.getElementById('page-new-prov-key')?.value.trim();
   const priority = parseInt(document.getElementById('page-new-prov-priority')?.value || '1', 10);
-  const tokenCost = parseFloat(document.getElementById('page-new-prov-cost')?.value || '0');
+  // The API retains USD per 1k tokens for compatibility with existing stored prices.
+  const tokenCost = parseFloat(document.getElementById('page-new-prov-cost')?.value || '0') / 1000;
   const editingId = window.editingAiProviderId;
 
   if (!name || !model) {

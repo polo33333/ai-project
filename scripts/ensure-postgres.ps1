@@ -8,8 +8,7 @@ function Invoke-StartupDocker {
     } catch { return 1 }
 }
 
-function Ensure-PostgresDocker {
-    param([Parameter(Mandatory = $true)][string]$ProjectRoot)
+function Ensure-StartupDocker {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw 'Docker CLI was not found. Install Docker Desktop and reopen the terminal.'
     }
@@ -35,6 +34,11 @@ function Ensure-PostgresDocker {
         if (-not $dockerReady) { throw 'Docker did not become ready within 120 seconds.' }
     }
     Write-Host '[OK] Docker is ready.'
+}
+
+function Ensure-PostgresDocker {
+    param([Parameter(Mandatory = $true)][string]$ProjectRoot)
+    Ensure-StartupDocker
     $postgresContainer = if ($env:APP_PG_DOCKER_CONTAINER) { $env:APP_PG_DOCKER_CONTAINER } else { 'knowledgehub-postgres' }
     if ((Invoke-StartupDocker -DockerArguments @('container', 'inspect', $postgresContainer)) -eq 0) {
         Write-Host '[Startup] Ensuring PostgreSQL container is running...'
