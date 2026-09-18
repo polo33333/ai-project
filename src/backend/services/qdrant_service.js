@@ -323,7 +323,9 @@ class QdrantService {
   async indexDocumentChunks(document, chunks) {
     try {
       const collection = await this.ensureDocumentCollection();
-      await this.deleteDocumentChunks(document.id);
+      if (await this.deleteDocumentChunks(document.id) === false) {
+        throw new Error('Cannot replace document index: previous chunks could not be removed.');
+      }
       const vectors = [];
       for (let start = 0; start < chunks.length; start += 32) {
         vectors.push(...await this.embedTexts(chunks.slice(start, start + 32).map(text => `${document.title}\n${text}`)));

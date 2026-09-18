@@ -3,6 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const storage = require('../src/backend/storage');
+storage.loadEnvironment();
 
 const command = process.argv[2];
 const dataDirectory = path.resolve(process.env.KNOWLEDGEHUB_DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -23,14 +25,22 @@ function listFiles(root) {
   return result;
 }
 
+async function main() {
 if (command === 'backup') {
   const destination = path.join(backupRoot, new Date().toISOString().replace(/[:.]/g, '-'));
   fs.mkdirSync(destination, { recursive: true });
   fs.cpSync(dataDirectory, path.join(destination, 'data'), { recursive: true });
+    if (storage.enabled()) {
+      await require('./postgres/backup').docker('pg_dump', ['--format=custom', '--no-owner', '--no-acl', '--schema=app'], { output: path.join(destination, 'app.dump') });
+      const dump = path.join(destination, 'app.dump');
+      fs.writeFileSync(dump + '.manifest.json', JSON.stringify({ version:1, bytes:fs.statSync(dump).size, sha256:hash(dump), createdAt:new Date().toISOString(), schema:'app', encryptionKeyRequired:true }, null, 2), { flag:'wx', mode:0o600 });
+  }
   const files = listFiles(path.join(destination, 'data')).map(file => ({ path: path.relative(path.join(destination, 'data'), file), sha256: hash(file), bytes: fs.statSync(file).size }));
-  fs.writeFileSync(path.join(destination, 'manifest.json'), JSON.stringify({ version: 1, createdAt: new Date().toISOString(), files }, null, 2));
+  fs.writeFileSync(path.join(destination, 'manifest.json'), JSON.stringify({ version: 1, createdAt: new Date().toISOString(), backend: process.env.APP_STORAGE_BACKEND || 'json', files,
+    postgres: storage.enabled() ? { file:'app.dump', sha256:hash(path.join(destination,'app.dump')), encryptionKeyRequired:true } : null }, null, 2));
   process.stdout.write(`${destination}\n`);
 } else if (command === 'restore') {
+  if (storage.enabled()) throw new Error('PostgreSQL is authoritative. Use restore:pg into a new database and verify it; do not restore legacy JSON over live app data.');
   if (!source) throw new Error('Usage: npm run restore -- <backup-directory>');
   const manifest = JSON.parse(fs.readFileSync(path.join(source, 'manifest.json'), 'utf8'));
   for (const item of manifest.files) {
@@ -43,3 +53,5 @@ if (command === 'backup') {
 } else {
   throw new Error('Usage: node scripts/backup_restore.js <backup|restore> [backup-directory]');
 }
+}
+main().catch(error => { console.error(error.code || error.message); process.exitCode=1; });

@@ -4,6 +4,7 @@
  */
 
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 
 function validateContextLimits(provider) {
   const window = Number(provider.contextWindow || provider.numCtx || 16384);
@@ -61,7 +62,7 @@ class AiProviderManager {
       }
     ];
 
-    this.providers = StorageHelper.loadJson('ai_providers.json', defaultProviders);
+    StorageHelper.bind(this, 'providers', 'ai_providers.json', defaultProviders);
     const activeProv = this.providers.find(p => p.isActive) || this.providers[0];
     this.activeProviderId = activeProv ? activeProv.id : "provider-ollama";
   }
@@ -96,7 +97,7 @@ class AiProviderManager {
   }
 
   getActiveProvider() {
-    const found = this.providers.find(p => p.id === this.activeProviderId && p.isActive);
+    const found = this.providers.find(p => p.isActive);
     if (found) return found;
     
     // Fallback to first active
@@ -126,7 +127,7 @@ class AiProviderManager {
   }
 
   addProvider(data) {
-    const newId = `provider-${Date.now()}`;
+    const newId = crypto.randomUUID();
     const newProvider = {
       id: newId,
       name: data.name || "Custom AI Provider",
@@ -174,8 +175,9 @@ class AiProviderManager {
   }
 
   deleteProvider(providerId) {
+    const wasActive = this.providers.some(provider => provider.id === providerId && provider.isActive);
     this.providers = this.providers.filter(p => p.id !== providerId);
-    if (this.activeProviderId === providerId && this.providers.length > 0) {
+    if (wasActive && this.providers.length > 0) {
       this.setActiveProvider(this.providers[0].id);
     }
     this.persist();

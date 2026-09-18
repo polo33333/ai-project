@@ -26,7 +26,7 @@ class AiPersonaService {
       updatedAt: new Date().toISOString().slice(0, 10)
     };
 
-    this.persona = StorageHelper.loadJson('ai_persona.json', defaults);
+    StorageHelper.bind(this, 'persona', 'ai_persona.json', defaults);
   }
 
   /** Lấy persona hiện tại */

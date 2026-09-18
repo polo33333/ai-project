@@ -2,12 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const StorageHelper = require('../../utils/storage_helper');
+const storage = require('../../storage');
 const libraryService = require('./library_service');
 
 class WatchFolderService {
   constructor() {
-    this.folders = StorageHelper.loadJson('watchfolders.json', []);
-    this.logs = StorageHelper.loadJson('watchfolder_logs.json', []);
+    StorageHelper.bind(this, 'folders', 'watchfolders.json', []);
+    StorageHelper.bind(this, 'logs', 'watchfolder_logs.json', []);
     this.watchers = new Map();
     this.processing = new Set();
     this.debounceTimers = new Map();
@@ -37,12 +38,21 @@ class WatchFolderService {
   }
 
   addLog(folder, filePath, event, vectorsIndexed = 0, error = null) {
-    this.logs.unshift({ id: `wfl-${Date.now()}-${Math.floor(Math.random() * 1000)}`, fileName: path.basename(filePath), folderPath: folder.path, event, vectorsIndexed, error, timestamp: new Date().toLocaleString('vi-VN') });
+    this.logs.unshift({ id: crypto.randomUUID(), fileName: path.basename(filePath), folderPath: folder.path, event, vectorsIndexed, error, timestamp: new Date().toLocaleString('vi-VN') });
     if (this.logs.length > 500) this.logs.length = 500;
     this.persist();
   }
 
   async processFile(folder, filePath, event = 'Phát hiện tệp mới') {
+    if (!storage.enabled()) return this._processFile(folder, filePath, event);
+    return storage.lease(`watchfile:${path.resolve(filePath).toLowerCase()}`, () => storage.run(() => {
+      const current = this.folders.find(item => item.id === folder.id);
+      if (!current || current.status !== 'Active') return;
+      return this._processFile(current, filePath, event);
+    }));
+  }
+
+  async _processFile(folder, filePath, event = 'Phát hiện tệp mới') {
     const resolved = path.resolve(filePath);
     if (this.processing.has(resolved) || !fs.existsSync(resolved)) return;
     const ext = path.extname(resolved).toLowerCase();
@@ -85,7 +95,10 @@ class WatchFolderService {
   scheduleFile(folder, filePath, event) {
     const key = path.resolve(filePath);
     clearTimeout(this.debounceTimers.get(key));
-    this.debounceTimers.set(key, setTimeout(() => { this.debounceTimers.delete(key); this.processFile(folder, key, event); }, 800));
+    this.debounceTimers.set(key, setTimeout(storage.detach(() => {
+      this.debounceTimers.delete(key);
+      this.processFile(folder, key, event).catch(error => console.error('[Watchfolder] Failed:', error.code || error.name));
+    }), 800));
   }
 
   formatBytes(bytes) {
@@ -106,7 +119,12 @@ class WatchFolderService {
         const filePath = path.join(folder.path, String(filename));
         if (eventType === 'rename' || eventType === 'change') this.scheduleFile(folder, filePath, eventType === 'rename' ? 'Tệp mới' : 'Tệp cập nhật');
       }));
-      this.watchers.get(folder.id).on('error', error => { folder.runtimeStatus = 'Error'; folder.error = error.message; this.persist(); });
+      this.watchers.get(folder.id).on('error', storage.detach(error => {
+        storage.run(() => {
+          const current = this.folders.find(item => item.id === folder.id);
+          if (current) { current.runtimeStatus = 'Error'; current.error = error.message; this.persist(); }
+        }).catch(failure => console.error('[Watchfolder] Failed:', failure.code || failure.name));
+      }));
       this.persist();
       if (importExisting) for (const filePath of existing) await this.processFile(folder, filePath, 'Quét ban đầu');
     } catch (error) { folder.runtimeStatus = 'Error'; folder.error = error.message; this.persist(); }
@@ -120,7 +138,7 @@ class WatchFolderService {
   async addFolder(folderPath, filters) {
     const normalizedPath = this.validateDirectory(folderPath);
     if (this.folders.some(folder => path.resolve(folder.path).toLowerCase() === normalizedPath.toLowerCase())) throw new Error('Thư mục này đã được cấu hình giám sát.');
-    const folder = { id: `wf-${Date.now()}`, path: normalizedPath, filters: Array.isArray(filters) && filters.length ? filters : ['.sql', '.pdf', '.docx'], scannedFiles: 0, status: 'Active', runtimeStatus: 'Starting', lastScan: 'Chưa quét', error: null };
+    const folder = { id: crypto.randomUUID(), path: normalizedPath, filters: Array.isArray(filters) && filters.length ? filters : ['.sql', '.pdf', '.docx'], scannedFiles: 0, status: 'Active', runtimeStatus: 'Starting', lastScan: 'Chưa quét', error: null };
     this.folders.unshift(folder); this.persist(); await this.startFolder(folder, true); return folder;
   }
 

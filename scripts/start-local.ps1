@@ -12,8 +12,9 @@ $envFile = Join-Path $projectRoot '.env'
 # LOAD .ENV FILE
 # ============================================
 
-if (Test-Path -LiteralPath $envFile) {
-    foreach ($line in Get-Content -LiteralPath $envFile -Encoding utf8) {
+foreach ($startupEnvFile in @($envFile, (Join-Path $projectRoot '.env.postgres'))) {
+if (Test-Path -LiteralPath $startupEnvFile) {
+    foreach ($line in Get-Content -LiteralPath $startupEnvFile -Encoding utf8) {
 
         # Ignore empty lines and comments
         if ($line -match '^\s*$' -or $line -match '^\s*#') {
@@ -33,6 +34,18 @@ if (Test-Path -LiteralPath $envFile) {
                 )
             }
         }
+    }
+}
+}
+
+# PostgreSQL must be ready before starting models and the backend.
+. (Join-Path $PSScriptRoot 'ensure-postgres.ps1')
+if ($env:APP_STORAGE_BACKEND -eq 'postgres') {
+    $postgresHost = if ($env:APP_PG_HOST) { $env:APP_PG_HOST } else { '127.0.0.1' }
+    if ($postgresHost -in @('127.0.0.1', 'localhost', '::1')) {
+        Ensure-PostgresDocker -ProjectRoot $projectRoot
+    } else {
+        Write-Host '[Startup] PostgreSQL uses an external host; local Docker startup skipped.'
     }
 }
 
@@ -429,7 +442,6 @@ Write-Host "[Startup] Local AI Model: $localAiModel"
 Write-Host ""
 Write-Host '[Startup] Starting KnowledgeHub...'
 
-
 Set-Location -LiteralPath $projectRoot
 
 
@@ -437,4 +449,3 @@ Set-Location -LiteralPath $projectRoot
 
 
 exit $LASTEXITCODE
-```

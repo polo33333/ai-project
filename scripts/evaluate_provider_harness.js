@@ -12,12 +12,30 @@ const { dispatchToProvider } = require('../src/backend/intelligent_core/adapters
 const security = require('../src/backend/intelligent_core/security_guard');
 const fixture = require('../tests/fixtures/provider_raw_contract_chat.json');
 
+async function configuredProvider(id) {
+  const {parseEnv}=require('node:util');
+  const values={};
+  for(const file of ['.env','.env.postgres']) {
+    const absolute=path.join(__dirname,'..',file);
+    if(fs.existsSync(absolute))Object.assign(values,parseEnv(fs.readFileSync(absolute,'utf8')));
+  }
+  if(values.APP_STORAGE_BACKEND==='postgres') {
+    require('../src/backend/storage/postgres/config').loadEnvironment();
+    const pool=require('../src/backend/storage/postgres/pool').createPool({runtime:true});
+    try {
+      const row=(await pool.query('SELECT payload FROM app.ai_providers WHERE id=$1',[id])).rows[0];
+      return row?require('../src/backend/storage/postgres/codec').decode('ai_providers',id,row.payload):null;
+    }finally{await pool.end();}
+  }
+  return JSON.parse(fs.readFileSync(path.join(__dirname,'../data/ai_providers.json'),'utf8')).find(item=>item.id===id);
+}
+
 async function main() {
   const liveIndex = process.argv.indexOf('--live');
   const liveId = liveIndex >= 0 ? process.argv[liveIndex + 1] : null;
   if (liveIndex >= 0 && !liveId) throw new Error('--live requires a provider id.');
   const provider = liveId
-    ? JSON.parse(fs.readFileSync(path.join(__dirname, '../data/ai_providers.json'), 'utf8')).find(item => item.id === liveId)
+    ? await configuredProvider(liveId)
     : { id: 'fixture-provider', name: 'Fixture', model: 'fixture', supportsToolCalling: true, executionClass: 'remote' };
   if (!provider) throw new Error('Provider not found.');
   providers.getProvidersForExecution = () => []; // No fallback to another live provider.

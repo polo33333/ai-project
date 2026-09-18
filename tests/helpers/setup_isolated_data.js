@@ -5,6 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 if (!process.env.KNOWLEDGEHUB_TEST_USE_INSTANCE_DATA) {
+  process.env.KNOWLEDGEHUB_TEST_ISOLATED = '1';
+  process.env.APP_STORAGE_BACKEND = 'json';
   const fixtureDir = path.resolve(__dirname, '..', 'fixtures');
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledgehub-test-'));
   fs.copyFileSync(path.join(fixtureDir, 'dictionary_seed.sample.json'), path.join(dataDir, 'dictionary.json'));

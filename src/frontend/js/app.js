@@ -260,6 +260,31 @@ async function loadCurrentAccount() {
   }
 }
 
+function openChangePassword() {
+  const modal=document.getElementById('change-password-modal');
+  modal.querySelector('form').reset();document.getElementById('password-change-error').textContent='';
+  modal.classList.add('show');modal.setAttribute('aria-hidden','false');
+  document.getElementById('password-current').focus();
+}
+function closeChangePassword() {
+  const modal=document.getElementById('change-password-modal');
+  modal.classList.remove('show');modal.setAttribute('aria-hidden','true');modal.querySelector('form').reset();
+  document.getElementById('user-profile-btn')?.focus();
+}
+async function submitChangePassword(event) {
+  event.preventDefault();
+  const button=document.getElementById('password-change-submit'),error=document.getElementById('password-change-error');
+  const newPassword=document.getElementById('password-new').value;
+  error.textContent='';
+  if(newPassword!==document.getElementById('password-confirm').value){error.textContent='Hai mật khẩu mới không khớp.';return;}
+  button.disabled=true;
+  try {
+    const response=await fetch('/api/auth/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:document.getElementById('password-current').value,newPassword})});
+    const data=await response.json();if(!response.ok)throw new Error(data.message||'Không thể đổi mật khẩu.');
+    closeChangePassword();window.location.href='/login.html';
+  }catch(err){error.textContent=err.message;}finally{button.disabled=false;}
+}
+
 function closeLogoutConfirmation() {
   const modal = document.getElementById('logout-confirm-modal');
   if (!modal) return;
@@ -688,8 +713,6 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   if (typeof fetchMcpServers === 'function' && cleanKey === 'mcp_sources') fetchMcpServers();
   if (typeof fetchTrainingReport === 'function' && cleanKey === 'training_core') fetchTrainingReport();
   if (typeof fetchSystemTools === 'function' && cleanKey === 'system_tools') fetchSystemTools();
-  if (typeof fetchMcpServers === 'function' && cleanKey === 'mcp_sources') fetchMcpServers();
-  if (typeof fetchSystemTools === 'function' && cleanKey === 'system_tools') fetchSystemTools();
   if (typeof fetchApiKeys === 'function' && cleanKey === 'api_docs') fetchApiKeys();
   if (typeof fetchEmbedConfigs === 'function' && cleanKey === 'api_docs') fetchEmbedConfigs();
   if (typeof fetchLibraryDocuments === 'function' && cleanKey === 'library') fetchLibraryDocuments();
@@ -812,7 +835,7 @@ function escapeCopilotHtml(value) {
 }
 
 function renderCopilotText(text) {
-  const raw = String(text ?? '')
+  const raw = sanitizeSystemPaths(text)
     .replace(/\{\s*(?:render[_-]?)?chart\s*\}/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

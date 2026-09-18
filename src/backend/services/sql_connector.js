@@ -34,10 +34,11 @@ try {
 }
 
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 
 class SqlConnector {
   constructor() {
-    this.dbSources = StorageHelper.loadJson('db_sources.json', []);
+    StorageHelper.bind(this, 'dbSources', 'db_sources.json', []);
     this.schemas = [];
     this.ensureSingleDefault();
   }
@@ -150,7 +151,7 @@ class SqlConnector {
       existing.lastSync = "Vừa xong";
     } else {
       this.dbSources.unshift({
-        id: `db-src-${Date.now()}`,
+        id: crypto.randomUUID(),
         dbName: dbName,
         type: "DDL Script Import",
         host: "Local File (.sql)",
@@ -201,7 +202,7 @@ class SqlConnector {
       if (!isNaN(parsedPort)) port = parsedPort;
     }
 
-    const resolvedSourceId = currentSource?.id || `db-src-${Date.now()}`;
+    const resolvedSourceId = currentSource?.id || crypto.randomUUID();
     let liveTables = [];
 
     if (Connection) {

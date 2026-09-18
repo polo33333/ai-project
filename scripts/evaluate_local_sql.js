@@ -32,6 +32,8 @@ function assertEvalDataDirectory(projectRoot) {
 
 async function runLive(corpus, args, projectRoot) {
   assertEvalDataDirectory(projectRoot);
+  process.env.APP_STORAGE_BACKEND = 'json';
+  process.env.KNOWLEDGEHUB_TEST_ISOLATED = '1';
   const providerId = args.provider || process.env.LOCAL_SQL_EVAL_PROVIDER_ID;
   const dbSourceId = args.db || process.env.LOCAL_SQL_EVAL_DB_SOURCE_ID;
   if (!providerId || !dbSourceId) throw new Error('Live eval requires --provider and --db (or matching environment variables)');

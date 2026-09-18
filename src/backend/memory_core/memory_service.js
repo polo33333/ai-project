@@ -1,6 +1,7 @@
 'use strict';
 
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 const policy = require('./memory_policy');
 const { routeMemory } = require('./memory_router');
 const { deriveReferences } = require('./reference_store');
@@ -13,10 +14,15 @@ function emptyReferences() {
 class MemoryService {
   constructor(options = {}) {
     this._save = options.save || (store => StorageHelper.saveJson('conversation_memory.json', store));
-    this.store = options.store || StorageHelper.loadJson('conversation_memory.json', { sessions: {} });
+    if (options.store) this.store = options.store;
+    else StorageHelper.bind(this, 'store', 'conversation_memory.json', { sessions: {} }, store => {
+      for (const [id, session] of Object.entries(store.sessions || {})) store.sessions[id] = this.migrateSession(session, id);
+      return store;
+    });
     if (!this.store || typeof this.store !== 'object' || Array.isArray(this.store)) this.store = { sessions: {} };
     if (!this.store.sessions || typeof this.store.sessions !== 'object') this.store.sessions = {};
     this.maxStored = Math.max(4, Number.parseInt(process.env.AI_MEMORY_MAX_MESSAGES || '40', 10));
+    this.maxStored -= this.maxStored % 2;
     this.maxSessions = Math.max(20, Number.parseInt(process.env.AI_MEMORY_MAX_SESSIONS || '500', 10));
     this.migrateStore();
   }
@@ -31,7 +37,7 @@ class MemoryService {
     return {
       ...value,
       id: value.id || id,
-      summary: typeof value.summary === 'string' ? value.summary : '',
+      summary: typeof value.summary === 'string' || (value.summary && typeof value.summary === 'object') ? value.summary : '',
       messages: Array.isArray(value.messages) ? value.messages : [],
       activeScope: value.activeScope || null,
       lastPlan: value.lastPlan || null,
@@ -115,12 +121,13 @@ class MemoryService {
       && now - updatedAt <= policy.pendingTtlMinutes() * 60 * 1000;
   }
 
-  recordPendingTurn({ sessionId, accountId = null, question, currentPlan, completionStatus, responseEvaluation } = {}) {
+  recordPendingTurn({ sessionId, accountId = null, embedId = null, question, currentPlan, completionStatus, responseEvaluation } = {}) {
     if (!policy.pendingTurnEnabled()) return { recorded: false, reason: 'pending_turn_disabled' };
     const userMessage = sanitizeMessage({ role: 'user', content: question }, 4000);
     if (!userMessage) return { recorded: false, reason: 'sanitizer_rejected' };
     const session = this.getSession(sessionId, true, accountId);
     if (!session) return { recorded: false, reason: 'invalid_session' };
+    if (embedId) session.embedId = embedId;
     const now = new Date().toISOString();
     session.pendingTurn = sanitizeObject({
       question: userMessage.content,
@@ -142,7 +149,7 @@ class MemoryService {
     return sanitizeMessages(Array.isArray(source) ? source.slice(-limit) : []);
   }
 
-  persistSuccessfulExchange({ sessionId, accountId = null, question, reply, currentPlan, toolCalls = [], completionStatus, responseEvaluation } = {}) {
+  persistSuccessfulExchange({ sessionId, accountId = null, embedId = null, question, reply, currentPlan, toolCalls = [], completionStatus, responseEvaluation } = {}) {
     if (policy.isEnabled() && !policy.canPersist({ completionStatus, responseEvaluation })) return { persisted: false, reason: 'quality_gate_rejected' };
     const userMessage = sanitizeMessage({ role: 'user', content: question }, 20000);
     const assistantMessage = sanitizeMessage({ role: 'assistant', content: reply }, 30000);
@@ -150,9 +157,12 @@ class MemoryService {
 
     const session = this.getSession(sessionId, true, accountId);
     if (!session) return { persisted: false, reason: 'invalid_session' };
+    if (embedId) session.embedId = embedId;
     const now = new Date().toISOString();
     userMessage.timestamp = now;
     assistantMessage.timestamp = now;
+    userMessage.id = crypto.randomUUID();
+    assistantMessage.id = crypto.randomUUID();
     const messageScope = policy.getDomain(currentPlan?.table);
     userMessage.scope = messageScope;
     assistantMessage.scope = messageScope;

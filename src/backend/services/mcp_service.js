@@ -31,12 +31,12 @@ function sanitizeSchema(schema) {
 
 class McpService {
   constructor() {
-    this.mcpServers = StorageHelper.loadJson('mcp_servers.json', []).map(server => ({
+    StorageHelper.bind(this, 'mcpServers', 'mcp_servers.json', [], servers => servers.map(server => ({
       ...server,
-      status: server.status === 'connected' ? 'disconnected' : (server.status || 'configured'),
+      status: this.sessions?.has(server.id) ? 'connected' : (server.status === 'connected' ? 'disconnected' : (server.status || 'configured')),
       tools: Array.isArray(server.tools) ? server.tools : [],
       resources: Array.isArray(server.resources) ? server.resources : []
-    }));
+    })));
     this.sessions = new Map();
     this.boundToolManager = null;
     this.BaseTool = null;

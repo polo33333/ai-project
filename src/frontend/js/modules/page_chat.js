@@ -204,16 +204,44 @@ document.addEventListener('keydown', event => {
   }
 });
 
+let chatHistoryLoaded = false;
+let chatHistoryFailed = false;
+let chatHistorySaveQueue = Promise.resolve();
+const persistedChatSessions = new Map();
+function sessionSnapshot(session) { const {version,...data}=session; return JSON.stringify(data); }
 function saveChatSessions() {
-  try {
-    localStorage.setItem(CHAT_ACTIVE_SESSION_KEY, window.currentChatSessionId || '');
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
-      currentChatSessionId: window.currentChatSessionId,
-      chatSessions: window.chatSessions || []
-    }));
-  } catch (err) {
-    console.warn('Không thể lưu chat session:', err);
-  }
+  try { localStorage.setItem(CHAT_ACTIVE_SESSION_KEY, window.currentChatSessionId || ''); } catch (_) {}
+  if (!chatHistoryLoaded || chatHistoryFailed) return Promise.resolve(false);
+  chatHistorySaveQueue = chatHistorySaveQueue.then(async () => {
+    if (chatHistoryFailed) return false;
+    const current = (window.chatSessions || []).map(session => JSON.parse(JSON.stringify(session)));
+    const ids = new Set(current.map(session=>session.id));
+    const changes = current.filter(session=>persistedChatSessions.get(session.id)?.snapshot!==sessionSnapshot(session))
+      .map(session=>({...session,version:persistedChatSessions.get(session.id)?.version || 0}));
+    const deleted = [...persistedChatSessions].filter(([id])=>!ids.has(id)).map(([id,value])=>({id,version:value.version}));
+    if (!changes.length && !deleted.length) return true;
+    const response=await fetch('/api/page-chat/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({changes,deleted})});
+    if (!response.ok) throw new Error(response.status===409?'Lịch sử đã thay đổi trên thiết bị khác. Tải lại trang trước khi sửa tiếp.':'Không lưu được lịch sử chat. Nội dung hiện vẫn còn trên trang; hãy thử lưu lại.');
+    const result=await response.json();
+    deleted.forEach(item=>persistedChatSessions.delete(item.id));
+    changes.forEach(session=>persistedChatSessions.set(session.id,{version:result.versions[session.id],snapshot:sessionSnapshot(session)}));
+    return true;
+  }).catch(error=>{
+    chatHistoryFailed=true;
+    showToast(error.message,'error');
+    if (!error.message.includes('thiết bị khác')) {
+      let retry=document.getElementById('chat-history-save-retry');
+      if (!retry) {
+        retry=document.createElement('button'); retry.id='chat-history-save-retry'; retry.type='button';
+        retry.textContent='Thử lưu lại lịch sử chat';
+        retry.onclick=async()=>{chatHistoryFailed=false;if(await saveChatSessions())retry.remove();};
+        document.getElementById('chat-sessions-list')?.prepend(retry);
+      }
+    }
+    console.error('Chat history save failed');
+    return false;
+  });
+  return chatHistorySaveQueue;
 }
 
 function clearBackendConversationMemory(sessionId) {
@@ -271,7 +299,7 @@ function normalizeStoredChatSession(session) {
     ? session.messages.map((message, index) => ({
       ...message,
       createdAt: Number(message.createdAt) || session.createdAt + index,
-      html: fixStoredMojibake(message.html || '')
+      html: sanitizeSystemPaths(fixStoredMojibake(message.html || ''))
     }))
     : [];
   session.history = Array.isArray(session.history)
@@ -293,16 +321,32 @@ function normalizeStoredChatSession(session) {
   return session;
 }
 
-function loadChatSessions() {
+async function loadChatSessions() {
   try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    if (Array.isArray(data.chatSessions)) window.chatSessions = data.chatSessions.map(normalizeStoredChatSession);
-    window.currentChatSessionId = localStorage.getItem(CHAT_ACTIVE_SESSION_KEY) || data.currentChatSessionId || null;
-    saveChatSessions();
+    const response=await fetch('/api/page-chat/sessions');
+    if (!response.ok) throw new Error('Không tải được lịch sử chat từ máy chủ. Hãy tải lại trang.');
+    const data=await response.json();
+    window.chatSessions=data.sessions.map(normalizeStoredChatSession);
+    window.chatSessions.forEach(session=>persistedChatSessions.set(session.id,{version:session.version,snapshot:sessionSnapshot(session)}));
+    try { window.currentChatSessionId=localStorage.getItem(CHAT_ACTIVE_SESSION_KEY); } catch (_) {}
+    if (!window.chatSessions.some(session=>session.id===window.currentChatSessionId)) window.currentChatSessionId=window.chatSessions[0]?.id || null;
+    chatHistoryLoaded=true;
+    // Legacy browser history has no reliable account owner. Import only after
+    // the signed-in user explicitly confirms that it belongs to them.
+    let legacy; try { legacy=JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY)||'null'); } catch (_) {}
+    if (legacy?.chatSessions?.length && await showUiConfirm('Trình duyệt còn lịch sử chat cũ. Bạn xác nhận đây là dữ liệu của mình và muốn lưu vào tài khoản đang đăng nhập?',{title:'Nhập lịch sử chat cũ',confirmText:'Nhập vào tài khoản'})) {
+      const ids=new Set(window.chatSessions.map(session=>session.id));
+      for(const session of legacy.chatSessions) {
+        const imported=normalizeStoredChatSession(session); delete imported.version;
+        if(ids.has(imported.id)) imported.id=`session-${crypto.randomUUID()}`;
+        window.chatSessions.push(imported); ids.add(imported.id);
+      }
+      if(await saveChatSessions()) localStorage.removeItem(CHAT_STORAGE_KEY);
+    }
+    renderChatSessionsList(); renderCurrentChatMessages();
   } catch (err) {
-    console.warn('Không thể đọc chat session:', err);
+    chatHistoryFailed=true;
+    showToast(err.message,'error');
   }
 }
 
@@ -319,8 +363,9 @@ async function loadPersona() {
 
 // Ensure at least 1 session exists before rendering
 function ensureChatSession() {
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
   if (window.chatSessions.length === 0) {
-    const newId = `session-${Date.now()}`;
+    const newId = `session-${crypto.randomUUID()}`;
     window.chatSessions.push({
       id: newId,
       title: 'Cuộc trò chuyện mới',
@@ -337,7 +382,7 @@ function ensureChatSession() {
   }
 }
 
-loadChatSessions();
+const chatHistoryReady = loadChatSessions();
 
 // Markdown + link + JSON-block cleaner
 function cleanReplyText(text) {
@@ -362,8 +407,16 @@ function escapeChatMarkdown(value) {
     .replace(/'/g, '&#039;');
 }
 
+function sanitizeSystemPaths(value) {
+  return String(value ?? '')
+    .replace(/<a\b[^>]*href\s*=\s*["']\s*file:[\s\S]*?<\/a>/gi, '[SYSTEM_PATH_HIDDEN]')
+    .replace(/file:\/{2,3}[^\s<>"'`)]+/gi, '[SYSTEM_PATH_HIDDEN]')
+    .replace(/(^|[\s(`"'=])(?:[a-z]:[\\/]|\\\\[^\s\\/]+[\\/])[^\s<>"'`)]+/gim, '$1[SYSTEM_PATH_HIDDEN]')
+    .replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]');
+}
+
 function parseMarkdownInline(value) {
-  let html = escapeChatMarkdown(value);
+  let html = escapeChatMarkdown(sanitizeSystemPaths(value));
   html = html.replace(/(^|[\s:])(\/(?:api\/)?exports\/[^\s<>()`]+\.(?:xlsx?|csv|pdf))(?=$|[\s,.!?<])/gi,
     '$1<a class="chat-download-link" href="$2" download><i class="fa-solid fa-download"></i>Tải file tại đây</a>');
   html = html.replace(/\[([^\]]+)\]\s*\(\s*(\/(?:api\/)?exports\/[^)\s]+)\s*\)/g,
@@ -925,6 +978,8 @@ function editPageChatQuestion(button) {
 
 // Main Send Message
 async function sendPageChatMessage() {
+  await chatHistoryReady;
+  if (chatHistoryFailed) return showToast('Lịch sử chat chưa được lưu hoặc tải thành công. Hãy thử lưu lại hoặc tải lại trang trước khi gửi tiếp.','error');
   if (window.pageChatIsResponding) return;
   const input = document.getElementById('page-chat-user-input');
   if (!input) return;
@@ -1494,6 +1549,7 @@ function toggleChatSessionMenu(id, event) {
 }
 
 function togglePinChatSession(id, event) {
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
   event?.stopPropagation();
   const session = window.chatSessions.find(item => item.id === id);
   if (!session) return;
@@ -1505,6 +1561,7 @@ function togglePinChatSession(id, event) {
 }
 
 async function renameChatSession(id, event) {
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
   event?.stopPropagation();
   const session = window.chatSessions.find(item => item.id === id);
   if (!session) return;
@@ -1526,8 +1583,9 @@ if (!window.__chatSessionMenuOutsideClickBound) {
 }
 
 function createNewChatSession() {
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
   if (window.pageChatIsResponding) return showToast('Hãy dừng câu trả lời hiện tại trước khi tạo đoạn chat mới.', 'info');
-  const newId = `session-${Date.now()}`;
+  const newId = `session-${crypto.randomUUID()}`;
   const count = window.chatSessions.length + 1;
   const now = Date.now();
   const newSession = { id: newId, title: `Cuộc trò chuyện mới ${count}`, messages: [], history: [], createdAt: now, updatedAt: now };
@@ -1542,6 +1600,7 @@ function createNewChatSession() {
 }
 
 async function deleteSingleChatSession(id, event) {
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
   event?.stopPropagation();
   const session = window.chatSessions.find(s => s.id === id);
   const title = session ? session.title : 'đoạn chat';
@@ -1577,6 +1636,7 @@ function selectChatSession(id) {
 }
 
 async function clearAllChatSessions() {
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
   if (await showUiConfirm('Bạn có chắc muốn xóa tất cả các cuộc trò chuyện?', { title: 'Xóa toàn bộ cuộc trò chuyện', confirmText: 'Xóa tất cả', tone: 'danger' })) {
     window.chatSessions.forEach(session => clearBackendConversationMemory(session.id));
     window.chatSessions = [];

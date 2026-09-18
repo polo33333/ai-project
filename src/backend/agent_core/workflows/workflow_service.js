@@ -1,12 +1,13 @@
 const crypto = require('crypto');
 const StorageHelper = require('../../utils/storage_helper');
+const storage = require('../../storage');
 const WorkflowEngine = require('./workflow_engine');
 const { createStep } = require('./automation_steps');
 
 class WorkflowService {
   constructor() {
-    this.workflows = StorageHelper.loadJson('workflows.json', [createDefaultDataExportWorkflow()]);
-    this.runs = StorageHelper.loadJson('workflow_runs.json', []);
+    StorageHelper.bind(this, 'workflows', 'workflows.json', [createDefaultDataExportWorkflow()]);
+    StorageHelper.bind(this, 'runs', 'workflow_runs.json', []);
   }
 
   persist() {
@@ -52,6 +53,17 @@ class WorkflowService {
   }
 
   async run(id, input = {}, context = {}) {
+    if (!storage.enabled()) return this._run(id, input, context);
+    const result = await storage.lease(`workflow:${id}`, async () => {
+      const execution = await this._run(id, input, context);
+      await storage.flush();
+      return execution;
+    });
+    if (result?.skipped) throw Object.assign(new Error('Workflow đang chạy. Hãy thử lại sau.'), { statusCode: 409 });
+    return result;
+  }
+
+  async _run(id, input = {}, context = {}) {
     const definition = this.get(id);
     if (!definition) throw new Error(`Workflow "${id}" not found`);
     if (!definition.enabled) throw new Error(`Workflow "${id}" is disabled`);

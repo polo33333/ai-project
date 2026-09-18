@@ -6,6 +6,7 @@ const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 const { parse: parseCsv } = require('csv-parse/sync');
 const StorageHelper = require('../../utils/storage_helper');
+const storage = require('../../storage');
 const qdrantService = require('../../services/qdrant_service');
 
 const DATA_DIR = StorageHelper.getDataDirectory();
@@ -15,7 +16,7 @@ for (const dir of [FILES_DIR, CONTENT_DIR]) fs.mkdirSync(dir, { recursive: true 
 
 class LibraryService {
   constructor() {
-    this.documents = StorageHelper.loadJson('library.json', []);
+    StorageHelper.bind(this, 'documents', 'library.json', []);
     this.maxFileBytes = Math.max(1024 * 1024, Number(process.env.LIBRARY_MAX_FILE_MB || 20) * 1024 * 1024);
     if (this.repairManagedPaths()) this.persist();
   }
@@ -125,7 +126,19 @@ class LibraryService {
     return chunks;
   }
 
-  async addDocument({ title, fileType, size, category, contentBase64, sourcePath = null, sourceFingerprint = null, sourceModifiedAt = null }) {
+  async addDocument(payload) {
+    if (!storage.enabled()) return this._addDocument(payload);
+    const fingerprint = crypto.createHash('sha256').update(Buffer.from(payload.contentBase64 || '', 'base64')).digest('hex');
+    const result = await storage.lease(`document-fingerprint:${fingerprint}`, async () => {
+      const document = await this._addDocument(payload);
+      await storage.flush();
+      return document;
+    });
+    if (result?.skipped) throw Object.assign(new Error('Tệp này đang được xử lý. Hãy thử lại sau.'), { statusCode: 409 });
+    return result;
+  }
+
+  async _addDocument({ title, fileType, size, category, contentBase64, sourcePath = null, sourceFingerprint = null, sourceModifiedAt = null }) {
     if (!title || !String(title).trim()) throw new Error('Tên tài liệu không được để trống.');
     if (!contentBase64) throw new Error('Chưa có nội dung file để xử lý.');
     const buffer = Buffer.from(contentBase64, 'base64');
@@ -146,7 +159,7 @@ class LibraryService {
       return { ...identical, duplicate: true };
     }
     if (!document) {
-      const id = `lib-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const id = crypto.randomUUID();
       document = { id, storagePath: path.join(FILES_DIR, `${id}-${this.sanitizeName(normalizedTitle)}`), contentPath: path.join(CONTENT_DIR, `${id}.txt`) };
       this.documents.unshift(document);
     }
@@ -164,6 +177,18 @@ class LibraryService {
       error: null
     });
     this.persist();
+    if (storage.enabled()) {
+      // The database job survives a crash/restart and carries the exact source
+      // version. File names include that version so a newer upload cannot
+      // overwrite bytes still needed by an older job.
+      document.storagePath = path.join(FILES_DIR, `${document.id}-${effectiveFingerprint.slice(0, 16)}-${this.sanitizeName(normalizedTitle)}`);
+      document.contentPath = path.join(CONTENT_DIR, `${document.id}-${effectiveFingerprint.slice(0, 16)}.txt`);
+      fs.writeFileSync(document.storagePath, buffer);
+      document.chunksCount = 0;
+      this.persist();
+      storage.enqueue('document.ingest', document.id, { fingerprint: effectiveFingerprint });
+      return document;
+    }
     try {
       fs.writeFileSync(document.storagePath, buffer);
       const text = this.cleanText(await this.extractText(buffer, type));
@@ -200,6 +225,12 @@ class LibraryService {
   async deleteDocument(id) {
     const document = this.findDocument(id);
     if (!document) return false;
+    if (storage.enabled()) {
+      storage.enqueue('document.delete', id, { paths: [document.storagePath, document.contentPath] });
+      this.documents = this.documents.filter(item => item.id !== id);
+      this.persist();
+      return true;
+    }
     for (const filePath of [document.storagePath, document.contentPath]) {
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
@@ -210,6 +241,14 @@ class LibraryService {
   }
 
   async reindexAll() {
+    if (storage.enabled()) {
+      for (const document of this.documents) {
+        document.status = 'Đang xử lý';
+        storage.enqueue('document.ingest', document.id, { fingerprint: document.sourceFingerprint || null });
+      }
+      this.persist();
+      return { total: this.documents.length, indexed: 0, queued: this.documents.length, failed: [] };
+    }
     const summary = { total: this.documents.length, indexed: 0, failed: [] };
     for (const document of this.documents) {
       try {
@@ -259,9 +298,10 @@ class LibraryService {
         keeper.sourceModifiedAt = sourceCopy.sourceModifiedAt || keeper.sourceModifiedAt;
       }
       for (const duplicate of copies.slice(1)) {
-        await qdrantService.deleteDocumentChunks(duplicate.id);
-        for (const filePath of [duplicate.storagePath, duplicate.contentPath]) {
-          if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        if (storage.enabled()) storage.enqueue('document.delete', duplicate.id, { paths: [duplicate.storagePath, duplicate.contentPath] });
+        else {
+          await qdrantService.deleteDocumentChunks(duplicate.id);
+          for (const filePath of [duplicate.storagePath, duplicate.contentPath]) if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
         removed.push({ id: duplicate.id, title: duplicate.title, keptId: keeper.id });
       }
@@ -269,6 +309,35 @@ class LibraryService {
     if (removed.length) this.documents = this.documents.filter(item => !removed.some(entry => entry.id === item.id));
     this.persist();
     return { removedCount: removed.length, remainingCount: this.documents.length, removed };
+  }
+
+  async processQueuedDocument(id, { fingerprint } = {}) {
+    const document = this.findDocument(id);
+    if (!document || (fingerprint && document.sourceFingerprint !== fingerprint)) return;
+    const buffer = fs.readFileSync(document.storagePath);
+    const text = this.cleanText(await this.extractText(buffer, document.fileType));
+    if (!text) throw new Error('DOCUMENT_HAS_NO_TEXT');
+    fs.writeFileSync(document.contentPath, text, 'utf8');
+    const chunks = this.chunkText(text);
+    const result = await qdrantService.indexDocumentChunks(document, chunks);
+    if (!result.success) throw new Error('DOCUMENT_INDEX_FAILED');
+    document.chunksCount = chunks.length;
+    document.preview = text.slice(0, 500);
+    document.status = 'Đã lập chỉ mục';
+    document.error = null;
+    document.updatedAt = new Date().toISOString();
+    this.persist();
+  }
+
+  async removeQueuedFiles(id, { paths = [] } = {}) {
+    if (this.findDocument(id)) throw new Error('DOCUMENT_STILL_EXISTS');
+    if (await qdrantService.deleteDocumentChunks(id) === false) throw new Error('DOCUMENT_VECTOR_DELETE_FAILED');
+    for (const file of paths) {
+      if (!file) continue;
+      const resolved = path.resolve(file);
+      if (![FILES_DIR, CONTENT_DIR].some(root => resolved.startsWith(path.resolve(root) + path.sep))) throw new Error('UNMANAGED_DOCUMENT_PATH');
+      if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
+    }
   }
 }
 

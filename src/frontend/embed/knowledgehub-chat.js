@@ -22,7 +22,11 @@
     /\[\[([^\]]+)\]\((\/api\/exports\/[^)\s]+)\)\]\([^)\s]+\)/g,
     '[$1]($2)'
   );
-  const renderText = value => escapeHtml(normalizeDownloadLinks(value))
+  const sanitizeSystemPaths = value => String(value ?? '')
+    .replace(/file:\/{2,3}[^\s<>"'`)]+/gi, '[SYSTEM_PATH_HIDDEN]')
+    .replace(/(^|[\s(`"'=])(?:[a-z]:[\\/]|\\\\[^\s\\/]+[\\/])[^\s<>"'`)]+/gim, '$1[SYSTEM_PATH_HIDDEN]')
+    .replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]');
+  const renderText = value => escapeHtml(normalizeDownloadLinks(sanitizeSystemPaths(value)))
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, rawUrl) => {
       const decodedUrl = rawUrl.replace(/&amp;/g, '&');
       let href = '';

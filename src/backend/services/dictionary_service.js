@@ -4,13 +4,14 @@
  */
 
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 const { withIdentity, sameTable } = require('./schema_identity');
 
 class DictionaryService {
   constructor() {
-    this.tablesStore = StorageHelper.loadJson('dictionary.json', []).map(withIdentity);
-    this.tableRelationships = StorageHelper.loadJson('table_relationships.json', []);
-    this.businessGlossary = StorageHelper.loadJson('glossary.json', []);
+    StorageHelper.bind(this, 'tablesStore', 'dictionary.json', [], value => value.map(withIdentity));
+    StorageHelper.bind(this, 'tableRelationships', 'table_relationships.json', []);
+    StorageHelper.bind(this, 'businessGlossary', 'glossary.json', []);
   }
 
   persist() {
@@ -78,7 +79,7 @@ class DictionaryService {
     );
     if (duplicate) throw new Error('Quan hệ này đã tồn tại.');
     const relationship = {
-      id: `rel-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: crypto.randomUUID(),
       sourceTable: data.sourceTable,
       sourceColumn: data.sourceColumn,
       targetTable: data.targetTable,

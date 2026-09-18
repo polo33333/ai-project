@@ -171,6 +171,9 @@ class SecurityGuard {
     // Che bớt mật khẩu trong chuỗi Connection String nếu có
     masked = masked.replace(/(Password|Pwd|secret)=([^;]+)/gi, '$1=******');
 
+    masked = masked.replace(/file:\/{2,3}[^\s<>"'`)]+/gi, '[SYSTEM_PATH_HIDDEN]');
+    masked = masked.replace(/(^|[\s(`"'=])(?:[a-z]:[\\/]|\\\\[^\s\\/]+[\\/])[^\s<>"'`)]+/gim, '$1[SYSTEM_PATH_HIDDEN]');
+    masked = masked.replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]');
     return masked;
   }
 

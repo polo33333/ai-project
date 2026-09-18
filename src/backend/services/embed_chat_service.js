@@ -1,8 +1,9 @@
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 
 class EmbedChatService {
   constructor() {
-    this.configs = StorageHelper.loadJson('embed_chat_configs.json', []);
+    StorageHelper.bind(this, 'configs', 'embed_chat_configs.json', []);
     this.rateBuckets = new Map();
   }
 
@@ -29,7 +30,7 @@ class EmbedChatService {
     if (!name) throw new Error('Tên cấu hình Embed không được để trống.');
     if (allowedOrigins.length === 0) throw new Error('Cần khai báo ít nhất một domain hợp lệ.');
     const config = {
-      id: `emb_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+      id: crypto.randomUUID(),
       name,
       allowedOrigins,
       rateLimit: Math.min(300, Math.max(1, Number(data.rateLimit) || 30)),

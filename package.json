@@ -24,7 +24,18 @@
     "migrate:dictionary-identity": "node scripts/migrate_dictionary_identity.js",
     "sanitize:chat-data": "node scripts/sanitize_persisted_chat_data.js",
     "training:collect": "node scripts/training_collect.js",
-    "training:evaluate": "node scripts/training_evaluate.js"
+    "training:evaluate": "node scripts/training_evaluate.js",
+    "db:pg:init": "node scripts/postgres/cli.js init",
+    "db:migrate": "node scripts/postgres/cli.js migrate",
+    "data:pg:preflight": "node scripts/postgres/cli.js preflight",
+    "data:pg:import": "node scripts/postgres/cli.js import",
+    "data:pg:verify": "node scripts/postgres/cli.js verify",
+    "data:pg:export": "node scripts/postgres/cli.js export",
+    "test:storage": "node scripts/postgres/test.js",
+    "data:pg:rehearse": "node scripts/postgres/rehearse.js",
+    "backup:pg": "node scripts/postgres/backup.js backup",
+    "restore:pg": "node scripts/postgres/backup.js restore",
+    "data:pg:cutover": "node scripts/postgres/cutover.js"
   },
   "author": "kingdom",
   "license": "ISC",
@@ -33,6 +44,7 @@
     "csv-parse": "^6.1.0",
     "mammoth": "^1.9.1",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.23.0",
     "tedious": "^16.7.0",
     "xlsx": "^0.18.5"
   }

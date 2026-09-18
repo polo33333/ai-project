@@ -4,6 +4,7 @@
  */
 
 const fs = require('fs');
+const storage = require('../storage');
 const path = require('path');
 const { getExportsDirectory } = require('../utils/export_paths');
 
@@ -74,11 +75,11 @@ const MIME_TYPES = {
 };
 
 // Helper to read UTF-8 JSON Body
-const readJsonBody = (req) => {
+const readJsonBody = (req, bodyLimit = null) => {
   return new Promise((resolve, reject) => {
     let chunks = [];
     let size = 0;
-    const maxBytes = Math.max(1024, Number(process.env.API_BODY_MAX_BYTES || 1048576));
+    const maxBytes = bodyLimit || Math.max(1024, Number(process.env.API_BODY_MAX_BYTES || 1048576));
     req.on('data', chunk => {
       size += chunk.length;
       if (size > maxBytes) {
@@ -256,7 +257,9 @@ async function handleRequest(req, res) {
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const pathname = parsedUrl.pathname;
   const currentAccount = authService.getAccountBySession(getSessionToken(req));
+  if(currentAccount) req.storageOwner=`account:${currentAccount.id}`;
   if (pathname === '/health/live' || pathname === '/health/ready') {
+    if (pathname === '/health/ready') await storage.ready();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ status: 'ok', requestId }));
     return;
@@ -328,6 +331,20 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/auth/change-password' && req.method === 'POST') {
+    try {
+      if(!checkChatRateLimit('password-change:'+currentAccount.id)) throw Object.assign(new Error('Bạn thao tác quá nhanh. Hãy thử lại sau.'),{statusCode:429});
+      const {currentPassword,newPassword}=await readJsonBody(req);
+      authService.changePassword(currentAccount.id,currentPassword,newPassword);
+      clearSessionCookie(res);
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
+      res.end(JSON.stringify({status:'success',message:'Đã đổi mật khẩu. Vui lòng đăng nhập lại.'}));
+    } catch(error) {
+      res.writeHead(error.statusCode||503,{'Content-Type':'application/json; charset=UTF-8'});
+      res.end(JSON.stringify({status:'error',message:error.statusCode?error.message:'Không thể đổi mật khẩu. Hãy thử lại.'}));
+    }
+    return;
+  }
   if (currentAccount && pathname === '/login.html') {
     res.writeHead(302, { Location: '/' });
     res.end();
@@ -758,6 +775,7 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ status: 'error', message: authorization.message }));
         return;
       }
+      req.storageOwner=`embed:${authorization.config.id}:${authorization.origin || 'admin-preview'}`;
       if (authorization.origin) res.setHeader('Access-Control-Allow-Origin', authorization.origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Cache-Control', 'no-store');
@@ -797,6 +815,7 @@ async function handleRequest(req, res) {
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
         sessionId: memorySessionId,
+        embedId: authorization.config.id,
         question: queryText,
         reply: coreResult.replyText,
         currentPlan: coreResult.trace?.training?.plan,
@@ -807,6 +826,7 @@ async function handleRequest(req, res) {
       const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
         : conversationMemoryService.recordPendingTurn({
           sessionId: memorySessionId,
+          embedId: authorization.config.id,
           question: queryText,
           currentPlan: coreResult.trace?.training?.plan,
           completionStatus: auditStatus,
@@ -1134,14 +1154,8 @@ async function handleRequest(req, res) {
 
 
   if (pathname === '/api/persona' && req.method === 'GET') {
-    const personaFile = path.join(__dirname, '../../../data/ai_persona.json');
-    if (fs.existsSync(personaFile)) {
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(fs.readFileSync(personaFile, 'utf8'));
-    } else {
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({ name: "KAI", quickPrompts: [] }));
-    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+    res.end(JSON.stringify(aiPersonaService.getPersona()));
     return;
   }
 
@@ -1152,6 +1166,18 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/page-chat/sessions' && ['GET','POST'].includes(req.method)) {
+    try {
+      const history = require('../services/page_chat_history_service');
+      const result = req.method === 'GET' ? {sessions:await history.list(currentAccount.id)} : await history.save(currentAccount.id,await readJsonBody(req,8*1024*1024));
+      res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});
+      res.end(JSON.stringify(result));
+    } catch(error) {
+      res.writeHead(error.statusCode||503, {'Content-Type':'application/json; charset=UTF-8'});
+      res.end(JSON.stringify({message:error.statusCode?error.message:'CHAT_HISTORY_STORAGE_FAILED'}));
+    }
+    return;
+  }
   if (pathname === '/api/chat-history' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify(loggerService.getChatHistory()));
@@ -1240,7 +1266,7 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/conversation-memory/clear' && req.method === 'POST') {
     const { sessionId } = await readJsonBody(req);
-    conversationMemoryService.clearSession(sessionId);
+    conversationMemoryService.clearSession(sessionId, currentAccount?.id || null);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ status: 'success' }));
     return;

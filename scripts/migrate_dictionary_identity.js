@@ -3,10 +3,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const StorageHelper = require('../src/backend/utils/storage_helper');
-const sqlConnector = require('../src/backend/services/sql_connector');
+const storage = require('../src/backend/storage');
+storage.loadEnvironment();
 const { withIdentity } = require('../src/backend/services/schema_identity');
 
 async function main() {
+  const sqlConnector = require('../src/backend/services/sql_connector');
   const sources = StorageHelper.loadJson('db_sources.json', []);
   const tables = StorageHelper.loadJson('dictionary.json', []);
   const relationships = StorageHelper.loadJson('table_relationships.json', []);
@@ -51,4 +53,7 @@ async function main() {
   process.stdout.write(`${JSON.stringify({ tables: migrated.length, relationships: migratedRelationships.length, unresolvedSources: migrated.filter(table => !table.dbSourceId).length }, null, 2)}\n`);
 }
 
-main().catch(error => { process.stderr.write(`${error.stack || error.message}\n`); process.exitCode = 1; });
+(async () => {
+  await storage.bootstrapStorage();
+  try { await storage.run(main); } finally { await storage.close(); }
+})().catch(error => { console.error(error.code || error.message); process.exitCode=1; });

@@ -4,6 +4,7 @@
  */
 
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 
 class LoggerService {
   constructor() {
@@ -74,9 +75,9 @@ class LoggerService {
       //   }
     ];
 
-    this.systemLogs = StorageHelper.loadJson('logs.json', defaultLogs);
-    this.chatHistory = StorageHelper.loadJson('chat_history.json', []);
-    this.chatFeedback = StorageHelper.loadJson('chat_feedback.json', []);
+    StorageHelper.bind(this, 'systemLogs', 'logs.json', defaultLogs);
+    StorageHelper.bind(this, 'chatHistory', 'chat_history.json', []);
+    StorageHelper.bind(this, 'chatFeedback', 'chat_feedback.json', []);
     this.maxChatHistory = Math.max(200, Number.parseInt(process.env.MAX_CHAT_HISTORY || '5000', 10) || 5000);
   }
 
@@ -88,7 +89,7 @@ class LoggerService {
 
   addLog(level, moduleName, message, details = null) {
     const logItem = {
-      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: crypto.randomUUID(),
       timestamp: new Date().toLocaleString('vi-VN'),
       level: level.toUpperCase(),
       module: moduleName,
@@ -104,7 +105,7 @@ class LoggerService {
 
   addChatAudit(question, replyText, sqlQuery, providerInfo, latencyMs, status = 'SUCCESS', errorReason = null, requestPayload = null) {
     const auditItem = {
-      id: `chat-${Date.now()}`,
+      id: crypto.randomUUID(),
       timestamp: new Date().toLocaleString('vi-VN'),
       question: question,
       replyText: replyText,
@@ -141,7 +142,7 @@ class LoggerService {
     if (!['like', 'dislike'].includes(rating)) throw new Error('Đánh giá không hợp lệ.');
     const existing = this.chatFeedback.find(item => item.auditId === auditId);
     const feedback = existing || {
-      id: `feedback-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: crypto.randomUUID(),
       auditId: auditId || null,
       createdAt: new Date().toISOString()
     };

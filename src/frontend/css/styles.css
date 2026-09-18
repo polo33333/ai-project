@@ -724,6 +724,20 @@ header.top-bar {
 .logout-submit-btn:hover { background: #b91c1c; border-color: #b91c1c; }
 .logout-submit-btn:disabled { opacity: .7; cursor: wait; }
 
+.account-password-dialog { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; text-align: left; padding: 28px; }
+.account-password-icon { width: 44px; height: 44px; display: grid; place-items: center; margin-bottom: 16px; border-radius: 12px; color: var(--primary, #6366f1); background: rgba(99,102,241,.1); font-size: 18px; }
+.account-password-fields { display: grid; gap: 8px; margin-top: 24px; }
+.account-password-fields label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.account-password-fields label:not(:first-child) { margin-top: 10px; }
+.account-password-fields input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 11px 13px; border: 1px solid var(--border-color, #d5dce8); border-radius: 10px; background: var(--bg-card, #fff); color: var(--text-primary); font: inherit; font-size: 13px; outline: none; transition: border-color .15s, box-shadow .15s; }
+.account-password-fields input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.14); }
+.account-password-fields input::placeholder { color: var(--text-secondary); opacity: .75; }
+.account-password-fields small { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.account-password-dialog #password-change-error:not(:empty) { color: #dc2626; margin-top: 16px; }
+.account-password-dialog .logout-confirm-actions { justify-content: flex-end; margin-top: 24px; }
+.account-password-dialog .logout-submit-btn { width: auto; min-width: 132px; background: #6366f1; border-color: #6366f1; }
+.account-password-dialog .logout-submit-btn:hover { background: #4f46e5; border-color: #4f46e5; }
+
 .search-input-wrapper {
   position: relative;
   width: 280px;

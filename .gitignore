@@ -11,6 +11,7 @@ node_modules/
 # Local application data, generated artifacts and backup archives
 /data/
 /artifacts/
+/backups/
 /ver/
 
 # Build, test and runtime output

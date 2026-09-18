@@ -13,7 +13,7 @@ const SCRYPT_KEY_LENGTH = 64;
 
 class AuthService {
   constructor() {
-    this.accounts = StorageHelper.loadJson(ACCOUNT_FILE, null);
+    StorageHelper.bind(this, 'accounts', ACCOUNT_FILE, null);
     if (!Array.isArray(this.accounts) || this.accounts.length === 0) {
       const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
       if (!bootstrapPassword) {
@@ -31,7 +31,7 @@ class AuthService {
       }];
       this.persistAccounts();
     }
-    this.sessions = StorageHelper.loadJson(SESSION_FILE, {});
+    StorageHelper.bind(this, 'sessions', SESSION_FILE, {});
     if (!this.sessions || Array.isArray(this.sessions) || typeof this.sessions !== 'object') this.sessions = {};
     this.cleanupSessions();
   }
@@ -103,6 +103,18 @@ class AuthService {
     this.persistAccounts();
     this.persistSessions();
     return { token, account: this.publicAccount(account), maxAge: Math.floor(SESSION_TTL_MS / 1000) };
+  }
+
+  changePassword(accountId, currentPassword, newPassword) {
+    const fail=(message,statusCode=400)=>{throw Object.assign(new Error(message),{statusCode});};
+    if(typeof currentPassword!=='string'||currentPassword.length>1024||typeof newPassword!=='string'||newPassword.length<8||newPassword.length>128) fail('Mật khẩu mới phải có từ 8 đến 128 ký tự.');
+    const account=this.accounts.find(item=>item.id===accountId&&item.isActive!==false);
+    if(!account||!this.verifyPassword(currentPassword,account.passwordHash)) fail('Mật khẩu hiện tại không đúng.',400);
+    if(this.verifyPassword(newPassword,account.passwordHash)) fail('Mật khẩu mới phải khác mật khẩu hiện tại.');
+    account.passwordHash=this.hashPassword(newPassword);
+    for(const [token,session] of Object.entries(this.sessions)) if(session.accountId===accountId) delete this.sessions[token];
+    this.persistAccounts();this.persistSessions();
+    return true;
   }
 
   logout(token) {

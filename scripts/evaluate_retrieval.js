@@ -9,11 +9,13 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const retrievalService = require('../src/backend/knowledge_core/services/retrieval_service');
+const storage = require('../src/backend/storage');
+storage.loadEnvironment();
 const datasetPath = path.resolve(process.argv[2] || path.join(__dirname, '..', 'tests', 'fixtures', 'retrieval_golden.sample.json'));
 const limit = Math.max(1, Number(process.argv[3] || 5));
 
 async function main() {
+  const retrievalService = require('../src/backend/knowledge_core/services/retrieval_service');
   const cases = JSON.parse(fs.readFileSync(datasetPath, 'utf8'));
   let hits = 0;
   let reciprocalRank = 0;
@@ -30,4 +32,7 @@ async function main() {
   if (cases.length && hits !== cases.length) process.exitCode = 1;
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+(async()=>{
+  await storage.bootstrapStorage();
+  try{await storage.run(main);}finally{await storage.close();}
+})().catch(error=>{console.error(error.code||error.message);process.exitCode=1;});

@@ -5,6 +5,7 @@
  */
 
 const StorageHelper = require('../utils/storage_helper');
+const crypto = require('node:crypto');
 
 class ApiKeyService {
   constructor() {
@@ -29,7 +30,7 @@ class ApiKeyService {
       }
     ];
 
-    this.apiKeys = StorageHelper.loadJson('api_keys.json', defaultKeys);
+    StorageHelper.bind(this, 'apiKeys', 'api_keys.json', defaultKeys);
   }
 
   persist() {
@@ -50,9 +51,9 @@ class ApiKeyService {
   }
 
   generateKey(name, rateLimit) {
-    const randomHex = Array.from({length: 32}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const randomHex = crypto.randomBytes(32).toString('hex');
     const newKey = {
-      id: `key-${Date.now()}`,
+      id: crypto.randomUUID(),
       name: name || "3rd-Party Client Key",
       key: `kh_live_${randomHex}`,
       createdDate: new Date().toLocaleDateString('vi-VN'),
