@@ -2,9 +2,9 @@
 
 KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát triển bằng Node.js và Vanilla HTML/CSS/JavaScript. Phiên bản hiện tại tập trung vào quản lý tri thức từ SQL Server, Data Dictionary, Business Glossary, Text-to-SQL, chat đa nhà cung cấp AI và các công cụ phân tích dữ liệu.
 
-> **Trạng thái:** MVP đang phát triển. Pipeline tài liệu `Import/Watch Folder -> Parse -> Chunk -> BGE-M3 -> Qdrant -> Hybrid Retrieval -> LLM` đã có lát cắt chạy thật, nhưng metadata vẫn dùng JSON, ingestion chạy trong tiến trình Node.js và chưa có queue/DLQ production. Xem [Trạng thái triển khai](#trạng-thái-triển-khai) trước khi sử dụng với dữ liệu thật.
+> **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [biên bản chuyển dữ liệu](docs/POSTGRESQL_IMPORT_STATUS_180926.md) và [Trạng thái triển khai](#trạng-thái-triển-khai).
 
-README đối chiếu với mã nguồn ngày **13/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
+README đối chiếu với mã nguồn ngày **18/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -25,19 +25,24 @@ README đối chiếu với mã nguồn ngày **13/09/2026**. Trạng thái dư�
 - Persona, lịch sử hội thoại, audit log và model selector.
 - Công cụ tích hợp: kiểm tra/sửa/thực thi SQL, tìm schema/glossary/Qdrant, tính toán, biểu đồ và export.
 - Local Model Harness: kiểm tra tham số công cụ, phục hồi lỗi, tổng hợp kết quả và kiểm tra yêu cầu biểu đồ/export.
+- Provider bên thứ ba dùng guarded harness khi `AI_PROVIDER_GUARDS_ENABLED=true`: kiểm tra tool/SQL/kết quả, repair có giới hạn, context budget và deadline. Page chat, modal và embed dùng chung luồng backend.
+- Gate `SUCCESS/PARTIAL`: PARTIAL có thể hiển thị kèm trạng thái nhưng không vào memory thành công hoặc history SUCCESS gửi cho lượt tiếp theo. Memory do ứng dụng quản lý, không giao provider tự quyết định ghi nhớ.
+- Lịch sử giao diện page chat lưu riêng trong PostgreSQL theo account, có version chống ghi đè giữa thiết bị; localStorage chỉ giữ tùy chọn và ID phiên đang mở. Nhập lịch sử trình duyệt cũ cần xác nhận quyền sở hữu.
+- Che đường dẫn hệ thống trong câu trả lời của page/modal/embed; giữ link tải hợp lệ qua `/api/exports/...`.
 - `skill_core`: chọn contract `record_lookup` hoặc `aggregate_report` theo request plan; hỗ trợ few-shot tương thích với schema và được kiểm soát bằng feature flag.
 - Request budget dùng chung cho model call, SQL attempt và deadline; truyền abort signal xuống SQL connector.
 - Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
 - Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
 - Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
 - Workflow engine: thực thi bước tự động, điều kiện, retry và trace; tab Workflow Automation hiện tạm ẩn trên giao diện.
-- Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu tại `data/skills.json`.
+- Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu PostgreSQL khi dùng backend `postgres`.
 - Memory Core v2 có pending turn, context budget, summary và semantic routing; các cờ v2 mặc định tắt trong `.env.example`.
 
 ### API và quản trị
 
 - Giao diện dashboard bằng HTML/CSS/JavaScript thuần, không có build step frontend.
 - Session authentication và tài khoản có role.
+- Menu Tài khoản có đổi mật khẩu: xác minh mật khẩu hiện tại, băm scrypt, thu hồi mọi phiên của account và yêu cầu đăng nhập lại. Trang đăng nhập không hiển thị mật khẩu mặc định.
 - API key nội bộ, embed-chat configuration và endpoint OpenAI-compatible cơ bản.
 - System logs, chat audit, analytics và system tools. Lịch sử chat có cột nguồn (Page Chat, Embed Chat, API); log xử lý chat được lọc khỏi System Logs.
 - Library hỗ trợ upload, parse PDF/DOCX/XLSX/CSV/TXT/SQL/Markdown, chunk, index, preview và xóa tài liệu.
@@ -67,15 +72,20 @@ README đối chiếu với mã nguồn ngày **13/09/2026**. Trạng thái dư�
 | Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
 | Memory Core v2 | Triển khai theo feature flag | Các cờ pending turn/budget/summary/semantic routing mặc định tắt trong cấu hình mẫu |
 | Workflow Automation | Backend có, tab tạm ẩn | Chưa đưa lại vào điều hướng UI |
-| PostgreSQL/Redis/BullMQ | Chưa triển khai | Đang nằm trong kế hoạch hoàn thiện Phase 1 |
+| PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–003; dữ liệu JSON hiện có đã nhập/đối soát, runtime không tự fallback về JSON |
+| Document outbox | Đã triển khai | PostgreSQL jobs, retry, lease và recovery; tác động file/Qdrant vẫn cần reconciliation |
+| Redis/BullMQ | Chưa triển khai | Outbox hiện chạy trong Node.js, chưa có worker service riêng |
+| Page chat history | Đã triển khai | Bảng `app.ui_chat_sessions`, owner account, mã hóa và kiểm tra version |
+| Tải dữ liệu theo tab | Đã tối ưu bước đầu | API đọc các store cần thiết; MCP/tools bỏ gọi trùng; chưa phân trang audit hoặc benchmark tải lớn |
 | Document Hybrid Search | Đã triển khai, phụ thuộc dịch vụ | BGE-M3 dense + BM25 + RRF; khi BGE-M3 lỗi vẫn tra cứu BM25 nhưng chất lượng semantic giảm |
 | BGE Reranker | Sẵn sàng tích hợp | Bật bằng `RERANKER_ENABLED=true` khi reranker HTTP hoạt động |
 | GraphRAG | Bản router/graph retrieval nền tảng | Chỉ kích hoạt cho câu hỏi quan hệ; chưa có persistent knowledge graph/community summary |
 
 ## Yêu cầu hệ thống
 
-- **Node.js 18 trở lên** — mã nguồn sử dụng Fetch API tích hợp.
+- **Node.js 22 trở lên** — dùng Fetch API và `node:util.parseEnv`.
 - npm.
+- Docker Desktop trên Windows, chế độ Linux containers, cho PostgreSQL 18; hoặc PostgreSQL bên ngoài được cấu hình tương ứng.
 - Microsoft SQL Server nếu sử dụng live SQL Connector.
 - Qdrant tại `http://127.0.0.1:6333` nếu sử dụng vector schema/document search.
 - BGE-M3 qua Ollama hoặc endpoint OpenAI-compatible nếu sử dụng dense retrieval.
@@ -152,7 +162,7 @@ LOCAL_MODEL_FEW_SHOT_ENABLED=false
 LOCAL_MODEL_MAX_MODEL_CALLS=9
 LOCAL_MODEL_MAX_SQL_CALLS=3
 
-# Local JSON log retention
+# System log retention (the selected storage backend applies)
 MAX_CHAT_HISTORY=5000
 
 # Memory Core v2: bật theo nhu cầu sau khi kiểm tra
@@ -166,11 +176,45 @@ MCP_CONNECT_TIMEOUT_MS=15000
 MCP_CALL_TIMEOUT_MS=30000
 ```
 
-Danh sách cấu hình đầy đủ và mặc định nằm trong [.env.example](.env.example). Thay `BOOTSTRAP_ADMIN_PASSWORD` trước lần chạy đầu; biến này chỉ tạo admin khi chưa có `accounts.json`, không đổi mật khẩu tài khoản đã tồn tại.
+Danh sách cấu hình đầy đủ và mặc định nằm trong [.env.example](.env.example). `BOOTSTRAP_ADMIN_PASSWORD` chỉ tạo admin trong bước bootstrap JSON khi chưa có account, không đổi mật khẩu account đã tồn tại. Runtime PostgreSQL yêu cầu account đã được nhập và database ở trạng thái `live`.
 
-Không lưu API key, password hoặc connection string thật vào Git. AI Provider hiện được cấu hình qua giao diện quản trị và đang lưu trong local JSON; xem phần [Cảnh báo bảo mật](#cảnh-báo-bảo-mật).
+Không lưu API key, password hoặc connection string thật vào Git. Provider được quản lý qua giao diện và lưu PostgreSQL; credential được mã hóa. Xem [Cảnh báo bảo mật](#cảnh-báo-bảo-mật).
 
 ### 3. Khởi động dịch vụ phụ trợ
+
+#### PostgreSQL
+
+Với môi trường đã cutover, giữ nguyên `.env.postgres`, khóa mã hóa và Docker volume. Chạy `npm start` sẽ kiểm tra/bật Docker và container PostgreSQL cục bộ, chờ `pg_isready` trước backend. Không chạy lại init/import/cutover vào database live.
+
+Với cài đặt mới hoặc chuyển từ dữ liệu JSON, tạo `.env.postgres` đã ignore khỏi Git:
+
+```dotenv
+POSTGRES_DB=knowledgehub_app
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<mat-khau-rieng-cua-ban>
+```
+
+Khởi động Docker Desktop, dừng backend/writer JSON và chạy:
+
+```powershell
+docker compose --env-file .env.postgres -f compose.postgres.yml up -d postgres
+# Chờ container healthy trước bước init
+npm run db:pg:init
+npm run db:migrate
+npm run data:pg:cutover
+```
+
+`db:pg:init` tạo role migrator/runtime và file khóa riêng; chỉ chạy khi chưa có các role/credential này. `data:pg:cutover` backup, lấy snapshot cuối, nhập/đối soát hoặc hợp nhất delta staging, chuyển database sang live và chọn PostgreSQL trong cấu hình. Cần sẵn dữ liệu account JSON. Nếu cài hoàn toàn mới, đặt mật khẩu bootstrap riêng trong `.env`, rồi tạo account trước cutover bằng chế độ JSON tường minh:
+
+```powershell
+$env:APP_STORAGE_BACKEND='json'
+node -e "require('./src/backend/services/auth_service')"
+Remove-Item Env:APP_STORAGE_BACKEND
+```
+
+Không dùng lệnh bootstrap JSON này với môi trường đã cutover. Schema ứng dụng là `app`, không phải `public`; trong pgAdmin mở `knowledgehub_app → Schemas → app → Tables`. Audit chat ở `chat_runs`, memory ở `chat_sessions/chat_messages`, lịch sử giao diện ở `ui_chat_sessions` (payload mã hóa).
+
+#### Qdrant và model
 
 Qdrant là tùy chọn cho chat chung nhưng cần cho dense search và đồng bộ vector. Ví dụ chạy Qdrant bằng Docker:
 
@@ -190,12 +234,13 @@ Nếu đã tự khởi động các dịch vụ phụ trợ, có thể chạy tr
 
 Trên Windows, `npm start` gọi `scripts/start-local.ps1` và tự động:
 
-1. Đọc cấu hình `.env`.
-2. Khởi động Ollama native nếu API `11434` chưa hoạt động.
-3. Tải `EMBEDDING_MODEL` nếu model chưa có trên máy.
-4. Warm-up endpoint embedding để model sẵn sàng trước khi nhận tài liệu.
-5. Khởi động Qdrant từ `QDRANT_EXE` nếu Qdrant chưa chạy.
-6. Kiểm tra/tải local chat model (`LOCAL_AI_MODEL`, mặc định trong script là `qwen3.5:9b`) và khởi động KnowledgeHub qua `scripts/supervisor.js`.
+1. Đọc `.env` và `.env.postgres`, giữ ưu tiên biến môi trường đã có.
+2. Khi backend là PostgreSQL cục bộ: kiểm tra Docker, mở Docker Desktop nếu cần, bật hoặc tạo container từ Compose và chờ database sẵn sàng. PostgreSQL remote bỏ bước Docker cục bộ. Bước này không tự chạy migration/import.
+3. Khởi động Ollama native nếu API `11434` chưa hoạt động.
+4. Tải `EMBEDDING_MODEL` nếu model chưa có trên máy.
+5. Warm-up endpoint embedding để model sẵn sàng trước khi nhận tài liệu.
+6. Khởi động Qdrant từ `QDRANT_EXE` nếu Qdrant chưa chạy.
+7. Kiểm tra/tải local chat model (`LOCAL_AI_MODEL`, mặc định trong script là `qwen3.5:9b`) và chạy KnowledgeHub qua supervisor. `[Startup] Completed.` chỉ in sau HTTP listen thành công.
 
 Các lần chạy sau không tải lại model vì Ollama đã lưu model cục bộ. Nếu Ollama hoặc Qdrant đã chạy, script chỉ kiểm tra và sử dụng tiến trình hiện có.
 
@@ -270,10 +315,10 @@ Node.js HTTP Server
   |-- SQL Server Connector ------> Microsoft SQL Server
   |-- Qdrant Service ------------> Qdrant
   |-- MCP Client ---------------> MCP servers (stdio/HTTP/SSE)
-  `-- Storage Helper ------------> data/*.json
+  `-- Async Storage -------------> PostgreSQL app schema + document outbox
 ```
 
-Backend hiện dùng `node:http`, chưa dùng Fastify. Metadata đang lưu bằng JSON. Kiến trúc mục tiêu của Phase 1 sẽ chuyển metadata sang PostgreSQL, tác vụ bất đồng bộ sang Redis/BullMQ và parser/embedding sang Python FastAPI.
+Backend dùng `node:http`, chưa dùng Fastify. Dữ liệu ứng dụng lưu PostgreSQL qua `storage.run/flush` bất đồng bộ; service thao tác view riêng từng operation. Commit hợp nhất thay đổi theo record trong transaction ngắn. HTTP success/cookie và SSE final chỉ gửi sau commit; progress SSE vẫn truyền khi xử lý. File tài liệu/export ở filesystem, dữ liệu nghiệp vụ ở SQL Server, vector ở Qdrant. Redis/BullMQ và parser/embedding Python service vẫn là định hướng.
 
 ## Cấu trúc thư mục
 
@@ -297,8 +342,11 @@ Backend hiện dùng `node:http`, chưa dùng Fastify. Metadata đang lưu bằn
 |       |-- training_core/            # Case collection, evaluation và đề xuất
 |       |-- knowledge_core/           # Library, Watch Folder và hybrid retrieval
 |       |-- services/                 # SQL, Qdrant, provider, auth, logs...
-|       `-- utils/storage_helper.js   # JSON persistence
-|-- data/                             # Local runtime data; có thể chứa secret
+|       |-- storage/                  # Async operation scope, PostgreSQL repository/outbox
+|       `-- utils/storage_helper.js   # Chuyển loadJson/saveJson sang storage theo backend
+|-- migrations/postgres/              # SQL migration có checksum
+|-- compose.postgres.yml              # PostgreSQL 18, named volume và healthcheck
+|-- data/                             # File tài liệu/export và JSON legacy giữ làm bản sao
 |   `-- backup/                       # Backup migration cục bộ, không dùng ở runtime
 |-- scripts/
 |   `-- eval/                         # Semantic evaluator và logic benchmark
@@ -309,6 +357,8 @@ Backend hiện dùng `node:http`, chưa dùng Fastify. Metadata đang lưu bằn
 ```
 
 ## API chính
+
+API bổ sung: `POST /api/auth/change-password`, `GET/POST /api/page-chat/sessions`, `GET /health/live` và `GET /health/ready`. Readiness yêu cầu schema 3, database live và account; PostgreSQL lỗi không tự ghi về JSON.
 
 Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 
@@ -352,6 +402,15 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embed chat. Endpoint `/api/v1/chat/completions` hiện chỉ tương thích một phần với OpenAI API; chưa hỗ trợ đầy đủ streaming và toàn bộ tham số chuẩn.
 
 ## Kiểm tra mã nguồn
+
+Kiểm tra gần nhất: **202 test ứng dụng đạt**, hai nhóm PostgreSQL chạy riêng; **33 test PostgreSQL thật đạt** trong database tạm. Bao phủ import/rollback/encryption, concurrency, auth/đổi mật khẩu, page history, scope API từng tab, HTTP/SSE commit gate, outbox và quyền runtime. Test chat/ingest dùng core/Qdrant giả lập; không thay thế kiểm thử provider tính phí, SQL nghiệp vụ và retrieval thật.
+
+```powershell
+npm run test:storage
+npm run eval:provider
+```
+
+Đã đo thời gian snapshot từng tab trên dữ liệu hiện tại, chưa phải thời gian tải trang end-to-end hoặc p95 tải lớn. Xem [biên bản hiệu năng](docs/PAGE_LOAD_PERFORMANCE_180926.md).
 
 Project có tests cho Local Harness, Memory Core, Training Core, `skill_core`, semantic evaluator, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context, export và retrieval. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
 
@@ -400,7 +459,7 @@ Các kế hoạch Phase 1-2 đã xác định unit test, integration test, secur
 
 Phiên bản hiện tại là prototype và **không nên expose trực tiếp ra Internet**.
 
-- API key của AI Provider hiện được lưu plaintext trong `data/ai_providers.json`.
+- Credential trên PostgreSQL dùng AES-256-GCM với context record; token/API key có hash lookup. JSON legacy và snapshot cũ có thể vẫn chứa secret, cần bảo vệ như dữ liệu nhạy cảm.
 - DTO provider không trả API key gốc; credential thực thi chỉ được đọc trong backend.
 - Password tài khoản mới dùng scrypt; hash SHA-256 cũ được nâng cấp sau lần đăng nhập hợp lệ.
 - Admin được bootstrap bằng `BOOTSTRAP_ADMIN_PASSWORD`; dữ liệu cũ có thể vẫn chứa tài khoản/mật khẩu từ bản trước.
@@ -410,7 +469,21 @@ Phiên bản hiện tại là prototype và **không nên expose trực tiếp r
 - Kết quả SQL loại các trường password/secret/token và các cột audit `CreateUser`, `CreateDate`, `UpdateUser`, `UpdateDate` trước khi gửi model hoặc UI.
 - Các file `data/*.json`, `.env`, archive và log có thể chứa secret hoặc dữ liệu nghiệp vụ.
 - Server bind `HOST`, mặc định `127.0.0.1`.
-- JSON persistence ghi đồng bộ qua file tạm, `fsync` và rename; lỗi đọc/ghi được ném lên caller. Chưa có transaction giữa nhiều file hoặc cơ chế database đa tiến trình. Session touch được ghi theo khoảng `SESSION_TOUCH_INTERVAL_MS` (mặc định 5 phút).
+- Runtime PostgreSQL có transaction memory/message/audit, conflict detection và lease. JSON chỉ dùng khi chọn backend `json` tường minh cho fixture/bootstrap/rollback đã kiểm chứng. Session touch theo `SESSION_TOUCH_INTERVAL_MS` (mặc định 5 phút).
+- Khóa mã hóa ở `APP_DATA_ENCRYPTION_KEY_FILE`, ngoài repo. Backup riêng khóa ở nơi an toàn; dump database không đủ giải mã credential. Process giữ khóa trong RAM; thay file khóa cần restart và quy trình re-encrypt.
+
+## Backup và vận hành PostgreSQL
+
+```powershell
+npm run backup        # Filesystem + app.dump và checksum khi dùng PostgreSQL
+npm run backup:pg     # Dump schema app, gồm lịch sử giao diện
+npm run restore:pg -- <file.dump> knowledgehub_restore_kiemtra
+npm run data:pg:export -- <thu-muc-moi>
+```
+
+Restore chỉ tạo database mới tên `knowledgehub_restore_*`, không ghi đè database live. Backup/restore đã được rehearsal và đối soát dữ liệu hiện tại. Export JSON legacy chưa bao gồm `ui_chat_sessions`; phục hồi đầy đủ cần database dump, file tài liệu và khóa mã hóa. Sau khi PostgreSQL đã nhận ghi mới, không đổi về JSON cũ hoặc chạy importer ghi đè. Volume Docker không thay thế backup; lịch backup tự động/PITR chưa được cấu hình.
+
+Request chat có `X-Request-Id` cùng owner/path/body không nhân đôi memory/audit; receipt hiện kiểm tra lúc commit nên retry vẫn có thể gọi model/tool. Worker lease chống chạy đồng thời nhưng chưa cam kết exactly-once cho tác động ngoài database. Mutation/route chưa tối ưu vẫn có thể đọc snapshot đầy đủ; phân trang audit và tối ưu tải lớn còn trong backlog.
 
 Trước khi chia sẻ repo hoặc triển khai:
 
@@ -426,7 +499,7 @@ Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ 
 
 ### Phase 1 - Nền tảng MVP
 
-- PostgreSQL metadata store.
+- PostgreSQL app store đã triển khai; tiếp tục query theo domain/cursor, phân trang audit, benchmark p95 và giám sát pool/dung lượng.
 - Redis/BullMQ ingestion queue và dead-letter queue.
 - Hoàn thiện versioning tài liệu và transaction/reconciliation giữa metadata, file và vector.
 - Nâng chunking hiện tại lên semantic/token-aware chunking có locator theo page/sheet/section.
@@ -450,6 +523,11 @@ Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ 
 Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ chi tiết để giao tự động cho coding agents. Phase 5 chưa được định nghĩa trong master plan hiện hành.
 
 ## Tài liệu
+
+- [Tích hợp PostgreSQL: kế hoạch và checklist](docs/POSTGRESQL_DATA_INTEGRATION_PLAN_180926.md)
+- [Biên bản dữ liệu và runtime PostgreSQL](docs/POSTGRESQL_IMPORT_STATUS_180926.md)
+- [Kiểm tra tải trang và dữ liệu từng tab](docs/PAGE_LOAD_PERFORMANCE_180926.md)
+- [Tối ưu provider bên thứ ba](docs/THIRD_PARTY_PROVIDER_OPTIMIZATION_PLAN_170926.md)
 
 - [Memory Core Upgrade v2](docs/MEMORY_CORE_UPGRADE_PLAN_v2_120926.md)
 - [Skill Core Upgrade](docs/SKILL_CORE_UPGRADE_PLAN_120926.md)
