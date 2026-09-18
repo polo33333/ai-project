@@ -446,9 +446,9 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 }
 :root[data-theme="dark"] .page-chat-character-count { color: #7888a2; }
 :root[data-theme="dark"] .chat-workspace .chat-user-message-bubble {
-  border-color: #3b82f6;
+  border-color: #5c4bb3;
   color: #fff;
-  background: linear-gradient(135deg, #1d4ed8, #4338ca);
+  background: linear-gradient(135deg, #5c4bb3, #664fdf);
   box-shadow: 0 4px 14px rgba(2, 6, 23, .28);
 }
 :root[data-theme="dark"] .chat-user-message-meta { color: rgba(255,255,255,.9); }
