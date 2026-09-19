@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const libraryService = require('./library_service');
 const qdrantService = require('../../services/qdrant_service');
+const { estimateTokens } = require('../../agent_core/harness/context_budget');
 
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const tokenize = value => normalize(value).match(/[a-z0-9_]{2,}/g) || [];
@@ -28,9 +29,20 @@ function postJson(url, body, timeoutMs = 30000) {
 }
 
 class RetrievalService {
+  resolveScope(documentIds = [], scopeMode = null) {
+    const mode = scopeMode || (documentIds.length ? 'selected' : 'all_authorized');
+    if (!['all_authorized', 'selected', 'none'].includes(mode)) throw new Error(`Invalid knowledge scope mode: ${mode}`);
+    if (mode === 'none') return { mode, documentIds: [] };
+    const available = new Set(libraryService.getDocuments().map(document => String(document.id)));
+    const requested = [...new Set(documentIds.map(String))];
+    const effective = mode === 'selected' ? requested.filter(id => available.has(id)) : [...available];
+    return { mode, documentIds: effective };
+  }
+
   buildCorpus(documentIds = []) {
     const selected = new Set(documentIds.map(String));
-    return libraryService.getDocuments().filter(document => !selected.size || selected.has(String(document.id))).flatMap(document => {
+    if (!selected.size) return [];
+    return libraryService.getDocuments().filter(document => selected.has(String(document.id))).flatMap(document => {
       try {
         const { content } = libraryService.getContent(document.id);
         return libraryService.chunkText(content).map((text, chunkIndex) => ({
@@ -97,13 +109,26 @@ class RetrievalService {
     const baseUrl = String(process.env.RERANKER_BASE_URL || '').replace(/\/$/, '');
     if (!baseUrl || (process.env.RERANKER_ENABLED || 'false') !== 'true') return candidates.slice(0, limit);
     try {
+      const maxCandidates = Math.max(limit, Number(process.env.RERANKER_MAX_CANDIDATES || 20));
+      const maxDocumentChars = Math.max(200, Number(process.env.RERANKER_MAX_DOCUMENT_CHARS || 1600));
+      const maxTotalChars = Math.max(maxDocumentChars, Number(process.env.RERANKER_MAX_TOTAL_CHARS || 24000));
+      const submitted = [];
+      let totalChars = 0;
+      for (const candidate of candidates.slice(0, maxCandidates)) {
+        const text = String(candidate.payload?.fullText || '').slice(0, maxDocumentChars);
+        if (!text || totalChars + text.length > maxTotalChars) continue;
+        submitted.push({ candidate, text }); totalChars += text.length;
+      }
+      if (!submitted.length) return candidates.slice(0, limit);
       const response = await postJson(`${baseUrl}/rerank`, {
         model: process.env.RERANKER_MODEL || 'bge-reranker-v2-m3', query,
-        documents: candidates.map(item => item.payload?.fullText || ''), top_n: limit
+        documents: submitted.map(item => item.text), top_n: Math.min(limit, submitted.length)
       });
       const ranked = (response.results || response.data || []).map(result => ({
-        ...candidates[Number(result.index)], score: Number(result.relevance_score ?? result.score ?? 0), reranked: true
-      })).filter(item => item.payload);
+        ...submitted[Number(result.index)]?.candidate,
+        score: Number(result.relevance_score ?? result.score ?? 0), reranked: true,
+        rerankTruncated: submitted.length < candidates.length || totalChars >= maxTotalChars
+      })).filter(item => item.payload && Number.isFinite(item.score));
       if (!ranked.length && candidates.length) throw new Error('Reranker returned no usable results');
       return ranked.slice(0, limit);
     } catch (error) {
@@ -112,16 +137,34 @@ class RetrievalService {
     }
   }
 
-  async search(query, { limit = 6, documentIds = [] } = {}) {
+  packContext(candidates = [], tokenBudget = Number(process.env.AI_DOCUMENT_CONTEXT_TOKENS || 3000)) {
+    const selected = [];
+    let usedTokens = 0;
+    for (const hit of candidates) {
+      const payload = hit.payload || {};
+      const marker = `[Tài liệu ${selected.length + 1}: ${payload.title || 'Không tên'} · đoạn ${Number(payload.chunkIndex || 0) + 1}]`;
+      const content = `${marker}\n${payload.fullText || ''}`;
+      const cost = estimateTokens(content) + 4;
+      if (cost > tokenBudget - usedTokens) continue;
+      selected.push({ ...hit, citationIndex: selected.length + 1, contextText: content });
+      usedTokens += cost;
+    }
+    return { text: selected.map(item => item.contextText).join('\n\n'), selected, usedTokens,
+      dropped: Math.max(0, candidates.length - selected.length), tokenBudget };
+  }
+
+  async search(query, { limit = 6, documentIds = [], scopeMode = null } = {}) {
+    const scope = this.resolveScope(documentIds, scopeMode);
+    if (!scope.documentIds.length) return { results: [], mode: 'empty_scope', graphActivated: false, scope };
     const candidateLimit = Math.max(limit, Number(process.env.RETRIEVAL_CANDIDATE_LIMIT || 30));
-    const corpus = this.buildCorpus(documentIds);
-    const vectorResults = await qdrantService.searchDocuments(query, candidateLimit);
-    const allowed = new Set(documentIds.map(String));
-    const dense = vectorResults.filter(item => !allowed.size || allowed.has(String(item.payload?.documentId)))
+    const corpus = this.buildCorpus(scope.documentIds);
+    const vectorResults = await qdrantService.searchDocuments(query, candidateLimit, { documentIds: scope.documentIds });
+    const allowed = new Set(scope.documentIds);
+    const dense = vectorResults.filter(item => allowed.has(String(item.payload?.documentId)))
       .map(item => ({ ...item, id: `${item.payload?.documentId}:${item.payload?.chunkIndex}`, source: 'dense' }));
     const graph = this.graphSearch(query, corpus, candidateLimit);
     const fused = this.fuse([dense, this.bm25(query, corpus, candidateLimit), graph], candidateLimit);
-    return { results: await this.rerank(query, fused, limit), mode: graph.length ? 'hybrid_graph' : 'hybrid', graphActivated: graph.length > 0 };
+    return { results: await this.rerank(query, fused, limit), mode: graph.length ? 'hybrid_graph' : 'hybrid', graphActivated: graph.length > 0, scope };
   }
 }
 

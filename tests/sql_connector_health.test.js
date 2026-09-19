@@ -23,3 +23,10 @@ test('testDbSource rejects an unknown id instead of falling back to default', as
   sqlConnector.dbSources = [{ id: 'default', dbName: 'Fixture', mode: 'live', isDefault: true }];
   await assert.rejects(() => sqlConnector.testDbSource('missing'), /không tồn tại/i);
 });
+
+test('query execution never falls back when an explicit source id is invalid', async t => {
+  const originalSources = sqlConnector.dbSources;
+  t.after(() => { sqlConnector.dbSources = originalSources; });
+  sqlConnector.dbSources = [{ id: 'default', dbName: 'Fixture', mode: 'live', isDefault: true }];
+  await assert.rejects(() => sqlConnector.executeSqlQuery('SELECT 1', 'missing'), error => error.code === 'INVALID_DB_SOURCE');
+});

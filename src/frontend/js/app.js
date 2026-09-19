@@ -937,11 +937,21 @@ function renderCopilotSql(sqlQuery, label = 'Câu lệnh SQL') {
   `;
 }
 
+function formatCopilotDisplayValue(value) {
+  const text = String(value ?? '');
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (!match) return text;
+  const [, year, month, day, hour, minute, second] = match;
+  const date = `${day}/${month}/${year}`;
+  return hour === undefined || (hour === '00' && minute === '00' && second === '00')
+    ? date : `${date} ${hour}:${minute}:${second}`;
+}
+
 function renderCopilotToolResult(toolResult, label = 'Xem dữ liệu') {
   if (!toolResult || !Array.isArray(toolResult.columns) || !Array.isArray(toolResult.rows) || toolResult.rows.length === 0) return '';
   const head = toolResult.columns.map(col => `<th>${escapeCopilotHtml(col)}</th>`).join('');
   const body = toolResult.rows.slice(0, 50).map(row => `
-    <tr>${row.map(cell => `<td>${escapeCopilotHtml(cell ?? '')}</td>`).join('')}</tr>
+    <tr>${row.map(cell => `<td>${escapeCopilotHtml(formatCopilotDisplayValue(cell))}</td>`).join('')}</tr>
   `).join('');
   return `
     <details class="copilot-result-table" open>
@@ -1197,7 +1207,83 @@ function renderCopilotAttachments() {
   renderCopilotKnowledgeChip();
 }
 
-function renderCopilotRetrievalContext(contextSelection) {
+function closeKnowledgeCitationPreview() {
+  document.querySelector('.chat-citation-preview-backdrop')?.remove();
+}
+
+async function openKnowledgeCitation(button) {
+  const documentId = button?.dataset.documentId;
+  if (!documentId) return;
+  closeKnowledgeCitationPreview();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'chat-citation-preview-backdrop';
+  backdrop.innerHTML = `<section class="chat-citation-preview" role="dialog" aria-modal="true">
+    <header><div><small>Đoạn nguồn được tham chiếu</small><strong>${escapeCopilotHtml(button.dataset.title || 'Tài liệu')} · Đoạn ${escapeCopilotHtml(button.dataset.chunk || '1')}</strong></div><button type="button" onclick="closeKnowledgeCitationPreview()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button></header>
+    <div class="chat-citation-preview-body"><div class="chat-citation-preview-loading"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải nội dung…</div></div>
+    <footer><a href="${escapeCopilotHtml(button.dataset.sourceUrl || '#')}" download><i class="fa-solid fa-download"></i>Tải file gốc</a><button type="button" onclick="closeKnowledgeCitationPreview()">Đóng</button></footer>
+  </section>`;
+  backdrop.addEventListener('click', event => { if (event.target === backdrop) closeKnowledgeCitationPreview(); });
+  document.body.appendChild(backdrop);
+  try {
+    const response = await fetch(`/api/library/${encodeURIComponent(documentId)}/content`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || `HTTP ${response.status}`);
+    const content = String(payload.content || '');
+    const excerpt = decodeURIComponent(button.dataset.excerpt || '');
+    const probe = excerpt.replace(/…$/, '').slice(0, 120);
+    const position = probe ? content.indexOf(probe) : -1;
+    const start = position >= 0 ? Math.max(0, position - 900) : 0;
+    const end = position >= 0 ? Math.min(content.length, position + Math.max(probe.length, 1) + 1800) : Math.min(content.length, 3000);
+    const shown = content.slice(start, end) || excerpt || 'Không có nội dung văn bản để xem trước.';
+    const body = backdrop.querySelector('.chat-citation-preview-body');
+    if (body) body.innerHTML = `<div class="chat-citation-preview-position"><i class="fa-solid fa-location-dot"></i>${position >= 0 ? 'Đã định vị đoạn trích trong nội dung tài liệu' : 'Hiển thị nội dung văn bản gần nhất có thể kiểm tra'}</div><pre>${escapeCopilotHtml(`${start > 0 ? '…\n' : ''}${shown}${end < content.length ? '\n…' : ''}`)}</pre>`;
+  } catch (error) {
+    const body = backdrop.querySelector('.chat-citation-preview-body');
+    if (body) body.innerHTML = `<div class="chat-citation-preview-error"><i class="fa-solid fa-triangle-exclamation"></i>${escapeCopilotHtml(error.message || 'Không thể tải nội dung tài liệu.')}</div>`;
+  }
+}
+
+if (!window.__citationPreviewEscapeBound) {
+  window.__citationPreviewEscapeBound = true;
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeKnowledgeCitationPreview(); });
+}
+
+function renderVerifiedCitations(citations, validation = {}, supportingEvidence = []) {
+  const verified = Array.isArray(citations) ? citations : [];
+  if (!verified.length) {
+    const evidence = Array.isArray(supportingEvidence) ? supportingEvidence : [];
+    if (!validation?.missingCitation || !evidence.length) return '';
+    const items = evidence.map(item => {
+      const chunk = (Number(item.chunkIndex) || 0) + 1;
+      const sourceLink = item.sourceUrl ? `<button type="button" class="chat-citation-open" data-document-id="${escapeCopilotHtml(item.documentId || '')}" data-title="${escapeCopilotHtml(item.title || '')}" data-chunk="${chunk}" data-excerpt="${encodeURIComponent(item.excerpt || '')}" data-source-url="${escapeCopilotHtml(item.sourceUrl)}" onclick="openKnowledgeCitation(this)"><i class="fa-solid fa-expand"></i><span>Xem nguồn</span></button>` : '';
+      return `<article class="chat-citation-item is-supporting"><div class="chat-citation-heading"><span class="chat-citation-marker"><i class="fa-solid fa-book-open"></i></span><strong>${escapeCopilotHtml(item.title || 'Tài liệu')}</strong><span>Đoạn ${chunk}</span>${sourceLink}</div><blockquote>${escapeCopilotHtml(item.excerpt || '')}</blockquote></article>`;
+    }).join('');
+    return `<details class="chat-citations chat-supporting-evidence" open><summary><span><i class="fa-solid fa-book-open"></i>Các đoạn đã cung cấp cho AI</span><span>${evidence.length} đoạn tham khảo</span><i class="fa-solid fa-chevron-down"></i></summary><div class="chat-citation-note">Model chưa gắn marker vào từng nhận định; đây là các đoạn thực tế đã được đưa vào ngữ cảnh.</div><div class="chat-citation-list">${items}</div></details>`;
+  }
+  const items = verified.map(citation => {
+    const marker = Number(citation.marker) || 0;
+    const chunk = (Number(citation.chunkIndex) || 0) + 1;
+    const sourceLink = citation.sourceUrl
+      ? `<button type="button" class="chat-citation-open" data-document-id="${escapeCopilotHtml(citation.documentId || '')}" data-title="${escapeCopilotHtml(citation.title || '')}" data-chunk="${chunk}" data-excerpt="${encodeURIComponent(citation.excerpt || '')}" data-source-url="${escapeCopilotHtml(citation.sourceUrl)}" onclick="openKnowledgeCitation(this)" title="Xem nội dung nguồn"><i class="fa-solid fa-expand"></i><span>Xem nguồn</span></button>`
+      : '';
+    return `<article class="chat-citation-item" id="chat-citation-${marker}">
+      <div class="chat-citation-heading"><span class="chat-citation-marker">${marker}</span><strong>${escapeCopilotHtml(citation.title || 'Tài liệu')}</strong><span>Đoạn ${chunk}</span>${sourceLink}</div>
+      <blockquote>${escapeCopilotHtml(citation.excerpt || 'Không có nội dung trích dẫn.')}</blockquote>
+    </article>`;
+  }).join('');
+  return `<details class="chat-citations"><summary><span><i class="fa-solid fa-quote-left"></i>Đoạn nguồn theo trích dẫn</span><span>${verified.length} đoạn</span><i class="fa-solid fa-chevron-down"></i></summary><div class="chat-citation-note">Hệ thống đã đối chiếu marker với đoạn có trong ngữ cảnh; nội dung trả lời vẫn cần được so sánh với đoạn nguồn bên dưới.</div><div class="chat-citation-list">${items}</div></details>`;
+}
+
+function renderVerifiedCitationMarkers(renderedHtml, citations) {
+  const markers = new Set((Array.isArray(citations) ? citations : []).map(item => Number(item.marker)));
+  if (!markers.size) return renderedHtml;
+  return String(renderedHtml || '').replace(/\[(\d+)\]/g, (value, rawMarker) => {
+    const marker = Number(rawMarker);
+    return markers.has(marker) ? `<sup class="chat-inline-citation" title="Xem nguồn trích dẫn ${marker}">[${marker}]</sup>` : value;
+  });
+}
+
+function renderCopilotRetrievalContext(contextSelection, citations = [], citationValidation = {}, supportingEvidence = []) {
   if (!contextSelection) return '';
   const webSearch = contextSelection.webSearch;
   if (webSearch?.enabled) {
@@ -1219,7 +1305,7 @@ function renderCopilotRetrievalContext(contextSelection) {
     pipeline.reranked ? 'Đã rerank' : 'RRF',
     pipeline.chunksSelected ? `${pipeline.chunksSelected} chunks` : null
   ].filter(Boolean);
-  return `<div class="copilot-rag-context"><div><i class="fa-solid fa-diagram-project"></i>${labels.map(label => `<span>${escapeCopilotHtml(label)}</span>`).join('')}</div><small><i class="fa-solid fa-book-open"></i> ${escapeCopilotHtml(sources.join(' · '))}</small></div>`;
+  return `${renderVerifiedCitations(citations, citationValidation, supportingEvidence)}<div class="copilot-rag-context"><div><i class="fa-solid fa-diagram-project"></i>${labels.map(label => `<span>${escapeCopilotHtml(label)}</span>`).join('')}</div><small><i class="fa-solid fa-book-open"></i> ${escapeCopilotHtml(sources.join(' · '))}</small></div>`;
 }
 
 function getCopilotKnowledgeValues(select = document.getElementById('copilot-knowledge-source')) {
@@ -1470,11 +1556,11 @@ window.sendChatMessage = async function sendChatMessage() {
     }, requestController.signal);
     const reply = data.reply || data.replyText || data.message || 'Không tìm thấy thông tin tương ứng.';
     const sqlQuery = data.generatedSql || data.sql || null;
-    const renderedReply = renderCopilotText(reply);
+    const renderedReply = renderVerifiedCitationMarkers(renderCopilotText(reply), data.citations);
     const richHtml = [
       renderedReply,
       renderCopilotDownloadAction(data.downloadUrl, renderedReply),
-      renderCopilotRetrievalContext(data.contextSelection),
+      renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence),
       renderCopilotChart(data.chartSpec),
       renderCopilotTechnicalDetails(data.toolCalls || [], sqlQuery, data.toolResult, data.sqlExecutions || [], progressEvents, data.executionTime || '')
     ].filter(Boolean).join('');

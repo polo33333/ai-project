@@ -449,12 +449,22 @@ function isMarkdownTableDivider(line) {
   return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
 }
 
+function formatChatDisplayValue(value) {
+  const text = String(value ?? '');
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (!match) return text;
+  const [, year, month, day, hour, minute, second] = match;
+  const date = `${day}/${month}/${year}`;
+  return hour === undefined || (hour === '00' && minute === '00' && second === '00')
+    ? date : `${date} ${hour}:${minute}:${second}`;
+}
+
 function renderMarkdownTable(headerLine, bodyLines) {
   const headers = splitMarkdownTableRow(headerLine);
   const rows = bodyLines.map(splitMarkdownTableRow);
   const headerHtml = headers.map(cell => `<th>${parseMarkdownInline(cell)}</th>`).join('');
   const bodyHtml = rows.map(row => `<tr>${headers.map((_, index) => {
-    const value = row[index] || '';
+    const value = formatChatDisplayValue(row[index] || '');
     const empty = !value || value === '-';
     return `<td${empty ? ' class="is-empty"' : ''}>${empty ? '&mdash;' : parseMarkdownInline(value)}</td>`;
   }).join('')}</tr>`).join('');
@@ -806,6 +816,22 @@ function enhanceAssistantMessageNode(node) {
   const bubble = node?.children?.[1];
   if (!bubble) return;
   bubble.classList.add('chat-ai-message-bubble');
+  bubble.querySelectorAll('.chat-citation-heading a[href*="/api/library/"][href$="/file"]').forEach(link => {
+    const match = link.getAttribute('href')?.match(/\/api\/library\/([^/]+)\/file$/);
+    const item = link.closest('.chat-citation-item');
+    if (!match || !item) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chat-citation-open';
+    button.dataset.documentId = decodeURIComponent(match[1]);
+    button.dataset.title = item.querySelector('.chat-citation-heading strong')?.textContent || '';
+    button.dataset.chunk = item.querySelector('.chat-citation-heading > span:not(.chat-citation-marker)')?.textContent?.match(/\d+/)?.[0] || '1';
+    button.dataset.excerpt = encodeURIComponent(item.querySelector('blockquote')?.textContent || '');
+    button.dataset.sourceUrl = link.getAttribute('href') || '';
+    button.setAttribute('onclick', 'openKnowledgeCitation(this)');
+    button.innerHTML = '<i class="fa-solid fa-expand"></i><span>Xem nguồn</span>';
+    link.replaceWith(button);
+  });
 }
 
 function repairStoredSummaryMarkup(node) {
@@ -1188,7 +1214,7 @@ async function sendPageChatMessage() {
         ).join('');
         const rowsBody = execution.rows.map(r =>
           `<tr style="border-bottom:1px solid #f1f5f9;">${r.map(cell =>
-            `<td style="padding:8px 12px;font-size:12.5px;color:#1e293b;">${cell ?? ''}</td>`
+            `<td style="padding:8px 12px;font-size:12.5px;color:#1e293b;">${escapeChatMarkdown(formatChatDisplayValue(cell ?? ''))}</td>`
           ).join('')}</tr>`
         ).join('');
         return `
@@ -1261,7 +1287,7 @@ async function sendPageChatMessage() {
     ` : '';
 
     // Assemble AI Bubble
-    const renderedAnswerHtml = parseMarkdown(aiResponseText);
+    const renderedAnswerHtml = renderVerifiedCitationMarkers(parseMarkdown(aiResponseText), data.citations);
     const downloadActionHtml = renderPageChatDownloadAction(data.downloadUrl, renderedAnswerHtml);
     const aiDiv = document.createElement('div');
     aiDiv.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;';
@@ -1279,7 +1305,7 @@ async function sendPageChatMessage() {
         </div>
         <div class="chat-ai-answer">${renderedAnswerHtml}</div>
         ${downloadActionHtml}
-        ${renderCopilotRetrievalContext(data.contextSelection)}
+        ${renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence)}
         ${chartHtml}
         ${technicalHtml}
         ${renderChatFeedback(data, data.tokenUsage)}

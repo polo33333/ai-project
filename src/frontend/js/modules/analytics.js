@@ -3,6 +3,26 @@
  */
 
 window.khCharts = window.khCharts || {};
+
+function setAnalyticsLoading(targetIds, loading) {
+  targetIds.forEach(id => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    const host = target.parentElement;
+    if (!host) return;
+    host.classList.add('analytics-loading-host');
+    host.setAttribute('aria-busy', loading ? 'true' : 'false');
+    let overlay = host.querySelector(':scope > .analytics-loading-overlay');
+    if (loading && !overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'analytics-loading-overlay';
+      overlay.setAttribute('role', 'status');
+      overlay.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Đang tải dữ liệu...</span>';
+      host.appendChild(overlay);
+    }
+    if (overlay) overlay.hidden = !loading;
+  });
+}
 window.dashboardAnalyticsRange = window.dashboardAnalyticsRange || '7d';
 window.dashboardAnalyticsHistory = window.dashboardAnalyticsHistory || [];
 window.dashboardAnalyticsProviders = window.dashboardAnalyticsProviders || [];
@@ -489,10 +509,73 @@ function changeDashboardAnalyticsRange(range) {
   renderDashboardChart(window.dashboardAnalyticsHistory || [], window.dashboardAnalyticsProviders || []);
 }
 
-function renderAnalyticsChart(history, providers) {
+function filterAnalyticsPeriod(history, year, month = 0) {
+  return (history || []).filter(item => {
+    const date = parseViTimestamp(item.timestamp);
+    if (!date) return false;
+    const parts = getVietnamDateParts(date);
+    return Number(parts.year) === year && (!month || Number(parts.month) === month);
+  });
+}
+
+function groupAnalyticsPeriod(history, providers, year, month = 0) {
+  const count = month ? new Date(Date.UTC(year, month, 0)).getUTCDate() : 12;
+  const buckets = Array.from({ length: count }, (_, index) => ({
+    label: month ? `${index + 1}/${month}` : `Tháng ${index + 1}`,
+    queries: 0, localQueries: 0, thirdPartyQueries: 0, estimatedCost: 0
+  }));
+  filterAnalyticsPeriod(history, year, month).forEach(item => {
+    const parts = getVietnamDateParts(parseViTimestamp(item.timestamp));
+    const bucket = buckets[Number(month ? parts.day : parts.month) - 1];
+    bucket.queries += 1;
+    if (isLocalAnalyticsProvider(item, providers)) bucket.localQueries += 1;
+    else bucket.thirdPartyQueries += 1;
+    bucket.estimatedCost += estimateAuditRecordCost(item, providers);
+  });
+  return buckets;
+}
+
+function renderPageAnalytics(data) {
+  window.pageAnalyticsData = data;
+  const currentYear = Number(getVietnamDateParts(new Date()).year);
+  const year = window.pageAnalyticsYear || currentYear;
+  const month = window.pageAnalyticsMonth || 0;
+  const years = new Set([currentYear, year]);
+  data.history.forEach(item => {
+    const date = parseViTimestamp(item.timestamp);
+    if (date) years.add(Number(getVietnamDateParts(date).year));
+  });
+  const yearSelect = document.getElementById('analytics-year');
+  if (yearSelect) yearSelect.innerHTML = [...years].sort((a, b) => b - a)
+    .map(value => `<option value="${value}"${value === year ? ' selected' : ''}>${value}</option>`).join('');
+  const monthSelect = document.getElementById('analytics-month');
+  if (monthSelect) monthSelect.value = String(month);
+  const history = filterAnalyticsPeriod(data.history, year, month);
+  const values = {
+    'analytics-total-cost': formatMoney(estimateAuditCost(history, data.providers)),
+    'analytics-total-queries': String(history.length),
+    'analytics-avg-latency': String(history.length
+      ? Math.round(history.reduce((sum, item) => sum + Number(item.latencyMs || 0), 0) / history.length) : 0),
+    'analytics-chart-period': month ? `theo ngày — tháng ${month}/${year}` : `theo tháng — năm ${year}`
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  });
+  renderAnalyticsChart(history, data.providers, year, month);
+  renderProviderBreakdown(history);
+}
+
+function changePageAnalyticsPeriod() {
+  window.pageAnalyticsYear = Number(document.getElementById('analytics-year').value);
+  window.pageAnalyticsMonth = Number(document.getElementById('analytics-month').value);
+  if (window.pageAnalyticsData) renderPageAnalytics(window.pageAnalyticsData);
+}
+
+function renderAnalyticsChart(history, providers, year, month = 0) {
   const canvas = document.getElementById('pageAnalyticsChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  const buckets = groupHistoryByMonth(history, 6, providers);
+  const buckets = groupAnalyticsPeriod(history, providers, year, month);
   destroyChart('pageAnalyticsChart');
   window.khCharts.pageAnalyticsChart = new Chart(canvas, {
     type: 'bar',
@@ -590,15 +673,31 @@ function renderProviderBreakdown(history) {
   }).join('');
 }
 
+function renderDashboardSqlMetrics(sources = [], dictionary = []) {
+  const active = sources.find(source => source.isDefault);
+  const tables = active ? dictionary.filter(table => table.dbSourceId
+    ? String(table.dbSourceId) === String(active.id)
+    : table.dbName === active.dbName) : [];
+  const values = {
+    'val-connectors': active ? active.dbName : 'Chưa chọn DB',
+    'val-connectors-detail': active ? (active.host || 'SQL Server') : 'Chưa có nguồn mặc định cho AI',
+    'val-tables': String(tables.filter(table => table.isActive).length),
+    'val-tables-detail': active ? `${active.dbName} · ${tables.length} bảng đã nạp` : 'Chưa có database active'
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = value;
+      element.title = value;
+    }
+  });
+}
+
 function updateMetricText(data) {
   const history = data.history || [];
   const dictionary = data.dictionary || [];
   const providers = data.providers || [];
-  const totalTables = dictionary.length;
   const totalColumns = dictionary.reduce((sum, t) => sum + (t.columns?.length || 0), 0);
-  const avgLatency = history.length
-    ? Math.round(history.reduce((sum, item) => sum + Number(item.latencyMs || 0), 0) / history.length)
-    : 0;
   const estimatedCost = estimateAuditCost(history, providers);
   const activeProvider = data.activeProvider || providers.find(p => p.isActive) || providers[0];
   const fallbackProvider = providers.find(p => !p.isActive);
@@ -608,40 +707,49 @@ function updateMetricText(data) {
     if (el) el.textContent = value;
   };
 
-  setText('val-connectors', String((data.sources || []).length).padStart(2, '0'));
-  setText('val-tables', String(totalTables));
+  renderDashboardSqlMetrics(data.sources || [], dictionary);
   setText('val-queries', String(history.length));
   setText('val-cost', formatMoney(estimatedCost));
   setText('dash-router-primary', activeProvider ? `${activeProvider.name} (${activeProvider.model})` : 'Chưa cấu hình');
   setText('dash-router-fallback', fallbackProvider ? `${fallbackProvider.name} (${fallbackProvider.model})` : 'Chưa kích hoạt');
   setText('dash-router-vector', `Qdrant (${data.qdrant.pointsCount || totalColumns || 0} vectors)`);
 
-  setText('analytics-total-cost', formatMoney(estimatedCost));
-  setText('analytics-avg-latency', String(avgLatency));
-  setText('analytics-total-queries', String(history.length));
   setText('analytics-health-qdrant', `${data.qdrant.pointsCount || totalColumns || 0} vectors indexed`);
 }
 
 async function refreshDashboardMetrics() {
-  const data = await fetchAnalyticsSourceData();
-  window.dashboardAnalyticsHistory = data.history;
-  window.dashboardAnalyticsProviders = data.providers;
-  window.dashboardFeedbackData = data.feedback;
-  updateMetricText(data);
-  renderDashboardChart(data.history, data.providers);
-  renderDashboardFeedbackChart(data.feedback);
-  renderDashboardActivity(data.history);
+  const targets = ['analyticsChart', 'dashboardFeedbackChart', 'dashboard-activity-chart'];
+  setAnalyticsLoading(targets, true);
+  try {
+    const data = await fetchAnalyticsSourceData();
+    window.dashboardAnalyticsHistory = data.history;
+    window.dashboardAnalyticsProviders = data.providers;
+    window.dashboardFeedbackData = data.feedback;
+    updateMetricText(data);
+    renderPageAnalytics(data);
+    renderDashboardChart(data.history, data.providers);
+    renderDashboardFeedbackChart(data.feedback);
+    renderDashboardActivity(data.history);
+  } finally {
+    setAnalyticsLoading(targets, false);
+  }
 }
 
 async function initPageAnalyticsCharts() {
-  const data = await fetchAnalyticsSourceData();
-  updateMetricText(data);
-  renderAnalyticsChart(data.history, data.providers);
-  renderProviderBreakdown(data.history);
+  const targets = ['pageAnalyticsChart', 'analytics-provider-breakdown'];
+  setAnalyticsLoading(targets, true);
+  try {
+    const data = await fetchAnalyticsSourceData();
+    updateMetricText(data);
+    renderPageAnalytics(data);
+  } finally {
+    setAnalyticsLoading(targets, false);
+  }
 }
 
 window.refreshDashboardMetrics = refreshDashboardMetrics;
 window.initPageAnalyticsCharts = initPageAnalyticsCharts;
+window.changePageAnalyticsPeriod = changePageAnalyticsPeriod;
 window.changeDashboardAnalyticsRange = changeDashboardAnalyticsRange;
 window.changeDashboardFeedbackRange = changeDashboardFeedbackRange;
 window.changeDashboardActivityYear = changeDashboardActivityYear;

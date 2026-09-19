@@ -14,6 +14,8 @@ let pool;
 let repository;
 let closing = false;
 const operations = new Set();
+const deferredTasks = new Map();
+let deferredTaskChain = Promise.resolve();
 
 const enabled = () => process.env.APP_STORAGE_BACKEND === 'postgres';
 function scope() {
@@ -71,18 +73,43 @@ async function run(operation, { independent = false, files } = {}) {
     const work = {
       id: crypto.randomUUID(), documents: snapshot.documents,
       baseline: cloneDocuments(snapshot.documents), dirty: new Set(), jobs: [], closed: false,
-      transforms: new Set(), committing: null, allowedFiles: files ? new Set(files) : null
+      transforms: new Set(), committing: null, allowedFiles: files ? new Set(files) : null,
+      afterCommit: new Map()
     };
-    return scopes.run(work, async () => {
+    const result = await scopes.run(work, async () => {
       try {
         const result = await operation();
         await flush();
         return result;
       } finally { work.closed = true; }
     });
+    for (const [key, callback] of work.afterCommit) scheduleDeferredTask(key, callback);
+    return result;
   })();
   operations.add(execution);
   try { return await execution; } finally { operations.delete(execution); }
+}
+
+function scheduleDeferredTask(key, callback) {
+  const existing = deferredTasks.get(key);
+  if (existing) clearTimeout(existing.timer);
+  const task = { callback };
+  task.timer = setTimeout(() => {
+    deferredTasks.delete(key);
+    deferredTaskChain = deferredTaskChain
+      .then(() => run(task.callback, { independent: true }))
+      .catch(error => console.error(`[Storage] Deferred task '${key}' failed:`, error.code || error.message || error.name || 'ERROR'));
+  }, 100);
+  task.timer.unref?.();
+  deferredTasks.set(key, task);
+}
+
+function afterCommit(key, callback) {
+  if (!enabled()) return false;
+  const work = scopes.getStore();
+  if (!work || work.closed) return false;
+  work.afterCommit.set(key, callback);
+  return true;
 }
 
 async function flush() {
@@ -164,4 +191,4 @@ async function lease(key, operation, { ttlMs = 120000 } = {}) {
   finally { clearInterval(timer); await pool.query('DELETE FROM app.worker_leases WHERE key=$1 AND owner=$2', [key, owner]); }
 }
 
-module.exports = { enabled, loadEnvironment, bootstrapStorage, run, flush, read, write, bind, enqueue, receipt, detach, ready, close, lease, getPool: () => pool };
+module.exports = { enabled, loadEnvironment, bootstrapStorage, run, flush, read, write, bind, enqueue, receipt, afterCommit, detach, ready, close, lease, getPool: () => pool };

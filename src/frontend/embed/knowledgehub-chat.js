@@ -18,6 +18,15 @@
   let conversationVersion = 0;
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const formatDisplayValue = value => {
+    const text = String(value ?? '');
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+    if (!match) return text;
+    const [, year, month, day, hour, minute, second] = match;
+    const date = `${day}/${month}/${year}`;
+    return hour === undefined || (hour === '00' && minute === '00' && second === '00')
+      ? date : `${date} ${hour}:${minute}:${second}`;
+  };
   const normalizeDownloadLinks = value => String(value ?? '').replace(
     /\[\[([^\]]+)\]\((\/api\/exports\/[^)\s]+)\)\]\([^)\s]+\)/g,
     '[$1]($2)'
@@ -68,7 +77,7 @@
           index += 1;
         }
         index -= 1;
-        output.push(`<div class="kh-embed-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${renderText(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, cellIndex) => `<td>${renderText(row[cellIndex] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        output.push(`<div class="kh-embed-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${renderText(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, cellIndex) => `<td>${renderText(formatDisplayValue(row[cellIndex] || ''))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
       } else prose.push(lines[index]);
     }
     flushProse();
@@ -101,6 +110,21 @@
     const xLabels = labels.map((label, index) => `<text x="${spec.type === 'bar' ? left + (index + .5) * plotW / slots : left + (slots === 1 ? plotW / 2 : index * plotW / Math.max(1, slots - 1))}" y="${height - 17}" text-anchor="middle">${escapeHtml(String(label).slice(0, 13))}</text>`).join('');
     return `<section class="kh-embed-chart"><strong>${escapeHtml(titleText)}</strong><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(titleText)}"><g class="kh-chart-grid">${grid}</g>${marks}<g class="kh-chart-labels">${xLabels}</g></svg></section>`;
   };
+  const renderEmbedCitations = (citations, validation = {}, supportingEvidence = []) => {
+    const verified = Array.isArray(citations) ? citations : [];
+    const fallback = Array.isArray(supportingEvidence) ? supportingEvidence : [];
+    const displayed = verified.length ? verified : fallback;
+    if (!displayed.length || (!verified.length && !validation?.missingCitation)) return '';
+    const items = displayed.map(citation => {
+      const marker = Number(citation.marker) || 0;
+      const chunk = (Number(citation.chunkIndex) || 0) + 1;
+      const href = citation.sourceUrl ? new URL(citation.sourceUrl, `${apiBase}/`).href : '';
+      return `<article><div><b>[${marker}] ${escapeHtml(citation.title || 'Tài liệu')}</b><span>Đoạn ${chunk}</span>${href ? `<a href="${escapeHtml(href)}" download>Tải file gốc</a>` : ''}</div><blockquote>${escapeHtml(citation.excerpt || '')}</blockquote></article>`;
+    }).join('');
+    const label = verified.length ? 'Đoạn nguồn theo trích dẫn' : 'Các đoạn đã cung cấp cho AI';
+    const note = verified.length ? '' : '<p>Model chưa gắn marker; đây là evidence thực tế trong ngữ cảnh.</p>';
+    return `<details class="kh-embed-citations"><summary>${label} (${displayed.length})</summary>${note}${items}</details>`;
+  };
   const chatIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5 3.8 21l.8-4.1A8 8 0 1 1 7 18.5Z"/><path d="M8 10h8M8 14h5"/></svg>';
   const botIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M9 3h6"/><rect x="4" y="7" width="16" height="12" rx="4"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 16h6"/></svg>';
   const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>';
@@ -132,13 +156,13 @@
     @keyframes khspin{to{transform:rotate(360deg)}}
     .kh-embed-footer{padding:11px 13px 8px;border-top:1px solid #e3e8f0;background:#fff}.kh-embed-form{display:flex;align-items:center;gap:8px;padding:5px 5px 5px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;transition:border-color .16s,box-shadow .16s}.kh-embed-form:focus-within{border-color:#818cf8;box-shadow:0 0 0 2px rgba(99,102,241,.1)}
     .kh-embed-input{flex:1;min-width:0;height:36px;padding:0;border:0;outline:none;color:#1e293b;background:transparent;font:inherit;font-size:12.5px}.kh-embed-input::placeholder{color:#94a3b8}.kh-embed-send{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;padding:0;border:0;border-radius:10px;color:#fff;background:var(--kh-primary);box-shadow:0 2px 7px rgba(79,70,229,.16);cursor:pointer}.kh-embed-send:hover{filter:brightness(1.04)}.kh-embed-send:disabled{opacity:.55;cursor:not-allowed}.kh-embed-send svg{width:17px;height:17px}
-    .kh-embed-brand{display:flex;align-items:center;justify-content:center;gap:5px;padding-top:7px;color:#94a3b8;font-size:9.5px}.kh-embed-brand b{color:#64748b}.kh-embed-error{color:#b91c1c!important;border-color:#fecaca!important;background:#fef2f2!important}.kh-embed-data{margin-top:9px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px}.kh-embed-data table{border-collapse:collapse;font-size:11px}.kh-embed-data th,.kh-embed-data td{padding:6px 8px;border-bottom:1px solid #eef2f7;white-space:nowrap;text-align:left}.kh-embed-chart{margin-top:10px;padding:10px;border:1px solid #e2e8f0;border-radius:11px;background:#fff}.kh-embed-chart>strong{display:block;margin-bottom:7px;color:#334155;font-size:11.5px}.kh-embed-chart svg{display:block;width:100%;height:auto;overflow:visible}.kh-chart-grid line{stroke:#e2e8f0;stroke-width:1}.kh-chart-grid text,.kh-chart-labels text{fill:#64748b;font-size:9px}.kh-pie-wrap{display:flex;align-items:center;gap:13px}.kh-pie{flex:0 0 112px;width:112px;height:112px;border-radius:50%}.kh-pie.doughnut{position:relative}.kh-pie.doughnut::after{content:"";position:absolute;inset:28px;border-radius:50%;background:#fff}.kh-chart-legend{display:grid;gap:5px;font-size:9.5px}.kh-chart-legend span{display:flex;align-items:center;gap:5px}.kh-chart-legend i{width:8px;height:8px;border-radius:2px}.kh-chart-legend b{margin-left:auto}
+    .kh-embed-brand{display:flex;align-items:center;justify-content:center;gap:5px;padding-top:7px;color:#94a3b8;font-size:9.5px}.kh-embed-brand b{color:#64748b}.kh-embed-error{color:#b91c1c!important;border-color:#fecaca!important;background:#fef2f2!important}.kh-embed-data{margin-top:9px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px}.kh-embed-data table{border-collapse:collapse;font-size:11px}.kh-embed-data th,.kh-embed-data td{padding:6px 8px;border-bottom:1px solid #eef2f7;white-space:nowrap;text-align:left}.kh-embed-citations{margin-top:10px;padding:8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:10.5px}.kh-embed-citations summary{color:#334155;cursor:pointer;font-weight:800}.kh-embed-citations article{margin-top:7px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff}.kh-embed-citations article>div{display:flex;align-items:center;gap:6px}.kh-embed-citations article b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kh-embed-citations article span{color:#64748b;white-space:nowrap}.kh-embed-citations article a{margin-left:auto;color:var(--kh-primary);white-space:nowrap}.kh-embed-citations blockquote{margin:6px 0 0;padding-left:8px;border-left:2px solid #a5b4fc;color:#475569;line-height:1.5}.kh-embed-citation-warning{margin-top:9px;padding:8px;border:1px solid #fde68a;border-radius:8px;color:#92400e;background:#fffbeb;font-size:10.5px}.kh-embed-chart{margin-top:10px;padding:10px;border:1px solid #e2e8f0;border-radius:11px;background:#fff}.kh-embed-chart>strong{display:block;margin-bottom:7px;color:#334155;font-size:11.5px}.kh-embed-chart svg{display:block;width:100%;height:auto;overflow:visible}.kh-chart-grid line{stroke:#e2e8f0;stroke-width:1}.kh-chart-grid text,.kh-chart-labels text{fill:#64748b;font-size:9px}.kh-pie-wrap{display:flex;align-items:center;gap:13px}.kh-pie{flex:0 0 112px;width:112px;height:112px;border-radius:50%}.kh-pie.doughnut{position:relative}.kh-pie.doughnut::after{content:"";position:absolute;inset:28px;border-radius:50%;background:#fff}.kh-chart-legend{display:grid;gap:5px;font-size:9.5px}.kh-chart-legend span{display:flex;align-items:center;gap:5px}.kh-chart-legend i{width:8px;height:8px;border-radius:2px}.kh-chart-legend b{margin-left:auto}
     .kh-embed-root.dark{color:#e5edf8}.kh-embed-root.dark .kh-embed-panel{border-color:#334158;background:#111b2b;box-shadow:0 24px 64px rgba(2,6,23,.5),0 3px 12px rgba(2,6,23,.25)}
     .kh-embed-root.dark .kh-embed-head{background:linear-gradient(135deg,#29256f,#4338a8 58%,#5b21b6)}.kh-embed-root.dark .kh-embed-messages{background:#0f1928}.kh-embed-root.dark .kh-embed-messages::-webkit-scrollbar-thumb{background:#44516a}
     .kh-embed-root.dark .kh-embed-mini-avatar{color:#c4b5fd;background:#29264b}.kh-embed-root.dark .kh-embed-message.ai{color:#d4deed;border-color:#33435b;background:#182438;box-shadow:none}.kh-embed-root.dark .kh-embed-message.user{background:#5145c7;box-shadow:0 3px 10px rgba(0,0,0,.2)}.kh-embed-root.dark .kh-embed-message code{color:#d8d2ff;background:#29264b}
     .kh-embed-root.dark .kh-embed-table-wrap{border-color:#3a4961;background:#172235;scrollbar-width:thin;scrollbar-color:#66758e #172235}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar{width:8px;height:8px}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-track{background:#172235}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-thumb{border:2px solid #172235;border-radius:999px;background:#66758e}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-thumb:hover{background:#8290a8}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-button{display:none;width:0;height:0}.kh-embed-root.dark .kh-embed-table-wrap th{color:#e2e8f0;background:#222f44}.kh-embed-root.dark .kh-embed-table-wrap th,.kh-embed-root.dark .kh-embed-table-wrap td{border-color:#344258}.kh-embed-root.dark .kh-embed-table-wrap tbody tr:nth-child(even){background:#1b293d}
     .kh-embed-root.dark .kh-embed-thinking{color:#9eabc0}.kh-embed-root.dark .kh-embed-footer{border-color:#303e54;background:#121d2d}.kh-embed-root.dark .kh-embed-form{border-color:#3b4a62;background:#172337}.kh-embed-root.dark .kh-embed-form:focus-within{border-color:#766ce0;box-shadow:0 0 0 2px rgba(118,108,224,.14)}.kh-embed-root.dark .kh-embed-input{color:#e6edf7}.kh-embed-root.dark .kh-embed-input::placeholder{color:#718099}
-    .kh-embed-root.dark .kh-embed-brand{color:#718099}.kh-embed-root.dark .kh-embed-brand b{color:#9eabc0}.kh-embed-root.dark .kh-embed-error{color:#fecaca!important;border-color:#7f1d1d!important;background:#3a1c25!important}.kh-embed-root.dark .kh-embed-data,.kh-embed-root.dark .kh-embed-chart{color:#d4deed;border-color:#344258;background:#172337}.kh-embed-root.dark .kh-embed-data th,.kh-embed-root.dark .kh-embed-data td{border-color:#344258}.kh-embed-root.dark .kh-embed-chart>strong{color:#dbe5f3}.kh-embed-root.dark .kh-chart-grid line{stroke:#344258}.kh-embed-root.dark .kh-chart-grid text,.kh-embed-root.dark .kh-chart-labels text{fill:#9eabc0}.kh-embed-root.dark .kh-pie.doughnut::after{background:#172337}
+    .kh-embed-root.dark .kh-embed-brand{color:#718099}.kh-embed-root.dark .kh-embed-brand b{color:#9eabc0}.kh-embed-root.dark .kh-embed-error{color:#fecaca!important;border-color:#7f1d1d!important;background:#3a1c25!important}.kh-embed-root.dark .kh-embed-data,.kh-embed-root.dark .kh-embed-chart,.kh-embed-root.dark .kh-embed-citations{color:#d4deed;border-color:#344258;background:#172337}.kh-embed-root.dark .kh-embed-data th,.kh-embed-root.dark .kh-embed-data td{border-color:#344258}.kh-embed-root.dark .kh-embed-citations summary{color:#dbe5f3}.kh-embed-root.dark .kh-embed-citations article{border-color:#344258;background:#1d2a3e}.kh-embed-root.dark .kh-embed-citations article span,.kh-embed-root.dark .kh-embed-citations blockquote{color:#aebbd0}.kh-embed-root.dark .kh-embed-citation-warning{color:#e5c783;border-color:#66522a;background:#342d20}.kh-embed-root.dark .kh-embed-chart>strong{color:#dbe5f3}.kh-embed-root.dark .kh-chart-grid line{stroke:#344258}.kh-embed-root.dark .kh-chart-grid text,.kh-embed-root.dark .kh-chart-labels text{fill:#9eabc0}.kh-embed-root.dark .kh-pie.doughnut::after{background:#172337}
     @media(max-width:520px){.kh-embed-root{${position}:12px;bottom:12px}.kh-embed-panel{width:calc(100vw - 24px);height:calc(100vh - 94px);border-radius:15px}.kh-embed-head{padding:13px 14px}.kh-embed-messages{padding:15px 13px}}
   `;
   // Render inside Shadow DOM so host-page styles cannot break the widget.
@@ -219,9 +243,10 @@
         result += `<br><a class="kh-embed-link" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener noreferrer">Tải file kết quả</a>`;
       }
       result += renderEmbedChart(data.chartSpec);
+      result += renderEmbedCitations(data.citations, data.citationValidation, data.supportingEvidence);
       if (!hasMarkdownTable && data.toolResult?.rows?.length) {
         const head = data.toolResult.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('');
-        const rows = data.toolResult.rows.slice(0, 20).map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('');
+        const rows = data.toolResult.rows.slice(0, 20).map(row => `<tr>${row.map(cell => `<td>${escapeHtml(formatDisplayValue(cell))}</td>`).join('')}</tr>`).join('');
         result += `<details class="kh-embed-data"><summary style="padding:7px 8px;cursor:pointer">Xem dữ liệu (${data.toolResult.rows.length} dòng)</summary><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></details>`;
       }
       thinking.remove(); append(result, 'ai', hasMarkdownTable ? 'kh-embed-has-table' : '');

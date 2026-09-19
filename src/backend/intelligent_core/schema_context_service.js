@@ -4,6 +4,7 @@ const dictionaryService = require('../services/dictionary_service');
 const qdrantService = require('../services/qdrant_service');
 const domainAliasService = require('./domain_alias_service');
 const { tableIdentity } = require('../services/schema_identity');
+const joinPlannerService = require('../services/join_planner_service');
 
 const MAX_TABLES = Math.max(1, parseInt(process.env.AI_SCHEMA_MAX_TABLES || '6', 10));
 const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COLUMNS_PER_TABLE || '40', 10));
@@ -26,6 +27,22 @@ function tokens(value) {
 function lexicalScore(queryTokens, text) {
   const haystack = ` ${normalize(text)} `;
   return queryTokens.reduce((score, token) => score + (haystack.includes(` ${token} `) ? 4 : (token.length >= 4 && haystack.includes(token)) ? 1 : 0), 0);
+}
+
+function relationshipRelevant(queryTokens, relation, tables = []) {
+  const source = tables.find(table => tableIdentity(table) === relation.sourceTableId);
+  const target = tables.find(table => tableIdentity(table) === relation.targetTableId);
+  const pairs = relation.columnPairs?.length ? relation.columnPairs : [{ sourceColumn: relation.sourceColumn, targetColumn: relation.targetColumn }];
+  const columnSignals = pairs.flatMap(pair => {
+    const sourceColumn = source?.columns?.find(column => column.columnName === pair.sourceColumn);
+    const targetColumn = target?.columns?.find(column => column.columnName === pair.targetColumn);
+    return [pair.sourceColumn, sourceColumn?.description, pair.targetColumn, targetColumn?.description];
+  });
+  // In roles such as "Giới tính của nhân viên", the text before "của" is the
+  // relationship subject; the suffix merely names the source entity.
+  const roleSubject = normalize(relation.businessRole).split(/\s+cua\s+/)[0];
+  const signalTokens = new Set(tokens([roleSubject, relation.description, ...columnSignals].filter(Boolean).join(' ')));
+  return queryTokens.some(token => signalTokens.has(token));
 }
 
 function domainText(domain) {
@@ -85,6 +102,21 @@ function selectColumns(table, expandedQuery, vectorColumnNames = new Set()) {
   return ranked.slice(0, MAX_COLUMNS_PER_TABLE).map(item => item.column);
 }
 
+function automaticEnrichmentRelations(rootTable, activeTables) {
+  if (!rootTable || process.env.SQL_JOIN_PLANNER_ENABLED !== 'true') return [];
+  const limit = Math.max(0, Number(process.env.SQL_AUTO_ENRICH_MAX_RELATIONSHIPS || 6));
+  return dictionaryService.getTableRelationships()
+    .filter(relation => relation.isActive !== false && relation.status === 'verified')
+    .filter(relation => relation.sourceTableId === tableIdentity(rootTable))
+    .filter(relation => ['many-to-one', 'one-to-one'].includes(relation.cardinality || relation.relationType))
+    .filter(relation => activeTables.some(table => tableIdentity(table) === relation.targetTableId))
+    .filter(relation => (relation.columnPairs || []).length > 0 && relation.columnPairs.every(pair => {
+      const column = (rootTable.columns || []).find(item => item.columnName === pair.sourceColumn);
+      return Boolean(column?.description?.trim());
+    }))
+    .slice(0, limit);
+}
+
 async function buildSchemaContext(query, options = {}) {
   const dbName = options.dbName || null;
   const dbSourceId = options.dbSourceId || null;
@@ -123,35 +155,75 @@ async function buildSchemaContext(query, options = {}) {
     .map((table, index) => ({ table, index, score: scores.get(tableIdentity(table)) || 0 }))
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const maxLexicalScore = Math.max(0, ...lexicalScores.values());
+  const strongLexicalThreshold = Math.max(4, Math.ceil(maxLexicalScore * 0.5));
   const tablePool = maxLexicalScore >= 4
-    ? rankedTables.filter(item => (lexicalScores.get(tableIdentity(item.table)) || 0) > 0)
+    ? rankedTables.filter(item => (lexicalScores.get(tableIdentity(item.table)) || 0) >= strongLexicalThreshold)
     : rankedTables;
   const selected = tablePool.slice(0, Math.min(MAX_TABLES, tablePool.length)).map(item => item.table);
   const selectedNames = new Set(selected.map(table => table.tableName));
+  const requestedIds = selected.slice(0, 4).map(table => tableIdentity(table));
+  const enrichmentRelations = selected.length === 1 ? automaticEnrichmentRelations(selected[0], activeTables) : [];
+  let joinPlan = enrichmentRelations.length
+    ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
+    : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && requestedIds.length > 1
+      ? joinPlannerService.planJoin(requestedIds, { dbSourceId, maxEdges: 3 }) : null;
+  if (joinPlan?.outcome === 'ready') {
+    for (const ref of joinPlan.tableRefs) {
+      if (selected.some(table => tableIdentity(table) === ref.tableId) || selected.length >= MAX_TABLES) continue;
+      const bridge = activeTables.find(table => tableIdentity(table) === ref.tableId);
+      if (bridge) { selected.push(bridge); selectedNames.add(bridge.tableName); }
+    }
+  }
 
-  const relationships = dictionaryService.getTableRelationships()
-    .filter(relation => relation.isActive !== false)
-    .filter(relation => selectedNames.has(relation.sourceTable) || selectedNames.has(relation.targetTable));
+  let relationships = dictionaryService.getTableRelationships()
+    .filter(relation => relation.isActive !== false && relation.status === 'verified')
+    .filter(relation => selected.some(table => tableIdentity(table) === relation.sourceTableId)
+      || selected.some(table => tableIdentity(table) === relation.targetTableId));
+  if (joinPlan?.outcome === 'ready' && joinPlan.edges.length) {
+    const plannedIds = new Set(joinPlan.edges.map(edge => edge.relationshipId));
+    relationships = relationships.filter(relation => plannedIds.has(relation.id));
+  } else {
+    relationships = relationships.filter(relation => relationshipRelevant(expandedTokens, relation, activeTables));
+  }
   for (const relation of relationships) {
-    for (const relatedName of [relation.sourceTable, relation.targetTable]) {
-      if (!selectedNames.has(relatedName) && selected.length < MAX_TABLES) {
-        const related = activeTables.find(table => table.tableName === relatedName);
-        if (related) { selected.push(related); selectedNames.add(relatedName); }
+    for (const relatedId of [relation.sourceTableId, relation.targetTableId]) {
+      if (!selected.some(table => tableIdentity(table) === relatedId) && selected.length < MAX_TABLES) {
+        const related = activeTables.find(table => tableIdentity(table) === relatedId);
+        if (related) { selected.push(related); selectedNames.add(related.tableName); }
       }
+    }
+  }
+  if (process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
+      && (!joinPlan || joinPlan.outcome !== 'ready' || !joinPlan.edges.length)) {
+    joinPlan = joinPlannerService.planJoin(selected.slice(0, 4).map(table => tableIdentity(table)), { dbSourceId, maxEdges: 3 });
+    if (joinPlan.outcome === 'ready') {
+      const plannedIds = new Set(joinPlan.edges.map(edge => edge.relationshipId));
+      relationships = relationships.filter(relation => plannedIds.has(relation.id));
     }
   }
 
   const lines = [];
+  const requiredColumns = new Map();
+  const relationshipMappedColumns = new Set();
+  relationships.forEach(relation => (relation.columnPairs || []).forEach(pair => {
+    if (relation.businessRole && relation.displayColumn) relationshipMappedColumns.add(`${relation.sourceTableId}\u0000${pair.sourceColumn}`);
+    requiredColumns.set(relation.sourceTableId, new Set([...(requiredColumns.get(relation.sourceTableId) || []), pair.sourceColumn]));
+    requiredColumns.set(relation.targetTableId, new Set([...(requiredColumns.get(relation.targetTableId) || []), pair.targetColumn]));
+    if (relation.displayColumn) requiredColumns.set(relation.targetTableId, new Set([...(requiredColumns.get(relation.targetTableId) || []), relation.displayColumn]));
+  }));
   for (const table of selected) {
-    const columns = selectColumns(table, expandedQuery, vectorColumnNames);
+    const rankedColumns = selectColumns(table, expandedQuery, vectorColumnNames);
+    const mandatory = requiredColumns.get(tableIdentity(table)) || new Set();
+    const columns = [...rankedColumns, ...(table.columns || []).filter(column => mandatory.has(column.columnName) && !rankedColumns.some(item => item.columnName === column.columnName))];
     const defaults = table.defaultMetric || table.defaultTimeColumn
       ? ` [Defaults: metric=${table.defaultMetric || 'none'}, time=${table.defaultTimeColumn || 'none'}, aggregation=${table.defaultAggregation || 'SUM'}]` : '';
     lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${defaults}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
-    lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
+    lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.displayName && !relationshipMappedColumns.has(`${tableIdentity(table)}\u0000${column.columnName}`) ? ` [result header: ${column.displayName}]` : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
   }
   if (relationships.length > 0) {
     lines.push('Relationships:');
-    relationships.forEach(relation => lines.push(`- ${relation.sourceTable}.${relation.sourceColumn} -> ${relation.targetTable}.${relation.targetColumn} (${relation.relationType || 'related'})`));
+    relationships.forEach(relation => lines.push(`- ${(relation.columnPairs || []).map(pair => `${relation.sourceTable}.${pair.sourceColumn} -> ${relation.targetTable}.${pair.targetColumn}`).join(' AND ')} (${relation.cardinality || relation.relationType || 'related'}; role=${relation.businessRole || 'unspecified'}; display=${relation.displayColumn || 'unspecified'})`));
+    if (joinPlan?.purpose === 'enrichment') lines.push('Auto-enrichment requirement: when returning rows from the primary table, JOIN every relationship listed above and include the mapped display column instead of its foreign-key ID. Alias each mapped display value with the exact relationship role as the result header. Order result columns as identity Code/Name fields, mapped display values, other business fields, then unmapped ID fields. Use each planned alias separately when several fields point to the same lookup table.');
   }
 
   return {
@@ -160,6 +232,7 @@ async function buildSchemaContext(query, options = {}) {
     selectedTables: selected.map(table => table.tableName),
     selectedTableIds: selected.map(table => tableIdentity(table)),
     useTools: true,
+    joinPlan,
     retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length },
     needsModelSelection: maxLexicalScore < 4,
     tableCatalog: activeTables.map(table => `${table.tableName}${table.domain ? ` [domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`).join('\n').slice(0, 12000)
@@ -176,34 +249,61 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   const selected = activeTables.filter(table => requested.has(table.tableName.toLowerCase())).slice(0, MAX_TABLES);
   if (selected.length === 0) return null;
   const selectedNames = new Set(selected.map(table => table.tableName));
-  const relationships = dictionaryService.getTableRelationships()
-    .filter(relation => relation.isActive !== false)
-    .filter(relation => selectedNames.has(relation.sourceTable) || selectedNames.has(relation.targetTable));
+  const enrichmentRelations = selected.length === 1 ? automaticEnrichmentRelations(selected[0], activeTables) : [];
+  const joinPlan = enrichmentRelations.length
+    ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
+    : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
+      ? joinPlannerService.planJoin(selected.slice(0, 4).map(table => tableIdentity(table)), { dbSourceId, maxEdges: 3 }) : null;
+  if (joinPlan?.outcome === 'ready') for (const ref of joinPlan.tableRefs) {
+    if (selected.some(table => tableIdentity(table) === ref.tableId) || selected.length >= MAX_TABLES) continue;
+    const bridge = activeTables.find(table => tableIdentity(table) === ref.tableId);
+    if (bridge) { selected.push(bridge); selectedNames.add(bridge.tableName); }
+  }
+  let relationships = dictionaryService.getTableRelationships()
+    .filter(relation => relation.isActive !== false && relation.status === 'verified')
+    .filter(relation => selected.some(table => tableIdentity(table) === relation.sourceTableId)
+      || selected.some(table => tableIdentity(table) === relation.targetTableId));
+  if (joinPlan?.outcome === 'ready' && joinPlan.edges.length) {
+    const plannedIds = new Set(joinPlan.edges.map(edge => edge.relationshipId));
+    relationships = relationships.filter(relation => plannedIds.has(relation.id));
+  }
   for (const relation of relationships) {
-    for (const name of [relation.sourceTable, relation.targetTable]) {
-      if (!selectedNames.has(name) && selected.length < MAX_TABLES) {
-        const table = activeTables.find(item => item.tableName === name);
-        if (table) { selected.push(table); selectedNames.add(name); }
+    for (const relatedId of [relation.sourceTableId, relation.targetTableId]) {
+      if (!selected.some(table => tableIdentity(table) === relatedId) && selected.length < MAX_TABLES) {
+        const table = activeTables.find(item => tableIdentity(item) === relatedId);
+        if (table) { selected.push(table); selectedNames.add(table.tableName); }
       }
     }
   }
   const lines = [];
+  const requiredColumns = new Map();
+  const relationshipMappedColumns = new Set();
+  relationships.forEach(relation => (relation.columnPairs || []).forEach(pair => {
+    if (relation.businessRole && relation.displayColumn) relationshipMappedColumns.add(`${relation.sourceTableId}\u0000${pair.sourceColumn}`);
+    requiredColumns.set(relation.sourceTableId, new Set([...(requiredColumns.get(relation.sourceTableId) || []), pair.sourceColumn]));
+    requiredColumns.set(relation.targetTableId, new Set([...(requiredColumns.get(relation.targetTableId) || []), pair.targetColumn]));
+    if (relation.displayColumn) requiredColumns.set(relation.targetTableId, new Set([...(requiredColumns.get(relation.targetTableId) || []), relation.displayColumn]));
+  }));
   for (const table of selected) {
-    const columns = selectColumns(table, query, new Set());
+    const rankedColumns = selectColumns(table, query, new Set());
+    const mandatory = requiredColumns.get(tableIdentity(table)) || new Set();
+    const columns = [...rankedColumns, ...(table.columns || []).filter(column => mandatory.has(column.columnName) && !rankedColumns.some(item => item.columnName === column.columnName))];
     const defaults = table.defaultMetric || table.defaultTimeColumn
       ? ` [Defaults: metric=${table.defaultMetric || 'none'}, time=${table.defaultTimeColumn || 'none'}, aggregation=${table.defaultAggregation || 'SUM'}]` : '';
     lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${defaults}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
-    lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
+    lines.push(`Columns: ${columns.map(column => `${column.columnName} ${column.dataType}${column.isPrimaryKey ? ' PK' : ''}${column.displayName && !relationshipMappedColumns.has(`${tableIdentity(table)}\u0000${column.columnName}`) ? ` [result header: ${column.displayName}]` : ''}${column.description ? ` (${column.description})` : ''}`).join('; ')}`);
   }
   if (relationships.length) {
     lines.push('Relationships:');
-    relationships.forEach(relation => lines.push(`- ${relation.sourceTable}.${relation.sourceColumn} -> ${relation.targetTable}.${relation.targetColumn} (${relation.relationType || 'related'})`));
+    relationships.forEach(relation => lines.push(`- ${(relation.columnPairs || []).map(pair => `${relation.sourceTable}.${pair.sourceColumn} -> ${relation.targetTable}.${pair.targetColumn}`).join(' AND ')} (${relation.cardinality || relation.relationType || 'related'}; display=${relation.displayColumn || 'unspecified'})`));
+    if (joinPlan?.purpose === 'enrichment') lines.push('Auto-enrichment requirement: when returning rows from the primary table, JOIN every relationship listed above and include the mapped display column instead of its foreign-key ID. Alias each mapped display value with the exact relationship role as the result header. Order result columns as identity Code/Name fields, mapped display values, other business fields, then unmapped ID fields. Use each planned alias separately when several fields point to the same lookup table.');
   }
   return {
     mode: 'data', useTools: true,
     schemaContext: lines.join('\n').slice(0, MAX_CONTEXT_CHARS),
     selectedTables: selected.map(table => table.tableName),
     selectedTableIds: selected.map(table => tableIdentity(table)),
+    joinPlan,
     retrieval: { strategy: 'model_table_selector', activeTableCount: activeTables.length }
   };
 }

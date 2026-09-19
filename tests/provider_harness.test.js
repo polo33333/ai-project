@@ -56,6 +56,49 @@ test('persistent SQL-only answers stop within repair budget and never enter succ
   assert.equal(saved.persisted, false);
 });
 
+test('third-party provider uses deterministic enrichment recovery for a limited list', async () => {
+  const plan = { intent: 'list', table: 'M_Employee', rowLimit: 5, schemaColumns: ['EmployeeID', 'EmployeeName', 'GenderID'],
+    requiredColumns: [], outputs: { data: true, chart: false, export: false } };
+  const joinPlan = { outcome: 'ready', purpose: 'enrichment', tableRefs: [
+    { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+    { tableRefId: 'constant#2', tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+  ], edges: [{ relationshipId: 'gender', fromTableId: 'employee', toTableId: 'constant', fromTableRefId: 'employee#1', toTableRefId: 'constant#2',
+    joinType: 'LEFT', businessRole: 'Giới tính', displayColumn: 'ConstantName', columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }] };
+  const s = setup([{ content: 'Không có dữ liệu.' }], { maxRepairs: 0, rows: [{ EmployeeID: 1, EmployeeName: 'Duy', ConstantName: 'Nam' }] });
+  const result = await s.run({ userMessage: 'ds 5 nv', messages: [{ role: 'user', content: 'ds 5 nv' }],
+    context: { requestPlan: plan, joinPlan, selectedTables: ['M_Employee', 'M_Constant'], mode: 'data' } });
+  assert.equal(s.executed.length, 1);
+  assert.match(s.executed[0].sql, /^SELECT TOP 5 t1\.\[EmployeeName\], t2\.\[ConstantName\] AS \[Giới tính\], t1\.\[EmployeeID\]/);
+  assert.ok(result.trace.steps.some(step => step.type === 'ENRICHED_LIST_RECOVERY' && step.success));
+  assert.match(result.replyText, /Duy/);
+});
+
+test('third-party provider recovers plural follow-ups from verified dataset keys', async () => {
+  const plan = { intent: 'record_lookup', table: 'M_Employee', question: '2 nhân viên này thuộc phòng ban gì',
+    schemaColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName', 'DepartmentID'], requiredColumns: [],
+    outputs: { data: true, chart: false, export: false } };
+  const joinPlan = { outcome: 'ready', purpose: 'enrichment', tableRefs: [
+    { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+    { tableRefId: 'master#2', tableId: 'master', tableName: 'M_Master', schemaName: 'dbo', alias: 't2' }
+  ], edges: [{ relationshipId: 'department', fromTableId: 'employee', toTableId: 'master',
+    fromTableRefId: 'employee#1', toTableRefId: 'master#2', joinType: 'LEFT', businessRole: 'Phòng ban',
+    displayColumn: 'Name', columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'MasterID' }] }] };
+  const reference = { type: 'lastDataset', data: { table: 'M_Employee', entityKeys: [
+    { EmployeeID: 5 }, { EmployeeID: 6 }
+  ] } };
+  const s = setup([{ content: 'Chưa có dữ liệu.' }], { maxRepairs: 0,
+    rows: [{ EmployeeCode: 'NV005', EmployeeName: 'Demo3', 'Phòng ban': 'CSKH' },
+      { EmployeeCode: 'NV006', EmployeeName: 'Nguyễn Văn A', 'Phòng ban': 'Kỹ thuật' }] });
+  const result = await s.run({ userMessage: plan.question, messages: [{ role: 'user', content: plan.question }],
+    context: { requestPlan: plan, joinPlan, memoryDecision: { mode: 'reference', reference },
+      selectedTables: ['M_Employee', 'M_Master'], mode: 'data' } });
+  assert.equal(s.executed.length, 1);
+  assert.match(s.executed[0].sql, /t1\.\[EmployeeID\] = 5/);
+  assert.match(s.executed[0].sql, /t1\.\[EmployeeID\] = 6/);
+  assert.match(s.executed[0].sql, /t2\.\[Name\] AS \[Phòng ban\]/);
+  assert.equal(result.trace.completionStatus, 'SUCCESS');
+});
+
 test('explicit SQL authoring is answered as code without execution', async () => {
   const s = setup([fixture.response]);
   const result = await s.run({ userMessage: 'Viết SQL lấy danh sách hợp đồng' });
@@ -117,11 +160,33 @@ test('content JSON requires an explicit compatibility capability', async () => {
 
 test('web and selected knowledge requests are not forced to execute SQL', async () => {
   for (const context of [{ webSearch: true, webSearchResultCount: 1 }, { mode: 'knowledge', knowledgeGrounding: { required: true } }]) {
-    const s = setup([{ content: 'Theo tài liệu được cung cấp, hợp đồng có thời hạn 12 tháng.' }]);
+    const s = setup([{ content: 'Theo tài liệu được cung cấp, hợp đồng có thời hạn 12 tháng [1].' }]);
     const result = await s.run({ context: { requestPlan: fixture.plan, ...context }, enabledToolNames: [] });
     assert.equal(result.trace.completionStatus, 'SUCCESS');
     assert.equal(s.executed.length, 0);
   }
+});
+
+test('third-party provider repairs a knowledge answer that omits citation markers', async () => {
+  const s = setup([
+    { content: 'Hợp đồng có thời hạn 12 tháng.' },
+    { content: 'Hợp đồng có thời hạn 12 tháng [1].' }
+  ]);
+  const result = await s.run({
+    context: {
+      requestPlan: fixture.plan,
+      mode: 'knowledge',
+      knowledgeGrounding: {
+        required: true,
+        documentContext: '[Tài liệu 1: Quy định hợp đồng · đoạn 2]\nHợp đồng có thời hạn 12 tháng.'
+      }
+    },
+    enabledToolNames: []
+  });
+  assert.equal(result.trace.completionStatus, 'SUCCESS');
+  assert.match(result.replyText, /\[1\]/);
+  assert.equal(s.requests.length, 2);
+  assert.match(s.requests[1].messages.at(-1).content, /MISSING_KNOWLEDGE_CITATION/);
 });
 
 test('missing chart and export cannot be claimed complete', async () => {

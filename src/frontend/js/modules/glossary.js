@@ -190,6 +190,8 @@ function openEditGlossaryModal(encodedTerm) {
 }
 
 async function saveGlossaryTermFromModal() {
+  const saveButton = document.querySelector('#glossary-modal .glossary-modal-actions .btn-primary');
+  if (saveButton?.disabled) return;
   const term = document.getElementById('glossary-term-input')?.value.trim();
   const fullMeaning = document.getElementById('glossary-meaning-input')?.value.trim();
   const category = document.getElementById('glossary-category-select')?.value || 'Nghiệp vụ';
@@ -204,6 +206,10 @@ async function saveGlossaryTermFromModal() {
   const payload = oldTerm ? { oldTerm, term, fullMeaning, category } : { term, fullMeaning, category };
 
   try {
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+    }
     let res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -231,6 +237,11 @@ async function saveGlossaryTermFromModal() {
     if (typeof showToast === 'function') showToast(oldTerm ? 'Đã cập nhật thuật ngữ.' : 'Đã thêm thuật ngữ mới.', 'success');
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể lưu thuật ngữ: ${err.message}`, 'error');
+  } finally {
+    if (saveButton?.isConnected) {
+      saveButton.disabled = false;
+      saveButton.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Lưu thuật ngữ';
+    }
   }
 }
 

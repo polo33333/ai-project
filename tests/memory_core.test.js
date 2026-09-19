@@ -115,6 +115,17 @@ test('short web follow-ups reuse recent context and expand the search query', ()
   ], true), 'kết quả các trận bóng đá hôm nay\ntỉ số ntn');
 });
 
+test('short confirmation replies retain the previous request context', () => {
+  const decision = routeMemory({
+    question: 'có',
+    currentPlan: { intent: 'record_lookup', table: null, requiredColumns: [], outputs: { data: false } },
+    session: { id: 'confirm', lastPlan: plan('M_Employee'), activeScope: 'employee', messages: [], references: {} }
+  });
+  assert.equal(isShortContextualFollowup('có'), true);
+  assert.equal(decision.mode, 'recent');
+  assert.equal(decision.reason, 'short_contextual_followup');
+});
+
 test('entity, dataset and export references resolve by intent keyword', () => {
   const now = Date.now();
   const references = {
@@ -125,6 +136,46 @@ test('entity, dataset and export references resolve by intent keyword', () => {
   assert.equal(resolveReference('người đó là ai', references, now).type, 'lastEntity');
   assert.equal(resolveReference('vẽ biểu đồ dữ liệu trên', references, now).type, 'lastDataset');
   assert.equal(resolveReference('tải file này', references, now).type, 'lastExport');
+});
+
+test('generic pronouns do not guess between multiple valid reference types', () => {
+  const now = Date.now();
+  const result = resolveReference('thông tin đó', {
+    lastEntity: { filters: { EmployeeName: 'Yên Duy' }, updatedAt: new Date(now - 2000).toISOString() },
+    lastExport: { downloadUrl: '/api/exports/other.xlsx', updatedAt: new Date(now - 1000).toISOString() }
+  }, now);
+  assert.equal(result.type, null);
+  assert.equal(result.reason, 'ambiguous_reference');
+});
+
+test('generic pronouns still resolve the only valid reference', () => {
+  const now = Date.now();
+  const result = resolveReference('thông tin đó', {
+    lastEntity: { filters: { EmployeeName: 'Yên Duy' }, updatedAt: new Date(now - 1000).toISOString() }
+  }, now);
+  assert.equal(result.type, 'lastEntity');
+});
+
+test('strict reference resolution can be rolled back with its feature flag', () => {
+  const previous = process.env.MEMORY_STRICT_REFERENCE_RESOLUTION;
+  process.env.MEMORY_STRICT_REFERENCE_RESOLUTION = 'false';
+  try {
+    const now = Date.now();
+    const result = resolveReference('thông tin đó', {
+      lastEntity: { filters: { EmployeeName: 'Yên Duy' }, updatedAt: new Date(now - 2000).toISOString() },
+      lastExport: { downloadUrl: '/api/exports/latest.xlsx', updatedAt: new Date(now - 1000).toISOString() }
+    }, now);
+    assert.equal(result.type, 'lastExport');
+  } finally {
+    if (previous === undefined) delete process.env.MEMORY_STRICT_REFERENCE_RESOLUTION;
+    else process.env.MEMORY_STRICT_REFERENCE_RESOLUTION = previous;
+  }
+});
+
+test('independent count questions are not short contextual follow-ups', () => {
+  assert.equal(isShortContextualFollowup('Phòng Kỹ thuật có bao nhiêu người?'), false);
+  assert.equal(isShortContextualFollowup('khách hàng này như thế nào'), false);
+  assert.equal(isShortContextualFollowup('tỉ số ntn'), true);
 });
 
 test('expired references are rejected instead of reused', () => {
@@ -185,6 +236,41 @@ test('multi-row SQL results do not invent a selected entity reference', () => {
   });
   assert.equal(memory.getSession('many').references.lastEntity, null);
   assert.equal(memory.getSession('many').references.lastDataset.table, 'M_Employee');
+});
+
+test('verified multi-row results persist bounded canonical dataset entity keys', () => {
+  const memory = service();
+  memory.persistSuccessfulExchange({
+    sessionId: 'dataset-keys', question: 'nhân viên nữ', reply: 'Có 2 kết quả',
+    currentPlan: plan('M_Employee', {
+      schemaColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName'],
+      identityColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName'],
+      columnDisplayNames: { EmployeeCode: 'Mã nhân viên', EmployeeName: 'Tên nhân viên' }
+    }),
+    completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] },
+    toolCalls: [{ toolName: 'execute_sql_query', success: true, result: { rows: [
+      { EmployeeID: 5, 'Mã nhân viên': 'NV005', 'Tên nhân viên': 'Demo3' },
+      { EmployeeID: 6, 'Mã nhân viên': 'NV006', 'Tên nhân viên': 'Nguyễn Văn A' }
+    ] } }]
+  });
+  assert.deepEqual(memory.getSession('dataset-keys').references.lastDataset.entityKeys, [
+    { EmployeeID: 5, EmployeeCode: 'NV005', EmployeeName: 'Demo3' },
+    { EmployeeID: 6, EmployeeCode: 'NV006', EmployeeName: 'Nguyễn Văn A' }
+  ]);
+});
+
+test('plural follow-up selects the verified dataset instead of a single entity', () => {
+  const now = new Date().toISOString();
+  const decision = routeMemory({
+    question: '2 nhân viên này thuộc phòng ban gì?', currentPlan: plan('M_Employee'),
+    session: { id: 'plural', activeScope: 'employee', lastPlan: plan('M_Employee'), references: {
+      lastEntity: { table: 'M_Employee', filters: { EmployeeID: 4 }, updatedAt: now },
+      lastDataset: { table: 'M_Employee', entityKeys: [{ EmployeeID: 5 }, { EmployeeID: 6 }], updatedAt: now }
+    } }
+  });
+  assert.equal(decision.mode, 'reference');
+  assert.equal(decision.reason, 'collection_reference_detected');
+  assert.equal(decision.reference.type, 'lastDataset');
 });
 
 test('future-dated references are invalid', () => {
@@ -248,5 +334,18 @@ test('recent context excludes stored messages from another explicit scope', () =
     ]
   } } });
   const context = memory.getContext({ mode: 'recent', sessionId: 'scoped', currentScope: 'electricity', maxMessages: 4 });
+  assert.deepEqual(context.map(item => item.content), ['sản lượng điện', '10']);
+});
+
+test('recent context falls back to the session active scope when current scope is unknown', () => {
+  const memory = service({ sessions: { scoped: {
+    id: 'scoped', activeScope: 'electricity', references: {}, messages: [
+      { role: 'user', content: 'nhân viên A', scope: 'employee' },
+      { role: 'assistant', content: 'A', scope: 'employee' },
+      { role: 'user', content: 'sản lượng điện', scope: 'electricity' },
+      { role: 'assistant', content: '10', scope: 'electricity' }
+    ]
+  } } });
+  const context = memory.getContext({ mode: 'recent', sessionId: 'scoped', currentScope: null, maxMessages: 4 });
   assert.deepEqual(context.map(item => item.content), ['sản lượng điện', '10']);
 });

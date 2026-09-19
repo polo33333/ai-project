@@ -13,7 +13,8 @@ const routes=new Map([
   ['/api/library',['library.json']],
   ['/api/providers',['ai_providers.json']],
   ['/api/glossary',['glossary.json']],
-  ['/api/dictionary/relationships',['table_relationships.json']],
+  // Relationship normalization resolves source/target identities from the dictionary.
+  ['/api/dictionary/relationships',['table_relationships.json','dictionary.json']],
   ['/api/embed/configs',['embed_chat_configs.json']],
   ['/api/logs',['logs.json']],
   ['/api/chat-history',['chat_history.json','chat_feedback.json']],

@@ -49,3 +49,15 @@ test('SQL tool forwards the selected database source from tool context', async (
     sqlConnector.executeSqlQuery = original;
   }
 });
+
+test('SQL tool rejects JOIN execution without a backend plan when planner is enabled', async t => {
+  const previous = process.env.SQL_JOIN_PLANNER_ENABLED;
+  t.after(() => { if (previous === undefined) delete process.env.SQL_JOIN_PLANNER_ENABLED; else process.env.SQL_JOIN_PLANNER_ENABLED = previous; });
+  process.env.SQL_JOIN_PLANNER_ENABLED = 'true';
+  const response = await new ExecuteSqlTool().execute(
+    { sql: 'SELECT o.ID FROM Orders o JOIN Customers c ON o.CustomerID = c.ID' },
+    { permissions: ['sql:read'], dbSourceId: 'db-src-test' }
+  );
+  assert.equal(response.success, false);
+  assert.match(response.error, /không có backend JOIN plan/);
+});

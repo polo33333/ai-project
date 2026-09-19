@@ -315,6 +315,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(div,span,p,small,label)[style*="color: #475569"] { color: var(--text-secondary) !important; }
 :root[data-theme="dark"] #page-chat-messages-container { background: #101a2a !important; }
 :root[data-theme="dark"] :is(.chat-chart-box,.copilot-chart-box) { background: var(--dark-raised) !important; border-color: #40506b !important; }
+:root[data-theme="dark"] .analytics-loading-overlay { color: #b9adff; background: rgba(15, 23, 42, .86); }
 :root[data-theme="dark"] .chat-chart-title { color: var(--text-primary); }
 :root[data-theme="dark"] .copilot-rag-context {
   border-color: var(--border-color);
@@ -400,6 +401,25 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
   background: #29364a !important;
 }
 :root[data-theme="dark"] :is(.dashboard-log-content strong,.dictionary-row-main strong,.chat-ai-answer,.chat-markdown-table td) { color: var(--text-primary) !important; }
+:root[data-theme="dark"] .chat-citations { border-color: var(--border-color); background: #151f2f; }
+:root[data-theme="dark"] .chat-citations > summary { color: #d7deea; }
+:root[data-theme="dark"] .chat-citation-item { border-color: #334158; background: #1b2739; }
+:root[data-theme="dark"] .chat-citation-heading strong { color: #dbe4f1; }
+:root[data-theme="dark"] .chat-citation-heading a { color: #b9aff0; }
+:root[data-theme="dark"] .chat-citation-open { color: #b9aff0; }
+:root[data-theme="dark"] .chat-citation-open:hover { background: #2b2b46; }
+:root[data-theme="dark"] .chat-citation-item blockquote { border-left-color: #665ba5; color: #aebbd0; }
+:root[data-theme="dark"] .chat-citation-warning { border-color: #66522a; color: #e5c783; background: #342d20; }
+:root[data-theme="dark"] .chat-citation-note { color: #e5c783; background: #342d20; }
+:root[data-theme="dark"] .chat-citation-item.is-supporting .chat-citation-marker { color: #c4baff; background: #2b2b46; }
+:root[data-theme="dark"] .chat-inline-citation { border-color: #514a82; color: #c4baff; background: #2b2b46; }
+:root[data-theme="dark"] .chat-citation-preview { border-color: #344158; background: #172235; }
+:root[data-theme="dark"] .chat-citation-preview header,:root[data-theme="dark"] .chat-citation-preview footer { border-color: #344158; }
+:root[data-theme="dark"] .chat-citation-preview header strong { color: #e2e8f0; }
+:root[data-theme="dark"] .chat-citation-preview-body { background: #111b2b; }
+:root[data-theme="dark"] .chat-citation-preview-body pre { border-color: #344158; color: #cbd5e1; background: #1b2739; }
+:root[data-theme="dark"] .chat-citation-preview header button,:root[data-theme="dark"] .chat-citation-preview footer button { border-color: #40506a; color: #cbd5e1; background: #202b3d; }
+:root[data-theme="dark"] .chat-citation-preview footer a { border-color: #514a82; color: #c4baff; background: #2b2b46; }
 :root[data-theme="dark"] :is(.dashboard-log-content p,.dashboard-log-item time,.dictionary-row-main p,.dictionary-row-meta,.chat-embedded-thinking-step,.chat-feedback,.chat-feedback button) { color: var(--text-secondary); }
 :root[data-theme="dark"] :is(.dictionary-drawer-header,.chat-technical-details,.chat-token-usage span,.chat-markdown-table th,.chat-inline-code,.dictionary-column-meta code,#quick-prompts-bar button) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; color: var(--text-secondary) !important; }
 :root[data-theme="dark"] :is(.chat-technical-details > summary,.chat-tool-result > summary,.chat-embedded-thinking-title,.dictionary-drawer-kicker,.chat-answer-link) { color: #b9aff0; background: var(--dark-raised) !important; border-color: var(--border-color) !important; }
@@ -650,3 +670,43 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
   .top-bar-actions { gap: 5px; }
   .top-bar .user-profile { display: none; }
 }
+
+/* Dictionary field relationship editor */
+:root[data-theme="dark"] .dictionary-field-relations { border-color: var(--border-color); }
+:root[data-theme="dark"] .dictionary-relation-toggle { color: #c8bcff; border-color: #51467d; background: #292440; }
+:root[data-theme="dark"] .dictionary-relation-toggle:hover { color: #e1dbff; border-color: #7768b2; background: #352e54; }
+:root[data-theme="dark"] .dictionary-field-relation-chip { color:var(--text-secondary); border-color:var(--border-color); background:linear-gradient(135deg,var(--dark-raised),#171e30); box-shadow:none; }
+:root[data-theme="dark"] .dictionary-field-relation-chip strong { color: var(--text-primary); }
+:root[data-theme="dark"] .dictionary-relation-display { color:#d8b4fe; background:#342552; }
+:root[data-theme="dark"] .relationship-status-suggested { color:#c4b5fd; background:#302852; }
+:root[data-theme="dark"] .relationship-status-verified { color:#6ee7b7; background:#173d35; }
+:root[data-theme="dark"] .relationship-status-rejected { color:#fcd34d; background:#47371d; }
+:root[data-theme="dark"] .dictionary-relation-chip-actions { border-color:#334155; background:#111827; }
+:root[data-theme="dark"] .relation-action.edit { color:#a5b4fc; }:root[data-theme="dark"] .relation-action.edit:hover { background:#293056; }
+:root[data-theme="dark"] .relation-action.inspect { color:#7dd3fc; }:root[data-theme="dark"] .relation-action.inspect:hover { background:#173b50; }
+:root[data-theme="dark"] .relation-action.verify { color:#6ee7b7; }:root[data-theme="dark"] .relation-action.verify:hover { background:#173d35; }
+:root[data-theme="dark"] .relation-action.reject { color:#fcd34d; }:root[data-theme="dark"] .relation-action.reject:hover { background:#47371d; }
+:root[data-theme="dark"] .relation-action.delete { color:#fda4af; }:root[data-theme="dark"] .relation-action.delete:hover { background:#4a252b; }
+:root[data-theme="dark"] .dictionary-relation-fixed-source { color:#ddd6fe; border-color:#51458a; background:#272440; }
+:root[data-theme="dark"] .dictionary-relation-fixed-source i { color:#a78bfa; }
+:root[data-theme="dark"] .dictionary-column-fields label>span { color:var(--text-muted); }
+:root[data-theme="dark"] .dictionary-column-derived-name { color:#ddd6fe; border-color:#51458a; background:#272440; }
+:root[data-theme="dark"] .dictionary-column-derived-name>i { color:#a78bfa; }:root[data-theme="dark"] .dictionary-column-derived-name>small { color:#c4b5fd; }
+:root[data-theme="dark"] .dictionary-field-relation-editor { color: var(--text-primary); border-color: #51467d; background: #182237; box-shadow: inset 0 1px 0 #ffffff08; }
+:root[data-theme="dark"] :is(.dictionary-relation-grid label,.dictionary-many-to-many label) { color: var(--text-secondary); }
+:root[data-theme="dark"] :is(.dictionary-relation-grid select,.dictionary-relation-grid input,.dictionary-relation-pair select,.dictionary-many-to-many select) { color: var(--text-primary); border-color: #40506a; background: var(--dark-input); color-scheme: dark; }
+:root[data-theme="dark"] :is(.dictionary-relation-grid select,.dictionary-relation-pair select,.dictionary-many-to-many select):focus { border-color: #8b7bea; box-shadow: 0 0 0 3px #8b7bea24; outline: 0; }
+:root[data-theme="dark"] :is(.dictionary-relation-grid select,.dictionary-relation-pair select,.dictionary-many-to-many select) option { color: var(--text-primary); background: var(--dark-input); }
+:root[data-theme="dark"] :is(.dictionary-relation-grid select,.dictionary-relation-pair select,.dictionary-many-to-many select):disabled { color: #8391a8; border-color: #344158; background: #202b3d; opacity: 1; }
+:root[data-theme="dark"] .dictionary-relation-pair > i { color: #8fa0bb; }
+:root[data-theme="dark"] .dictionary-relation-pair button { color: #ff9aaa; background: #402633; }
+:root[data-theme="dark"] .dictionary-composite-key-options { color: var(--text-muted); }
+:root[data-theme="dark"] .dictionary-composite-key-options summary { color: var(--text-muted); }
+:root[data-theme="dark"] .dictionary-composite-key-options summary:hover { color: #c8bcff; background: #292440; }
+:root[data-theme="dark"] .dictionary-composite-key-options summary span { color: #c5b9ff; background: #33294f; }
+:root[data-theme="dark"] .dictionary-many-to-many { border-color: #5f5590; background: #24213b; }
+:root[data-theme="dark"] .dictionary-relation-hint { color: #9fadc2; }
+:root[data-theme="dark"] .dictionary-relation-hint strong { color: #c5b9ff; }
+:root[data-theme="dark"] .relationship-preview-box { border-color: var(--border-color); background: var(--dark-raised); }
+:root[data-theme="dark"] .relationship-preview-result { color: var(--text-secondary); background: #24213b; }
+:root[data-theme="dark"] .relationship-preview-result strong { color: #c5b9ff; }

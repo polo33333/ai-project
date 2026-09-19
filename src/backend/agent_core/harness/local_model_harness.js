@@ -16,6 +16,7 @@ const { emitProgress, toolLabel } = require('./progress_events');
 const { trainingService } = require('../../training_core');
 const { ensureDownloadLink, buildSqlRowsFallbackReply, isUngroundedKnowledgeAnswer } = require('./grounded_reply');
 const { blockingSqlViolation, evaluateCompletion, stableFingerprint } = require('./completion_policy');
+const { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, extractNamedEntityValue } = require('../../services/sql_enrichment_builder');
 
 function fingerprint(name, args) {
   return stableFingerprint(name, args);
@@ -88,7 +89,7 @@ function buildRequestedLatestMonthsSql(userMessage = '', months, selectedTables 
   return `SELECT TOP ${months} FORMAT([${dateColumn.columnName}], 'yyyy-MM') AS [Period], SUM([${metric.columnName}]) AS [${metric.columnName}] FROM [${table.tableName}] WHERE [${dateColumn.columnName}] IS NOT NULL GROUP BY FORMAT([${dateColumn.columnName}], 'yyyy-MM') ORDER BY [Period] DESC`;
 }
 
-function buildEntityLookupSql(userMessage = '', refs = {}) {
+function buildEntityLookupSql(userMessage = '', refs = {}, joinPlan = null) {
   // Generic "looked up by name" recovery: works for whatever table the user
   // already named in the message (see getExplicitSchemaRefs), instead of
   // being hardcoded to one entity/table. Trigger requires the literal word
@@ -99,13 +100,7 @@ function buildEntityLookupSql(userMessage = '', refs = {}) {
   if (!table) return '';
 
   const question = String(userMessage).trim();
-  const nameMatch = question.match(/t[eê]n\s*(?:l[aà])?\s*[:"']?\s*(.+)$/iu);
-  if (!nameMatch) return '';
-
-  const searchTerm = nameMatch[1]
-    .replace(/\s+(?:trong|thu[oộ]c|[oở])\s+(?:b[aả]ng\s+)?[\s\S]*$/iu, '')
-    .replace(/[?.!,;:"']+$/g, '')
-    .trim();
+  const searchTerm = extractNamedEntityValue(question);
   if (!searchTerm || searchTerm.length > 100) return '';
 
   const isTextType = dataType => /char|text/i.test(String(dataType || ''));
@@ -118,16 +113,49 @@ function buildEntityLookupSql(userMessage = '', refs = {}) {
     || table.columns.find(column => /id$/i.test(column.columnName));
 
   const escapedTerm = searchTerm.replace(/'/g, "''");
+  if (joinPlan?.outcome === 'ready' && joinPlan.edges?.length && joinPlan.tableRefs?.length) {
+    const quote = name => `[${String(name).replace(/\]/g, ']]')}]`;
+    const refsById = new Map(joinPlan.tableRefs.map(ref => [ref.tableRefId || ref.tableId, ref]));
+    const rootRef = joinPlan.tableRefs.find(ref => ref.tableName === table.tableName) || joinPlan.tableRefs[0];
+    const orderedEdges = joinPlan.edges.every(edge => edge.fromTableRefId && edge.toTableRefId)
+      ? joinPlan.edges.map(edge => ({ edge, nextTableId: edge.toTableId })) : [];
+    const joined = new Set([rootRef.tableId]);
+    const remaining = orderedEdges.length ? [] : [...joinPlan.edges];
+    while (remaining.length) {
+      const index = remaining.findIndex(edge => joined.has(edge.fromTableId) !== joined.has(edge.toTableId));
+      if (index < 0) break;
+      const edge = remaining.splice(index, 1)[0];
+      const nextTableId = joined.has(edge.fromTableId) ? edge.toTableId : edge.fromTableId;
+      orderedEdges.push({ edge, nextTableId });
+      joined.add(nextTableId);
+    }
+    if (orderedEdges.length === joinPlan.edges.length) {
+      const selectRefs = buildEnrichmentProjection((table.columns || []).map(column => column.columnName), joinPlan, rootRef.alias,
+        Object.fromEntries((table.columns || []).filter(column => column.displayName).map(column => [column.columnName, column.displayName])));
+      const joins = orderedEdges.map(({ edge, nextTableId }) => {
+        const from = refsById.get(edge.fromTableRefId || edge.fromTableId);
+        const to = refsById.get(edge.toTableRefId || edge.toTableId);
+        const next = nextTableId === edge.fromTableId ? from : to;
+        const pairs = (edge.columnPairs || []).map(pair => `${from.alias}.${quote(pair.sourceColumn)} = ${to.alias}.${quote(pair.targetColumn)}`).join(' AND ');
+        return `${edge.joinType || 'LEFT'} JOIN ${quote(next.schemaName || 'dbo')}.${quote(next.tableName)} ${next.alias} ON ${pairs}`;
+      }).join(' ');
+      const orderClause = orderColumn ? ` ORDER BY ${rootRef.alias}.${quote(orderColumn.columnName)}` : '';
+      return `SELECT TOP 100 ${selectRefs} FROM ${quote(rootRef.schemaName || 'dbo')}.${quote(rootRef.tableName)} ${rootRef.alias} ${joins} WHERE ${rootRef.alias}.${quote(nameColumn.columnName)} LIKE N'%${escapedTerm}%'${orderClause}`;
+    }
+  }
   const orderClause = orderColumn ? ` ORDER BY [${orderColumn.columnName}]` : '';
   return `SELECT TOP 100 * FROM [${table.tableName}] WHERE [${nameColumn.columnName}] LIKE N'%${escapedTerm}%'${orderClause}`;
 }
 
-function buildPlannedTablePreviewSql(plan = {}) {
-  if (plan.unfilteredList && plan.table && plan.schemaColumns?.length) {
+function buildPlannedTablePreviewSql(plan = {}, joinPlan = null) {
+  const listLimit = Math.max(1, Math.min(1000, Number(plan.rowLimit) || 100));
+  const enrichedSql = buildEnrichedListSql(plan, joinPlan);
+  if (enrichedSql) return enrichedSql;
+  if (plan.intent === 'list' && plan.table && plan.schemaColumns?.length) {
     const quote = name => `[${String(name).replace(/\]/g, ']]')}]`;
     const columns = plan.schemaColumns.filter(name => !/password|pwd|secret|token|credential|api.?key/i.test(name));
     if (!columns.length) return '';
-    return `SELECT TOP 100 ${columns.map(quote).join(', ')} FROM ${quote(plan.table)}`;
+    return `SELECT TOP ${listLimit} ${columns.map(column => `${quote(column)}${plan.columnDisplayNames?.[column] ? ` AS ${quote(plan.columnDisplayNames[column])}` : ''}`).join(', ')} FROM ${quote(plan.table)}`;
   }
   if (!plan.table) return '';
   // Only an explicit, unfiltered preview request can be replaced by sample rows.
@@ -401,6 +429,7 @@ class LocalModelHarness {
     const toolCalls = [];
     let repairs = 0;
     let finalText = null;
+    let knowledgeRepairAttempts = 0;
     let forceSynthesis = false;
     let lastDispatchError = null;
     const toolEnabled = name => !Array.isArray(enabledToolNames) || enabledToolNames.includes(name);
@@ -470,13 +499,15 @@ class LocalModelHarness {
           });
           continue;
         }
-        if (knowledgeGrounding?.required && isUngroundedKnowledgeAnswer(finalText) && trace.iterations < this.maxIterations) {
-          trace.steps.push({ iteration: trace.iterations, type: 'UNGROUNDED_KNOWLEDGE_RESPONSE' });
+        const missingKnowledgeCitation = knowledgeGrounding?.required && !/\[\d+\](?!\s*\()/.test(finalText);
+        if (knowledgeGrounding?.required && (isUngroundedKnowledgeAnswer(finalText) || missingKnowledgeCitation) && knowledgeRepairAttempts < 2 && trace.iterations < this.maxIterations) {
+          knowledgeRepairAttempts++;
+          trace.steps.push({ iteration: trace.iterations, type: isUngroundedKnowledgeAnswer(finalText) ? 'UNGROUNDED_KNOWLEDGE_RESPONSE' : 'MISSING_KNOWLEDGE_CITATION' });
           finalText = null;
           emitProgress(onProgress, { type: 'grounding_retry', label: 'Câu trả lời chưa bám tài liệu, đang tổng hợp lại', status: 'warning', icon: 'book-open', iteration: trace.iterations });
           conversation.push({
             role: 'user',
-            content: `Câu trả lời vừa rồi đã bỏ qua nguồn được chọn. Hãy trả lời trực tiếp câu hỏi từ nội dung tài liệu sau, nêu chính xác thông tin hữu ích như tên ứng dụng hoặc liên kết nếu có, và ghi nguồn ${knowledgeGrounding.sourceTitles?.join(', ') || 'đã chọn'}:\n\n${String(knowledgeGrounding.documentContext || '').slice(0, 12000)}`
+            content: `Câu trả lời vừa rồi chưa bám nguồn hoặc thiếu marker trích dẫn. Hãy trả lời lại trực tiếp từ nội dung dưới đây. Sau mỗi nhận định, chèn số thật của nguồn như [1] hoặc [2], khớp với nhãn Tài liệu 1 hoặc Tài liệu 2. Tuyệt đối không ghi chữ [N] và không tạo số ngoài các nhãn đã có.\n\n${String(knowledgeGrounding.documentContext || '')}`
           });
           continue;
         }
@@ -664,7 +695,8 @@ class LocalModelHarness {
       const lookupRefs = explicitSchemaRefs.tables.length
         ? explicitSchemaRefs
         : { ...explicitSchemaRefs, tables: plannedTable ? [plannedTable] : [] };
-      const entityLookupSql = buildEntityLookupSql(effectiveUserMessage, lookupRefs);
+      const lookupQuestion = contextualLookupQuestion(effectiveUserMessage, messages);
+      const entityLookupSql = buildEntityLookupSql(lookupQuestion, lookupRefs, context.joinPlan);
       if (entityLookupSql) {
         entityLookupAttempted = true;
         await executeDeterministicTool('execute_sql_query', { sql: entityLookupSql }, 'ENTITY_LOOKUP_RECOVERY');
@@ -672,7 +704,7 @@ class LocalModelHarness {
       }
     }
     if (!usefulSql && requestPolicy.dataRequired && !entityLookupAttempted) {
-      const previewSql = buildPlannedTablePreviewSql(requestPlan);
+      const previewSql = buildPlannedTablePreviewSql({ ...requestPlan, datasetReference: context.memoryDecision?.reference }, context.joinPlan);
       if (previewSql) {
         await executeDeterministicTool('execute_sql_query', { sql: previewSql }, 'PLANNED_TABLE_RECOVERY');
         usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));

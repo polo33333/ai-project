@@ -6,6 +6,18 @@
   box-shadow: none;
 }
 
+.metric-val.metric-db-name {
+  font-size: 21px;
+  line-height: 1.4;
+  letter-spacing: -.3px;
+  overflow-wrap: anywhere;
+}
+
+#val-connectors-detail,
+#val-tables-detail {
+  overflow-wrap: anywhere;
+}
+
 .ai-report-page.analytics-page-card {
   padding: 0;
 }
@@ -60,6 +72,90 @@
 
 .ai-report-page .analytics-kpi-grid {
   margin: 0;
+}
+
+.analytics-period-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 14px;
+}
+
+.analytics-period-heading,
+.analytics-period-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.analytics-period-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(79, 70, 229, .09);
+  color: #6366f1;
+}
+
+.analytics-period-heading strong {
+  display: block;
+  color: var(--text-primary, #172033);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.analytics-period-heading div > span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted, #64748b);
+  font-size: 12px;
+}
+
+.analytics-period-field {
+  display: grid;
+  gap: 5px;
+}
+
+.analytics-period-field label {
+  text-align: left;
+  color: var(--text-muted, #64748b);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.analytics-period-select {
+  min-width: 120px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-card, #fff);
+  color: var(--text-primary, #172033);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.analytics-period-select:hover {
+  border-color: #818cf8;
+}
+
+.analytics-period-select:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+@media (max-width: 540px) {
+  .analytics-period-controls { width: 100%; }
+  .analytics-period-field { flex: 1; min-width: 0; }
+  .analytics-period-select { width: 100%; min-width: 0; }
 }
 
 .provider-config-card,

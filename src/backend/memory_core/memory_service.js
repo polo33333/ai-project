@@ -98,17 +98,18 @@ class MemoryService {
     }
     const session = this.getSession(decision.sessionId, false, decision.accountId);
     const stored = session?.messages?.length ? session.messages : null;
-    const source = stored && decision.currentScope
-      ? stored.filter(message => !message.scope || message.scope === decision.currentScope)
+    const effectiveScope = decision.currentScope || session?.activeScope || null;
+    const source = stored && effectiveScope
+      ? stored.filter(message => !message.scope || message.scope === effectiveScope)
       : (stored || decision.fallbackHistory);
     const limit = Math.max(1, Number(decision.maxMessages) || policy.recentMaxMessages());
     const messages = sanitizeMessages(Array.isArray(source) ? source.slice(-limit) : []);
-    if (policy.summaryEnabled() && session?.summary && decision.currentScope
-        && session.summary.scope === decision.currentScope) {
+    if (policy.summaryEnabled() && session?.summary && effectiveScope
+        && session.summary.scope === effectiveScope) {
       messages.unshift({ role: 'system', content: `Verified conversation state: ${JSON.stringify(sanitizeObject(session.summary))}` });
     }
     if (policy.pendingTurnEnabled() && this.isPendingTurnValid(session?.pendingTurn)
-        && (!session.pendingTurn.scope || session.pendingTurn.scope === decision.currentScope)) {
+        && (!session.pendingTurn.scope || session.pendingTurn.scope === effectiveScope)) {
       messages.unshift({ role: 'system', content: `Yêu cầu trước chưa hoàn tất: ${session.pendingTurn.question}` });
     }
     return messages;

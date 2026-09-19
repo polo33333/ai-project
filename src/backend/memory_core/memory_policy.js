@@ -32,6 +32,7 @@ function isShadowMode() { return process.env.MEMORY_CORE_SHADOW_MODE === 'true';
 function recentMaxMessages() { return Math.min(4, envNumber('MEMORY_RECENT_MAX_MESSAGES', 4, 1)); }
 function referenceTtlMinutes() { return envNumber('MEMORY_REFERENCE_TTL_MINUTES', 120, 1); }
 function traceEnabled() { return process.env.MEMORY_TRACE_ENABLED !== 'false'; }
+function strictReferenceResolution() { return process.env.MEMORY_STRICT_REFERENCE_RESOLUTION !== 'false'; }
 function pendingTurnEnabled() { return process.env.MEMORY_PENDING_TURN_ENABLED === 'true'; }
 function summaryEnabled() { return process.env.MEMORY_SUMMARY_ENABLED === 'true'; }
 function pendingTtlMinutes() { return envNumber('MEMORY_PENDING_TURN_TTL_MINUTES', 30, 1); }
@@ -74,12 +75,19 @@ function isExportOrChartIntent(questionText) {
   return matchesReferenceKeyword(questionText, 'lastExport') || matchesReferenceKeyword(questionText, 'lastDataset');
 }
 
+function isCollectionReference(questionText) {
+  const text = normalize(questionText).trim();
+  return hasReferencePronoun(questionText)
+    && (/(?:^|\s)(?:\d+|cac|nhung)(?:\s|$)[\s\S]*(?:nay|do|tren|vua roi)\b/.test(text)
+      || /\b(?:danh sach|ket qua|du lieu)[\s\S]*(?:nay|do|tren|vua roi)\b/.test(text));
+}
+
 function isShortContextualFollowup(questionText) {
   const text = normalize(questionText).trim();
   if (!text || text.split(/\s+/).length > 8) return false;
   if (/^(?:hi|hello|hey|xin chao|chao|cam on|thanks?)\b/.test(text)) return false;
-  return /\b(?:ntn|nhu the nao|the nao|ra sao|ket qua sao|ti so|ty so|bao nhieu|chi tiet|cu the|con hom nay|con hom qua|doi nao|tran nao)\b/.test(text)
-    || /^(?:con|va|vay|vay con|the|the con)\b/.test(text);
+  return /\b(?:ntn|ra sao|ket qua sao|ti so|ty so|chi tiet|cu the|con hom nay|con hom qua|doi nao|tran nao)\b/.test(text)
+    || /^(?:co|khong|ok|okay|yes|duoc|dong y|uh|u|con|va|vay|vay con|the|the con)\b/.test(text);
 }
 
 function isPlanSelfContained(plan = {}) {
@@ -104,6 +112,7 @@ module.exports = {
   hasReferencePronoun,
   isEnabled,
   isExportOrChartIntent,
+  isCollectionReference,
   isShortContextualFollowup,
   isPlanSelfContained,
   isShadowMode,
@@ -114,5 +123,6 @@ module.exports = {
   recentMaxMessages,
   referenceTtlMinutes,
   summaryEnabled,
+  strictReferenceResolution,
   traceEnabled
 };

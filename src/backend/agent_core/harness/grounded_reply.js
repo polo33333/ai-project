@@ -14,9 +14,19 @@ function ensureDownloadLink(text, downloadUrl) {
   return `${reply}\n\n${link}.`.trim();
 }
 
+function formatDisplayDate(value) {
+  const text = value instanceof Date ? value.toISOString() : String(value);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (!match) return text;
+  const [, year, month, day, hour, minute, second] = match;
+  const date = `${day}/${month}/${year}`;
+  if (hour === undefined || (hour === '00' && minute === '00' && second === '00')) return date;
+  return `${date} ${hour}:${minute}:${second}`;
+}
+
 function markdownCell(value) {
   if (value === null || value === undefined || value === '') return '—';
-  const normalized = value instanceof Date ? value.toISOString() : String(value);
+  const normalized = formatDisplayDate(value);
   return normalized.replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
 }
 
@@ -43,4 +53,4 @@ function isUngroundedKnowledgeAnswer(text = '') {
   return /khong co thong tin(?: cu the)?|khong phai ung dung|neu co ung dung|app nao cu the|ung dung nao cu the|hay cho (?:toi|minh) biet them/.test(normalized);
 }
 
-module.exports = { ensureDownloadLink, buildSqlRowsFallbackReply, isUngroundedKnowledgeAnswer };
+module.exports = { ensureDownloadLink, buildSqlRowsFallbackReply, formatDisplayDate, isUngroundedKnowledgeAnswer };

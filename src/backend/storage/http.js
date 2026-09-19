@@ -72,7 +72,7 @@ async function handleStoredRequest(req, res, handler) {
     restore();
     if (res.destroyed) return;
     const message = error.code === 'DATA_CONFLICT' ? 'DATA_CONFLICT' : 'STORAGE_OPERATION_FAILED';
-    console.error('[Storage] Request failed:', error.code || error.name || 'ERROR');
+    console.error('[Storage] Request failed:', error.code || error.message || error.name || 'ERROR');
     if (res.headersSent) native.end(`event: error\ndata: ${JSON.stringify({ status: 'error', message })}\n\n`);
     else {
       res.removeHeader('Set-Cookie');

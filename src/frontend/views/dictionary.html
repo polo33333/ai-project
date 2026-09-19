@@ -49,6 +49,9 @@
         <button class="btn-secondary-sm" onclick="openRelationshipDiagram()">
           <i class="fa-solid fa-diagram-project"></i> Sơ đồ quan hệ
         </button>
+        <button id="relationship-discovery-button" class="btn-secondary-sm" onclick="discoverDictionaryRelationships()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Khám phá quan hệ
+        </button>
         <button class="btn-primary" onclick="triggerAiGenerateDictionary()">
           <i class="fa-solid fa-wand-magic-sparkles"></i> Tạo mô tả bảng thông minh
         </button>
@@ -206,6 +209,12 @@
           <label>Mô tả<input class="form-control" id="relation-description" placeholder="VD: Mỗi đơn hàng thuộc một khách hàng"></label>
           <button class="btn-primary" id="relationship-save-button" onclick="createTableRelationship()"><i class="fa-solid fa-plus"></i> Tạo quan hệ</button>
           <button class="btn-secondary-sm" id="relationship-cancel-edit" style="display:none" onclick="cancelEditTableRelationship()"><i class="fa-solid fa-xmark"></i> Hủy chỉnh sửa</button>
+        </div>
+        <div class="relationship-preview-box">
+          <h4><i class="fa-solid fa-route"></i> Preview đường JOIN</h4>
+          <textarea class="form-control" id="relationship-preview-question" rows="2" placeholder="VD: Doanh thu theo nhóm sản phẩm"></textarea>
+          <button class="btn-secondary-sm" onclick="previewRelationshipPlan()"><i class="fa-solid fa-magnifying-glass"></i> Xem đường JOIN</button>
+          <div id="relationship-preview-result" class="relationship-preview-result" hidden></div>
         </div>
         <div class="relationship-list-header"><strong>Quan hệ hiện có</strong><span id="relationship-count">0</span></div>
         <div id="relationship-list" class="relationship-list"></div>

@@ -187,7 +187,10 @@ class SqlConnector {
     if (rawHost.includes('\\')) {
       const parts = rawHost.split('\\');
       rawHost = parts[0].trim();
-      instanceName = parts[1].trim();
+      const instancePart = parts[1].trim();
+      const instancePieces = instancePart.split(':');
+      instanceName = instancePieces[0];
+      if (instancePieces[1] && !isNaN(parseInt(instancePieces[1], 10))) port = parseInt(instancePieces[1], 10);
     }
 
     if (rawHost.includes(',')) {
@@ -269,6 +272,13 @@ class SqlConnector {
     return liveTables;
   }
 
+  async refreshLiveSource(id) {
+    const source = this.dbSources.find(item => item.id === id);
+    if (!source) throw Object.assign(new Error('Nguồn CSDL không tồn tại.'), { statusCode: 404 });
+    if (source.mode !== 'live' && source.type !== 'Direct Live Connection') throw Object.assign(new Error('Chỉ có thể làm mới nguồn SQL live.'), { statusCode: 400 });
+    return this.addLiveSource({ sourceId: source.id, host: source.host, dbName: source.dbName, user: source.user, password: source.password });
+  }
+
   /**
    * Execute INFORMATION_SCHEMA query using Tedious connection
    */
@@ -317,25 +327,32 @@ class SqlConnector {
         }
 
         const sqlQuery = `
-          SELECT 
-            t.TABLE_SCHEMA,
-            t.TABLE_NAME, 
-            c.COLUMN_NAME, 
-            c.DATA_TYPE, 
-            c.IS_NULLABLE,
-            CASE WHEN k.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END AS IS_PRIMARY_KEY
-          FROM INFORMATION_SCHEMA.TABLES t
-          INNER JOIN INFORMATION_SCHEMA.COLUMNS c 
-            ON t.TABLE_NAME = c.TABLE_NAME AND t.TABLE_SCHEMA = c.TABLE_SCHEMA
+          SELECT s.name AS TABLE_SCHEMA, t.name AS TABLE_NAME, c.name AS COLUMN_NAME,
+            ty.name AS DATA_TYPE, c.is_nullable AS IS_NULLABLE, c.column_id AS ORDINAL_POSITION,
+            CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS IS_PRIMARY_KEY,
+            CASE WHEN uq.column_id IS NOT NULL THEN 1 ELSE 0 END AS IS_UNIQUE_KEY,
+            fk.name AS FK_NAME, fk.is_disabled AS FK_DISABLED, fk.is_not_trusted AS FK_NOT_TRUSTED,
+            rs.name AS REF_SCHEMA, rt.name AS REF_TABLE, rc.name AS REF_COLUMN,
+            fkc.constraint_column_id AS FK_ORDINAL
+          FROM sys.tables t
+          JOIN sys.schemas s ON s.schema_id=t.schema_id
+          JOIN sys.columns c ON c.object_id=t.object_id
+          JOIN sys.types ty ON ty.user_type_id=c.user_type_id
           LEFT JOIN (
-            SELECT ku.TABLE_SCHEMA, ku.TABLE_NAME, ku.COLUMN_NAME
-            FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-            JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku
-              ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME
-            WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-          ) k ON c.TABLE_SCHEMA = k.TABLE_SCHEMA AND c.TABLE_NAME = k.TABLE_NAME AND c.COLUMN_NAME = k.COLUMN_NAME
-          WHERE t.TABLE_TYPE = 'BASE TABLE'
-          ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION;
+            SELECT ic.object_id,ic.column_id FROM sys.indexes i JOIN sys.index_columns ic
+              ON ic.object_id=i.object_id AND ic.index_id=i.index_id WHERE i.is_primary_key=1
+          ) pk ON pk.object_id=c.object_id AND pk.column_id=c.column_id
+          LEFT JOIN (
+            SELECT ic.object_id,ic.column_id FROM sys.indexes i JOIN sys.index_columns ic
+              ON ic.object_id=i.object_id AND ic.index_id=i.index_id WHERE i.is_unique=1
+          ) uq ON uq.object_id=c.object_id AND uq.column_id=c.column_id
+          LEFT JOIN sys.foreign_key_columns fkc ON fkc.parent_object_id=c.object_id AND fkc.parent_column_id=c.column_id
+          LEFT JOIN sys.foreign_keys fk ON fk.object_id=fkc.constraint_object_id
+          LEFT JOIN sys.tables rt ON rt.object_id=fkc.referenced_object_id
+          LEFT JOIN sys.schemas rs ON rs.schema_id=rt.schema_id
+          LEFT JOIN sys.columns rc ON rc.object_id=fkc.referenced_object_id AND rc.column_id=fkc.referenced_column_id
+          WHERE t.is_ms_shipped=0
+          ORDER BY s.name,t.name,c.column_id,fk.name,fkc.constraint_column_id;
         `;
 
         const tablesMap = {};
@@ -355,7 +372,8 @@ class SqlConnector {
             schemaName: entry.schemaName,
             dbName: opts.dbName,
             columnCount: entry.columns.length,
-            columns: entry.columns
+            columns: entry.columns,
+            foreignKeys: Object.values(entry.foreignKeys).map(fk => ({ ...fk, columnPairs: fk.columnPairs.sort((a, b) => a.ordinal - b.ordinal) }))
           }));
 
           resolve(result);
@@ -371,15 +389,24 @@ class SqlConnector {
           const schemaName = row.TABLE_SCHEMA || 'dbo';
           const tableKey = `${schemaName}.${tableName}`;
           if (!tablesMap[tableKey]) {
-            tablesMap[tableKey] = { tableName, schemaName, columns: [] };
+            tablesMap[tableKey] = { tableName, schemaName, columns: [], foreignKeys: {} };
           }
-
-          tablesMap[tableKey].columns.push({
+          const entry = tablesMap[tableKey];
+          if (!entry.columns.some(column => column.columnName === row.COLUMN_NAME)) entry.columns.push({
             columnName: row.COLUMN_NAME,
             dataType: row.DATA_TYPE ? row.DATA_TYPE.toUpperCase() : 'NVARCHAR',
             isPrimaryKey: row.IS_PRIMARY_KEY === 1,
+            isUnique: row.IS_UNIQUE_KEY === 1,
+            isNullable: row.IS_NULLABLE === true || row.IS_NULLABLE === 1,
+            ordinalPosition: Number(row.ORDINAL_POSITION) || entry.columns.length + 1,
             description: `Cột ${row.COLUMN_NAME} trong bảng SQL Server ${tableName}`
           });
+          if (row.FK_NAME) {
+            entry.foreignKeys[row.FK_NAME] ||= { constraintName: row.FK_NAME, targetSchema: row.REF_SCHEMA || 'dbo',
+              targetTable: row.REF_TABLE, isDisabled: !!row.FK_DISABLED, isNotTrusted: !!row.FK_NOT_TRUSTED, columnPairs: [] };
+            entry.foreignKeys[row.FK_NAME].columnPairs.push({ sourceColumn: row.COLUMN_NAME, targetColumn: row.REF_COLUMN,
+              ordinal: Number(row.FK_ORDINAL) || 1 });
+          }
         });
 
         connection.execSql(request);
@@ -398,9 +425,11 @@ class SqlConnector {
    */
   executeSqlQuery(sqlString, dbSourceId = null, signal = null) {
     return new Promise((resolve, reject) => {
-      const liveSource = (dbSourceId && this.dbSources.find(s => s.id === dbSourceId && (s.mode === 'live' || s.type === 'Direct Live Connection')))
-        || this.dbSources.find(s => s.isDefault && (s.mode === 'live' || s.type === 'Direct Live Connection'))
-        || this.dbSources.find(s => s.mode === 'live' || s.type === 'Direct Live Connection');
+      const liveSource = dbSourceId
+        ? this.dbSources.find(s => s.id === dbSourceId && (s.mode === 'live' || s.type === 'Direct Live Connection'))
+        : (this.dbSources.find(s => s.isDefault && (s.mode === 'live' || s.type === 'Direct Live Connection'))
+          || this.dbSources.find(s => s.mode === 'live' || s.type === 'Direct Live Connection'));
+      if (dbSourceId && !liveSource) return reject(Object.assign(new Error('Nguồn CSDL được chỉ định không tồn tại hoặc không phải kết nối live.'), { code: 'INVALID_DB_SOURCE' }));
       if (!liveSource || !Connection) {
         return reject(new Error("Chưa kết nối SQL Server trực tiếp (Live Database)."));
       }

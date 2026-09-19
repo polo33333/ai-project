@@ -53,6 +53,19 @@ test('planner supports custom domain names and limits selection to retrieved tab
   assert.equal(createRequestPlan({ ...input, domainAliases: {} }).table, 'First');
 });
 
+test('planner preserves an explicit list row limit', () => {
+  const input = { selectedTables: ['M_Employee'], dictionaryTables: [{ tableName: 'M_Employee', domain: 'employee', columns: [] }], domainAliases: { employee: ['nv'] } };
+  assert.equal(createRequestPlan({ ...input, question: 'ds 5 nv' }).rowLimit, 5);
+  assert.equal(createRequestPlan({ ...input, question: 'ds nv' }).rowLimit, null);
+});
+
+test('planner carries configured column display names', () => {
+  const plan = createRequestPlan({ question: 'ds hợp đồng', selectedTables: ['T_Contract'],
+    dictionaryTables: [{ tableName: 'T_Contract', domain: 'contract', columns: [{ columnName: 'ContractNo', displayName: 'Số HĐ' }] }],
+    domainAliases: { contract: ['hợp đồng'] } });
+  assert.deepEqual(plan.columnDisplayNames, { ContractNo: 'Số HĐ' });
+});
+
 test('training core creates a structured time-series plan', () => {
   const plan = createRequestPlan({
     question: 'vẽ biểu đồ TotalQty trong 7 tháng theo ElectricityOutputDate và gửi file',

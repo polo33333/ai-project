@@ -278,7 +278,7 @@ function openEmbedPreview(id) {
   document.querySelectorAll('script[data-kh-embed-preview]').forEach(script => script.remove());
 
   const script = document.createElement('script');
-  script.src = `/embed/knowledgehub-chat.js?v=20260912-theme-${Date.now()}`;
+  script.src = `/embed/knowledgehub-chat.js?v=20260920-date-display-${Date.now()}`;
   script.dataset.khEmbedPreview = 'true';
   script.dataset.embedId = config.id;
   script.dataset.title = 'Trợ lý AI';
@@ -362,7 +362,7 @@ async function confirmDeleteEmbedConfig() {
 }
 
 async function copyEmbedSnippet(id) {
-  const snippet = `<script src="${location.origin}/embed/knowledgehub-chat.js?v=20260912-theme" data-embed-id="${id}" data-title="Trợ lý AI" data-color="#4f46e5" data-position="right" data-theme="auto"><\/script>`;
+  const snippet = `<script src="${location.origin}/embed/knowledgehub-chat.js?v=20260920-date-display" data-embed-id="${id}" data-title="Trợ lý AI" data-color="#4f46e5" data-position="right" data-theme="auto"><\/script>`;
   await copyMcpText(snippet);
   if (typeof showToast === 'function') showToast('Đã sao chép mã nhúng.', 'success');
 }

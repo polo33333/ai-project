@@ -11,6 +11,7 @@ const { getExportsDirectory } = require('../utils/export_paths');
 const sqlConnector = require('../services/sql_connector');
 const dictionaryService = require('../services/dictionary_service');
 const text2SqlAgent = require('../services/text2sql_agent');
+const joinPlannerService = require('../services/join_planner_service');
 const aiProviderManager = require('../services/ai_provider_manager');
 const loggerService = require('../services/logger_service');
 const mcpService = require('../services/mcp_service');
@@ -162,7 +163,9 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
   return {
     status: coreResult.success ? 'success' : 'error', completionStatus: coreResult.trace?.completionStatus || (coreResult.success ? 'PARTIAL' : 'ERROR'), reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
     executionTime: `${execMs}ms`, executionMode: coreResult.executionMode, auditId, tokenUsage: coreResult.tokenUsage || null,
-    providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null, provider: coreResult.usedProvider,
+    providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null,
+    citations: coreResult.citations || [], supportingEvidence: coreResult.supportingEvidence || [],
+    citationValidation: coreResult.citationValidation || null, provider: coreResult.usedProvider,
     message: coreResult.error || null
   };
 }
@@ -490,6 +493,21 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/sql/refresh-source' && req.method === 'POST') {
+    try {
+      const { id } = await readJsonBody(req);
+      const liveTables = await sqlConnector.refreshLiveSource(id);
+      dictionaryService.saveDictionaryItems(liveTables);
+      await dictionaryService.syncToQdrant();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', tablesCount: liveTables.length, tables: dictionaryService.getGroupedTables() }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
   // 2. Data Dictionary APIs (Grouped Tables & Active Toggle)
   if (pathname === '/api/dictionary' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -537,7 +555,7 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/qdrant/sync' && req.method === 'POST') {
     try {
-      const syncResult = await dictionaryService.syncToQdrant();
+      const syncResult = await dictionaryService.syncToQdrant({ defer: false });
       loggerService.addLog('SUCCESS', 'Qdrant Vector DB', `Đã đồng bộ toàn bộ bảng dữ liệu vào Qdrant tại http://localhost:6333.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', data: syncResult }));
@@ -589,7 +607,19 @@ async function handleRequest(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', relationship, relationships: dictionaryService.getTableRelationships() }));
     } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/dictionary/relationships/add-many-to-many' && req.method === 'POST') {
+    try {
+      const relationships = await dictionaryService.addManyToManyRelationship(await readJsonBody(req));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', created: relationships, relationships: dictionaryService.getTableRelationships() }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
     }
     return;
@@ -616,7 +646,71 @@ async function handleRequest(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', relationship, relationships: dictionaryService.getTableRelationships() }));
     } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/dictionary/relationships/status' && req.method === 'POST') {
+    try {
+      const { id, status, expectedRevision } = await readJsonBody(req);
+      const relationship = await dictionaryService.setTableRelationshipStatus(id, status, expectedRevision, currentAccount?.id || null);
+      if (!relationship) throw Object.assign(new Error('Không tìm thấy quan hệ.'), { statusCode: 404 });
+      loggerService.addLog('INFO', 'Data Dictionary', `${status === 'verified' ? 'Xác minh' : 'Từ chối'} quan hệ ${relationship.sourceTable}.${relationship.sourceColumn} → ${relationship.targetTable}.${relationship.targetColumn}.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', relationship, relationships: dictionaryService.getTableRelationships() }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/dictionary/relationships/preview' && req.method === 'POST') {
+    try {
+      if (process.env.SQL_JOIN_PLANNER_ENABLED !== 'true') throw Object.assign(new Error('JOIN planner đang tắt bởi feature flag.'), { statusCode: 409 });
+      const { tableIds, dbSourceId, question } = await readJsonBody(req);
+      let result;
+      if (String(question || '').trim()) {
+        const schemaContextService = require('../intelligent_core/schema_context_service');
+        const source = dbSourceId ? sqlConnector.getDbSources().find(item => item.id === dbSourceId) : sqlConnector.getDefaultDbSource();
+        const selection = await schemaContextService.buildSchemaContext(question, { dbSourceId: source?.id || null, dbName: source?.dbName || null });
+        result = selection.joinPlan || { outcome: 'no_path', reason: 'Câu hỏi không xác định được ít nhất hai bảng có quan hệ.' };
+      } else {
+        if (!Array.isArray(tableIds) || tableIds.length < 2) throw Object.assign(new Error('Cần câu hỏi hoặc ít nhất hai bảng để xem đường JOIN.'), { statusCode: 400 });
+        result = joinPlannerService.planJoin(tableIds, { dbSourceId, maxEdges: 3 });
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ outcome: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/dictionary/relationships/discover' && req.method === 'POST') {
+    try {
+      const created = await dictionaryService.discoverRelationshipCandidates(await readJsonBody(req));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', created, relationships: dictionaryService.getTableRelationships() }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/dictionary/relationships/profile' && req.method === 'POST') {
+    try {
+      const { id, expectedRevision } = await readJsonBody(req);
+      const relationship = await dictionaryService.profileTableRelationship(id, expectedRevision);
+      if (!relationship) throw Object.assign(new Error('Không tìm thấy quan hệ.'), { statusCode: 404 });
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', relationship, relationships: dictionaryService.getTableRelationships() }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
     }
     return;
@@ -639,9 +733,9 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/dictionary/update-column' && req.method === 'POST') {
     try {
-      const { tableName, columnName, description } = await readJsonBody(req);
-      await dictionaryService.updateColumnDescription(tableName, columnName, description);
-      loggerService.addLog('INFO', 'Data Dictionary', `Cập nhật mô tả cột '${columnName}' của Bảng '${tableName}' & tự động đồng bộ Qdrant.`);
+      const { tableName, columnName, description, displayName } = await readJsonBody(req);
+      await dictionaryService.updateColumnDescription(tableName, columnName, description, displayName);
+      loggerService.addLog('INFO', 'Data Dictionary', `Cập nhật metadata cột '${columnName}' của Bảng '${tableName}' & tự động đồng bộ Qdrant.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success' }));
     } catch (err) {
@@ -859,6 +953,9 @@ async function handleRequest(req, res) {
         executionTime: payload.executionTime,
         auditId: audit.id,
         completionStatus: auditStatus,
+        citations: payload.citations || [],
+        supportingEvidence: payload.supportingEvidence || [],
+        citationValidation: payload.citationValidation || null,
         sessionId: safeSessionId
       }));
     } catch (err) {
@@ -1147,6 +1244,9 @@ async function handleRequest(req, res) {
         tokenUsage: coreResult.tokenUsage || null,
         providerFallbacks: coreResult.providerFallbacks || [],
         contextSelection: coreResult.contextSelection || null,
+        citations: coreResult.citations || [],
+        supportingEvidence: coreResult.supportingEvidence || [],
+        citationValidation: coreResult.citationValidation || null,
         memoryDecision: coreResult.trace?.memoryDecision || null,
         provider: coreResult.usedProvider
       }));
@@ -1443,9 +1543,9 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/tools/execute' && req.method === 'POST') {
     try {
-      const { toolName, args } = await readJsonBody(req);
+      const { toolName, args, dbSourceId } = await readJsonBody(req);
       if (!toolName) throw new Error('Thiếu "toolName".');
-      const result = await toolRegistry.executeTool(toolName, args || {});
+      const result = await toolRegistry.executeTool(toolName, args || {}, { dbSourceId: dbSourceId || null });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1542,7 +1642,7 @@ async function handleRequest(req, res) {
   if (pathname === '/api/text2sql' && req.method === 'POST') {
     const startTime = Date.now();
     try {
-      const { question, providerId } = await readJsonBody(req);
+      const { question, providerId, dbSourceId } = await readJsonBody(req);
 
       let targetProvider = aiProviderManager.getActiveProvider();
       if (providerId) {
@@ -1550,7 +1650,9 @@ async function handleRequest(req, res) {
         if (found) targetProvider = found;
       }
 
-      const result = await text2SqlAgent.processNaturalLanguageQuery(question || '', targetProvider.id);
+      const selectedSource = dbSourceId ? sqlConnector.getDbSources().find(source => source.id === dbSourceId) : sqlConnector.getDefaultDbSource();
+      if (dbSourceId && !selectedSource) throw Object.assign(new Error('Nguồn CSDL không tồn tại.'), { statusCode: 404 });
+      const result = await text2SqlAgent.processNaturalLanguageQuery(question || '', targetProvider.id, { dbSourceId: selectedSource?.id || null, dbName: selectedSource?.dbName || null });
       const latencyMs = Date.now() - startTime;
 
       loggerService.addChatAudit(

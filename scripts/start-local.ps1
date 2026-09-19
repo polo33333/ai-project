@@ -38,18 +38,6 @@ if (Test-Path -LiteralPath $startupEnvFile) {
 }
 }
 
-# PostgreSQL must be ready before starting models and the backend.
-. (Join-Path $PSScriptRoot 'ensure-postgres.ps1')
-if ($env:APP_STORAGE_BACKEND -eq 'postgres') {
-    $postgresHost = if ($env:APP_PG_HOST) { $env:APP_PG_HOST } else { '127.0.0.1' }
-    if ($postgresHost -in @('127.0.0.1', 'localhost', '::1')) {
-        Ensure-PostgresDocker -ProjectRoot $projectRoot
-    } else {
-        Write-Host '[Startup] PostgreSQL uses an external host; local Docker startup skipped.'
-    }
-}
-
-
 # ============================================
 # CONFIGURATION
 # ============================================
@@ -212,6 +200,30 @@ function Ensure-OllamaModel {
 
 
 # ============================================
+# DOCKER SERVICES
+# ============================================
+
+Write-Host ""
+Write-Host "========================================"
+Write-Host "        DOCKER SERVICES STARTUP"
+Write-Host "========================================"
+
+# Check PostgreSQL and Qdrant together before starting models and the backend.
+. (Join-Path $PSScriptRoot 'ensure-postgres.ps1')
+if ($env:APP_STORAGE_BACKEND -eq 'postgres') {
+    $postgresHost = if ($env:APP_PG_HOST) { $env:APP_PG_HOST } else { '127.0.0.1' }
+    if ($postgresHost -in @('127.0.0.1', 'localhost', '::1')) {
+        Ensure-PostgresDocker -ProjectRoot $projectRoot
+    } else {
+        Write-Host '[Startup] PostgreSQL uses an external host; local Docker startup skipped.'
+    }
+}
+
+. (Join-Path $PSScriptRoot 'ensure-qdrant.ps1')
+Ensure-QdrantDocker -ProjectRoot $projectRoot -QdrantUrl $qdrantUrl
+
+
+# ============================================
 # OLLAMA
 # ============================================
 
@@ -353,20 +365,6 @@ $ollamaExe
     Write-Host "[OK] Local AI model is ready: $localAiModel"
     Write-Host "[Startup] Local AI model will load when requested."
 }
-
-
-# ============================================
-# QDRANT
-# ============================================
-
-Write-Host ""
-Write-Host "========================================"
-Write-Host "           QDRANT STARTUP"
-Write-Host "========================================"
-
-
-. (Join-Path $PSScriptRoot 'ensure-qdrant.ps1')
-Ensure-QdrantDocker -ProjectRoot $projectRoot -QdrantUrl $qdrantUrl
 
 
 # ============================================

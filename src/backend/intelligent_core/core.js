@@ -10,6 +10,7 @@ const toolRegistry      = require('./tool_registry');
 const securityGuard     = require('./security_guard');
 const schemaContextService = require('./schema_context_service');
 const retrievalService = require('../knowledge_core/services/retrieval_service');
+const citationService = require('../knowledge_core/services/citation_service');
 const libraryService = require('../knowledge_core/services/library_service');
 const sqlConnector = require('../services/sql_connector');
 const { needsKnowledgeSearch } = require('./knowledge_intent');
@@ -20,7 +21,7 @@ const { trainingService } = require('../training_core');
 const webSearchService = require('../services/web_search_service');
 const { memoryService, policy: memoryPolicy } = require('../memory_core');
 const { RequestExecutionBudget } = require('../agent_core/harness/request_execution_budget');
-const { fitOptionalMessages, measureMessages } = require('../agent_core/harness/context_budget');
+const { estimateTokens, fitOptionalMessages, measureMessages } = require('../agent_core/harness/context_budget');
 const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 const { resolvePlan } = require('../agent_core/harness/completion_policy');
 const { createProviderBudget } = require('../agent_core/harness/guarded_agent_harness');
@@ -154,8 +155,11 @@ class IntelligentCore {
     const selectedDb = options.dbSourceId
       ? sqlConnector.getDbSources().find(source => source.id === options.dbSourceId)
       : sqlConnector.getDefaultDbSource();
+    const contextualRequest = memoryPolicy.isShortContextualFollowup(userMessage)
+      ? webSearchService.buildContextualQuery(userMessage, history, true)
+      : userMessage;
     emitProgress(options.onProgress, { type: 'context_started', label: 'Đang chọn ngữ cảnh và cấu trúc dữ liệu', status: 'running', icon: 'book-open' });
-    let contextSelection = await schemaContextService.buildSchemaContext(userMessage, { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
+    let contextSelection = await schemaContextService.buildSchemaContext(contextualRequest, { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
     if (webSearch) {
       contextSelection.mode = 'general';
       contextSelection.selectedTables = [];
@@ -174,12 +178,12 @@ class IntelligentCore {
       try {
         const selectorMessages = [
           { role: 'system', content: 'Select the database tables relevant to the user request. Return only JSON: {"tables":["TableName"]}. Choose at most 6 exact names from the catalog. Do not invent names.' },
-          { role: 'user', content: `Request: ${userMessage}\n\nTable catalog:\n${contextSelection.tableCatalog}` }
+          { role: 'user', content: `Request: ${contextualRequest}\n\nTable catalog:\n${contextSelection.tableCatalog}` }
         ];
         const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, selectorMessages, [], providerFallbacks, options.signal, executionBudget);
         provider = dispatched.provider;
         collectUsage(dispatched.response.usage);
-        const refined = schemaContextService.refineSchemaContext(userMessage, parseSelectedTableNames(dispatched.response.content), { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
+        const refined = schemaContextService.refineSchemaContext(contextualRequest, parseSelectedTableNames(dispatched.response.content), { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
         if (refined) contextSelection = refined;
       } catch (error) {
         if (options.signal?.aborted || error?.name === 'AbortError') throw error;
@@ -228,20 +232,29 @@ class IntelligentCore {
     if (shouldSearchKnowledge) {
       emitProgress(options.onProgress, { type: 'knowledge_started', label: 'Đang tìm trong kho tri thức', status: 'running', icon: 'magnifying-glass' });
       contextSelection.knowledgeRouting = { searched: true, reason: knowledgeIntent.reason };
-      const retrieval = await retrievalService.search(userMessage, { limit: 6, documentIds: knowledgeSourceIds });
+      const retrieval = await retrievalService.search(userMessage, { limit: 6, documentIds: knowledgeSourceIds,
+        scopeMode: knowledgeSourceIds.length ? 'selected' : 'all_authorized' });
       const relevant = retrieval.results;
       if (relevant.length) {
-        documentContext = relevant.map((hit, index) => {
-          const payload = hit.payload || {};
-          return `[Tài liệu ${index + 1}: ${payload.title || 'Không tên'} · đoạn ${Number(payload.chunkIndex || 0) + 1}]\n${payload.fullText || ''}`;
-        }).join('\n\n').slice(0, Number(process.env.AI_DOCUMENT_CONTEXT_CHARS || 12000));
-        contextSelection.documentSources = [...new Set(relevant.map(hit => hit.payload?.title).filter(Boolean))];
+        const contextWindow = Number(provider?.contextWindow || provider?.numCtx || process.env.LOCAL_MODEL_NUM_CTX || 16384);
+        const outputReserve = Number(provider?.outputReserve || process.env.LOCAL_MODEL_NUM_PREDICT || 2048);
+        const requiredTokens = estimateTokens(userMessage) + estimateTokens(contextSelection.schemaContext || '') + measureMessages(history) + 512;
+        const available = Math.max(0, contextWindow - outputReserve - requiredTokens - 256);
+        const packed = retrievalService.packContext(relevant, Math.min(Number(process.env.AI_DOCUMENT_CONTEXT_TOKENS || 3000), available));
+        documentContext = packed.text;
+        const packedHits = packed.selected;
+        contextSelection.citationEvidence = packedHits;
+        contextSelection.documentSources = [...new Set(packedHits.map(hit => hit.payload?.title).filter(Boolean))];
         contextSelection.knowledgeMode = knowledgeSourceIds.length ? 'selected_hybrid' : retrieval.mode;
         contextSelection.graphActivated = retrieval.graphActivated;
         contextSelection.retrievalPipeline = {
-          chunksSelected: relevant.length,
-          reranked: relevant.some(hit => hit.reranked === true),
-          retrievalSources: [...new Set(relevant.flatMap(hit => hit.retrievalSources || []))]
+          chunksSelected: packedHits.length,
+          chunksDroppedByBudget: packed.dropped,
+          contextTokensEstimated: packed.usedTokens,
+          contextTokenBudget: packed.tokenBudget,
+          reranked: packedHits.some(hit => hit.reranked === true),
+          rerankTruncated: packedHits.some(hit => hit.rerankTruncated === true),
+          retrievalSources: [...new Set(packedHits.flatMap(hit => hit.retrievalSources || []))]
         };
       }
       emitProgress(options.onProgress, { type: 'knowledge_completed', label: `Đã tìm thấy ${relevant.length} đoạn tri thức liên quan`, status: 'done', icon: 'book' });
@@ -265,8 +278,8 @@ class IntelligentCore {
 ${documentContext}
 
 ${strictSelectedKnowledge
-  ? 'Trả lời trực tiếp từ nguồn tài liệu trên. Không trả lời kiến thức chung, không nói thiếu thông tin nếu nội dung đã có trong nguồn, và phải nêu tên tài liệu nguồn.'
-  : 'Chỉ dùng nội dung trên khi liên quan và nêu tên tài liệu nguồn trong câu trả lời.'}` : '';
+  ? 'Trả lời trực tiếp từ nguồn tài liệu trên. Không trả lời kiến thức chung, không nói thiếu thông tin nếu nội dung đã có trong nguồn. Sau mỗi nhận định, chèn số thật như [1] hoặc [2] khớp Tài liệu 1 hoặc Tài liệu 2; tuyệt đối không ghi chữ [N].'
+  : 'Chỉ dùng nội dung trên khi liên quan. Sau mỗi nhận định lấy từ tài liệu, chèn số thật như [1] hoặc [2] khớp Tài liệu 1 hoặc Tài liệu 2; tuyệt đối không ghi chữ [N].'}` : '';
 
     // ── Prepare tools and system prompt ───────────────────────────────────
     // General conversation does not need database tools, but utility tools must
@@ -275,7 +288,7 @@ ${strictSelectedKnowledge
       ...toolRegistry.listTools().map(tool => tool.name).filter(name => name.startsWith('mcp_'))];
     const enabledToolNames = contextSelection.mode === 'knowledge' ? [] : (contextSelection.mode === 'general' ? generalToolNames : null);
     const effectiveUseTools = contextSelection.mode !== 'knowledge' && useTools && (contextSelection.useTools || enabledToolNames?.length > 0);
-    const requestPlan = resolvePlan(userMessage, { ...trainingService.plan({ question: userMessage, selectedTables: contextSelection.selectedTables || [] }), dbSourceId: selectedDb?.id || null },
+    const requestPlan = resolvePlan(contextualRequest, { ...trainingService.plan({ question: contextualRequest, selectedTables: contextSelection.selectedTables || [] }), dbSourceId: selectedDb?.id || null },
       { mode: contextSelection.mode, webSearch });
     const memoryDecision = memoryService.route({
       sessionId: options.session?.id,
@@ -345,6 +358,7 @@ ${strictSelectedKnowledge
           context: {
             permissions: options.permissions || [], session: options.session, dbSourceId: selectedDb?.id || null,
             selectedTables: contextSelection.selectedTables || [],
+            joinPlan: contextSelection.joinPlan || null,
             requestPlan,
             mode: contextSelection.mode,
             memoryDecision,
@@ -353,7 +367,7 @@ ${strictSelectedKnowledge
             webTemporalGrounding,
             signal: options.signal || null,
             executionBudget,
-            knowledgeGrounding: strictSelectedKnowledge ? {
+            knowledgeGrounding: documentContext ? {
               required: true,
               sourceTitles: contextSelection.documentSources || [],
               documentContext
@@ -440,7 +454,11 @@ ${strictSelectedKnowledge
             : (toolCall.function?.arguments || toolCall.input || {});
         } catch (_) {}
 
-        const toolResult = await toolRegistry.executeTool(toolName, toolArgs);
+        const toolResult = await toolRegistry.executeTool(toolName, toolArgs, {
+          dbSourceId: selectedDb?.id || null,
+          joinPlan: contextSelection.joinPlan || null,
+          signal: options.signal || null
+        });
 
         toolCallsLog.push({
           toolName, args: toolArgs,
@@ -494,6 +512,16 @@ ${strictSelectedKnowledge
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
+    const citationResult = citationService.buildVerifiedCitations(
+      cleanReplyText,
+      contextSelection?.citationEvidence || [],
+      question
+    );
+    cleanReplyText = citationService.removeInvalidMarkers(
+      cleanReplyText,
+      citationResult.validation.invalidCitationIndexes
+    );
+
     // Nếu đã có kết quả SQL trả về dạng bảng riêng, tự động loại bỏ khối ```sql...``` lặp lại gây xấu giao diện
     if (hasSql) {
       cleanReplyText = cleanReplyText.replace(/```(?:sql|tsql)?[\s\S]*?```/gi, '').replace(/\n{3,}/g, '\n\n').trim();
@@ -520,6 +548,15 @@ ${strictSelectedKnowledge
       calcResult:      calcEntry  ? calcEntry.result              : null,
       tokenUsage: tokenUsage?.available ? tokenUsage : null,
       providerFallbacks,
+      citations: citationResult.citations.map(citation => ({
+        ...citation,
+        excerpt: securityGuard.maskSensitiveData(citation.excerpt)
+      })),
+      supportingEvidence: citationResult.supportingEvidence.map(evidence => ({
+        ...evidence,
+        excerpt: securityGuard.maskSensitiveData(evidence.excerpt)
+      })),
+      citationValidation: citationResult.validation,
       trace,
       contextSelection: contextSelection ? {
         mode: contextSelection.mode,

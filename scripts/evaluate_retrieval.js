@@ -17,19 +17,31 @@ const limit = Math.max(1, Number(process.argv[3] || 5));
 async function main() {
   const retrievalService = require('../src/backend/knowledge_core/services/retrieval_service');
   const cases = JSON.parse(fs.readFileSync(datasetPath, 'utf8'));
+  if (!Array.isArray(cases) || !cases.length) throw new Error('RETRIEVAL_GOLDEN_FIXTURE_EMPTY');
+  if (cases.some(item => !item.query || (item.expectedDocumentIds || []).some(id => /replace-with|placeholder/i.test(String(id))))) {
+    throw new Error('RETRIEVAL_GOLDEN_FIXTURE_PLACEHOLDER');
+  }
   let hits = 0;
   let reciprocalRank = 0;
+  let documentRecall = 0;
   const details = [];
   for (const item of cases) {
     const { results, mode } = await retrievalService.search(item.query, { limit });
     const expected = new Set((item.expectedDocumentIds || []).map(String));
     const rank = results.findIndex(result => expected.has(String(result.payload?.documentId))) + 1;
     if (rank > 0) { hits++; reciprocalRank += 1 / rank; }
+    const returned = new Set(results.map(result => String(result.payload?.documentId)));
+    const matched = [...expected].filter(id => returned.has(id)).length;
+    if (expected.size) documentRecall += matched / expected.size;
     details.push({ query: item.query, mode, rank: rank || null, returnedDocumentIds: results.map(result => result.payload?.documentId) });
   }
-  const report = { dataset: datasetPath, cases: cases.length, limit, recallAtK: cases.length ? hits / cases.length : 0, mrr: cases.length ? reciprocalRank / cases.length : 0, details };
+  const answerable = cases.filter(item => (item.expectedDocumentIds || []).length).length;
+  const report = { dataset: datasetPath, cases: cases.length, limit,
+    hitRateAtK: answerable ? hits / answerable : 0,
+    documentRecallAtK: answerable ? documentRecall / answerable : 0,
+    documentMrr: answerable ? reciprocalRank / answerable : 0, details };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  if (cases.length && hits !== cases.length) process.exitCode = 1;
+  if (answerable && hits !== answerable) process.exitCode = 1;
 }
 
 (async()=>{

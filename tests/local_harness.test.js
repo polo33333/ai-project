@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const BaseTool = require('../src/backend/agent_core/tools/base_tool');
 const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
 const LocalModelHarness = require('../src/backend/agent_core/harness/local_model_harness');
-const { buildRequestedLatestMonthsSql, isBusinessSqlCall, ensureDownloadLink, isInsufficientSqlAnswer } = LocalModelHarness;
+const { buildRequestedLatestMonthsSql, buildEntityLookupSql, buildPlannedTablePreviewSql, isBusinessSqlCall, ensureDownloadLink, isInsufficientSqlAnswer } = LocalModelHarness;
+const { formatDisplayDate } = require('../src/backend/agent_core/harness/grounded_reply');
 const { isLocalProvider } = require('../src/backend/agent_core/harness/provider_classifier');
 const { normalizeAssistantResponse } = require('../src/backend/agent_core/harness/tool_call_normalizer');
 const { validateToolCall } = require('../src/backend/agent_core/harness/tool_argument_validator');
@@ -12,6 +13,7 @@ const { isListRequest, listAnswerMentionsRowValue } = require('../src/backend/ag
 const { compactToolResult } = require('../src/backend/agent_core/harness/local_result_compactor');
 const { getRequestPolicy, validateCallAgainstPolicy, sanitizeFinalText } = require('../src/backend/agent_core/harness/local_execution_policy');
 const { sanitizeProgressEvent } = require('../src/backend/agent_core/harness/progress_events');
+const { buildEnrichedListSql, contextualLookupQuestion, extractNamedEntityValue } = require('../src/backend/services/sql_enrichment_builder');
 
 class EchoTool extends BaseTool {
   constructor() {
@@ -43,6 +45,94 @@ class SqlTool extends BaseTool {
   }
   async run(args) { return { sql: args.sql, rows: this.rows, rowCount: this.rows.length }; }
 }
+
+test('entity lookup recovery follows a ready join plan and removes question suffix from the name', () => {
+  const employee = {
+    tableName: 'M_Employee',
+    columns: [
+      { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
+      { columnName: 'EmployeeName', dataType: 'nvarchar' }
+    ]
+  };
+  const plan = {
+    outcome: 'ready',
+    tableRefs: [
+      { tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+      { tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+    ],
+    edges: [{
+      fromTableId: 'employee', targetTableId: 'constant', toTableId: 'constant', joinType: 'LEFT',
+      columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }]
+    }]
+  };
+  const sql = buildEntityLookupSql('giới tính nv có tên duy là gì', { tables: [employee] }, plan);
+  assert.match(sql, /FROM \[dbo\]\.\[M_Employee\] t1 LEFT JOIN \[dbo\]\.\[M_Constant\] t2/);
+  assert.match(sql, /t1\.\[GenderID\] = t2\.\[ConstantID\]/);
+  assert.match(sql, /LIKE N'%duy%'/);
+  assert.doesNotMatch(sql, /duy là gì/);
+});
+
+test('entity lookup recovery removes Vietnamese yes-no suffix from the name', () => {
+  const employee = { tableName: 'M_Employee', columns: [
+    { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
+    { columnName: 'EmployeeName', dataType: 'nvarchar' }
+  ] };
+  const sql = buildEntityLookupSql('có nv nào tên Duy ko', { tables: [employee] });
+  assert.match(sql, /LIKE N'%Duy%'/);
+  assert.doesNotMatch(sql, /Duy ko/);
+});
+
+test('relationship recovery inherits the last explicit entity name for a pronoun follow-up', () => {
+  const previous = 'có nv nào tên Duy?';
+  assert.equal(extractNamedEntityValue(previous), 'Duy');
+  assert.equal(contextualLookupQuestion('nv này có giới tính gì', [
+    { role: 'user', content: previous },
+    { role: 'assistant', content: 'Có một nhân viên phù hợp.' },
+    { role: 'user', content: 'nv này có giới tính gì' }
+  ]), previous);
+});
+
+test('limited list recovery preserves TOP and enriches every planned lookup', () => {
+  const plan = { intent: 'list', table: 'M_Employee', rowLimit: 5, question: 'có nv nào có giới tính nữ ko', schemaColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName', 'DOB', 'GenderID', 'DepartmentID'] };
+  const joinPlan = {
+    outcome: 'ready', purpose: 'enrichment',
+    tableRefs: [
+      { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+      { tableRefId: 'constant#2', tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+    ],
+    edges: [{ fromTableId: 'employee', toTableId: 'constant', fromTableRefId: 'employee#1', toTableRefId: 'constant#2',
+      joinType: 'LEFT', businessRole: 'Giới tính', displayColumn: 'ConstantName', columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }]
+  };
+  const sql = buildPlannedTablePreviewSql(plan, joinPlan);
+  assert.match(sql, /^SELECT TOP 5 t1\.\[EmployeeCode\], t1\.\[EmployeeName\], t2\.\[ConstantName\] AS \[Giới tính\], t1\.\[DOB\], t1\.\[EmployeeID\], t1\.\[DepartmentID\]/);
+  assert.doesNotMatch(sql.split(/\s+FROM\s+/i)[0], /t1\.\[GenderID\]/);
+  assert.match(sql, /LEFT JOIN \[dbo\]\.\[M_Constant\] t2 ON t1\.\[GenderID\] = t2\.\[ConstantID\]/);
+  assert.match(sql, /WHERE t2\.\[ConstantName\] LIKE N'%nữ%'/);
+});
+
+test('enrichment recovery filters a plural follow-up by verified dataset keys', () => {
+  const plan = { intent: 'record_lookup', table: 'M_Employee', question: '2 nhân viên này thuộc phòng ban gì',
+    schemaColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName', 'DepartmentID'],
+    datasetReference: { type: 'lastDataset', data: { table: 'M_Employee', entityKeys: [
+      { EmployeeID: 5, EmployeeCode: 'NV005' }, { EmployeeID: 6, EmployeeCode: 'NV006' }
+    ] } } };
+  const joinPlan = { outcome: 'ready', purpose: 'enrichment', tableRefs: [
+    { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+    { tableRefId: 'master#2', tableId: 'master', tableName: 'M_Master', schemaName: 'dbo', alias: 't2' }
+  ], edges: [{ relationshipId: 'department', fromTableId: 'employee', toTableId: 'master',
+    fromTableRefId: 'employee#1', toTableRefId: 'master#2', joinType: 'LEFT', businessRole: 'Phòng ban',
+    displayColumn: 'Name', columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'MasterID' }] }] };
+  const sql = buildEnrichedListSql(plan, joinPlan);
+  assert.match(sql, /t2\.\[Name\] AS \[Phòng ban\]/);
+  assert.match(sql, /\(t1\.\[EmployeeID\] = 5 AND t1\.\[EmployeeCode\] = N'NV005'\) OR \(t1\.\[EmployeeID\] = 6 AND t1\.\[EmployeeCode\] = N'NV006'\)/);
+  assert.doesNotMatch(sql.split(/\s+FROM\s+/i)[0], /DepartmentID/);
+});
+
+test('list recovery aliases physical columns with configured result headers', () => {
+  const sql = buildPlannedTablePreviewSql({ intent: 'list', table: 'T_Contract', rowLimit: 5,
+    schemaColumns: ['ContractID', 'ContractNo'], columnDisplayNames: { ContractNo: 'Số HĐ' } });
+  assert.equal(sql, 'SELECT TOP 5 [ContractID], [ContractNo] AS [Số HĐ] FROM [T_Contract]');
+});
 
 class ChartTool extends BaseTool {
   constructor() { super({ name: 'render_chart', description: 'Render chart.', parameters: { type: 'object', properties: { type: { type: 'string' }, labels: { type: 'array' }, datasets: { type: 'array' } }, required: ['type', 'labels', 'datasets'] } }); }
@@ -107,6 +197,13 @@ test('Ollama adapter keeps tool arguments as objects in multi-turn history', () 
 test('tool-result compactor serializes Date values as ISO strings', () => {
   const compacted = JSON.parse(compactToolResult({ success: true, result: { rows: [{ date: new Date('2024-02-01T00:00:00Z') }] } }));
   assert.equal(compacted.result.rows[0].date, '2024-02-01T00:00:00.000Z');
+});
+
+test('SQL result display formats ISO dates without changing ordinary values', () => {
+  assert.equal(formatDisplayDate('2002-05-24T00:00:00.000Z'), '24/05/2002');
+  assert.equal(formatDisplayDate('2026-09-20'), '20/09/2026');
+  assert.equal(formatDisplayDate('2026-09-20T14:30:45.000Z'), '20/09/2026 14:30:45');
+  assert.equal(formatDisplayDate('NV005'), 'NV005');
 });
 
 test('temporal chart policy rejects TOP raw rows and placeholder images', () => {
@@ -201,7 +298,7 @@ test('local harness never treats schema metadata rows as business data', () => {
 test('local harness retries an answer that ignores a selected knowledge source', async () => {
   const responses = [
     { content: 'Tôi không có thông tin cụ thể. Bạn muốn tải app nào?' },
-    { content: 'Bạn có thể tải IPMS trên Google Play tại https://play.google.com/store/apps/details?id=com.tpsoft.ipms. Nguồn: HDSD IPMS.' }
+    { content: 'Bạn có thể tải IPMS trên Google Play tại https://play.google.com/store/apps/details?id=com.tpsoft.ipms [1].' }
   ];
   const harness = new LocalModelHarness({ toolManager: manager(), dispatch: async () => responses.shift(), maxIterations: 3 });
   const result = await harness.run({
@@ -211,7 +308,7 @@ test('local harness retries an answer that ignores a selected knowledge source',
       knowledgeGrounding: {
         required: true,
         sourceTitles: ['HDSD IPMS'],
-        documentContext: 'Tải IPMS trên Google Play: https://play.google.com/store/apps/details?id=com.tpsoft.ipms'
+        documentContext: '[Tài liệu 1: HDSD IPMS · đoạn 1]\nTải IPMS trên Google Play: https://play.google.com/store/apps/details?id=com.tpsoft.ipms'
       }
     }
   });

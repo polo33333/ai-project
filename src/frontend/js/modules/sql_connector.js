@@ -20,22 +20,18 @@ async function fetchDbSources() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     window.dbSourcesData = await res.json();
     renderDbSourcesTable();
-    updateDashboardSqlMetrics();
+    await updateDashboardSqlMetrics();
   } catch (err) {
     console.error("Lỗi nạp DB Sources:", err);
   }
 }
 
-function updateDashboardSqlMetrics() {
+async function updateDashboardSqlMetrics() {
   const sources = window.dbSourcesData || [];
-  const valConnectors = document.getElementById('val-connectors');
-  const valTables = document.getElementById('val-tables');
-
-  if (valConnectors) valConnectors.textContent = String(sources.length).padStart(2, '0');
-  if (valTables) {
-    const totalTables = sources.reduce((acc, s) => acc + Number(s.tablesCount || 0), 0);
-    valTables.textContent = totalTables;
-  }
+  const response = await fetch('/api/dictionary');
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const dictionary = await response.json();
+  renderDashboardSqlMetrics(sources, Array.isArray(dictionary) ? dictionary : (dictionary.tables || []));
 }
 
 function renderDbSourcesTable() {

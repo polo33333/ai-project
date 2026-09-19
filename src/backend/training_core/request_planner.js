@@ -61,14 +61,26 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
   const calendarRelative = /\b(?:hom nay|thang nay|tinh den hien tai|tinh den hom nay|calendar)\b/.test(normalized);
   const allowLatestAvailableMonths = months !== null && !calendarRelative
     && /\b(?:gan nhat|co du lieu|du lieu san co|latest available)\b/.test(normalized);
+  const listIntent = /\b(ds|danh sach|liet ke|top)\b/.test(normalized);
+  const requestedRowLimit = listIntent && months === null
+    ? Number(normalized.match(/\b(?:ds|danh sach|liet ke|top)\s+(\d+)\b/)?.[1]) || null
+    : null;
+  const primaryIdentityColumns = availableColumns.filter(column => column.isPrimaryKey).map(column => column.columnName);
+  const secondaryIdentityColumns = availableColumns
+    .filter(column => column.isUnique || /(?:code|name)$/i.test(column.columnName))
+    .map(column => column.columnName);
   return {
     version: 1,
-    intent: months ? 'aggregate_timeseries' : /\b(ds|danh sach|liet ke|top)\b/.test(normalized) ? 'list' : 'record_lookup',
+    intent: months ? 'aggregate_timeseries' : listIntent ? 'list' : 'record_lookup',
     question,
     table: table?.tableName || null,
     schemaColumns: (table?.columns || []).map(column => column.columnName),
+    identityColumns: [...new Set([...primaryIdentityColumns, ...secondaryIdentityColumns])].slice(0, 6),
+    columnDisplayNames: Object.fromEntries((table?.columns || []).filter(column => column.displayName)
+      .map(column => [column.columnName, column.displayName])),
     unfilteredList: Boolean(table && [table.tableName, table.domain, ...(aliases[table.domain] || [])].filter(Boolean)
       .some(term => ['ds', 'danh sach', 'liet ke'].some(prefix => phrase(question) === `${prefix} ${phrase(term)}`))),
+    rowLimit: requestedRowLimit ? Math.max(1, Math.min(1000, requestedRowLimit)) : null,
     requiredColumns: [...new Set(tableColumns.map(column => column.columnName))],
     metric: metric?.columnName || null,
     aggregation: metric ? (table?.defaultAggregation || 'SUM').toUpperCase() : null,

@@ -6,6 +6,9 @@
 
 const dictionaryService = require('./dictionary_service');
 const aiProviderManager = require('./ai_provider_manager');
+const schemaContextService = require('../intelligent_core/schema_context_service');
+const securityGuard = require('../intelligent_core/security_guard');
+const { validateSqlAgainstJoinPlan } = require('./sql_join_validator');
 
 class Text2SqlAgent {
   validateSqlSafety(sqlString) {
@@ -141,11 +144,14 @@ class Text2SqlAgent {
     return { error: "Không nhận được phản hồi từ AI Provider." };
   }
 
-  async processNaturalLanguageQuery(questionText, targetProviderId = null) {
+  async processNaturalLanguageQuery(questionText, targetProviderId = null, options = {}) {
     const lower = questionText.toLowerCase().trim();
     const normalized = this.removeVietnameseDiacritics(lower);
-    const groupedTables = dictionaryService.getGroupedTables();
-    const activeTables = dictionaryService.getDictionary();
+    const groupedTables = dictionaryService.getGroupedTables().filter(table => !options.dbSourceId || table.dbSourceId === options.dbSourceId);
+    const activeTables = groupedTables.filter(table => table.isActive).flatMap(table => (table.columns || []).map(column => ({
+      ...column, tableName: table.tableName, tableId: table.tableId, dbName: table.dbName
+    })));
+    const schemaSelection = await schemaContextService.buildSchemaContext(questionText, { dbSourceId: options.dbSourceId || null, dbName: options.dbName || null });
 
     let provider = aiProviderManager.getActiveProvider();
     if (targetProviderId) {
@@ -171,9 +177,9 @@ class Text2SqlAgent {
     const isDbQuery = dbKeywords.some(kw => normalized.includes(kw));
 
     // Construct System Prompt with Active Database Schemas
-    const schemaContext = activeTables.length > 0 ? 
+    const schemaContext = schemaSelection.schemaContext || (activeTables.length > 0 ?
       activeTables.map(col => `- Table: ${col.tableName}, Column: ${col.columnName} (${col.dataType}${col.isPrimaryKey ? ', PK' : ''})`).join('\n')
-      : "Chưa nạp Schema SQL Server.";
+      : "Chưa nạp Schema SQL Server.");
 
     const systemPrompt = `Bạn là Trợ lý AI chuyên gia Text-to-SQL và RAG cho SQL Server.
 Dưới đây là cấu trúc các bảng SQL Server hiện có trong CSDL (Chỉ sử dụng các bảng này):
@@ -192,16 +198,18 @@ Quy tắc bắt buộc:
       const sqlMatch = llmResponse.match(/```sql([\s\S]*?)```/) || llmResponse.match(/(SELECT[\s\S]*?;)/i);
       if (sqlMatch) {
         const extractedSql = sqlMatch[1].trim();
-        const safetyCheck = this.validateSqlSafety(extractedSql);
+        const safetyCheck = securityGuard.validateSqlQuery(extractedSql);
 
         if (safetyCheck.safe) {
+          const joinCheck = validateSqlAgainstJoinPlan(safetyCheck.cleanedSql, schemaSelection.joinPlan);
+          if (!joinCheck.valid) throw new Error(`[JOIN Validator Rejected] ${joinCheck.error}`);
           const cleanText = llmResponse.replace(/```sql[\s\S]*?```/g, '').trim();
           
           // Try executing real query on live database
           let dynamicResults = [];
           try {
             const sqlConnector = require('./sql_connector');
-            dynamicResults = await sqlConnector.executeSqlQuery(extractedSql);
+            dynamicResults = await sqlConnector.executeSqlQuery(safetyCheck.cleanedSql, options.dbSourceId || null);
           } catch (liveErr) {
             console.error("[SQL Live Execution Error]:", liveErr.message);
             // If offline or using DDL file mode, fallback to schema-based calculation

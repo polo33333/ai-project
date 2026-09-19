@@ -200,7 +200,7 @@ class ToolRegistry {
     }];
   }
 
-  async executeTool(toolName, args) {
+  async executeTool(toolName, args, context = {}) {
     try {
       const mcpTool = mcpService.getToolSpecs().find(tool => tool.name === toolName);
       if (mcpTool) {
@@ -213,7 +213,7 @@ class ToolRegistry {
         // case 'resolve_date_range':     return await this._resolveDateRange(args);
         case 'validate_sql': return this._validateSql(args);
         case 'repair_sql': return this._repairSql(args);
-        case 'execute_sql_query': return await this._executeSqlQuery(args);
+        case 'execute_sql_query': return await this._executeSqlQuery(args, context);
         case 'render_chart': return this._renderChart(args);
         case 'calculate_stats': return this._calculateStats(args);
         case 'calculate_expression': return this._calculateExpression(args);
@@ -536,14 +536,17 @@ class ToolRegistry {
     };
   }
 
-  async _executeSqlQuery({ sql }) {
+  async _executeSqlQuery({ sql }, context = {}) {
     const check = securityGuard.validateSqlQuery(sql);
     if (!check.safe) {
       return { success: false, error: check.error };
     }
+    const { validateSqlAgainstJoinPlan } = require('../services/sql_join_validator');
+    const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
+    if (!joinCheck.valid) return { success: false, error: joinCheck.error };
 
     try {
-      const rows = await sqlConnector.executeSqlQuery(check.cleanedSql);
+      const rows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
       const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
       return { success: true, result: { rows, columns, rowCount: rows.length, sql: check.cleanedSql } };
     } catch (err) {

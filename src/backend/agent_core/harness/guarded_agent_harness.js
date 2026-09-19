@@ -13,6 +13,7 @@ const { buildSqlRowsFallbackReply, ensureDownloadLink } = require('./grounded_re
 const { resolvePlan, blockingSqlViolation, qualifiedSql, evaluateCompletion, stableFingerprint, validateOutputData } = require('./completion_policy');
 const { estimateTokens } = require('./context_budget');
 const { emitProgress, toolLabel } = require('./progress_events');
+const { buildEnrichedListSql, contextualLookupQuestion } = require('../../services/sql_enrichment_builder');
 
 const positive = (value, fallback) => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
 const aborted = () => Object.assign(new Error('Request aborted'), { name: 'AbortError' });
@@ -152,7 +153,10 @@ class GuardedAgentHarness {
       trace.steps.push({ type: 'completion_rejected', iteration: trace.iterations, failures });
       if (repairs >= this.maxRepairs) { stopReason = 'REPAIR_BUDGET_EXCEEDED'; return false; }
       repairs++; budget.recordRepair();
-      conversation.push({ role: 'user', content: `The request is incomplete: ${failures.join(', ')}. Use the enabled tools to produce the missing outputs from verified data. Do not print SQL/tool JSON as the final answer. If tools already succeeded, answer from their results. For document/web questions use the supplied sources.` });
+      const citationInstruction = failures.includes('MISSING_KNOWLEDGE_CITATION')
+        ? ` Rewrite the answer from the supplied document context. After every document claim, insert the actual numbered marker such as [1] or [2], matching Tài liệu 1 or Tài liệu 2. Never output the literal text [N] and do not invent marker numbers. Available evidence:\n\n${String(context.knowledgeGrounding?.documentContext || '')}`
+        : '';
+      conversation.push({ role: 'user', content: `The request is incomplete: ${failures.join(', ')}. Use the enabled tools to produce the missing outputs from verified data. Do not print SQL/tool JSON as the final answer. If tools already succeeded, answer from their results. For document/web questions use the supplied sources.${citationInstruction}` });
       emitProgress(onProgress, { type: 'policy_repair', label: 'Kết quả chưa đầy đủ, đang điều chỉnh', status: 'warning', icon: 'wrench', iteration: trace.iterations });
       return true;
     };
@@ -174,7 +178,10 @@ class GuardedAgentHarness {
         emitProgress(onProgress, { type: 'model_completed', label: 'Đã nhận phản hồi từ model', status: 'done', icon: 'robot', iteration: trace.iterations });
         if (!calls.length) {
           const candidate = response.content || '';
-          const evaluation = evaluateCompletion({ reply: candidate, plan, toolCalls, context, finishReason });
+          let evaluation = evaluateCompletion({ reply: candidate, plan, toolCalls, context, finishReason });
+          if (context.knowledgeGrounding?.required && !/\[\d+\](?!\s*\()/.test(candidate)) {
+            evaluation = { valid: false, score: 0, failures: [...new Set([...evaluation.failures, 'MISSING_KNOWLEDGE_CITATION'])] };
+          }
           if (evaluation.valid) { reply = candidate; break; }
           // Once verified rows exist, a deterministic renderer can replace raw/empty text.
           const contentFailures = ['EMPTY_ANSWER', 'RAW_TOOL_ANSWER', 'SQL_ONLY_ANSWER', 'TRUNCATED_ANSWER', 'INSUFFICIENT_DATA_ANSWER'];
@@ -237,6 +244,26 @@ class GuardedAgentHarness {
       if (context.signal?.aborted) throw aborted();
       stopReason = error.code || 'PROVIDER_ERROR';
       trace.steps.push({ type: stopReason, iteration: trace.iterations });
+    }
+
+    if (!qualifiedSql(toolCalls, plan).length) {
+      const recoveryQuestion = contextualLookupQuestion(question, messages);
+      const recoverySql = buildEnrichedListSql({ ...plan, question: recoveryQuestion,
+        datasetReference: context.memoryDecision?.reference }, context.joinPlan);
+      if (recoverySql && toolContext.allowedToolNames.includes('execute_sql_query')) {
+        try {
+          check(); budget.consumeToolCall(); budget.consumeSqlAttempt();
+          const execution = await boundedCall(signal => this.toolManager.executeTool('execute_sql_query', { sql: recoverySql },
+            { ...toolContext, signal }), context.signal, budget.remainingMs());
+          toolCalls.push({ toolName: 'execute_sql_query', args: { sql: recoverySql }, success: execution.success,
+            result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs });
+          trace.toolCalls.push({ toolName: 'execute_sql_query', success: execution.success, durationMs: execution.durationMs, source: 'ENRICHED_LIST_RECOVERY' });
+          trace.steps.push({ type: 'ENRICHED_LIST_RECOVERY', success: execution.success, toolName: 'execute_sql_query' });
+          if (execution.success) stopReason = null;
+        } catch (error) {
+          trace.steps.push({ type: error.code || 'ENRICHED_LIST_RECOVERY_FAILED', error: error.message });
+        }
+      }
     }
 
     if (context.signal?.aborted) throw aborted();

@@ -35,7 +35,7 @@ function routeMemory({ currentPlan, session, question, fallbackHistory = [], now
       fallbackHistory
     };
     if (base.mode === 'reference') {
-      const resolvedReference = resolveReference(question, session?.references || {}, now);
+      const resolvedReference = resolveReference(question, session?.references || {}, now, base.referenceType || null);
       if (!resolvedReference.type) return { ...decision, mode: 'none', reason: resolvedReference.reason };
       decision.reference = resolvedReference;
     }

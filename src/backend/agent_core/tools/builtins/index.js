@@ -210,6 +210,9 @@ class ExecuteSqlTool extends BaseTool {
     if (!check.safe) {
       throw new Error(check.error || 'Câu lệnh SQL không an toàn.');
     }
+    const { validateSqlAgainstJoinPlan } = require('../../../services/sql_join_validator');
+    const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
+    if (!joinCheck.valid) throw new Error(joinCheck.error);
 
     const rawRows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
     const rows = securityGuard.sanitizeTabularRows(rawRows);

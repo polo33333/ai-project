@@ -16,6 +16,9 @@ function detectTopic({ currentPlan = {}, lastPlan = null, questionText = '', ref
   if (hasPronoun && policy.isExportOrChartIntent(questionText)) {
     return { mode: 'reference', reason: 'reference_pronoun_detected' };
   }
+  if (hasPronoun && policy.isCollectionReference(questionText) && references.lastDataset?.updatedAt) {
+    return { mode: 'reference', reason: 'collection_reference_detected', referenceType: 'lastDataset' };
+  }
   if (!tableChanged && currentPlan.table && lastPlan.table) {
     return { mode: 'recent', reason: 'same_table_followup', maxMessages: policy.recentMaxMessages() };
   }

@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [biên bản chuyển dữ liệu](docs/POSTGRESQL_IMPORT_STATUS_180926.md) và [Trạng thái triển khai](#trạng-thái-triển-khai).
 
-README đối chiếu với mã nguồn ngày **18/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
+README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -12,7 +12,8 @@ README đối chiếu với mã nguồn ngày **18/09/2026**. Trạng thái dư�
 
 - Nạp schema từ file DDL hoặc kết nối trực tiếp Microsoft SQL Server.
 - Đọc table, column, primary key và metadata schema.
-- Quản lý Data Dictionary, quan hệ bảng và Business Glossary.
+- Quản lý Data Dictionary, quan hệ bảng và Business Glossary. Quan hệ hỗ trợ vai trò, cột hiển thị, trạng thái xác minh và xóa trực tiếp trên UI.
+- Join planner dùng quan hệ đã cấu hình để làm giàu kết quả: ưu tiên cột hiển thị đã map, dùng vai trò làm tiêu đề và giảm ưu tiên các cột ID thô.
 - Đồng bộ schema, relationship và glossary sang Qdrant.
 - Text-to-SQL với giới hạn câu lệnh `SELECT/WITH` và `TOP 100` mặc định.
 - Thực thi truy vấn read-only, hiển thị bảng kết quả, biểu đồ và xuất dữ liệu.
@@ -36,7 +37,7 @@ README đối chiếu với mã nguồn ngày **18/09/2026**. Trạng thái dư�
 - Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
 - Workflow engine: thực thi bước tự động, điều kiện, retry và trace; tab Workflow Automation hiện tạm ẩn trên giao diện.
 - Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu PostgreSQL khi dùng backend `postgres`.
-- Memory Core v2 có pending turn, context budget, summary và semantic routing; các cờ v2 mặc định tắt trong `.env.example`.
+- Memory Core v2 có pending turn, context budget, summary và semantic routing. Cấu hình mẫu bật pending turn, budget và summary; semantic routing vẫn mặc định tắt.
 
 ### API và quản trị
 
@@ -48,6 +49,8 @@ README đối chiếu với mã nguồn ngày **18/09/2026**. Trạng thái dư�
 - Library hỗ trợ upload, parse PDF/DOCX/XLSX/CSV/TXT/SQL/Markdown, chunk, index, preview và xóa tài liệu.
 - Watch Folder theo dõi filesystem thật, quét file ban đầu, chống trùng bằng `sourcePath` + SHA-256 và cập nhật lại document khi file đổi.
 - UI Chat hiển thị mode retrieval, RRF/reranker, số chunk và nguồn tài liệu.
+- Câu trả lời theo tài liệu có marker `[1]`, `[2]` dùng chung cho local model và provider bên thứ ba. Khối “Đoạn nguồn theo trích dẫn” mặc định thu gọn và cho phép mở đoạn nguồn để đối chiếu; đây là kiểm tra marker với context, chưa phải xác minh ngữ nghĩa toàn bộ câu trả lời.
+- Dashboard và trang Analytics hiển thị trạng thái chờ trong khi tải dữ liệu biểu đồ, gồm tần suất gọi AI, đánh giá, bản đồ nhiệt và tỷ trọng provider.
 - MCP client kết nối server qua stdio, Streamable HTTP hoặc SSE; có handshake, discovery tools/resources và thực thi tool qua Agent Core/registry.
 - Embed Chat hiển thị bảng Markdown, biểu đồ, link xuất file; hỗ trợ `data-theme="auto|light|dark"` và preview theo Embed ID từ trang quản trị.
 
@@ -70,7 +73,7 @@ README đối chiếu với mã nguồn ngày **18/09/2026**. Trạng thái dư�
 | MCP Sources | Đã triển khai kết nối thật | SDK MCP, handshake/discovery/execution; cần khai báo server riêng, test stdio không chứng minh mọi server bên ngoài tương thích |
 | Embed Chat | Đã triển khai | Endpoint JSON, domain allowlist, giới hạn theo cấu hình; admin preview bỏ kiểm tra domain |
 | Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
-| Memory Core v2 | Triển khai theo feature flag | Các cờ pending turn/budget/summary/semantic routing mặc định tắt trong cấu hình mẫu |
+| Memory Core v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary; semantic routing mặc định tắt |
 | Workflow Automation | Backend có, tab tạm ẩn | Chưa đưa lại vào điều hướng UI |
 | PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–003; dữ liệu JSON hiện có đã nhập/đối soát, runtime không tự fallback về JSON |
 | Document outbox | Đã triển khai | PostgreSQL jobs, retry, lease và recovery; tác động file/Qdrant vẫn cần reconciliation |
@@ -142,7 +145,7 @@ EMBEDDING_FALLBACK_MODE=error
 # Hybrid retrieval
 RETRIEVAL_CANDIDATE_LIMIT=30
 RRF_K=60
-AI_DOCUMENT_CONTEXT_CHARS=12000
+AI_DOCUMENT_CONTEXT_TOKENS=3000
 
 # Optional reranker and graph retrieval
 RERANKER_ENABLED=false
@@ -154,21 +157,27 @@ GRAPHRAG_ENABLED=true
 KNOWLEDGE_REINDEX_ON_START=false
 
 # Intelligent Core
-AI_MAX_TOOL_ITERATIONS=10
+AI_MAX_TOOL_ITERATIONS=5
 AI_DEFAULT_TIMEOUT_MS=30000
 LOCAL_MODEL_HARNESS_ENABLED=true
 LOCAL_MODEL_SKILL_CORE_ENABLED=false
 LOCAL_MODEL_FEW_SHOT_ENABLED=false
 LOCAL_MODEL_MAX_MODEL_CALLS=9
 LOCAL_MODEL_MAX_SQL_CALLS=3
+AI_PROVIDER_GUARDS_ENABLED=true
+AI_PROVIDER_MAX_REPAIRS=2
+
+# SQL relationship và join enrichment
+SQL_RELATIONSHIP_DISCOVERY_ENABLED=false
+SQL_JOIN_PLANNER_ENABLED=false
 
 # System log retention (the selected storage backend applies)
 MAX_CHAT_HISTORY=5000
 
-# Memory Core v2: bật theo nhu cầu sau khi kiểm tra
-MEMORY_PENDING_TURN_ENABLED=false
-MEMORY_CONTEXT_BUDGET_ENABLED=false
-MEMORY_SUMMARY_ENABLED=false
+# Memory Core v2
+MEMORY_PENDING_TURN_ENABLED=true
+MEMORY_CONTEXT_BUDGET_ENABLED=true
+MEMORY_SUMMARY_ENABLED=true
 MEMORY_SEMANTIC_ROUTING_ENABLED=false
 
 # MCP
@@ -197,7 +206,7 @@ POSTGRES_PASSWORD=<mat-khau-rieng-cua-ban>
 Khởi động Docker Desktop, dừng backend/writer JSON và chạy:
 
 ```powershell
-docker compose --env-file .env.postgres -f compose.postgres.yml up -d postgres
+docker compose --env-file .env.postgres -f compose.docker.yml up -d postgres
 # Chờ container healthy trước bước init
 npm run db:pg:init
 npm run db:migrate
@@ -345,7 +354,7 @@ Backend dùng `node:http`, chưa dùng Fastify. Dữ liệu ứng dụng lưu Po
 |       |-- storage/                  # Async operation scope, PostgreSQL repository/outbox
 |       `-- utils/storage_helper.js   # Chuyển loadJson/saveJson sang storage theo backend
 |-- migrations/postgres/              # SQL migration có checksum
-|-- compose.postgres.yml              # PostgreSQL 18, named volume và healthcheck
+|-- compose.docker.yml                # PostgreSQL 18, Qdrant, named volumes và healthcheck
 |-- data/                             # File tài liệu/export và JSON legacy giữ làm bản sao
 |   `-- backup/                       # Backup migration cục bộ, không dùng ở runtime
 |-- scripts/
@@ -403,7 +412,7 @@ Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embe
 
 ## Kiểm tra mã nguồn
 
-Kiểm tra gần nhất: **202 test ứng dụng đạt**, hai nhóm PostgreSQL chạy riêng; **33 test PostgreSQL thật đạt** trong database tạm. Bao phủ import/rollback/encryption, concurrency, auth/đổi mật khẩu, page history, scope API từng tab, HTTP/SSE commit gate, outbox và quyền runtime. Test chat/ingest dùng core/Qdrant giả lập; không thay thế kiểm thử provider tính phí, SQL nghiệp vụ và retrieval thật.
+Kiểm tra gần nhất ngày **20/09/2026**: **260 test ứng dụng đạt, 2 test bỏ qua**, hai nhóm PostgreSQL chạy riêng; lần kiểm tra PostgreSQL được ghi nhận gần nhất có **33 test đạt** trong database tạm. Bao phủ import/rollback/encryption, concurrency, auth/đổi mật khẩu, page history, scope API từng tab, HTTP/SSE commit gate, outbox, citation, quan hệ SQL và quyền runtime. Test chat/ingest dùng core/Qdrant giả lập; không thay thế kiểm thử provider tính phí, SQL nghiệp vụ và retrieval thật.
 
 ```powershell
 npm run test:storage
@@ -524,6 +533,8 @@ Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ
 
 ## Tài liệu
 
+- [Nâng cấp kiến trúc RAG và citation](docs/RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md)
+- [Quan hệ SQL và join enrichment](docs/SQL_RELATIONSHIP_JOIN_PLAN_190926.md)
 - [Tích hợp PostgreSQL: kế hoạch và checklist](docs/POSTGRESQL_DATA_INTEGRATION_PLAN_180926.md)
 - [Biên bản dữ liệu và runtime PostgreSQL](docs/POSTGRESQL_IMPORT_STATUS_180926.md)
 - [Kiểm tra tải trang và dữ liệu từng tab](docs/PAGE_LOAD_PERFORMANCE_180926.md)

@@ -41,6 +41,7 @@ class QdrantService {
     this.embeddingModel = process.env.EMBEDDING_MODEL || 'bge-m3';
     this.embeddingProvider = (process.env.EMBEDDING_PROVIDER || 'ollama').toLowerCase();
     this.embeddingBaseUrl = (process.env.EMBEDDING_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
+    this.documentCollectionPromise = null;
   }
 
   /**
@@ -123,7 +124,7 @@ class QdrantService {
   /**
    * Ensure Qdrant collection exists
    */
-  async ensureCollection() {
+  async ensureCollection(options = {}) {
     try {
       const collections = await this.request('/collections');
       const exists = collections.result?.collections?.some(c => c.name === this.collectionName);
@@ -135,7 +136,10 @@ class QdrantService {
             distance: 'Cosine'
           }
         });
-        console.log(`[Qdrant] Collection '${this.collectionName}' created successfully.`);
+        const reason = options.reason === 'full_sync'
+          ? 'recreated for full schema synchronization'
+          : 'created because it did not exist';
+        console.log(`[Qdrant] Collection '${this.collectionName}' ${reason}.`);
       }
       return true;
     } catch (err) {
@@ -153,12 +157,13 @@ class QdrantService {
   async syncTablesToQdrant(tablesStore, glossaryStore = [], relationshipsStore = [], domainAliases = {}) {
     try {
       // 1. Purge all existing collection points first to ensure inactive or deleted tables are completely removed!
+      console.log(`[Qdrant] Full schema sync started: rebuilding collection '${this.collectionName}'.`);
       try {
         await this.request(`/collections/${this.collectionName}`, 'DELETE');
       } catch (e) {
         // ignore if collection didn't exist
       }
-      await this.ensureCollection();
+      await this.ensureCollection({ reason: 'full_sync' });
 
       // 2. Filter ONLY active tables
       const activeTables = tablesStore.filter(t => t.isActive);
@@ -195,7 +200,7 @@ class QdrantService {
 
         // Column level metadata
         for (const col of table.columns) {
-          const colText = `Bảng ${table.tableName} Cột ${col.columnName} (${col.dataType}): ${col.description || ''} PrimaryKey: ${col.isPrimaryKey ? 'Yes' : 'No'}`;
+          const colText = `Bảng ${table.tableName} Cột ${col.columnName} (${col.dataType}), tên hiển thị: ${col.displayName || col.columnName}: ${col.description || ''} PrimaryKey: ${col.isPrimaryKey ? 'Yes' : 'No'}`;
           const [colVector] = await this.embedTexts([colText], this.vectorSize);
 
           points.push({
@@ -213,6 +218,7 @@ class QdrantService {
               dataType: col.dataType,
               isPrimaryKey: !!col.isPrimaryKey,
               description: col.description || '',
+              displayName: col.displayName || '',
               fullText: colText
             }
           });
@@ -221,16 +227,26 @@ class QdrantService {
 
       // 4. Index active table relationships so Text-to-SQL can infer JOIN paths.
       for (const relation of relationshipsStore || []) {
-        const relationText = `Quan hệ bảng: ${relation.sourceTable}.${relation.sourceColumn} ${relation.relationType || 'liên kết'} ${relation.targetTable}.${relation.targetColumn}. ${relation.description || ''}`;
+        const pairs = Array.isArray(relation.columnPairs) && relation.columnPairs.length
+          ? relation.columnPairs
+          : [{ sourceColumn: relation.sourceColumn, targetColumn: relation.targetColumn }];
+        const pairText = pairs.map(pair => `${relation.sourceTable}.${pair.sourceColumn} → ${relation.targetTable}.${pair.targetColumn}`).join(', ');
+        const relationText = `Quan hệ bảng: ${pairText} (${relation.cardinality || relation.relationType || 'liên kết'}). ${relation.businessRole || ''} ${relation.description || ''}`;
         points.push({
           id: pointId++,
           vector: (await this.embedTexts([relationText], this.vectorSize))[0],
           payload: {
             type: 'relationship',
+            relationshipId: relation.id,
+            sourceTableId: relation.sourceTableId || null,
+            targetTableId: relation.targetTableId || null,
             sourceTable: relation.sourceTable,
             sourceColumn: relation.sourceColumn,
             targetTable: relation.targetTable,
             targetColumn: relation.targetColumn,
+            columnPairs: pairs,
+            status: relation.status || 'suggested',
+            revision: relation.revision || 1,
             relationType: relation.relationType || 'many-to-one',
             description: relation.description || '',
             fullText: relationText
@@ -274,7 +290,7 @@ class QdrantService {
         points: points
       });
 
-      console.log(`[Qdrant] Successfully indexed ${points.length} points (${activeTables.length} active tables & ${glossaryStore ? glossaryStore.length : 0} glossary terms) into Qdrant collection '${this.collectionName}'.`);
+      console.log(`[Qdrant] Full schema sync completed for '${this.collectionName}': ${points.length} points, ${activeTables.length} active tables, ${relationshipsStore?.length || 0} relationships, ${glossaryStore?.length || 0} glossary terms.`);
 
       return {
         success: true,
@@ -312,12 +328,21 @@ class QdrantService {
   }
 
   async ensureDocumentCollection() {
-    const collection = process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents';
-    const collections = await this.request('/collections');
-    if (!collections.result?.collections?.some(item => item.name === collection)) {
-      await this.request(`/collections/${collection}`, 'PUT', { vectors: { size: this.documentVectorSize, distance: 'Cosine' } });
-    }
-    return collection;
+    if (this.documentCollectionPromise) return this.documentCollectionPromise;
+    this.documentCollectionPromise = (async () => {
+      const collection = process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents';
+      const collections = await this.request('/collections');
+      if (!collections.result?.collections?.some(item => item.name === collection)) {
+        await this.request(`/collections/${collection}`, 'PUT', { vectors: { size: this.documentVectorSize, distance: 'Cosine' } });
+      }
+      for (const [fieldName, fieldSchema] of [['documentId', 'keyword'], ['type', 'keyword'], ['chunkIndex', 'integer']]) {
+        try { await this.request(`/collections/${collection}/index?wait=true`, 'PUT', { field_name: fieldName, field_schema: fieldSchema }); }
+        catch (error) { console.warn(`[Qdrant] Document payload index '${fieldName}' unavailable: ${error.message}`); }
+      }
+      return collection;
+    })();
+    try { return await this.documentCollectionPromise; }
+    catch (error) { this.documentCollectionPromise = null; throw error; }
   }
 
   async indexDocumentChunks(document, chunks) {
@@ -354,12 +379,17 @@ class QdrantService {
     }
   }
 
-  async searchDocuments(queryText, limit = 6) {
+  async searchDocuments(queryText, limit = 6, { documentIds = [] } = {}) {
     try {
       const collection = await this.ensureDocumentCollection();
       const [queryVector] = await this.embedTexts([queryText]);
+      if (!documentIds.length) return [];
       const result = await this.request(`/collections/${collection}/points/search`, 'POST', {
-        vector: queryVector, limit, with_payload: true
+        vector: queryVector, limit, with_payload: true,
+        filter: { must: [
+          { key: 'type', match: { value: 'document_chunk' } },
+          { key: 'documentId', match: { any: [...new Set(documentIds.map(String))] } }
+        ] }
       });
       return result.result || [];
     } catch (_) {

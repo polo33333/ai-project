@@ -12,5 +12,51 @@
     "question": "sản lượng điện theo tháng",
     "currentPlan": { "intent": "aggregate", "table": "T_ElectricityOutput", "requiredColumns": ["TotalQty"], "metric": "TotalQty", "outputs": { "data": true } },
     "expectedMode": "none"
+  },
+  {
+    "name": "independent count question is not a follow-up",
+    "lastPlan": { "intent": "list", "table": "T_ElectricityOutput", "requiredColumns": ["TotalQty"], "outputs": { "data": true } },
+    "question": "Phòng Kỹ thuật có bao nhiêu người?",
+    "currentPlan": { "intent": "record_lookup", "table": "M_Employee", "requiredColumns": [], "outputs": {} },
+    "expectedMode": "none"
+  },
+  {
+    "name": "generic pronoun with multiple references is ambiguous",
+    "lastPlan": { "intent": "record_lookup", "table": "M_Employee", "requiredColumns": ["EmployeeName"], "outputs": { "data": true } },
+    "question": "xóa thông tin đó đi",
+    "currentPlan": { "intent": "general", "table": null, "requiredColumns": [], "outputs": {} },
+    "references": {
+      "lastEntity": { "filters": { "EmployeeName": "Yên Duy" }, "updatedAt": "2026-09-20T10:00:00.000Z" },
+      "lastExport": { "downloadUrl": "/api/exports/other.xlsx", "updatedAt": "2026-09-20T10:01:00.000Z" }
+    },
+    "now": "2026-09-20T10:02:00.000Z",
+    "expectedMode": "none",
+    "expectedReferenceType": null,
+    "expectedReason": "ambiguous_reference"
+  },
+  {
+    "name": "generic pronoun resolves the only valid reference",
+    "lastPlan": { "intent": "record_lookup", "table": "M_Employee", "requiredColumns": ["EmployeeName"], "outputs": { "data": true } },
+    "question": "thông tin đó là gì",
+    "currentPlan": { "intent": "general", "table": null, "requiredColumns": [], "outputs": {} },
+    "references": {
+      "lastEntity": { "filters": { "EmployeeName": "Yên Duy" }, "updatedAt": "2026-09-20T10:00:00.000Z" }
+    },
+    "now": "2026-09-20T10:02:00.000Z",
+    "expectedMode": "reference",
+    "expectedReferenceType": "lastEntity"
+  },
+  {
+    "name": "unknown current scope stays inside active scope",
+    "evaluation": "context",
+    "activeScope": "electricity",
+    "currentScope": null,
+    "messages": [
+      { "role": "user", "content": "nhân viên A", "scope": "employee" },
+      { "role": "assistant", "content": "A", "scope": "employee" },
+      { "role": "user", "content": "sản lượng điện", "scope": "electricity" },
+      { "role": "assistant", "content": "10", "scope": "electricity" }
+    ],
+    "expectedContext": ["sản lượng điện", "10"]
   }
 ]

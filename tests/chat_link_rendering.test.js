@@ -59,3 +59,17 @@ test('trailing punctuation stays outside the URL', () => {
   assert.match(html, /href="https:\/\/example\.com\/app"/);
   assert.match(html, /<\/a>\.$/);
 });
+
+test('chat result renderers convert ISO database dates to Vietnamese display format', () => {
+  const page = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const pageContext = vm.createContext({});
+  const pageStart = page.indexOf('function formatChatDisplayValue');
+  const pageEnd = page.indexOf('\nfunction renderMarkdownTable', pageStart);
+  vm.runInContext(`${page.slice(pageStart, pageEnd)}\nthis.dateOnly=formatChatDisplayValue('2002-05-24T00:00:00.000Z');this.dateTime=formatChatDisplayValue('2026-09-20T14:30:45.000Z');`, pageContext);
+  assert.equal(pageContext.dateOnly, '24/05/2002');
+  assert.equal(pageContext.dateTime, '20/09/2026 14:30:45');
+
+  const embed = fs.readFileSync('src/frontend/embed/knowledgehub-chat.js', 'utf8');
+  assert.match(embed, /formatDisplayValue\(row\[cellIndex\]/);
+  assert.match(embed, /escapeHtml\(formatDisplayValue\(cell\)\)/);
+});

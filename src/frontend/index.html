@@ -29,7 +29,7 @@
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
-  <link rel="stylesheet" href="css/styles.css?v=20260913-sql-table-fit">
+  <link rel="stylesheet" href="css/styles.css?v=20260919-composite-key-advanced">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
   <link rel="stylesheet" href="css/audit-logs.css?v=20260912-review-panel">
   <link rel="stylesheet" href="css/provider-management.css">
@@ -42,7 +42,7 @@
   <link rel="stylesheet" href="css/workspace.css?v=20260908-synced-brand-icon">
   <link rel="stylesheet" href="css/module-workspaces.css?v=20260912-skill-equal-height">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
-  <link rel="stylesheet" href="css/theme.css?v=20260913-library-modal">
+  <link rel="stylesheet" href="css/theme.css?v=20260919-composite-key-advanced">
   <link rel="stylesheet" href="css/settings.css?v=20260912-qdrant-metrics-wrap">
 </head>
 
@@ -268,9 +268,9 @@
         <div class="metric-card metric-card-blue">
           <span class="metric-main-icon blue"><i class="fa-solid fa-share-nodes"></i></span>
           <div class="metric-content">
-            <div class="metric-header"><span class="metric-title">SQL Connectors</span></div>
-            <div class="metric-val" id="val-connectors">00</div>
-            <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> Live Read-Only DB</div>
+            <div class="metric-header"><span class="metric-title">Database đang active</span></div>
+            <div class="metric-val metric-db-name" id="val-connectors">Chưa chọn DB</div>
+            <div class="metric-sub text-green" id="val-connectors-detail">Nguồn mặc định cho AI</div>
           </div>
           <span class="metric-icon blue"><i class="fa-solid fa-circle"></i></span>
         </div>
@@ -278,9 +278,9 @@
         <div class="metric-card metric-card-purple">
           <span class="metric-main-icon purple"><i class="fa-solid fa-database"></i></span>
           <div class="metric-content">
-            <div class="metric-header"><span class="metric-title">Schema đã nạp</span></div>
+            <div class="metric-header"><span class="metric-title">Bảng đang active</span></div>
             <div class="metric-val" id="val-tables">0</div>
-            <div class="metric-sub text-purple"><i class="fa-solid fa-circle-check"></i> Indexed Qdrant DB</div>
+            <div class="metric-sub text-purple" id="val-tables-detail">Thuộc database đang active</div>
           </div>
           <span class="metric-icon purple"><i class="fa-solid fa-layer-group"></i></span>
         </div>
@@ -672,10 +672,10 @@
   <!-- Modular JavaScript Engine Files -->
   <script src="js/ui_dialogs.js?v=20260913"></script>
   <script src="js/modules/ai_providers.js"></script>
-  <script src="js/modules/dictionary.js?v=20260912-overview-stats"></script>
+  <script src="js/modules/dictionary.js?v=20260919-derived-display-name"></script>
   <script src="js/modules/dictionary-graph.js?v=20260912-overview-stats"></script>
-  <script src="js/modules/glossary.js"></script>
-  <script src="js/modules/page_chat.js?v=20260912-empty-recent-chats"></script>
+  <script src="js/modules/glossary.js?v=20260919-fast-save"></script>
+  <script src="js/modules/page_chat.js?v=20260920-date-display"></script>
   <script src="js/modules/sql_connector.js"></script>
   <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
   <script src="js/modules/chat_history.js?v=20260912-chat-source"></script>
@@ -691,6 +691,6 @@
   <!-- Main App Router Script -->
   <script src="js/sidebar.js?v=20260906-null-safe-footer"></script>
   <script src="js/notifications.js?v=1.0.1"></script>
-  <script src="js/app.js?v=20260912-hide-empty-thinking"></script>
+  <script src="js/app.js?v=20260920-date-display"></script>
 </body>
 </html>
