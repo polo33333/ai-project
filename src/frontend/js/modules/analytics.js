@@ -701,9 +701,9 @@ function updateMetricText(data) {
   const dictionary = data.dictionary || [];
   const providers = data.providers || [];
   const totalColumns = dictionary.reduce((sum, t) => sum + (t.columns?.length || 0), 0);
-  const estimatedCost = estimateAuditCost(history, providers);
   const activeProvider = data.activeProvider || providers.find(p => p.isActive) || providers[0];
   const fallbackProvider = providers.find(p => !p.isActive);
+  const qdrant = data.qdrant || {};
 
   const setText = (id, value) => {
     const el = document.getElementById(id);
@@ -712,7 +712,10 @@ function updateMetricText(data) {
 
   renderDashboardSqlMetrics(data.sources || [], dictionary);
   setText('val-queries', String(history.length));
-  setText('val-cost', formatMoney(estimatedCost));
+  setText('val-qdrant', qdrant.connected ? `${Number(qdrant.pointsCount || 0).toLocaleString('vi-VN')} vectors` : 'Ngoại tuyến');
+  setText('val-qdrant-detail', qdrant.connected
+    ? `${qdrant.collectionName || 'Collection'} · ${qdrant.status || 'Đã kết nối'}`
+    : 'Không thể kết nối Qdrant');
   setText('dash-router-primary', activeProvider ? `${activeProvider.name} (${activeProvider.model})` : 'Chưa cấu hình');
   setText('dash-router-fallback', fallbackProvider ? `${fallbackProvider.name} (${fallbackProvider.model})` : 'Chưa kích hoạt');
   setText('dash-router-vector', `Qdrant (${data.qdrant.pointsCount || totalColumns || 0} vectors)`);

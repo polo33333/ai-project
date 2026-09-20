@@ -218,7 +218,7 @@ function renderDictionaryDrawer(table) {
 
   columnsEl.innerHTML = cols.map(col => {
     const encodedCol = encodeURIComponent(col.columnName || '');
-    const relationships = (window.tableRelationshipsData || []).filter(relation =>
+    const relationships = getDictionaryRelationshipPreviews().filter(relation =>
       (relation.sourceTableId ? relation.sourceTableId === table.tableId : relation.sourceTable === table.tableName)
       && (relation.columnPairs || [{ sourceColumn: relation.sourceColumn }]).some(pair => pair.sourceColumn === col.columnName));
     const mappedRelationship = relationships.find(relation => relation.status !== 'rejected' && relation.businessRole && relation.displayColumn);
@@ -256,9 +256,10 @@ function renderDictionaryDrawer(table) {
                 <small class="relationship-status relationship-status-${escapeDictHtml(relation.status || 'suggested')}">${escapeDictHtml(formatRelationshipCardinality(relation.cardinality || relation.relationType))} · ${escapeDictHtml(relation.status || 'suggested')}</small>
               </div>
               <div class="dictionary-relation-chip-actions">
+                ${relation._pending ? `<button type="button" class="relation-action delete" onclick="event.stopPropagation(); discardPendingFieldRelationship('${encodeURIComponent(relation.id)}')" title="Bỏ thay đổi"><i class="fa-solid fa-trash-can"></i></button>` : `
                 ${relation.status !== 'verified' ? `<button type="button" class="relation-action verify" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'verified')" title="Xác minh"><i class="fa-solid fa-check"></i></button>` : ''}
                 ${relation.status !== 'rejected' ? `<button type="button" class="relation-action reject" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'rejected')" title="Từ chối"><i class="fa-solid fa-ban"></i></button>` : ''}
-                <button type="button" class="relation-action delete" onclick="event.stopPropagation(); deleteFieldRelationship('${encodeURIComponent(relation.id)}')" title="Xóa"><i class="fa-solid fa-trash-can"></i></button>
+                <button type="button" class="relation-action delete" onclick="event.stopPropagation(); deleteFieldRelationship('${encodeURIComponent(relation.id)}')" title="Xóa"><i class="fa-solid fa-trash-can"></i></button>`}
               </div>
             </div>`).join('')}
           </div>
@@ -297,6 +298,13 @@ function renderDictionaryDrawer(table) {
 
 function formatRelationshipCardinality(value) {
   return ({ 'one-to-one': '1:1', 'one-to-many': '1:N', 'many-to-one': 'N:1', 'many-to-many': 'N:N', unknown: '?' })[value] || value || '?';
+}
+
+function getDictionaryRelationshipPreviews() {
+  const stored = window.tableRelationshipsData || [];
+  const previews = window.pendingDictionaryRelationshipPreviews || [];
+  const replacedIds = new Set(previews.map(item => item._storedId).filter(Boolean));
+  return stored.filter(item => !replacedIds.has(item.id)).concat(previews);
 }
 
 function toggleDictionaryColumnVisibility(checkbox) {
@@ -340,7 +348,7 @@ function toggleFieldRelationshipEditor(encodedColumnName, button) {
   button?.classList.toggle('is-open', opening);
   if (!opening) editor.hidden = true;
   else {
-    const relationships = (window.tableRelationshipsData || []).filter(relation =>
+    const relationships = getDictionaryRelationshipPreviews().filter(relation =>
     (relation.sourceTableId ? relation.sourceTableId === window.selectedDictionaryTableId : relation.sourceTable === window.selectedDictionaryTableName)
       && (relation.columnPairs || [{ sourceColumn: relation.sourceColumn }]).some(pair => pair.sourceColumn === columnName));
     if (relationships.length === 1) editFieldRelationship(encodeURIComponent(relationships[0].id), encodedColumnName);
@@ -418,7 +426,7 @@ function cancelFieldRelationship(encodedColumnName) {
 }
 
 function editFieldRelationship(encodedId, encodedColumnName) {
-  const relation = (window.tableRelationshipsData || []).find(item => item.id === decodeURIComponent(encodedId));
+  const relation = getDictionaryRelationshipPreviews().find(item => item.id === decodeURIComponent(encodedId));
   const editor = getFieldRelationshipEditor(decodeURIComponent(encodedColumnName));
   if (!relation || !editor) return;
   editor.hidden = false;
@@ -446,7 +454,9 @@ async function saveFieldRelationship(encodedColumnName) {
   if (!sourceTable || !editor) return;
   const saveButton = editor.querySelector('.dictionary-relation-actions .btn-primary');
   if (saveButton?.disabled) return;
-  const id = editor.querySelector('[data-role="relationship-id"]').value;
+  const editorRelationshipId = editor.querySelector('[data-role="relationship-id"]').value;
+  const draftRelation = (window.pendingDictionaryRelationshipPreviews || []).find(item => item.id === editorRelationshipId);
+  const id = draftRelation?._storedId || (draftRelation ? '' : editorRelationshipId);
   const targetTableId = editor.querySelector('[data-role="target-table"]').value;
   const cardinality = editor.querySelector('[data-role="cardinality"]').value;
   const columnPairs = Array.from(editor.querySelectorAll('.dictionary-relation-pair')).map(row => ({
@@ -485,13 +495,53 @@ async function saveFieldRelationship(encodedColumnName) {
   if (id) { delete payload.id; delete payload.expectedRevision; }
   window.pendingDictionaryRelationships ||= [];
   const change = { id: id || null, expectedRevision, operation: endpoint.endsWith('add-many-to-many') ? 'many-to-many' : (id ? 'update' : 'add'), payload };
-  const existingIndex = id ? window.pendingDictionaryRelationships.findIndex(item => item.id === id) : -1;
+  const localId = draftRelation?.id || id || `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  change.localId = localId;
+  const existingIndex = window.pendingDictionaryRelationships.findIndex(item => item.localId === localId || (id && item.id === id));
   if (existingIndex >= 0) window.pendingDictionaryRelationships[existingIndex] = change;
   else window.pendingDictionaryRelationships.push(change);
-  editor.hidden = true;
+  const targetTable = findDictionaryTable(targetTableId);
+  const previous = draftRelation || (window.tableRelationshipsData || []).find(item => item.id === id) || {};
+  const preview = {
+    ...previous,
+    id: localId,
+    _pending: true,
+    _storedId: id || null,
+    sourceTableId: sourceTable.tableId,
+    sourceTable: sourceTable.tableName,
+    targetTableId,
+    targetTable: targetTable?.tableName || previous.targetTable || '',
+    targetSchema: targetTable?.schemaName || previous.targetSchema || 'dbo',
+    columnPairs,
+    sourceColumn: columnPairs[0]?.sourceColumn || columnName,
+    targetColumn: columnPairs[0]?.targetColumn || '',
+    cardinality,
+    relationType: cardinality,
+    businessRole: payload.businessRole || '',
+    displayColumn: payload.displayColumn || '',
+    status: previous.status || 'suggested'
+  };
+  window.pendingDictionaryRelationshipPreviews ||= [];
+  const previewIndex = window.pendingDictionaryRelationshipPreviews.findIndex(item => item.id === localId);
+  if (previewIndex >= 0) window.pendingDictionaryRelationshipPreviews[previewIndex] = preview;
+  else window.pendingDictionaryRelationshipPreviews.push(preview);
+  renderDictionaryDrawer(sourceTable);
   const saveAllButton = document.getElementById('dictionary-save-all-button');
   if (saveAllButton) saveAllButton.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi (${window.pendingDictionaryRelationships.length} quan hệ)`;
   showToast?.('Đã thêm quan hệ vào danh sách thay đổi. Nhấn “Lưu tất cả thay đổi” để áp dụng.', 'info');
+}
+
+function discardPendingFieldRelationship(encodedId) {
+  const id = decodeURIComponent(encodedId);
+  window.pendingDictionaryRelationships = (window.pendingDictionaryRelationships || []).filter(item => item.localId !== id);
+  window.pendingDictionaryRelationshipPreviews = (window.pendingDictionaryRelationshipPreviews || []).filter(item => item.id !== id);
+  const sourceTable = findDictionaryTable(window.selectedDictionaryTableId || window.selectedDictionaryTableName);
+  if (sourceTable) renderDictionaryDrawer(sourceTable);
+  const saveAllButton = document.getElementById('dictionary-save-all-button');
+  if (saveAllButton) {
+    const count = window.pendingDictionaryRelationships.length;
+    saveAllButton.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi${count ? ` (${count} quan hệ)` : ''}`;
+  }
 }
 
 async function setFieldRelationshipStatus(encodedId, status) {
@@ -693,6 +743,7 @@ function openDictionaryDrawer(encodedTableIdentity) {
   window.selectedDictionaryTableName = table.tableName;
   window.selectedDictionaryTableId = table.tableId;
   window.pendingDictionaryRelationships = [];
+  window.pendingDictionaryRelationshipPreviews = [];
   renderDictionaryDrawer(table);
   const dialog = document.getElementById('dictionary-drawer');
   dialog?.classList.add('active');
@@ -784,7 +835,7 @@ async function saveSelectedTableDescription() {
     const displayName = Array.from(document.querySelectorAll('.dictionary-column-display-name')).find(el => el.dataset.column === column.columnName);
     const visible = Array.from(document.querySelectorAll('[data-role="column-visible"]')).find(el => el.dataset.column === column.columnName);
     return { columnName: column.columnName, description: description?.value.trim() || '',
-      displayName: displayName ? displayName.value.trim() : (column.displayName || ''), isVisible: visible?.checked !== false };
+      displayName: typeof displayName?.value === 'string' ? displayName.value.trim() : (column.displayName || ''), isVisible: visible?.checked !== false };
   });
   const button = document.getElementById('dictionary-save-all-button');
   try {
@@ -796,6 +847,7 @@ async function saveSelectedTableDescription() {
     window.groupedTablesData = Array.isArray(data.tables) ? data.tables : getDictionaryTables();
     window.tableRelationshipsData = Array.isArray(data.relationships) ? data.relationships : window.tableRelationshipsData;
     window.pendingDictionaryRelationships = [];
+    window.pendingDictionaryRelationshipPreviews = [];
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     renderDictionaryDrawer(findDictionaryTable(tableId || tableName));
