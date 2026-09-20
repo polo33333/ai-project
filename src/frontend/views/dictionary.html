@@ -105,7 +105,7 @@
           <p>Bảng active sẽ được đưa vào ngữ cảnh schema khi AI tạo truy vấn.</p>
         </div>
         <label class="switch">
-          <input type="checkbox" id="dict-drawer-active-toggle" onchange="toggleSelectedDictionaryTableActive(this.checked)">
+          <input type="checkbox" id="dict-drawer-active-toggle">
           <span class="slider round"></span>
         </label>
       </div>
@@ -123,11 +123,6 @@
         </div>
         <p class="dictionary-defaults-hint"><i class="fa-regular fa-lightbulb"></i> Dùng khi câu hỏi không gọi tên rõ metric hoặc cột thời gian.</p>
         <textarea class="form-control dictionary-table-description" id="dict-drawer-table-description" rows="4" placeholder="Mô tả ý nghĩa nghiệp vụ của bảng này..."></textarea>
-        <div class="dictionary-drawer-actions">
-          <button class="btn-primary" onclick="saveSelectedTableDescription()">
-            <i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình bảng
-          </button>
-        </div>
       </div>
 
       <div class="dictionary-drawer-section">
@@ -138,6 +133,12 @@
           </div>
         </div>
         <div id="dict-drawer-columns" class="dictionary-columns-list"></div>
+      </div>
+      <div class="dictionary-drawer-actions dictionary-drawer-actions-bottom">
+        <span><i class="fa-solid fa-circle-info"></i> Lưu cấu hình bảng, tất cả cột và quan hệ đang chờ</span>
+        <button class="btn-primary" id="dictionary-save-all-button" onclick="saveSelectedTableDescription()">
+          <i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi
+        </button>
       </div>
     </div>
   </section>

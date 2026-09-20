@@ -39,3 +39,15 @@ test('settings reject stale revisions and redact credentials in URLs', t => {
   fs.appendFileSync(file, 'PORT=3002\n');
   assert.throws(() => service.save({ revision: before.revision, values: { PORT: '4000' } }), error => error.statusCode === 409);
 });
+
+test('settings expose safe env options with example defaults and preserve CORS lists', t => {
+  const { service } = fixture(t, 'CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000\nSQL_JOIN_PLANNER_ENABLED=true\n');
+  const fields = service.get().fields;
+  const byKey = key => fields.find(field => field.key === key);
+  assert.equal(byKey('CORS_ALLOWED_ORIGINS').value, 'http://127.0.0.1:3000,http://localhost:3000');
+  assert.equal(byKey('CORS_ALLOWED_ORIGINS').type, 'text');
+  assert.equal(byKey('SQL_JOIN_PLANNER_ENABLED').value, 'true');
+  assert.equal(byKey('AI_PROVIDER_MAX_MODEL_CALLS').value, '12');
+  assert.equal(byKey('APP_STORAGE_BACKEND').type, 'select');
+  assert.equal(byKey('AI_DOCUMENT_CONTEXT_CHARS'), undefined);
+});

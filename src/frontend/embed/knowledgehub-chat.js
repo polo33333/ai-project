@@ -18,7 +18,16 @@
   let conversationVersion = 0;
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const formatDisplayValue = value => {
+  const isBooleanDisplayColumn = (columnName = '') => {
+    const normalized = String(columnName).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    return /^(?:is|has|can|should|allow|enable|active|inactive|deleted|locked|verified|approved|visible)/.test(normalized)
+      || /^(?:co|da|duoc|kichhoat|hieuluc)/.test(normalized);
+  };
+  const formatDisplayValue = (value, columnName = '') => {
+    if (value === true || String(value).toLowerCase() === 'true') return 'Có';
+    if (value === false || String(value).toLowerCase() === 'false') return 'Không';
+    if (isBooleanDisplayColumn(columnName) && (value === 1 || String(value) === '1')) return 'Có';
+    if (isBooleanDisplayColumn(columnName) && (value === 0 || String(value) === '0')) return 'Không';
     const text = String(value ?? '');
     const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
     if (!match) return text;
@@ -32,9 +41,28 @@
     '[$1]($2)'
   );
   const sanitizeSystemPaths = value => String(value ?? '')
+    .replace(/\[[^\]]*\]\(\s*\[SYSTEM_PATH_HIDDEN\]\s*\)/gi, '')
     .replace(/file:\/{2,3}[^\s<>"'`)]+/gi, '[SYSTEM_PATH_HIDDEN]')
     .replace(/(^|[\s(`"'=])(?:[a-z]:[\\/]|\\\\[^\s\\/]+[\\/])[^\s<>"'`)]+/gim, '$1[SYSTEM_PATH_HIDDEN]')
-    .replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]');
+    .replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]')
+    .replace(/\[[^\]]*\]\(\s*\[SYSTEM_PATH_HIDDEN\]\s*\)/gi, '')
+    .replace(/\[SYSTEM_PATH_HIDDEN\]/g, '')
+    .replace(/^[\s>*•-]*(?:🔽\s*)?(?:Tải (?:về|xuống)(?: tại)?|Download)\s*:?\s*(?:\(\s*\))?\s*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const stripInlineDownloadLink = (value, downloadUrl) => {
+    const text = String(value ?? '');
+    const url = String(downloadUrl || '').trim();
+    if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return text;
+    const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text
+      .replace(new RegExp(`\\[[^\\]]*\\]\\(\\s*${escapedUrl}\\s*\\)`, 'gi'), '')
+      .replace(new RegExp(escapedUrl, 'gi'), '')
+      .replace(/^[\s>*•-]*(?:🔽\s*)?(?:Tải (?:về|xuống|file)(?: tại| kết quả)?|Download)\s*:?\s*[.,]*\s*$/gim, '')
+      .replace(/:\s*\.(?=\s|$)/g, '.')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
   const renderText = value => escapeHtml(normalizeDownloadLinks(sanitizeSystemPaths(value)))
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, rawUrl) => {
       const decodedUrl = rawUrl.replace(/&amp;/g, '&');
@@ -77,7 +105,7 @@
           index += 1;
         }
         index -= 1;
-        output.push(`<div class="kh-embed-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${renderText(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, cellIndex) => `<td>${renderText(formatDisplayValue(row[cellIndex] || ''))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        output.push(`<div class="kh-embed-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${renderText(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((header, cellIndex) => `<td>${renderText(formatDisplayValue(row[cellIndex] ?? '', header))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
       } else prose.push(lines[index]);
     }
     flushProse();
@@ -236,9 +264,10 @@
       const data = await response.json();
       if (!response.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${response.status}`);
       if (requestVersion !== conversationVersion) return;
-      const hasMarkdownTable = data.reply && data.reply.includes('|') && /\|?\s*:?-+:?\s*\|/.test(data.reply);
-      let result = hasMarkdownTable ? renderRichText(data.reply || '') : renderText(data.reply || '');
-      if (data.downloadUrl && !String(data.reply || '').includes(data.downloadUrl)) {
+      const replyWithoutDownloadLink = stripInlineDownloadLink(data.reply || '', data.downloadUrl);
+      const hasMarkdownTable = replyWithoutDownloadLink.includes('|') && /\|?\s*:?-+:?\s*\|/.test(replyWithoutDownloadLink);
+      let result = hasMarkdownTable ? renderRichText(replyWithoutDownloadLink) : renderText(replyWithoutDownloadLink);
+      if (data.downloadUrl) {
         const downloadHref = new URL(data.downloadUrl, `${apiBase}/`).href;
         result += `<br><a class="kh-embed-link" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener noreferrer">Tải file kết quả</a>`;
       }
@@ -246,7 +275,7 @@
       result += renderEmbedCitations(data.citations, data.citationValidation, data.supportingEvidence);
       if (!hasMarkdownTable && data.toolResult?.rows?.length) {
         const head = data.toolResult.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('');
-        const rows = data.toolResult.rows.slice(0, 20).map(row => `<tr>${row.map(cell => `<td>${escapeHtml(formatDisplayValue(cell))}</td>`).join('')}</tr>`).join('');
+        const rows = data.toolResult.rows.slice(0, 20).map(row => `<tr>${row.map((cell, cellIndex) => `<td>${escapeHtml(formatDisplayValue(cell, data.toolResult.columns[cellIndex]))}</td>`).join('')}</tr>`).join('');
         result += `<details class="kh-embed-data"><summary style="padding:7px 8px;cursor:pointer">Xem dữ liệu (${data.toolResult.rows.length} dòng)</summary><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></details>`;
       }
       thinking.remove(); append(result, 'ai', hasMarkdownTable ? 'kh-embed-has-table' : '');

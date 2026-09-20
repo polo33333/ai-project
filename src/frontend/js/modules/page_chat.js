@@ -409,10 +409,30 @@ function escapeChatMarkdown(value) {
 
 function sanitizeSystemPaths(value) {
   return String(value ?? '')
+    .replace(/\[[^\]]*\]\(\s*\[SYSTEM_PATH_HIDDEN\]\s*\)/gi, '')
     .replace(/<a\b[^>]*href\s*=\s*["']\s*file:[\s\S]*?<\/a>/gi, '[SYSTEM_PATH_HIDDEN]')
     .replace(/file:\/{2,3}[^\s<>"'`)]+/gi, '[SYSTEM_PATH_HIDDEN]')
     .replace(/(^|[\s(`"'=])(?:[a-z]:[\\/]|\\\\[^\s\\/]+[\\/])[^\s<>"'`)]+/gim, '$1[SYSTEM_PATH_HIDDEN]')
-    .replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]');
+    .replace(/(^|[\s(`"'=])\/(?:home|root|etc|var|tmp|srv|opt|Users)\/[^\s<>"'`)]+/g, '$1[SYSTEM_PATH_HIDDEN]')
+    .replace(/\[[^\]]*\]\(\s*\[SYSTEM_PATH_HIDDEN\]\s*\)/gi, '')
+    .replace(/\[SYSTEM_PATH_HIDDEN\]/g, '')
+    .replace(/^[\s>*•-]*(?:🔽\s*)?(?:Tải (?:về|xuống)(?: tại)?|Download)\s*:?\s*(?:\(\s*\))?\s*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function stripInlineDownloadLink(value, downloadUrl) {
+  const text = String(value ?? '');
+  const url = String(downloadUrl || '').trim();
+  if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return text;
+  const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text
+    .replace(new RegExp(`\\[[^\\]]*\\]\\(\\s*${escapedUrl}\\s*\\)`, 'gi'), '')
+    .replace(new RegExp(escapedUrl, 'gi'), '')
+    .replace(/^[\s>*•-]*(?:🔽\s*)?(?:Tải (?:về|xuống|file)(?: tại| kết quả)?|Download)\s*:?\s*[.,]*\s*$/gim, '')
+    .replace(/:\s*\.(?=\s|$)/g, '.')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function parseMarkdownInline(value) {
@@ -449,7 +469,17 @@ function isMarkdownTableDivider(line) {
   return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
 }
 
-function formatChatDisplayValue(value) {
+function isBooleanDisplayColumn(columnName = '') {
+  const normalized = String(columnName).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return /^(?:is|has|can|should|allow|enable|active|inactive|deleted|locked|verified|approved|visible)/.test(normalized)
+    || /^(?:co|da|duoc|kichhoat|hieuluc)/.test(normalized);
+}
+
+function formatChatDisplayValue(value, columnName = '') {
+  if (value === true || String(value).toLowerCase() === 'true') return 'Có';
+  if (value === false || String(value).toLowerCase() === 'false') return 'Không';
+  if (isBooleanDisplayColumn(columnName) && (value === 1 || String(value) === '1')) return 'Có';
+  if (isBooleanDisplayColumn(columnName) && (value === 0 || String(value) === '0')) return 'Không';
   const text = String(value ?? '');
   const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
   if (!match) return text;
@@ -463,8 +493,8 @@ function renderMarkdownTable(headerLine, bodyLines) {
   const headers = splitMarkdownTableRow(headerLine);
   const rows = bodyLines.map(splitMarkdownTableRow);
   const headerHtml = headers.map(cell => `<th>${parseMarkdownInline(cell)}</th>`).join('');
-  const bodyHtml = rows.map(row => `<tr>${headers.map((_, index) => {
-    const value = formatChatDisplayValue(row[index] || '');
+  const bodyHtml = rows.map(row => `<tr>${headers.map((header, index) => {
+    const value = formatChatDisplayValue(row[index] ?? '', header);
     const empty = !value || value === '-';
     return `<td${empty ? ' class="is-empty"' : ''}>${empty ? '&mdash;' : parseMarkdownInline(value)}</td>`;
   }).join('')}</tr>`).join('');
@@ -606,7 +636,8 @@ function renderChartSpec(canvasId, chartSpec) {
         if (config.type === 'bar') {
           ds.borderWidth = ds.borderWidth ?? 1;
           ds.borderRadius = ds.borderRadius ?? 5;
-          ds.maxBarThickness = ds.maxBarThickness ?? 120;
+          ds.maxBarThickness = Math.min(Number(ds.maxBarThickness) || 56, 56);
+          if (Number.isFinite(Number(ds.barThickness))) ds.barThickness = Math.min(Number(ds.barThickness), 56);
         }
         if (config.type === 'line') ds.tension = ds.tension ?? 0.3;
       });
@@ -671,7 +702,7 @@ function disposeThinkingBubble(root) {
 
 function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '') {
   const url = String(downloadUrl || '').trim();
-  if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url) || String(renderedAnswer).includes('chat-download-link')) return '';
+  if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return '';
   return `<div><a class="chat-download-link" href="${escapeChatMarkdown(url)}" download><i class="fa-solid fa-download"></i>Tải file báo cáo</a></div>`;
 }
 
@@ -1213,8 +1244,8 @@ async function sendPageChatMessage() {
           `<th style="padding:8px 12px;text-align:left;background:#f8fafc;font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;">${c}</th>`
         ).join('');
         const rowsBody = execution.rows.map(r =>
-          `<tr style="border-bottom:1px solid #f1f5f9;">${r.map(cell =>
-            `<td style="padding:8px 12px;font-size:12.5px;color:#1e293b;">${escapeChatMarkdown(formatChatDisplayValue(cell ?? ''))}</td>`
+          `<tr style="border-bottom:1px solid #f1f5f9;">${r.map((cell, cellIndex) =>
+            `<td style="padding:8px 12px;font-size:12.5px;color:#1e293b;">${escapeChatMarkdown(formatChatDisplayValue(cell ?? '', execution.columns[cellIndex]))}</td>`
           ).join('')}</tr>`
         ).join('');
         return `
@@ -1245,7 +1276,7 @@ async function sendPageChatMessage() {
             <i class="fa-solid fa-chart-bar" style="color:#6366f1;"></i>
             ${chartSpec.title || 'Biểu đồ dữ liệu'}
           </div>
-          <canvas id="${chartId}" class="chat-chart-canvas"></canvas>
+          <div class="chat-chart-stage"><canvas id="${chartId}" class="chat-chart-canvas"></canvas></div>
         </div>
       `;
     }
@@ -1287,7 +1318,7 @@ async function sendPageChatMessage() {
     ` : '';
 
     // Assemble AI Bubble
-    const renderedAnswerHtml = renderVerifiedCitationMarkers(parseMarkdown(aiResponseText), data.citations);
+    const renderedAnswerHtml = renderVerifiedCitationMarkers(parseMarkdown(stripInlineDownloadLink(aiResponseText, data.downloadUrl)), data.citations);
     const downloadActionHtml = renderPageChatDownloadAction(data.downloadUrl, renderedAnswerHtml);
     const aiDiv = document.createElement('div');
     aiDiv.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;';

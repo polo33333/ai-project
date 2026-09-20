@@ -2,7 +2,7 @@
 
 KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát triển bằng Node.js và Vanilla HTML/CSS/JavaScript. Phiên bản hiện tại tập trung vào quản lý tri thức từ SQL Server, Data Dictionary, Business Glossary, Text-to-SQL, chat đa nhà cung cấp AI và các công cụ phân tích dữ liệu.
 
-> **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [biên bản chuyển dữ liệu](docs/POSTGRESQL_IMPORT_STATUS_180926.md) và [Trạng thái triển khai](#trạng-thái-triển-khai).
+> **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [Trạng thái triển khai](#trạng-thái-triển-khai).
 
 README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
@@ -160,8 +160,9 @@ KNOWLEDGE_REINDEX_ON_START=false
 AI_MAX_TOOL_ITERATIONS=5
 AI_DEFAULT_TIMEOUT_MS=30000
 LOCAL_MODEL_HARNESS_ENABLED=true
-LOCAL_MODEL_SKILL_CORE_ENABLED=false
-LOCAL_MODEL_FEW_SHOT_ENABLED=false
+LOCAL_MODEL_SKILL_CORE_ENABLED=true
+LOCAL_MODEL_FEW_SHOT_ENABLED=true
+LOCAL_MODEL_MAX_ITERATIONS=7
 LOCAL_MODEL_MAX_MODEL_CALLS=9
 LOCAL_MODEL_MAX_SQL_CALLS=3
 AI_PROVIDER_GUARDS_ENABLED=true
@@ -419,7 +420,7 @@ npm run test:storage
 npm run eval:provider
 ```
 
-Đã đo thời gian snapshot từng tab trên dữ liệu hiện tại, chưa phải thời gian tải trang end-to-end hoặc p95 tải lớn. Xem [biên bản hiệu năng](docs/PAGE_LOAD_PERFORMANCE_180926.md).
+Đã đo thời gian snapshot từng tab trên dữ liệu hiện tại; số liệu này chưa phải thời gian tải trang end-to-end hoặc p95 tải lớn.
 
 Project có tests cho Local Harness, Memory Core, Training Core, `skill_core`, semantic evaluator, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context, export và retrieval. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
 
@@ -449,8 +450,15 @@ Có thể kiểm tra cú pháp toàn bộ JavaScript bằng PowerShell:
 
 ```powershell
 $files = rg --files -g '*.js' src server.js
+$failed = @()
 foreach ($file in $files) {
   node --check $file
+  if ($LASTEXITCODE -ne 0) {
+    $failed += $file
+  }
+}
+if ($failed.Count -gt 0) {
+  throw "JavaScript syntax check failed: $($failed -join ', ')"
 }
 ```
 
@@ -504,7 +512,7 @@ Trước khi chia sẻ repo hoặc triển khai:
 
 ## Roadmap
 
-Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Xem backlog BE-01–BE-11 và tiêu chí nghiệm thu trong [kế hoạch backend](docs/Backend_Review_Development_Plan-080926.md). Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành.
+Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành. Công việc gần nhất được theo dõi trong [kế hoạch bước tiếp theo](docs/NEXT_STEPS_PLAN_180926.md).
 
 ### Phase 1 - Nền tảng MVP
 
@@ -534,21 +542,8 @@ Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ
 ## Tài liệu
 
 - [Nâng cấp kiến trúc RAG và citation](docs/RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md)
-- [Quan hệ SQL và join enrichment](docs/SQL_RELATIONSHIP_JOIN_PLAN_190926.md)
-- [Tích hợp PostgreSQL: kế hoạch và checklist](docs/POSTGRESQL_DATA_INTEGRATION_PLAN_180926.md)
-- [Biên bản dữ liệu và runtime PostgreSQL](docs/POSTGRESQL_IMPORT_STATUS_180926.md)
-- [Kiểm tra tải trang và dữ liệu từng tab](docs/PAGE_LOAD_PERFORMANCE_180926.md)
-- [Tối ưu provider bên thứ ba](docs/THIRD_PARTY_PROVIDER_OPTIMIZATION_PLAN_170926.md)
-
-- [Memory Core Upgrade v2](docs/MEMORY_CORE_UPGRADE_PLAN_v2_120926.md)
-- [Skill Core Upgrade](docs/SKILL_CORE_UPGRADE_PLAN_120926.md)
-- [Local Model Optimization v2](docs/LOCAL_MODEL_OPTIMIZATION_MASTER_PLAN_v2.md)
-
-- [Đánh giá backend và kế hoạch phát triển — 08/09/2026](docs/Backend_Review_Development_Plan-080926.md)
-
-- [KnowledgeHub Master Plan v3](docs/KnowledgeHub_Master_Plan_v3.docx)
-- [Kế hoạch triển khai Phase 1-2 - bản nháp](docs/KnowledgeHub_Phase1_Phase2_Implementation_Plan_Draft.md)
-- [Kế hoạch SQL Server Connector Phase 1](docs/Phase1_SQLServer_Connector_Plan.docx)
+- [Kế hoạch bước tiếp theo](docs/NEXT_STEPS_PLAN_180926.md)
+- [Kế hoạch hiểu hình ảnh trong chat](docs/CHAT_IMAGE_UNDERSTANDING_PLAN_180926.md)
 
 ## Quy ước đóng góp
 

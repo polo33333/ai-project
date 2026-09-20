@@ -35,7 +35,7 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     .map(column => ({ ...column, tableName: candidate.tableName })));
   const tableColumns = table ? mentionedColumns.filter(column => column.tableName === table.tableName) : mentionedColumns;
   const numericType = /^(?:tinyint|smallint|int|bigint|decimal|numeric|float|real|money|smallmoney)$/i;
-  const availableColumns = table?.columns || [];
+  const availableColumns = (table?.columns || []).filter(column => column.isVisible !== false);
   const numericColumns = availableColumns.filter(column => numericType.test(column.dataType) && !/id$/i.test(column.columnName));
   const tableBase = String(table?.tableName || '').replace(/^[A-Z]+_/i, '');
   const configuredMetric = availableColumns.find(column => column.columnName === table?.defaultMetric && numericType.test(column.dataType));
@@ -74,7 +74,7 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     intent: months ? 'aggregate_timeseries' : listIntent ? 'list' : 'record_lookup',
     question,
     table: table?.tableName || null,
-    schemaColumns: (table?.columns || []).map(column => column.columnName),
+    schemaColumns: availableColumns.map(column => column.columnName),
     identityColumns: [...new Set([...primaryIdentityColumns, ...secondaryIdentityColumns])].slice(0, 6),
     columnDisplayNames: Object.fromEntries((table?.columns || []).filter(column => column.displayName)
       .map(column => [column.columnName, column.displayName])),

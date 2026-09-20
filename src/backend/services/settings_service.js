@@ -14,15 +14,21 @@ function parse(text) {
 }
 const envPathAtStartup = path.join(root, '.env');
 const envValuesAtStartup = fs.existsSync(envPathAtStartup) ? parse(fs.readFileSync(envPathAtStartup, 'utf8')) : {};
+const examplePath = path.join(root, '.env.example');
+const exampleValues = fs.existsSync(examplePath) ? parse(fs.readFileSync(examplePath, 'utf8')) : {};
 const safeServerKeys = ['HOST', 'SHUTDOWN_TIMEOUT_MS', 'CORS_ALLOWED_ORIGINS', 'SESSION_TOUCH_INTERVAL_MS', 'KNOWLEDGEHUB_BACKUP_DIR'];
-const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])].filter(key=>key!=='QDRANT_EXE');
-const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? '']));
+const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])]
+  .filter(key => key !== 'QDRANT_EXE' && (safeServerKeys.includes(key) || key in envValuesAtStartup || key in exampleValues));
+const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? exampleValues[key] ?? '']));
 Object.assign(defaults, {
-  AI_MAX_TOOL_ITERATIONS: '10', LOCAL_AI_MODEL: 'qwen3.5:9b',
-  LOCAL_MODEL_SKILL_CORE_ENABLED: envValuesAtStartup.LOCAL_MODEL_SKILL_CORE_ENABLED ?? 'false',
-  LOCAL_MODEL_FEW_SHOT_ENABLED: envValuesAtStartup.LOCAL_MODEL_FEW_SHOT_ENABLED ?? 'false'
+  AI_MAX_TOOL_ITERATIONS: envValuesAtStartup.AI_MAX_TOOL_ITERATIONS ?? exampleValues.AI_MAX_TOOL_ITERATIONS ?? '10',
+  LOCAL_AI_MODEL: envValuesAtStartup.LOCAL_AI_MODEL ?? exampleValues.LOCAL_AI_MODEL ?? 'qwen3.5:9b',
+  LOCAL_MODEL_SKILL_CORE_ENABLED: envValuesAtStartup.LOCAL_MODEL_SKILL_CORE_ENABLED ?? exampleValues.LOCAL_MODEL_SKILL_CORE_ENABLED ?? 'false',
+  LOCAL_MODEL_FEW_SHOT_ENABLED: envValuesAtStartup.LOCAL_MODEL_FEW_SHOT_ENABLED ?? exampleValues.LOCAL_MODEL_FEW_SHOT_ENABLED ?? 'false'
 });
 const choices = {
+  NODE_ENV: ['production', 'development', 'test'],
+  APP_STORAGE_BACKEND: ['postgres', 'json'],
   EMBEDDING_PROVIDER: ['ollama', 'openai'],
   EMBEDDING_FALLBACK_MODE: ['error', 'deterministic']
 };
@@ -36,15 +42,19 @@ const descriptions = {
   QDRANT_DOCUMENT_VECTOR_SIZE: 'Phải khớp số chiều model embedding tài liệu.',
   EMBEDDING_FALLBACK_MODE: 'error: dừng khi embedding lỗi; deterministic: vector dự phòng, không đảm bảo chất lượng tìm kiếm.',
 };
+const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT']);
 const schema = Object.entries(defaults).map(([key, value]) => ({
   key, defaultValue: value, label: help[key]?.[0] || key.replace(/_/g, ' '),
   group: /^(LOCAL_MODEL|LOCAL_AI|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
-    : /^(AI_MEMORY)/.test(key) ? 'Bộ nhớ hội thoại'
+    : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'
+      : /^(AI_MEMORY|MEMORY_|MAX_CHAT_HISTORY)/.test(key) ? 'Bộ nhớ hội thoại'
       : /^(WEB_SEARCH)/.test(key) ? 'Tìm kiếm web'
-        : /^(AI_SCHEMA)/.test(key) ? 'Ngữ cảnh CSDL'
-          : safeServerKeys.includes(key) || key === 'PORT' ? 'Máy chủ' : 'Kho tri thức và embedding',
+        : /^(AI_SCHEMA|SQL_)/.test(key) ? 'Ngữ cảnh và quan hệ CSDL'
+          : /^(APP_STORAGE|APP_PG)/.test(key) ? 'Lưu trữ PostgreSQL'
+            : /^(MCP_)/.test(key) ? 'MCP và công cụ'
+              : safeServerKeys.includes(key) || /^(PORT|NODE_ENV|TRUST_PROXY|API_BODY|CHAT_RATE|KNOWLEDGEHUB_)/.test(key) ? 'Máy chủ' : 'Kho tri thức và embedding',
   type: choices[key] ? 'select' : /^(true|false)$/.test(value) ? 'boolean'
-    : /^\d+(\.\d+)?$/.test(value) ? 'number' : /^https?:/.test(value) ? 'url' : 'text',
+    : /^\d+(\.\d+)?$/.test(value) ? 'number' : urlKeys.has(key) ? 'url' : 'text',
   options: choices[key], readOnly: false,
   description: help[key]?.[1] || descriptions[key] || 'Áp dụng sau khi khởi động lại máy chủ.'
 }));
@@ -58,8 +68,8 @@ function validate(field, value) {
   if (field.options && !field.options.includes(value)) fail(`Lựa chọn không hợp lệ: ${field.key}`);
   if (field.type === 'number') {
     const n = Number(value);
-    const fractional = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE'].includes(field.key);
-    const allowZero = fractional || field.key === 'LOCAL_MODEL_MAX_REPAIRS';
+    const fractional = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN'].includes(field.key);
+    const allowZero = fractional || ['LOCAL_MODEL_MAX_REPAIRS', 'AI_PROVIDER_MAX_REPAIRS'].includes(field.key);
     const max = field.key === 'PORT' ? 65535 : field.key === 'AI_DOCUMENT_MIN_SCORE' ? 1 : field.key === 'LOCAL_MODEL_TEMPERATURE' ? 2 : 1000000000;
     if (!Number.isFinite(n) || n < (allowZero ? 0 : 1) || n > max || (!fractional && !Number.isInteger(n))) fail(`Số ngoài phạm vi: ${field.key}`);
   }

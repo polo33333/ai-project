@@ -706,6 +706,52 @@ test('unfiltered customer list recovers from repeated invalid model SQL using sc
   assert.equal(result.trace.completionStatus, 'SUCCESS');
 });
 
+test('simple local list uses the reviewed enrichment plan before asking the model for SQL', async () => {
+  const executed = [];
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool();
+  sqlTool.run = async args => {
+    executed.push(args.sql);
+    return { sql: args.sql, rows: [{ 'Số HĐ': 'HD-01', 'Khách hàng': 'ACME' }], rowCount: 1 };
+  };
+  toolManager.registerTool(sqlTool);
+  let modelCalls = 0;
+  const harness = new LocalModelHarness({ toolManager, dispatch: async () => {
+    modelCalls++;
+    throw new Error('The model should not generate SQL for a simple entity list.');
+  } });
+  const joinPlan = {
+    outcome: 'ready', purpose: 'enrichment',
+    tableRefs: [
+      { tableId: 'contract', tableName: 'T_Contract', schemaName: 'dbo', alias: 't1' },
+      { tableId: 'customer', tableName: 'M_Customer', schemaName: 'dbo', alias: 't2' }
+    ],
+    edges: [{
+      relationshipId: 'contract-customer', fromTableId: 'contract', toTableId: 'customer', joinType: 'LEFT',
+      columnPairs: [{ sourceColumn: 'CustomerID', targetColumn: 'CustomerID' }],
+      displayColumn: 'CustomerName', businessRole: 'Khách hàng'
+    }]
+  };
+  const result = await harness.run({
+    userMessage: 'ds hợp đồng', provider: localProvider,
+    messages: [{ role: 'user', content: 'ds hợp đồng' }], enabledToolNames: ['execute_sql_query'],
+    context: {
+      joinPlan,
+      requestPlan: {
+        table: 'T_Contract', intent: 'list', question: 'ds hợp đồng', schemaColumns: ['ContractID', 'ContractNo', 'CustomerID'],
+        columnDisplayNames: { ContractNo: 'Số HĐ' }, unfilteredList: false, requiredColumns: [], outputs: { data: true }
+      }
+    }
+  });
+  assert.equal(modelCalls, 0);
+  assert.equal(executed.length, 1);
+  assert.match(executed[0], /LEFT JOIN \[dbo\]\.\[M_Customer\]/);
+  assert.match(executed[0], /t2\.\[CustomerName\] AS \[Khách hàng\]/);
+  assert.match(result.replyText, /HD-01/);
+  assert.ok(result.trace.steps.some(step => step.type === 'DETERMINISTIC_LIST_QUERY' && step.success));
+  assert.equal(result.trace.completionStatus, 'SUCCESS');
+});
+
 test('list rendering includes all four SQL rows even when model text truncates on row two', async () => {
   const toolManager = new ToolManager();
   const sqlTool = new SqlTool();

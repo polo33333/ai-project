@@ -591,7 +591,6 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   if (activityCard) activityCard.style.display = isDashboard ? 'block' : 'none';
   if (routerSection) routerSection.style.display = isDashboard ? 'block' : 'none';
   if (dashboardLower) dashboardLower.classList.toggle('is-dashboard', isDashboard);
-  if (isDashboard && typeof refreshDashboardMetrics === 'function') refreshDashboardMetrics();
 
   const pageHeading = document.getElementById('page-heading');
   const dashboardHeadingIcon = document.getElementById('dashboard-heading-icon');
@@ -709,7 +708,10 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   if (isDashboard) {
     const dashLogs = document.getElementById('view-dashboard-logs');
     if (dashLogs) dashLogs.style.display = 'block';
-    if (typeof fetchDashboardLogs === 'function') fetchDashboardLogs();
+    requestAnimationFrame(() => {
+      if (typeof refreshDashboardMetrics === 'function') refreshDashboardMetrics();
+      if (typeof fetchDashboardLogs === 'function') fetchDashboardLogs();
+    });
     return;
   }
 
@@ -1015,7 +1017,7 @@ function renderCopilotChart(chartSpec) {
       if (typeof renderChartSpec === 'function') renderChartSpec(chartId, chartSpec);
     }, 80);
   });
-  return `<div class="copilot-chart-box"><canvas id="${chartId}"></canvas></div>`;
+  return `<div class="copilot-chart-box"><div class="chat-chart-stage"><canvas id="${chartId}" class="chat-chart-canvas"></canvas></div></div>`;
 }
 
 function addCopilotThinkingStep(containerId, icon, label, status = 'running') {
@@ -1556,7 +1558,7 @@ window.sendChatMessage = async function sendChatMessage() {
     }, requestController.signal);
     const reply = data.reply || data.replyText || data.message || 'Không tìm thấy thông tin tương ứng.';
     const sqlQuery = data.generatedSql || data.sql || null;
-    const renderedReply = renderVerifiedCitationMarkers(renderCopilotText(reply), data.citations);
+    const renderedReply = renderVerifiedCitationMarkers(renderCopilotText(stripInlineDownloadLink(reply, data.downloadUrl)), data.citations);
     const richHtml = [
       renderedReply,
       renderCopilotDownloadAction(data.downloadUrl, renderedReply),

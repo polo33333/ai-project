@@ -26,12 +26,12 @@
     control.className = 'form-control settings-input'; control.dataset.key = field.key; control.dataset.initial = field.value;
     control.setAttribute('aria-label', field.label);
     if (control.tagName === 'SELECT') {
-      const labels = {ollama:'Ollama · chạy nội bộ',openai:'API tương thích OpenAI',error:'Dừng và báo lỗi',deterministic:'Vector dự phòng'};
+      const labels = {ollama:'Ollama · chạy nội bộ',openai:'API tương thích OpenAI',error:'Dừng và báo lỗi',deterministic:'Vector dự phòng',production:'Production',development:'Development',test:'Test',postgres:'PostgreSQL',json:'JSON file'};
       const options = (field.options || []).map(option => [option, labels[option] || option]);
       options.forEach(([optionValue, label]) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = label; control.append(option); });
     } else {
       control.type = field.type === 'number' ? 'number' : field.type === 'url' ? 'url' : 'text';
-      if (field.type === 'number') control.step = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE'].includes(field.key) ? 'any' : '1';
+      if (field.type === 'number') control.step = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN'].includes(field.key) ? 'any' : '1';
     }
     control.value = field.value; control.addEventListener('input', updateDirtyState); control.addEventListener('change', updateDirtyState);
     return control;

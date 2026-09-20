@@ -172,12 +172,13 @@ class QdrantService {
 
       // 3. Index Active Tables & Columns
       for (const table of activeTables) {
+        const visibleColumns = (table.columns || []).filter(column => column.isVisible !== false);
         // Table level metadata
         const aliases = Array.isArray(domainAliases?.[table.domain]) ? domainAliases[table.domain] : [];
         const aliasText = aliases.length ? ` Từ khóa nghiệp vụ: ${aliases.join(', ')}.` : '';
         const defaultsText = table.defaultMetric || table.defaultTimeColumn
           ? ` Mặc định: metric ${table.defaultMetric || 'không có'}, thời gian ${table.defaultTimeColumn || 'không có'}, tổng hợp ${table.defaultAggregation || 'SUM'}.` : '';
-        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText}${defaultsText} ${table.tableDescription || ''}. Các cột: ${table.columns.map(c => c.columnName).join(', ')}`;
+        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText}${defaultsText} ${table.tableDescription || ''}. Các cột: ${visibleColumns.map(c => c.columnName).join(', ')}`;
         const [tableVector] = await this.embedTexts([tableText], this.vectorSize);
 
         points.push({
@@ -192,14 +193,14 @@ class QdrantService {
             schemaName: table.schemaName || 'dbo',
             domain: table.domain || null,
             description: table.tableDescription || '',
-            columnCount: table.columns.length,
-            columnsList: table.columns.map(c => c.columnName),
+            columnCount: visibleColumns.length,
+            columnsList: visibleColumns.map(c => c.columnName),
             fullText: tableText
           }
         });
 
         // Column level metadata
-        for (const col of table.columns) {
+        for (const col of visibleColumns) {
           const colText = `Bảng ${table.tableName} Cột ${col.columnName} (${col.dataType}), tên hiển thị: ${col.displayName || col.columnName}: ${col.description || ''} PrimaryKey: ${col.isPrimaryKey ? 'Yes' : 'No'}`;
           const [colVector] = await this.embedTexts([colText], this.vectorSize);
 

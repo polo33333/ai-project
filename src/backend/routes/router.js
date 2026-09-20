@@ -731,6 +731,19 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/dictionary/save-table-configuration' && req.method === 'POST') {
+    try {
+      const result = await dictionaryService.saveTableConfiguration(await readJsonBody(req));
+      loggerService.addLog('INFO', 'Data Dictionary', `Đã lưu đồng thời cấu hình bảng, cột và quan hệ của '${result.table.tableName}', sau đó đồng bộ Qdrant một lần.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', tables: result.tables, relationships: result.relationships }));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
   if (pathname === '/api/dictionary/update-column' && req.method === 'POST') {
     try {
       const { tableName, columnName, description, displayName } = await readJsonBody(req);

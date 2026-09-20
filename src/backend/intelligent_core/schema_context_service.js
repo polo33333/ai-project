@@ -58,7 +58,7 @@ function domainText(domain) {
 function tableText(table) {
   return [table.tableName, table.dbName, table.domain, domainText(table.domain), table.tableDescription,
     table.defaultMetric, table.defaultTimeColumn, table.defaultAggregation,
-    ...(table.columns || []).flatMap(column => [column.columnName, column.description, column.dataType])
+    ...(table.columns || []).filter(column => column.isVisible !== false).flatMap(column => [column.columnName, column.description, column.dataType])
   ].filter(Boolean).join(' ');
 }
 
@@ -93,7 +93,7 @@ function expandWithGlossary(query) {
 
 function selectColumns(table, expandedQuery, vectorColumnNames = new Set()) {
   const queryTokens = tokens(expandedQuery);
-  const ranked = (table.columns || []).map((column, index) => ({
+  const ranked = (table.columns || []).filter(column => column.isVisible !== false).map((column, index) => ({
     column,
     index,
     score: lexicalScore(queryTokens, `${column.columnName} ${column.description || ''}`) +
@@ -214,7 +214,7 @@ async function buildSchemaContext(query, options = {}) {
   for (const table of selected) {
     const rankedColumns = selectColumns(table, expandedQuery, vectorColumnNames);
     const mandatory = requiredColumns.get(tableIdentity(table)) || new Set();
-    const columns = [...rankedColumns, ...(table.columns || []).filter(column => mandatory.has(column.columnName) && !rankedColumns.some(item => item.columnName === column.columnName))];
+    const columns = [...rankedColumns, ...(table.columns || []).filter(column => column.isVisible !== false && mandatory.has(column.columnName) && !rankedColumns.some(item => item.columnName === column.columnName))];
     const defaults = table.defaultMetric || table.defaultTimeColumn
       ? ` [Defaults: metric=${table.defaultMetric || 'none'}, time=${table.defaultTimeColumn || 'none'}, aggregation=${table.defaultAggregation || 'SUM'}]` : '';
     lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${defaults}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);
@@ -287,7 +287,7 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   for (const table of selected) {
     const rankedColumns = selectColumns(table, query, new Set());
     const mandatory = requiredColumns.get(tableIdentity(table)) || new Set();
-    const columns = [...rankedColumns, ...(table.columns || []).filter(column => mandatory.has(column.columnName) && !rankedColumns.some(item => item.columnName === column.columnName))];
+    const columns = [...rankedColumns, ...(table.columns || []).filter(column => column.isVisible !== false && mandatory.has(column.columnName) && !rankedColumns.some(item => item.columnName === column.columnName))];
     const defaults = table.defaultMetric || table.defaultTimeColumn
       ? ` [Defaults: metric=${table.defaultMetric || 'none'}, time=${table.defaultTimeColumn || 'none'}, aggregation=${table.defaultAggregation || 'SUM'}]` : '';
     lines.push(`Table ${table.tableName}${table.domain ? ` [Business domain: ${table.domain}]` : ''}${defaults}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`);

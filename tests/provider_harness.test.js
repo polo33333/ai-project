@@ -73,6 +73,50 @@ test('third-party provider uses deterministic enrichment recovery for a limited 
   assert.match(result.replyText, /Duy/);
 });
 
+test('third-party provider executes a simple enriched list without asking the model to generate SQL', async () => {
+  const plan = { intent: 'list', table: 'M_Employee', question: 'ds nv', schemaColumns: ['EmployeeID', 'EmployeeName', 'GenderID'],
+    requiredColumns: [], outputs: { data: true, chart: false, export: false } };
+  const joinPlan = { outcome: 'ready', purpose: 'enrichment', tableRefs: [
+    { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+    { tableRefId: 'constant#2', tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+  ], edges: [{ relationshipId: 'gender', fromTableId: 'employee', toTableId: 'constant', fromTableRefId: 'employee#1', toTableRefId: 'constant#2',
+    joinType: 'LEFT', businessRole: 'Giới tính', displayColumn: 'ConstantName', columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }] };
+  const s = setup([], { rows: [{ EmployeeName: 'Duy', 'Giới tính': 'Nam' }] });
+  const result = await s.run({ userMessage: 'ds nv', messages: [{ role: 'user', content: 'ds nv' }],
+    context: { requestPlan: plan, joinPlan, selectedTables: ['M_Employee', 'M_Constant'], mode: 'data' } });
+  assert.equal(s.requests.length, 0);
+  assert.equal(s.executed.length, 1);
+  assert.match(s.executed[0].sql, /LEFT JOIN \[dbo\]\.\[M_Constant\]/);
+  assert.match(s.executed[0].sql, /t2\.\[ConstantName\] AS \[Giới tính\]/);
+  assert.match(result.replyText, /Duy/);
+  assert.ok(result.trace.steps.some(step => step.type === 'DETERMINISTIC_LIST_QUERY' && step.success));
+  assert.equal(result.trace.completionStatus, 'SUCCESS');
+});
+
+test('legacy third-party path uses the same deterministic relationship list', async () => {
+  const previous = process.env.AI_PROVIDER_GUARDS_ENABLED;
+  process.env.AI_PROVIDER_GUARDS_ENABLED = 'false';
+  try {
+    const plan = { intent: 'list', table: 'M_Employee', question: 'ds nv', schemaColumns: ['EmployeeName', 'GenderID'],
+      requiredColumns: [], outputs: { data: true, chart: false, export: false } };
+    const joinPlan = { outcome: 'ready', purpose: 'enrichment', tableRefs: [
+      { tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+      { tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+    ], edges: [{ relationshipId: 'gender', fromTableId: 'employee', toTableId: 'constant', joinType: 'LEFT',
+      businessRole: 'Giới tính', displayColumn: 'ConstantName', columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }] };
+    const s = setup([], { rows: [{ EmployeeName: 'Duy', 'Giới tính': 'Nam' }] });
+    const result = await s.run({ userMessage: 'ds nv', messages: [{ role: 'user', content: 'ds nv' }],
+      context: { requestPlan: plan, joinPlan, mode: 'data' } });
+    assert.equal(s.requests.length, 0);
+    assert.equal(s.executed.length, 1);
+    assert.match(result.replyText, /Duy/);
+    assert.ok(result.trace.steps.some(step => step.type === 'DETERMINISTIC_LIST_QUERY' && step.success));
+  } finally {
+    if (previous === undefined) delete process.env.AI_PROVIDER_GUARDS_ENABLED;
+    else process.env.AI_PROVIDER_GUARDS_ENABLED = previous;
+  }
+});
+
 test('third-party provider recovers plural follow-ups from verified dataset keys', async () => {
   const plan = { intent: 'record_lookup', table: 'M_Employee', question: '2 nhân viên này thuộc phòng ban gì',
     schemaColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName', 'DepartmentID'], requiredColumns: [],

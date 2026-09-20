@@ -3,8 +3,14 @@
 const dictionaryService = require('./dictionary_service');
 
 function verifiedRelationships(options = {}) {
+  const tables = dictionaryService.getGroupedTables();
+  const columnVisible = (tableId, columnName) => tables.find(table => table.tableId === tableId)?.columns
+    ?.find(column => column.columnName === columnName)?.isVisible !== false;
   return dictionaryService.getTableRelationships().filter(relation => relation.isActive !== false
     && relation.status === 'verified'
+    && (relation.columnPairs || []).every(pair => columnVisible(relation.sourceTableId, pair.sourceColumn)
+      && columnVisible(relation.targetTableId, pair.targetColumn))
+    && (!relation.displayColumn || columnVisible(relation.targetTableId, relation.displayColumn))
     && (!options.dbSourceId || relation.sourceTableId?.startsWith(`${String(options.dbSourceId).toLowerCase()}::`)));
 }
 

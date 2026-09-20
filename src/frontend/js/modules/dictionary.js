@@ -208,8 +208,8 @@ function renderDictionaryDrawer(table) {
   if (descEl) descEl.value = table.tableDescription || '';
   renderDictionaryDomainOptions(table.domain || '');
   const numericType = /^(?:tinyint|smallint|int|bigint|decimal|numeric|float|real|money|smallmoney)$/i;
-  if (metricEl) metricEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => numericType.test(col.dataType) && !/id$/i.test(col.columnName)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
-  if (timeEl) timeEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => /date|time/i.test(col.dataType)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
+  if (metricEl) metricEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => col.isVisible !== false && numericType.test(col.dataType) && !/id$/i.test(col.columnName)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
+  if (timeEl) timeEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => col.isVisible !== false && /date|time/i.test(col.dataType)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
   if (metricEl) metricEl.value = table.defaultMetric || '';
   if (timeEl) timeEl.value = table.defaultTimeColumn || '';
   if (aggregationEl) aggregationEl.value = table.defaultAggregation || 'SUM';
@@ -223,6 +223,10 @@ function renderDictionaryDrawer(table) {
       && (relation.columnPairs || [{ sourceColumn: relation.sourceColumn }]).some(pair => pair.sourceColumn === col.columnName));
     const mappedRelationship = relationships.find(relation => relation.status !== 'rejected' && relation.businessRole && relation.displayColumn);
     return `
+      <div class="dictionary-column-row ${col.isVisible === false ? 'is-excluded' : ''}">
+        <div class="dictionary-column-visible" title="Đưa cột vào schema AI, truy vấn và vector Qdrant">
+          <input type="checkbox" data-role="column-visible" data-column="${escapeDictHtml(col.columnName)}" ${col.isVisible !== false ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleDictionaryColumnVisibility(this)">
+        </div>
       <div class="dictionary-column-card">
         <div class="dictionary-column-meta">
           <div>
@@ -235,27 +239,23 @@ function renderDictionaryDrawer(table) {
         </div>
         <div class="dictionary-column-fields">
           <label><span>Tên hiển thị</span>${mappedRelationship
-            ? `<div class="dictionary-column-derived-name" title="Header được lấy từ vai trò của quan hệ"><i class="fa-solid fa-link"></i><strong>${escapeDictHtml(mappedRelationship.businessRole)}</strong><small>Từ quan hệ</small></div>`
+            ? `<div class="form-control dictionary-column-display-name dictionary-column-derived-name" title="Tên hiển thị lấy từ vai trò của quan hệ"><i class="fa-solid fa-link"></i><span>${escapeDictHtml(mappedRelationship.businessRole)}</span><small>Quan hệ</small></div>`
             : `<input class="form-control dictionary-column-display-name" data-column="${escapeDictHtml(col.columnName)}" value="${escapeDictHtml(col.displayName || '')}" placeholder="VD: Số HĐ">`}</label>
           <label><span>Mô tả cho AI</span><textarea class="form-control dictionary-column-description" data-column="${escapeDictHtml(col.columnName)}" rows="1" placeholder="Ý nghĩa nghiệp vụ của cột...">${escapeDictHtml(col.description || col.columnDescription || '')}</textarea></label>
         </div>
-        <button class="icon-action-btn" onclick="saveDictionaryColumnDescription('${encodedCol}')" title="Lưu mô tả cột">
-          <i class="fa-solid fa-floppy-disk"></i>
-        </button>
         <div class="dictionary-field-relations">
-          <button class="dictionary-relation-toggle" type="button" onclick="toggleFieldRelationshipEditor('${encodedCol}', this)">
-            <i class="fa-solid fa-link"></i> Quan hệ <span>${relationships.length}</span>
+          <button class="dictionary-relation-toggle" type="button" aria-expanded="false" onclick="toggleFieldRelationshipEditor('${encodedCol}', this)">
+            <i class="fa-solid fa-link"></i> Quan hệ <span>${relationships.length}</span><i class="fa-solid fa-chevron-down dictionary-relation-chevron"></i>
           </button>
+          <div class="dictionary-field-relation-content" hidden>
           <div class="dictionary-field-relation-list">
-            ${relationships.map(relation => `<div class="dictionary-field-relation-chip">
+            ${relationships.map(relation => `<div class="dictionary-field-relation-chip" role="button" tabindex="0" onclick="editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}')" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}'); }">
               <div class="dictionary-relation-chip-info">
                 <span class="dictionary-relation-path">${escapeDictHtml((relation.columnPairs || [{ sourceColumn: relation.sourceColumn, targetColumn: relation.targetColumn }]).map(pair => `${pair.sourceColumn} → ${pair.targetColumn}`).join(', '))} <strong>${escapeDictHtml(relation.targetTable)}</strong></span>
                 ${relation.displayColumn ? `<span class="dictionary-relation-display"><i class="fa-regular fa-eye"></i>${escapeDictHtml(relation.displayColumn)}</span>` : ''}
                 <small class="relationship-status relationship-status-${escapeDictHtml(relation.status || 'suggested')}">${escapeDictHtml(formatRelationshipCardinality(relation.cardinality || relation.relationType))} · ${escapeDictHtml(relation.status || 'suggested')}</small>
               </div>
               <div class="dictionary-relation-chip-actions">
-                <button type="button" class="relation-action edit" onclick="event.stopPropagation(); editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}')" title="Chỉnh sửa"><i class="fa-solid fa-pen"></i></button>
-                <button type="button" class="relation-action inspect" onclick="event.stopPropagation(); profileFieldRelationship('${encodeURIComponent(relation.id)}')" title="Kiểm tra dữ liệu"><i class="fa-solid fa-microscope"></i></button>
                 ${relation.status !== 'verified' ? `<button type="button" class="relation-action verify" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'verified')" title="Xác minh"><i class="fa-solid fa-check"></i></button>` : ''}
                 ${relation.status !== 'rejected' ? `<button type="button" class="relation-action reject" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'rejected')" title="Từ chối"><i class="fa-solid fa-ban"></i></button>` : ''}
                 <button type="button" class="relation-action delete" onclick="event.stopPropagation(); deleteFieldRelationship('${encodeURIComponent(relation.id)}')" title="Xóa"><i class="fa-solid fa-trash-can"></i></button>
@@ -285,9 +285,11 @@ function renderDictionaryDrawer(table) {
               <label>Cột nối tới bảng đích<select data-role="bridge-target-column"><option value="">Chọn cột</option></select></label>
             </div>
             <p class="dictionary-relation-hint">Quan hệ tính từ <strong>${escapeDictHtml(table.tableName)}.${escapeDictHtml(col.columnName)}</strong> sang bảng đích. N:N cần cấu hình qua bảng trung gian trong sơ đồ quan hệ.</p>
-            <div class="dictionary-relation-actions"><button type="button" class="btn-secondary-sm" onclick="cancelFieldRelationship('${encodedCol}')">Hủy</button><button type="button" class="btn-primary" onclick="saveFieldRelationship('${encodedCol}')"><i class="fa-solid fa-floppy-disk"></i> Lưu quan hệ</button></div>
+            <div class="dictionary-relation-actions"><button type="button" class="btn-secondary-sm" onclick="cancelFieldRelationship('${encodedCol}')">Hủy</button><button type="button" class="btn-primary" onclick="saveFieldRelationship('${encodedCol}')"><i class="fa-solid fa-plus"></i> Thêm vào thay đổi</button></div>
+          </div>
           </div>
         </div>
+      </div>
       </div>
     `;
   }).join('');
@@ -295,6 +297,12 @@ function renderDictionaryDrawer(table) {
 
 function formatRelationshipCardinality(value) {
   return ({ 'one-to-one': '1:1', 'one-to-many': '1:N', 'many-to-one': 'N:1', 'many-to-many': 'N:N', unknown: '?' })[value] || value || '?';
+}
+
+function toggleDictionaryColumnVisibility(checkbox) {
+  const row = checkbox?.closest('.dictionary-column-row');
+  if (!row) return;
+  row.classList.toggle('is-excluded', !checkbox.checked);
 }
 
 function renderRelationshipTargetTableOptions(sourceTable) {
@@ -306,7 +314,8 @@ function renderRelationshipTargetTableOptions(sourceTable) {
 }
 
 function renderFieldRelationshipPair(sourceTable, sourceColumn = '', targetColumn = '', locked = false) {
-  const sourceOptions = (sourceTable.columns || []).map(column => `<option value="${escapeDictHtml(column.columnName)}" ${column.columnName === sourceColumn ? 'selected' : ''}>${escapeDictHtml(column.columnName)}</option>`).join('');
+  const sourceOptions = (sourceTable.columns || []).filter(column => column.isVisible !== false || column.columnName === sourceColumn)
+    .map(column => `<option value="${escapeDictHtml(column.columnName)}" ${column.columnName === sourceColumn ? 'selected' : ''}>${escapeDictHtml(column.columnName)}</option>`).join('');
   return `<div class="dictionary-relation-pair">
     ${locked
       ? `<div class="dictionary-relation-fixed-source" title="Cột nguồn được cố định theo field đang thao tác"><i class="fa-solid fa-lock"></i><span>${escapeDictHtml(sourceColumn)}</span><input type="hidden" data-role="pair-source" value="${escapeDictHtml(sourceColumn)}"></div>`
@@ -323,28 +332,23 @@ function getFieldRelationshipEditor(columnName) {
 function toggleFieldRelationshipEditor(encodedColumnName, button) {
   const columnName = decodeURIComponent(encodedColumnName);
   const editor = getFieldRelationshipEditor(columnName);
-  if (!editor) return;
-  if (!editor.hidden) {
-    editor.hidden = true;
-    button?.setAttribute('aria-expanded', 'false');
-    return;
+  const content = editor?.closest('.dictionary-field-relation-content');
+  if (!editor || !content) return;
+  const opening = content.hidden;
+  content.hidden = !opening;
+  button?.setAttribute('aria-expanded', String(opening));
+  button?.classList.toggle('is-open', opening);
+  if (!opening) editor.hidden = true;
+  else {
+    const relationships = (window.tableRelationshipsData || []).filter(relation =>
+    (relation.sourceTableId ? relation.sourceTableId === window.selectedDictionaryTableId : relation.sourceTable === window.selectedDictionaryTableName)
+      && (relation.columnPairs || [{ sourceColumn: relation.sourceColumn }]).some(pair => pair.sourceColumn === columnName));
+    if (relationships.length === 1) editFieldRelationship(encodeURIComponent(relationships[0].id), encodedColumnName);
+    else if (relationships.length === 0) {
+      cancelFieldRelationship(encodedColumnName);
+      editor.hidden = false;
+    }
   }
-  const sourceTable = findDictionaryTable(window.selectedDictionaryTableId || window.selectedDictionaryTableName);
-  const relationships = (window.tableRelationshipsData || []).filter(relation =>
-    (relation.sourceTableId ? relation.sourceTableId === sourceTable?.tableId : relation.sourceTable === sourceTable?.tableName)
-    && (relation.columnPairs || [{ sourceColumn: relation.sourceColumn }]).some(pair => pair.sourceColumn === columnName));
-  if (relationships.length === 1) {
-    editFieldRelationship(encodeURIComponent(relationships[0].id), encodedColumnName);
-    button?.setAttribute('aria-expanded', 'true');
-    return;
-  }
-  if (relationships.length > 1) {
-    showToast?.('Field có nhiều quan hệ. Hãy chọn biểu tượng sửa trên quan hệ cần chỉnh.', 'info');
-    return;
-  }
-  cancelFieldRelationship(encodedColumnName);
-  editor.hidden = false;
-  button?.setAttribute('aria-expanded', 'true');
 }
 
 function updateFieldRelationshipColumns(select, selectedColumn = '') {
@@ -353,7 +357,7 @@ function updateFieldRelationshipColumns(select, selectedColumn = '') {
   if (!editor) return;
   editor.querySelectorAll('[data-role="pair-target"]').forEach((columnSelect, index) => {
     const desired = index === 0 && selectedColumn ? selectedColumn : (columnSelect.dataset.selected || columnSelect.value);
-    columnSelect.innerHTML = '<option value="">Chọn cột</option>' + (table?.columns || []).map(column =>
+    columnSelect.innerHTML = '<option value="">Chọn cột</option>' + (table?.columns || []).filter(column => column.isVisible !== false).map(column =>
       `<option value="${escapeDictHtml(column.columnName)}">${escapeDictHtml(column.columnName)} (${escapeDictHtml(column.dataType || '-')})</option>`).join('');
     columnSelect.value = desired;
     delete columnSelect.dataset.selected;
@@ -361,7 +365,7 @@ function updateFieldRelationshipColumns(select, selectedColumn = '') {
   const displaySelect = editor.querySelector('[data-role="display-column"]');
   if (displaySelect) {
     const desired = displaySelect.dataset.selected || displaySelect.value;
-    displaySelect.innerHTML = '<option value="">Chọn cột trả về</option>' + (table?.columns || []).map(column =>
+    displaySelect.innerHTML = '<option value="">Chọn cột trả về</option>' + (table?.columns || []).filter(column => column.isVisible !== false).map(column =>
       `<option value="${escapeDictHtml(column.columnName)}">${escapeDictHtml(column.columnName)} (${escapeDictHtml(column.dataType || '-')})</option>`).join('');
     displaySelect.value = desired;
     delete displaySelect.dataset.selected;
@@ -374,7 +378,7 @@ function addFieldRelationshipPair(encodedColumnName, sourceColumn = '', targetCo
   const list = editor?.querySelector('[data-role="column-pairs"]');
   if (!sourceTable || !list) return;
   const usedSourceColumns = new Set(Array.from(list.querySelectorAll('[data-role="pair-source"]')).map(select => select.value));
-  const nextSourceColumn = sourceColumn || sourceTable.columns?.find(column => !usedSourceColumns.has(column.columnName))?.columnName;
+  const nextSourceColumn = sourceColumn || sourceTable.columns?.find(column => column.isVisible !== false && !usedSourceColumns.has(column.columnName))?.columnName;
   if (!nextSourceColumn) {
     showToast?.('Không còn cột nguồn nào để thêm vào khóa ghép.', 'warning');
     return;
@@ -394,7 +398,7 @@ function toggleManyToManyFields(select) {
 function updateBridgeColumnOptions(select) {
   const editor = select?.closest('.dictionary-field-relation-editor');
   const bridge = getDictionaryTables().find(table => table.tableId === select?.value);
-  const options = '<option value="">Chọn cột</option>' + (bridge?.columns || []).map(column =>
+  const options = '<option value="">Chọn cột</option>' + (bridge?.columns || []).filter(column => column.isVisible !== false).map(column =>
     `<option value="${escapeDictHtml(column.columnName)}">${escapeDictHtml(column.columnName)} (${escapeDictHtml(column.dataType || '-')})</option>`).join('');
   editor?.querySelectorAll('[data-role="bridge-source-column"],[data-role="bridge-target-column"]').forEach(item => { item.innerHTML = options; });
 }
@@ -477,28 +481,17 @@ async function saveFieldRelationship(encodedColumnName) {
       businessRole: payload.businessRole };
   }
   if (id) { payload.id = id; payload.expectedRevision = Number(editor.querySelector('[data-role="relationship-revision"]').value || 1); }
-  try {
-    if (saveButton) {
-      saveButton.disabled = true;
-      saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
-    }
-    const res = await fetch(endpoint, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
-    renderDictionaryDrawer(sourceTable);
-    if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
-    showToast?.('Đã lưu quan hệ ở trạng thái chưa xác minh.', 'success');
-  } catch (err) {
-    showToast?.(`Không thể lưu quan hệ: ${err.message}`, 'error');
-  } finally {
-    if (saveButton?.isConnected) {
-      saveButton.disabled = false;
-      saveButton.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Lưu quan hệ';
-    }
-  }
+  const expectedRevision = id ? Number(editor.querySelector('[data-role="relationship-revision"]').value || 1) : undefined;
+  if (id) { delete payload.id; delete payload.expectedRevision; }
+  window.pendingDictionaryRelationships ||= [];
+  const change = { id: id || null, expectedRevision, operation: endpoint.endsWith('add-many-to-many') ? 'many-to-many' : (id ? 'update' : 'add'), payload };
+  const existingIndex = id ? window.pendingDictionaryRelationships.findIndex(item => item.id === id) : -1;
+  if (existingIndex >= 0) window.pendingDictionaryRelationships[existingIndex] = change;
+  else window.pendingDictionaryRelationships.push(change);
+  editor.hidden = true;
+  const saveAllButton = document.getElementById('dictionary-save-all-button');
+  if (saveAllButton) saveAllButton.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi (${window.pendingDictionaryRelationships.length} quan hệ)`;
+  showToast?.('Đã thêm quan hệ vào danh sách thay đổi. Nhấn “Lưu tất cả thay đổi” để áp dụng.', 'info');
 }
 
 async function setFieldRelationshipStatus(encodedId, status) {
@@ -699,6 +692,7 @@ function openDictionaryDrawer(encodedTableIdentity) {
   window.dictionaryModalTrigger = document.activeElement;
   window.selectedDictionaryTableName = table.tableName;
   window.selectedDictionaryTableId = table.tableId;
+  window.pendingDictionaryRelationships = [];
   renderDictionaryDrawer(table);
   const dialog = document.getElementById('dictionary-drawer');
   dialog?.classList.add('active');
@@ -774,27 +768,42 @@ async function toggleDictionaryTableActiveFromList(encodedTableName, checkbox) {
 
 async function saveSelectedTableDescription() {
   const tableName = window.selectedDictionaryTableName;
-  const description = document.getElementById('dict-drawer-table-description')?.value.trim() || '';
-  const domain = document.getElementById('dict-drawer-table-domain')?.value.trim() || '';
-  const defaultMetric = document.getElementById('dict-drawer-default-metric')?.value || '';
-  const defaultTimeColumn = document.getElementById('dict-drawer-default-time')?.value || '';
-  const defaultAggregation = document.getElementById('dict-drawer-default-aggregation')?.value || 'SUM';
+  const tableId = window.selectedDictionaryTableId;
   if (!tableName) return;
+  const table = {
+    description: document.getElementById('dict-drawer-table-description')?.value.trim() || '',
+    domain: document.getElementById('dict-drawer-table-domain')?.value.trim() || '',
+    defaultMetric: document.getElementById('dict-drawer-default-metric')?.value || '',
+    defaultTimeColumn: document.getElementById('dict-drawer-default-time')?.value || '',
+    defaultAggregation: document.getElementById('dict-drawer-default-aggregation')?.value || 'SUM',
+    isActive: document.getElementById('dict-drawer-active-toggle')?.checked !== false
+  };
+  const current = findDictionaryTable(tableId || tableName);
+  const columns = (current?.columns || []).map(column => {
+    const description = Array.from(document.querySelectorAll('.dictionary-column-description')).find(el => el.dataset.column === column.columnName);
+    const displayName = Array.from(document.querySelectorAll('.dictionary-column-display-name')).find(el => el.dataset.column === column.columnName);
+    const visible = Array.from(document.querySelectorAll('[data-role="column-visible"]')).find(el => el.dataset.column === column.columnName);
+    return { columnName: column.columnName, description: description?.value.trim() || '',
+      displayName: displayName ? displayName.value.trim() : (column.displayName || ''), isVisible: visible?.checked !== false };
+  });
+  const button = document.getElementById('dictionary-save-all-button');
   try {
-    const res = await fetch('/api/dictionary/update-table', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableName, description, domain, defaultMetric, defaultTimeColumn, defaultAggregation })
-    });
+    if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...'; }
+    const res = await fetch('/api/dictionary/save-table-configuration', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableId, tableName, table, columns, relationships: window.pendingDictionaryRelationships || [] }) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     window.groupedTablesData = Array.isArray(data.tables) ? data.tables : getDictionaryTables();
+    window.tableRelationshipsData = Array.isArray(data.relationships) ? data.relationships : window.tableRelationshipsData;
+    window.pendingDictionaryRelationships = [];
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
-    renderDictionaryDrawer(findDictionaryTable(tableName));
-    if (typeof showToast === 'function') showToast('Đã lưu cấu hình nghiệp vụ của bảng.', 'success');
+    renderDictionaryDrawer(findDictionaryTable(tableId || tableName));
+    showToast?.('Đã lưu cấu hình bảng, cột và quan hệ; Qdrant được đồng bộ một lần.', 'success');
   } catch (err) {
-    if (typeof showToast === 'function') showToast(`Không thể lưu mô tả bảng: ${err.message}`, 'error');
+    showToast?.(`Không thể lưu cấu hình: ${err.message}`, 'error');
+  } finally {
+    if (button?.isConnected) { button.disabled = false; button.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi'; }
   }
 }
 
@@ -859,6 +868,10 @@ async function triggerAiGenerateDictionary() {
 
 function getActiveDictionaryTables() {
   return getDictionaryTables().filter(table => table.isActive);
+}
+
+function getVisibleDictionaryColumns(table) {
+  return (table?.columns || []).filter(column => column.isVisible !== false);
 }
 
 async function openRelationshipDiagram() {
@@ -947,7 +960,7 @@ function updateRelationshipColumnOptions(side) {
   const select = document.getElementById(`relation-${side}-column`);
   const table = findDictionaryTable(tableName);
   if (!select) return;
-  select.innerHTML = (table?.columns || []).map(column => `<option value="${escapeDictHtml(column.columnName)}">${escapeDictHtml(column.columnName)}</option>`).join('');
+  select.innerHTML = getVisibleDictionaryColumns(table).map(column => `<option value="${escapeDictHtml(column.columnName)}">${escapeDictHtml(column.columnName)}</option>`).join('');
 }
 
 function renderRelationshipDiagram() {
@@ -964,7 +977,7 @@ function renderRelationshipDiagram() {
   const gapY = 55;
   const padding = 35;
   const rowCount = Math.ceil(tables.length / columnsPerRow);
-  const nodeHeights = tables.map(table => 38 + Math.max(1, (table.columns || []).length) * 21 + 12);
+  const nodeHeights = tables.map(table => 38 + Math.max(1, getVisibleDictionaryColumns(table).length) * 21 + 12);
   const rowHeights = Array.from({ length: rowCount }, (_, rowIndex) => {
     const heights = nodeHeights.slice(rowIndex * columnsPerRow, (rowIndex + 1) * columnsPerRow);
     return Math.max(71, ...heights);
@@ -982,6 +995,7 @@ function renderRelationshipDiagram() {
   if (empty) empty.hidden = tables.length > 0;
 
   nodes.innerHTML = tables.map((table, index) => {
+    const visibleColumns = getVisibleDictionaryColumns(table);
     const defaultLeft = padding + (index % columnsPerRow) * (nodeWidth + gapX);
     const defaultTop = rowTops[Math.floor(index / columnsPerRow)] || padding;
     const savedPosition = window.relationshipNodePositions[table.tableName];
@@ -995,8 +1009,8 @@ function renderRelationshipDiagram() {
       return names;
     }));
     return `<article class="relationship-table-node" data-table="${escapeDictHtml(table.tableName)}" style="left:${left}px;top:${top}px;width:${nodeWidth}px">
-      <header class="relationship-node-drag-handle"><strong>${escapeDictHtml(table.tableName)}</strong><span>${(table.columns || []).length}</span><button class="relationship-node-remove" onpointerdown="event.stopPropagation()" onclick="removeTableFromRelationshipDiagram('${encodeURIComponent(table.tableName)}')" title="Bỏ khỏi sơ đồ"><i class="fa-solid fa-xmark"></i></button></header>
-      <div class="relationship-node-columns">${(table.columns || []).map(column => `<div class="relationship-node-column ${relationColumns.has(column.columnName) ? 'linked' : ''}"><button class="relationship-port left" data-table="${escapeDictHtml(table.tableName)}" data-column="${escapeDictHtml(column.columnName)}" title="Kéo để nối cột"></button><span>${escapeDictHtml(column.columnName)}</span><code>${escapeDictHtml(column.dataType || '-')}</code>${column.isPrimaryKey ? '<b>PK</b>' : relationColumns.has(column.columnName) ? '<b>FK</b>' : ''}</div>`).join('')}</div>
+      <header class="relationship-node-drag-handle"><strong>${escapeDictHtml(table.tableName)}</strong><span>${visibleColumns.length}</span><button class="relationship-node-remove" onpointerdown="event.stopPropagation()" onclick="removeTableFromRelationshipDiagram('${encodeURIComponent(table.tableName)}')" title="Bỏ khỏi sơ đồ"><i class="fa-solid fa-xmark"></i></button></header>
+      <div class="relationship-node-columns">${visibleColumns.map(column => `<div class="relationship-node-column ${relationColumns.has(column.columnName) ? 'linked' : ''}"><button class="relationship-port left" data-table="${escapeDictHtml(table.tableName)}" data-column="${escapeDictHtml(column.columnName)}" title="Kéo để nối cột"></button><span>${escapeDictHtml(column.columnName)}</span><code>${escapeDictHtml(column.dataType || '-')}</code>${column.isPrimaryKey ? '<b>PK</b>' : relationColumns.has(column.columnName) ? '<b>FK</b>' : ''}</div>`).join('')}</div>
     </article>`;
   }).join('');
   requestAnimationFrame(drawRelationshipLines);
@@ -1221,6 +1235,7 @@ function drawRelationshipLines() {
     const b = target.getBoundingClientRect();
     const sourcePort = Array.from(source.querySelectorAll('.relationship-port.left')).find(port => port.dataset.column === relation.sourceColumn);
     const targetPort = Array.from(target.querySelectorAll('.relationship-port.left')).find(port => port.dataset.column === relation.targetColumn);
+    if (!sourcePort || !targetPort) return '';
     const sourceRect = sourcePort?.getBoundingClientRect();
     const targetRect = targetPort?.getBoundingClientRect();
     const x1 = sourceRect ? (sourceRect.left - canvasRect.left + sourceRect.width / 2) / scale : (a.left - canvasRect.left + a.width / 2) / scale;
@@ -1409,6 +1424,7 @@ window.updateBridgeColumnOptions = updateBridgeColumnOptions;
 window.cancelFieldRelationship = cancelFieldRelationship;
 window.editFieldRelationship = editFieldRelationship;
 window.saveFieldRelationship = saveFieldRelationship;
+window.toggleDictionaryColumnVisibility = toggleDictionaryColumnVisibility;
 window.setFieldRelationshipStatus = setFieldRelationshipStatus;
 window.profileFieldRelationship = profileFieldRelationship;
 window.previewRelationshipPlan = previewRelationshipPlan;

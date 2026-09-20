@@ -24,6 +24,27 @@ test('internal paths are hidden while application download links remain', () => 
   }
 });
 
+test('hidden system-path download lines are omitted completely', () => {
+  const values = [
+    'Nội dung trả lời.\n\n- Tải về tại: [Tải file tại đây]([SYSTEM_PATH_HIDDEN])',
+    'Nội dung trả lời.\n\n- Tải về tại: [Tải file tại đây](file:///C:/Users/Admin/report.xlsx)'
+  ];
+  for (const value of values) {
+    const html = parseInline(value);
+    assert.match(html, /Nội dung trả lời/);
+    assert.doesNotMatch(html, /SYSTEM_PATH_HIDDEN|Tải về tại|Tải file tại đây/);
+  }
+});
+
+test('inline export link is removed when a separate download action is available', () => {
+  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const start = source.indexOf('function stripInlineDownloadLink');
+  const end = source.indexOf('\nfunction parseMarkdownInline', start);
+  const context = vm.createContext({});
+  vm.runInContext(`${source.slice(start, end)}\nthis.result = stripInlineDownloadLink('Đã xuất file thành công: [Tải file tại đây](/api/exports/report.xlsx).', '/api/exports/report.xlsx');`, context);
+  assert.equal(context.result, 'Đã xuất file thành công.');
+});
+
 test('modal and standalone embed renderers hide paths while retaining export links',()=>{
   const value='[Tải](/api/exports/report.xlsx) (file:///C:/Users/Admin/AppData/Local/Temp/report.xlsx)';
   const page=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
@@ -63,13 +84,16 @@ test('trailing punctuation stays outside the URL', () => {
 test('chat result renderers convert ISO database dates to Vietnamese display format', () => {
   const page = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
   const pageContext = vm.createContext({});
-  const pageStart = page.indexOf('function formatChatDisplayValue');
+  const pageStart = page.indexOf('function isBooleanDisplayColumn');
   const pageEnd = page.indexOf('\nfunction renderMarkdownTable', pageStart);
-  vm.runInContext(`${page.slice(pageStart, pageEnd)}\nthis.dateOnly=formatChatDisplayValue('2002-05-24T00:00:00.000Z');this.dateTime=formatChatDisplayValue('2026-09-20T14:30:45.000Z');`, pageContext);
+  vm.runInContext(`${page.slice(pageStart, pageEnd)}\nthis.dateOnly=formatChatDisplayValue('2002-05-24T00:00:00.000Z');this.dateTime=formatChatDisplayValue('2026-09-20T14:30:45.000Z');this.yes=formatChatDisplayValue(1,'IsVAT');this.no=formatChatDisplayValue(false,'IsVAT');this.number=formatChatDisplayValue(0,'Quantity');`, pageContext);
   assert.equal(pageContext.dateOnly, '24/05/2002');
   assert.equal(pageContext.dateTime, '20/09/2026 14:30:45');
+  assert.equal(pageContext.yes, 'Có');
+  assert.equal(pageContext.no, 'Không');
+  assert.equal(pageContext.number, '0');
 
   const embed = fs.readFileSync('src/frontend/embed/knowledgehub-chat.js', 'utf8');
   assert.match(embed, /formatDisplayValue\(row\[cellIndex\]/);
-  assert.match(embed, /escapeHtml\(formatDisplayValue\(cell\)\)/);
+  assert.match(embed, /escapeHtml\(formatDisplayValue\(cell, data\.toolResult\.columns\[cellIndex\]\)\)/);
 });

@@ -3,6 +3,13 @@
 function quote(name) { return `[${String(name).replace(/\]/g, ']]')}]`; }
 function outputAlias(edge, index) { return String(edge.businessRole || '').trim() || `RelatedValue${index + 1}`; }
 
+function isSimpleEntityListRequest(text = '') {
+  const normalized = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
+  const tail = normalized.replace(/^(?:ds|danh sach|liet ke|cho (?:(?:toi|minh)\s+)?xem)\s+/, '').trim();
+  if (!tail || tail === normalized || /\d/.test(tail)) return false;
+  return tail.split(/\s+/).filter(Boolean).length <= 2;
+}
+
 function extractNamedEntityValue(question = '') {
   const match = String(question).trim().match(/t[eê]n\s*(?:l[aà])?\s*[:"']?\s*(.+)$/iu);
   if (!match) return '';
@@ -101,4 +108,4 @@ function buildEnrichedListSql(plan = {}, joinPlan = null) {
 
 function key(value) { return String(value || '').toLowerCase(); }
 
-module.exports = { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, datasetEntityFilter, extractNamedEntityValue, mappedValueFilters };
+module.exports = { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, datasetEntityFilter, extractNamedEntityValue, isSimpleEntityListRequest, mappedValueFilters };

@@ -13,7 +13,7 @@ const { buildSqlRowsFallbackReply, ensureDownloadLink } = require('./grounded_re
 const { resolvePlan, blockingSqlViolation, qualifiedSql, evaluateCompletion, stableFingerprint, validateOutputData } = require('./completion_policy');
 const { estimateTokens } = require('./context_budget');
 const { emitProgress, toolLabel } = require('./progress_events');
-const { buildEnrichedListSql, contextualLookupQuestion } = require('../../services/sql_enrichment_builder');
+const { buildEnrichedListSql, contextualLookupQuestion, isSimpleEntityListRequest } = require('../../services/sql_enrichment_builder');
 
 const positive = (value, fallback) => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
 const aborted = () => Object.assign(new Error('Request aborted'), { name: 'AbortError' });
@@ -161,8 +161,32 @@ class GuardedAgentHarness {
       return true;
     };
 
+    // Plain lists are fully defined by the reviewed schema and relationship
+    // plan. Execute that plan before calling a remote model so providers cannot
+    // omit mandatory joins or rewrite configured business aliases.
+    if (policy.dataRequired && plan.intent === 'list' && !policy.chartRequired && !policy.exportRequired
+      && (plan.unfilteredList || isSimpleEntityListRequest(question))
+      && toolContext.allowedToolNames.includes('execute_sql_query')) {
+      const deterministicSql = buildEnrichedListSql({ ...plan, question,
+        datasetReference: context.memoryDecision?.reference }, context.joinPlan);
+      if (deterministicSql) {
+        try {
+          check(); budget.consumeToolCall(); budget.consumeSqlAttempt();
+          const execution = await boundedCall(signal => this.toolManager.executeTool('execute_sql_query', { sql: deterministicSql },
+            { ...toolContext, signal }), context.signal, budget.remainingMs());
+          toolCalls.push({ toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: execution.success,
+            result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs });
+          trace.toolCalls.push({ toolName: 'execute_sql_query', success: execution.success, durationMs: execution.durationMs, source: 'DETERMINISTIC_LIST_QUERY' });
+          trace.steps.push({ type: 'DETERMINISTIC_LIST_QUERY', success: execution.success, toolName: 'execute_sql_query' });
+          if (execution.success) reply = buildSqlRowsFallbackReply({ toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: true, result: execution.result });
+        } catch (error) {
+          trace.steps.push({ type: error.code || 'DETERMINISTIC_LIST_QUERY_FAILED', error: error.message });
+        }
+      }
+    }
+
     try {
-      while (trace.iterations < this.maxIterations) {
+      while (!reply && trace.iterations < this.maxIterations) {
         check(); trace.iterations++;
         emitProgress(onProgress, { type: 'model_started', label: `Đang xử lý · vòng ${trace.iterations}`, status: 'running', icon: 'brain', iteration: trace.iterations });
         const response = await dispatch(toolDefs);

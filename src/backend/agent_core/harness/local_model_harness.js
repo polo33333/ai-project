@@ -16,7 +16,7 @@ const { emitProgress, toolLabel } = require('./progress_events');
 const { trainingService } = require('../../training_core');
 const { ensureDownloadLink, buildSqlRowsFallbackReply, isUngroundedKnowledgeAnswer } = require('./grounded_reply');
 const { blockingSqlViolation, evaluateCompletion, stableFingerprint } = require('./completion_policy');
-const { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, extractNamedEntityValue } = require('../../services/sql_enrichment_builder');
+const { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, extractNamedEntityValue, isSimpleEntityListRequest } = require('../../services/sql_enrichment_builder');
 
 function fingerprint(name, args) {
   return stableFingerprint(name, args);
@@ -468,7 +468,22 @@ class LocalModelHarness {
       return log;
     };
 
-    while (trace.iterations < this.maxIterations) {
+    // A plain entity list has no analytical decision for the model to make.
+    // Build it from the reviewed schema/relationship plan so mapped JOINs and
+    // business aliases cannot be omitted or rewritten by a small local model.
+    if (requestPolicy.dataRequired
+      && requestPlan.intent === 'list'
+      && !requestPolicy.chartRequired
+      && !requestPolicy.exportRequired
+      && (requestPlan.unfilteredList || isSimpleEntityListRequest(effectiveUserMessage))) {
+      const listSql = buildPlannedTablePreviewSql({ ...requestPlan, datasetReference: context.memoryDecision?.reference }, context.joinPlan);
+      if (listSql) {
+        const listExecution = await executeDeterministicTool('execute_sql_query', { sql: listSql }, 'DETERMINISTIC_LIST_QUERY');
+        if (listExecution?.success) finalText = buildSqlRowsFallbackReply(listExecution);
+      }
+    }
+
+    while (finalText === null && trace.iterations < this.maxIterations) {
       trace.iterations += 1;
       const modelStartedAt = Date.now();
       emitProgress(onProgress, { type: 'model_started', label: `Model đang phân tích · vòng ${trace.iterations}`, status: 'running', icon: 'brain', iteration: trace.iterations, providerName: activeProvider?.name });

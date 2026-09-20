@@ -14,6 +14,8 @@ const securityGuard = require('../../intelligent_core/security_guard');
 const errorRecovery = require('./error_recovery');
 const { emitProgress, toolLabel } = require('./progress_events');
 const { isLocalProvider } = require('./provider_classifier');
+const { buildSqlRowsFallbackReply } = require('./grounded_reply');
+const { buildEnrichedListSql, isSimpleEntityListRequest } = require('../../services/sql_enrichment_builder');
 
 const REQUEST_TIMEOUT_MS = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
 const LOCAL_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS, 10);
@@ -162,7 +164,33 @@ class AgentHarness {
 
     let iterations = 0;
 
-    while (iterations < this.maxIterations) {
+    // Keep the legacy non-guarded provider path consistent with the guarded
+    // and local harnesses for simple relationship-backed entity lists.
+    const requestPlan = context.requestPlan;
+    if (requestPlan?.outputs?.data && requestPlan.intent === 'list'
+      && !requestPlan.outputs?.chart && !requestPlan.outputs?.export
+      && (requestPlan.unfilteredList || isSimpleEntityListRequest(userMessage))
+      && (!Array.isArray(enabledToolNames) || enabledToolNames.includes('execute_sql_query'))) {
+      const deterministicSql = buildEnrichedListSql({ ...requestPlan, question: userMessage,
+        datasetReference: context.memoryDecision?.reference }, context.joinPlan);
+      if (deterministicSql) {
+        const execution = await this.toolManager.executeTool('execute_sql_query', { sql: deterministicSql }, context);
+        const log = { toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: execution.success,
+          result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs };
+        toolCallsLog.push(log);
+        trace.toolCalls.push({ toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: execution.success,
+          durationMs: execution.durationMs, source: 'DETERMINISTIC_LIST_QUERY' });
+        trace.steps.push({ type: 'DETERMINISTIC_LIST_QUERY', success: execution.success, toolName: 'execute_sql_query' });
+        if (execution.success) {
+          extractedSqlQuery = execution.result?.sql || deterministicSql;
+          extractedExecutionResult = execution.result;
+          extractedSqlExecutions.push({ sql: extractedSqlQuery, rowCount: execution.result?.rowCount || 0, success: true });
+          finalText = buildSqlRowsFallbackReply(log);
+        }
+      }
+    }
+
+    while (finalText === null && iterations < this.maxIterations) {
       iterations++;
       trace.iterations = iterations;
       emitProgress(onProgress, { type: 'model_started', label: `Đang gọi model · vòng ${iterations}`, status: 'running', icon: 'brain', iteration: iterations, providerName: activeProvider?.name });

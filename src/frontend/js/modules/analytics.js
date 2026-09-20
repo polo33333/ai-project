@@ -29,6 +29,9 @@ window.dashboardAnalyticsProviders = window.dashboardAnalyticsProviders || [];
 window.dashboardFeedbackRange = window.dashboardFeedbackRange || '7d';
 window.dashboardFeedbackData = window.dashboardFeedbackData || [];
 window.dashboardActivityYear = window.dashboardActivityYear || new Date().getFullYear();
+window.dashboardAnalyticsData = window.dashboardAnalyticsData || null;
+let dashboardAnalyticsRefreshPromise = null;
+const DASHBOARD_ANALYTICS_CACHE_MS = 30_000;
 
 function findAnalyticsProvider(item = {}, providers = []) {
   const providerId = item.requestPayload?.providerId || null;
@@ -717,22 +720,44 @@ function updateMetricText(data) {
   setText('analytics-health-qdrant', `${data.qdrant.pointsCount || totalColumns || 0} vectors indexed`);
 }
 
+function renderDashboardAnalyticsData(data) {
+  window.dashboardAnalyticsHistory = data.history;
+  window.dashboardAnalyticsProviders = data.providers;
+  window.dashboardFeedbackData = data.feedback;
+  updateMetricText(data);
+  renderPageAnalytics(data);
+  renderDashboardChart(data.history, data.providers);
+  renderDashboardFeedbackChart(data.feedback);
+  renderDashboardActivity(data.history);
+}
+
+function resizeDashboardCharts() {
+  ['analyticsChart', 'dashboardFeedbackChart'].forEach(id => window.khCharts[id]?.resize?.());
+}
+
 async function refreshDashboardMetrics() {
   const targets = ['analyticsChart', 'dashboardFeedbackChart', 'dashboard-activity-chart'];
-  setAnalyticsLoading(targets, true);
-  try {
-    const data = await fetchAnalyticsSourceData();
-    window.dashboardAnalyticsHistory = data.history;
-    window.dashboardAnalyticsProviders = data.providers;
-    window.dashboardFeedbackData = data.feedback;
-    updateMetricText(data);
-    renderPageAnalytics(data);
-    renderDashboardChart(data.history, data.providers);
-    renderDashboardFeedbackChart(data.feedback);
-    renderDashboardActivity(data.history);
-  } finally {
+  const cached = window.dashboardAnalyticsData;
+  if (cached) {
     setAnalyticsLoading(targets, false);
-  }
+    requestAnimationFrame(resizeDashboardCharts);
+  } else setAnalyticsLoading(targets, true);
+
+  if (dashboardAnalyticsRefreshPromise) return dashboardAnalyticsRefreshPromise;
+  if (cached && Date.now() - Number(window.dashboardAnalyticsLoadedAt || 0) < DASHBOARD_ANALYTICS_CACHE_MS) return cached;
+  dashboardAnalyticsRefreshPromise = (async () => {
+    try {
+      const data = await fetchAnalyticsSourceData();
+      window.dashboardAnalyticsData = data;
+      window.dashboardAnalyticsLoadedAt = Date.now();
+      renderDashboardAnalyticsData(data);
+      return data;
+    } finally {
+      setAnalyticsLoading(targets, false);
+      dashboardAnalyticsRefreshPromise = null;
+    }
+  })();
+  return dashboardAnalyticsRefreshPromise;
 }
 
 async function initPageAnalyticsCharts() {

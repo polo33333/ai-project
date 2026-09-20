@@ -34,6 +34,7 @@ class DictionaryService {
         isNullable: c.isNullable,
         ordinalPosition: c.ordinalPosition,
         displayName: c.displayName ?? prior?.displayName ?? '',
+        isVisible: c.isVisible !== undefined ? c.isVisible !== false : prior?.isVisible !== false,
         description: c.description || prior?.description || `Cột ${c.columnName} thuộc bảng ${t.tableName}`
       }); });
 
@@ -180,14 +181,20 @@ class DictionaryService {
     if (!pairs.length || pairs.some(pair => !pair.sourceColumn || !pair.targetColumn)) throw Object.assign(new Error('Quan hệ phải có ít nhất một cặp cột hợp lệ.'), { statusCode: 400 });
     const seen = new Set();
     for (const pair of pairs) {
-      if (!sourceTable.columns.some(column => column.columnName === pair.sourceColumn)) throw Object.assign(new Error(`Cột nguồn '${pair.sourceColumn}' không tồn tại.`), { statusCode: 400 });
-      if (!targetTable.columns.some(column => column.columnName === pair.targetColumn)) throw Object.assign(new Error(`Cột đích '${pair.targetColumn}' không tồn tại.`), { statusCode: 400 });
+      const sourceColumn = sourceTable.columns.find(column => column.columnName === pair.sourceColumn);
+      const targetColumn = targetTable.columns.find(column => column.columnName === pair.targetColumn);
+      if (!sourceColumn) throw Object.assign(new Error(`Cột nguồn '${pair.sourceColumn}' không tồn tại.`), { statusCode: 400 });
+      if (!targetColumn) throw Object.assign(new Error(`Cột đích '${pair.targetColumn}' không tồn tại.`), { statusCode: 400 });
+      if (sourceColumn.isVisible === false || targetColumn.isVisible === false) throw Object.assign(new Error('Quan hệ chỉ được dùng các cột đang bật hiển thị cho AI.'), { statusCode: 400 });
       const key = `${pair.sourceColumn}\u0000${pair.targetColumn}`;
       if (seen.has(key)) throw Object.assign(new Error('Cặp cột trong quan hệ bị trùng.'), { statusCode: 400 });
       seen.add(key);
     }
     if (data.displayColumn && !targetTable.columns.some(column => column.columnName === data.displayColumn)) {
       throw Object.assign(new Error(`Cột hiển thị '${data.displayColumn}' không tồn tại trong bảng đích.`), { statusCode: 400 });
+    }
+    if (data.displayColumn && targetTable.columns.find(column => column.columnName === data.displayColumn)?.isVisible === false) {
+      throw Object.assign(new Error(`Cột hiển thị '${data.displayColumn}' đang bị tắt cho AI.`), { statusCode: 400 });
     }
     const cardinality = data.cardinality || data.relationType || 'many-to-one';
     if (!['one-to-one', 'one-to-many', 'many-to-one', 'many-to-many', 'unknown'].includes(cardinality)) {
@@ -201,17 +208,17 @@ class DictionaryService {
     return { sourceTable, targetTable, pairs, cardinality };
   }
 
-  async addTableRelationship(data) {
+  async addTableRelationship(data, options = {}) {
     const { sourceTable, targetTable, pairs, cardinality } = this.validateRelationship(data);
     const relationship = this.normalizeRelationship({ ...data, id: crypto.randomUUID(), sourceTableId: sourceTable.tableId,
       targetTableId: targetTable.tableId, sourceTable: sourceTable.tableName, targetTable: targetTable.tableName,
       columnPairs: pairs, cardinality, relationType: cardinality, origin: 'manual', source: 'manual', status: 'suggested', revision: 1 });
     this.tableRelationships.push(relationship);
-    this.persist();
+    if (!options.deferPersistence) this.persist();
     return relationship;
   }
 
-  async addManyToManyRelationship(data = {}) {
+  async addManyToManyRelationship(data = {}, options = {}) {
     const firstInput = { sourceTableId: data.sourceTableId, targetTableId: data.bridgeTableId,
       columnPairs: data.sourceToBridgePairs, cardinality: 'one-to-many', businessRole: `${data.businessRole || 'many_to_many'}_bridge_source` };
     const secondInput = { sourceTableId: data.bridgeTableId, targetTableId: data.targetTableId,
@@ -226,7 +233,7 @@ class DictionaryService {
     const groupId = data.groupId || crypto.randomUUID();
     const relationships = [build({ ...firstInput, manyToManyGroupId: groupId }, first), build({ ...secondInput, manyToManyGroupId: groupId }, second)];
     relationships.forEach(relation => { relation.manyToManyGroupId = groupId; this.tableRelationships.push(relation); });
-    this.persist();
+    if (!options.deferPersistence) this.persist();
     return relationships;
   }
 
@@ -240,7 +247,7 @@ class DictionaryService {
     return deleted;
   }
 
-  async updateTableRelationship(id, data) {
+  async updateTableRelationship(id, data, options = {}) {
     const relationship = this.tableRelationships.find(relation => relation.id === id);
     if (!relationship) return null;
     const wasVerified = relationship.status === 'verified';
@@ -252,8 +259,10 @@ class DictionaryService {
     Object.assign(relationship, this.normalizeRelationship({ ...merged, sourceTableId: sourceTable.tableId,
       targetTableId: targetTable.tableId, sourceTable: sourceTable.tableName, targetTable: targetTable.tableName,
       columnPairs: pairs, cardinality, relationType: cardinality, revision: relationship.revision + 1 }));
-    this.persist();
-    if (wasVerified || relationship.status === 'verified') await this.syncToQdrant();
+    if (!options.deferPersistence) {
+      this.persist();
+      if (wasVerified || relationship.status === 'verified') await this.syncToQdrant();
+    }
     return relationship;
   }
 
@@ -417,6 +426,50 @@ class DictionaryService {
     return false;
   }
 
+  async saveTableConfiguration(data = {}) {
+    const table = this.findTable(data.tableId, data.tableName);
+    if (!table) throw Object.assign(new Error('Không tìm thấy bảng cần cập nhật.'), { statusCode: 404 });
+    const tablesSnapshot = structuredClone(this.tablesStore);
+    const relationshipsSnapshot = structuredClone(this.tableRelationships);
+    try {
+    const metadata = data.table || {};
+    if (metadata.description !== undefined) table.tableDescription = String(metadata.description || '');
+    if (metadata.domain !== undefined) table.domain = this.normalizeDomain(metadata.domain);
+    if (metadata.isActive !== undefined) table.isActive = metadata.isActive !== false;
+    const column = name => (table.columns || []).find(item => item.columnName === String(name || ''));
+    for (const [field, value] of [['defaultMetric', metadata.defaultMetric], ['defaultTimeColumn', metadata.defaultTimeColumn]]) {
+      if (value !== undefined) {
+        if (value && !column(value)) throw Object.assign(new Error(`Cột ${field} không tồn tại trong bảng.`), { statusCode: 400 });
+        if (value) table[field] = value; else delete table[field];
+      }
+    }
+    if (metadata.defaultAggregation !== undefined) {
+      const value = String(metadata.defaultAggregation || '').toUpperCase();
+      if (value && !['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'].includes(value)) throw Object.assign(new Error('Phép tổng hợp mặc định không hợp lệ.'), { statusCode: 400 });
+      if (value) table.defaultAggregation = value; else delete table.defaultAggregation;
+    }
+    for (const update of Array.isArray(data.columns) ? data.columns : []) {
+      const target = column(update.columnName);
+      if (!target) throw Object.assign(new Error(`Cột '${update.columnName}' không tồn tại.`), { statusCode: 400 });
+      if (update.description !== undefined) target.description = String(update.description || '');
+      if (update.displayName !== undefined) target.displayName = String(update.displayName || '').trim();
+      if (update.isVisible !== undefined) target.isVisible = update.isVisible !== false;
+    }
+    for (const change of Array.isArray(data.relationships) ? data.relationships : []) {
+      if (change.operation === 'many-to-many') await this.addManyToManyRelationship(change.payload || {}, { deferPersistence: true });
+      else if (change.id) await this.updateTableRelationship(change.id, { ...(change.payload || {}), expectedRevision: change.expectedRevision }, { deferPersistence: true });
+      else await this.addTableRelationship(change.payload || {}, { deferPersistence: true });
+    }
+    this.persist();
+    await this.syncToQdrant();
+    return { table, tables: this.getGroupedTables(), relationships: this.getTableRelationships() };
+    } catch (error) {
+      this.tablesStore = tablesSnapshot;
+      this.tableRelationships = relationshipsSnapshot;
+      throw error;
+    }
+  }
+
   async deleteTable(tableName) {
     this.tablesStore = this.tablesStore.filter(t => t.tableName !== tableName);
     this.persist();
@@ -428,7 +481,7 @@ class DictionaryService {
   getDictionary() {
     const activeColumns = [];
     this.tablesStore.filter(t => t.isActive).forEach(t => {
-      t.columns.forEach(c => {
+      t.columns.filter(c => c.isVisible !== false).forEach(c => {
         activeColumns.push({
           tableName: t.tableName,
           dbName: t.dbName,
