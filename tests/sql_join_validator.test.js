@@ -83,6 +83,37 @@ test('enrichment validator accepts display values with the configured business-r
   assert.equal(result.valid, true);
 });
 
+test('enrichment validator allows a compact lookup that does not project mapped IDs', () => {
+  const enrichmentPlan = {
+    outcome: 'ready', purpose: 'enrichment',
+    tableRefs: [
+      { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee' },
+      { tableRefId: 'constant#2', tableId: 'constant', tableName: 'M_Constant' }
+    ],
+    edges: [{ relationshipId: 'employee_gender', fromTableRefId: 'employee#1', toTableRefId: 'constant#2',
+      fromTableId: 'employee', toTableId: 'constant', businessRole: 'Giới tính', displayColumn: 'ConstantName',
+      columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }]
+  };
+  const result = validateSqlAgainstJoinPlan("SELECT EmployeeID, EmployeeCode, EmployeeName FROM M_Employee WHERE EmployeeName LIKE N'%Duy%'", enrichmentPlan);
+  assert.equal(result.valid, true);
+});
+
+test('enrichment validator requires the mapped table when a mapped ID is projected', () => {
+  const enrichmentPlan = {
+    outcome: 'ready', purpose: 'enrichment',
+    tableRefs: [
+      { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee' },
+      { tableRefId: 'constant#2', tableId: 'constant', tableName: 'M_Constant' }
+    ],
+    edges: [{ relationshipId: 'employee_gender', fromTableRefId: 'employee#1', toTableRefId: 'constant#2',
+      fromTableId: 'employee', toTableId: 'constant', businessRole: 'Giới tính', displayColumn: 'ConstantName',
+      columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }]
+  };
+  const result = validateSqlAgainstJoinPlan('SELECT EmployeeName, GenderID FROM M_Employee', enrichmentPlan);
+  assert.equal(result.valid, false);
+  assert.match(result.error, /M_Constant/);
+});
+
 test('enrichment validator rejects wildcard projections that expose mapped IDs', () => {
   const enrichmentPlan = {
     outcome: 'ready', purpose: 'enrichment',

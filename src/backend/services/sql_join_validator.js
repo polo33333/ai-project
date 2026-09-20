@@ -34,6 +34,27 @@ function equalityPairs(expression) {
   });
   return pairs;
 }
+function projectedColumns(selects) {
+  const columns = selects[selects.length - 1]?.columns || [];
+  return columns.map(column => ({
+    table: key(column.expr?.table),
+    column: key(column.expr?.column),
+    star: column.expr?.type === 'star' || key(column.expr?.column) === '*'
+  }));
+}
+function applicableEdges(selects, refs, plan) {
+  const projected = projectedColumns(selects);
+  return plan.edges.filter(edge => {
+    const fromRef = plan.tableRefs.find(ref => edge.fromTableRefId ? ref.tableRefId === edge.fromTableRefId : ref.tableId === edge.fromTableId);
+    const toRef = plan.tableRefs.find(ref => edge.toTableRefId ? ref.tableRefId === edge.toTableRefId : ref.tableId === edge.toTableId);
+    const fromAliases = new Set(refs.filter(ref => ref.tableName === key(fromRef?.tableName)).map(ref => ref.alias));
+    const targetReferenced = refs.some(ref => ref.tableName === key(toRef?.tableName));
+    const sourceColumns = new Set((edge.columnPairs || []).map(pair => key(pair.sourceColumn)));
+    const sourceProjected = projected.some(item => (item.star || sourceColumns.has(item.column))
+      && (!item.table || fromAliases.has(item.table)));
+    return targetReferenced || sourceProjected;
+  });
+}
 function validateAggregateGrain(selects, plan) {
   for (const select of selects) {
     const refs = tableRefs(select, new Set());
@@ -113,10 +134,17 @@ function validateSqlAgainstJoinPlan(sql, plan) {
   const allowedNames = new Set(plan.tableRefs.map(ref => key(ref.tableName)));
   const outside = refs.find(ref => !allowedNames.has(ref.tableName));
   if (outside) return { valid: false, error: `SQL dùng bảng ngoài JOIN plan: ${outside.tableName}.` };
-  for (const ref of plan.tableRefs) if (!refs.some(item => item.tableName === key(ref.tableName))) return { valid: false, error: `SQL thiếu bảng bắt buộc: ${ref.tableName}.` };
+  const edges = applicableEdges(selects, refs, plan);
+  if (!edges.length) return containsJoin
+    ? { valid: false, error: 'SQL JOIN bảng nhưng không sử dụng quan hệ nào trong JOIN plan.' }
+    : { valid: true };
+  const requiredRefIds = new Set(edges.flatMap(edge => [edge.fromTableRefId || edge.fromTableId, edge.toTableRefId || edge.toTableId]));
+  for (const ref of plan.tableRefs.filter(item => requiredRefIds.has(item.tableRefId || item.tableId))) {
+    if (!refs.some(item => item.tableName === key(ref.tableName))) return { valid: false, error: `SQL thiếu bảng bắt buộc: ${ref.tableName}.` };
+  }
   if (refs.some(ref => ref.join === 'cross join' || (ref.join && !ref.on))) return { valid: false, error: 'JOIN thiếu điều kiện ON hoặc dùng CROSS JOIN.' };
   const predicates = selects.flatMap(select => (select.from || []).flatMap(item => equalityPairs(item.on)));
-  for (const edge of plan.edges) {
+  for (const edge of edges) {
     const fromRef = plan.tableRefs.find(ref => edge.fromTableRefId ? ref.tableRefId === edge.fromTableRefId : ref.tableId === edge.fromTableId);
     const toRef = plan.tableRefs.find(ref => edge.toTableRefId ? ref.tableRefId === edge.toTableRefId : ref.tableId === edge.toTableId);
     const fromAliases = refs.filter(ref => ref.tableName === key(fromRef?.tableName)).map(ref => ref.alias);
@@ -127,9 +155,10 @@ function validateSqlAgainstJoinPlan(sql, plan) {
         || (predicate.rightAlias === left && predicate.rightColumn === key(pair.sourceColumn) && predicate.leftAlias === right && predicate.leftColumn === key(pair.targetColumn))))));
     if (!matches) return { valid: false, error: `SQL thiếu đủ khóa JOIN của quan hệ ${edge.relationshipId}.` };
   }
-  const projection = validateEnrichmentProjection(selects, refs, plan);
+  const applicablePlan = { ...plan, edges };
+  const projection = validateEnrichmentProjection(selects, refs, applicablePlan);
   if (!projection.valid) return projection;
-  return validateAggregateGrain(selects, plan);
+  return validateAggregateGrain(selects, applicablePlan);
 }
 
 module.exports = { validateSqlAgainstJoinPlan };

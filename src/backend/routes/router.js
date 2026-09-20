@@ -259,7 +259,14 @@ async function handleRequest(req, res) {
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const pathname = parsedUrl.pathname;
-  const currentAccount = authService.getAccountBySession(getSessionToken(req));
+  const sessionToken = getSessionToken(req);
+  const currentAccount = authService.getAccountBySession(sessionToken);
+  // Keep the browser cookie aligned with the server-side sliding session.
+  // Without this refresh, the browser drops an otherwise active session eight
+  // hours after the original login.
+  if (currentAccount && pathname.startsWith('/api/')) {
+    setSessionCookie(res, sessionToken, authService.getSessionMaxAge());
+  }
   if(currentAccount) req.storageOwner=`account:${currentAccount.id}`;
   if (pathname === '/health/live' || pathname === '/health/ready') {
     if (pathname === '/health/ready') await storage.ready();

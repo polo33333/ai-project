@@ -79,7 +79,7 @@ README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dư�
 | Document outbox | Đã triển khai | PostgreSQL jobs, retry, lease và recovery; tác động file/Qdrant vẫn cần reconciliation |
 | Redis/BullMQ | Chưa triển khai | Outbox hiện chạy trong Node.js, chưa có worker service riêng |
 | Page chat history | Đã triển khai | Bảng `app.ui_chat_sessions`, owner account, mã hóa và kiểm tra version |
-| Tải dữ liệu theo tab | Đã tối ưu bước đầu | API đọc các store cần thiết; MCP/tools bỏ gọi trùng; chưa phân trang audit hoặc benchmark tải lớn |
+| Tải dữ liệu theo tab | Đã tối ưu | View được tải lười theo tab; request đang chạy được dùng chung; dữ liệu tab có cache ngắn hạn và tự tải lại khi hết hạn; thao tác thay đổi dữ liệu cập nhật trực tiếp |
 | Document Hybrid Search | Đã triển khai, phụ thuộc dịch vụ | BGE-M3 dense + BM25 + RRF; khi BGE-M3 lỗi vẫn tra cứu BM25 nhưng chất lượng semantic giảm |
 | BGE Reranker | Sẵn sàng tích hợp | Bật bằng `RERANKER_ENABLED=true` khi reranker HTTP hoạt động |
 | GraphRAG | Bản router/graph retrieval nền tảng | Chỉ kích hoạt cho câu hỏi quan hệ; chưa có persistent knowledge graph/community summary |

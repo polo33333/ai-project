@@ -51,25 +51,72 @@ test('entity lookup recovery follows a ready join plan and removes question suff
     tableName: 'M_Employee',
     columns: [
       { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
-      { columnName: 'EmployeeName', dataType: 'nvarchar' }
+      { columnName: 'EmployeeName', dataType: 'nvarchar' },
+      { columnName: 'GenderID', dataType: 'int' },
+      { columnName: 'DepartmentID', dataType: 'int' }
     ]
   };
   const plan = {
     outcome: 'ready',
     tableRefs: [
       { tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
-      { tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+      { tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' },
+      { tableId: 'master', tableName: 'M_Master', schemaName: 'dbo', alias: 't3' }
     ],
     edges: [{
       fromTableId: 'employee', targetTableId: 'constant', toTableId: 'constant', joinType: 'LEFT',
+      businessRole: 'gi\u1edbi t\u00ednh', displayColumn: 'ConstantName',
       columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }]
+    }, {
+      fromTableId: 'employee', targetTableId: 'master', toTableId: 'master', joinType: 'LEFT',
+      businessRole: 'Ph\u00f2ng ban', displayColumn: 'Name',
+      columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'MasterID' }]
     }]
   };
-  const sql = buildEntityLookupSql('giới tính nv có tên duy là gì', { tables: [employee] }, plan);
+  const sql = buildEntityLookupSql('gi\u1edbi t\u00ednh nv c\u00f3 t\u00ean duy l\u00e0 g\u00ec', { tables: [employee] }, plan);
   assert.match(sql, /FROM \[dbo\]\.\[M_Employee\] t1 LEFT JOIN \[dbo\]\.\[M_Constant\] t2/);
   assert.match(sql, /t1\.\[GenderID\] = t2\.\[ConstantID\]/);
+  assert.doesNotMatch(sql, /DepartmentID/);
+  assert.doesNotMatch(sql, /M_Master/);
   assert.match(sql, /LIKE N'%duy%'/);
   assert.doesNotMatch(sql, /duy là gì/);
+});
+
+test('entity lookup combines every relationship field explicitly requested in one query', () => {
+  const employee = {
+    tableName: 'M_Employee',
+    columns: [
+      { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
+      { columnName: 'EmployeeCode', dataType: 'nvarchar', displayName: 'Mã nhân viên' },
+      { columnName: 'EmployeeName', dataType: 'nvarchar', displayName: 'Tên nhân viên' },
+      { columnName: 'GenderID', dataType: 'int' },
+      { columnName: 'DepartmentID', dataType: 'int' },
+      { columnName: 'CompanyID', dataType: 'int' }
+    ]
+  };
+  const plan = {
+    outcome: 'ready', purpose: 'enrichment',
+    tableRefs: [
+      { tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+      { tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' },
+      { tableId: 'master', tableName: 'M_Master', schemaName: 'dbo', alias: 't3' }
+    ],
+    edges: [{
+      relationshipId: 'employee_gender', fromTableId: 'employee', toTableId: 'constant', joinType: 'LEFT',
+      businessRole: 'Giới tính', displayColumn: 'ConstantName',
+      columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }]
+    }, {
+      relationshipId: 'employee_department', fromTableId: 'employee', toTableId: 'master', joinType: 'LEFT',
+      businessRole: 'Phòng ban', displayColumn: 'Name',
+      columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'MasterID' }]
+    }]
+  };
+  const sql = buildEntityLookupSql('giới tính và phòng ban nv có tên admin', { tables: [employee] }, plan);
+  assert.match(sql, /JOIN \[dbo\]\.\[M_Constant\] t2/);
+  assert.match(sql, /JOIN \[dbo\]\.\[M_Master\] t3/);
+  assert.match(sql, /t2\.\[ConstantName\] AS \[Giới tính\]/);
+  assert.match(sql, /t3\.\[Name\] AS \[Phòng ban\]/);
+  assert.doesNotMatch(sql, /t1\.\[CompanyID\]/);
 });
 
 test('entity lookup recovery removes Vietnamese yes-no suffix from the name', () => {
@@ -82,6 +129,22 @@ test('entity lookup recovery removes Vietnamese yes-no suffix from the name', ()
   assert.doesNotMatch(sql, /Duy ko/);
 });
 
+test('detailed entity lookup selects every visible column while a yes-no lookup stays compact', () => {
+  const employee = { tableName: 'M_Employee', columns: [
+    { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
+    { columnName: 'EmployeeCode', dataType: 'nvarchar' },
+    { columnName: 'EmployeeName', dataType: 'nvarchar', displayName: 'Tên nhân viên' },
+    { columnName: 'DOB', dataType: 'datetime', displayName: 'Ngày sinh' },
+    { columnName: 'InternalNote', dataType: 'nvarchar', isVisible: false }
+  ] };
+  const compact = buildEntityLookupSql('c\u00f3 nv n\u00e0o t\u00ean Duy ko', { tables: [employee] });
+  const detailed = buildEntityLookupSql('th\u00f4ng tin chi ti\u1ebft nv t\u00ean Duy', { tables: [employee] });
+  assert.doesNotMatch(compact, /\[DOB\]/);
+  assert.match(detailed, /\[DOB\] AS \[Ngày sinh\]/);
+  assert.match(detailed, /\[EmployeeName\] AS \[Tên nhân viên\]/);
+  assert.doesNotMatch(detailed, /\[InternalNote\]/);
+});
+
 test('relationship recovery inherits the last explicit entity name for a pronoun follow-up', () => {
   const previous = 'có nv nào tên Duy?';
   assert.equal(extractNamedEntityValue(previous), 'Duy');
@@ -89,7 +152,18 @@ test('relationship recovery inherits the last explicit entity name for a pronoun
     { role: 'user', content: previous },
     { role: 'assistant', content: 'Có một nhân viên phù hợp.' },
     { role: 'user', content: 'nv này có giới tính gì' }
-  ]), previous);
+  ]), 'nv này có giới tính gì tên Duy');
+});
+
+test('follow-up lookup inherits an employee written without the word name', () => {
+  const previous = 'Giới tính và phòng ban của nhân viên admin';
+  assert.equal(extractNamedEntityValue(previous), 'admin');
+  assert.equal(extractNamedEntityValue('thông tin chi tiết nv trên'), '');
+  assert.equal(contextualLookupQuestion('thông tin chi tiết nv trên', [
+    { role: 'user', content: previous },
+    { role: 'assistant', content: 'Nhân viên administrator có giới tính Nam.' },
+    { role: 'user', content: 'thông tin chi tiết nv trên' }
+  ]), 'thông tin chi tiết nv trên tên admin');
 });
 
 test('limited list recovery preserves TOP and enriches every planned lookup', () => {
@@ -569,26 +643,30 @@ test('local harness formats SQL rows when the synthesis response is still empty'
   assert.equal(result.trace.steps.some(step => step.type === 'DETERMINISTIC_SQL_ROWS_FALLBACK'), true);
 });
 
-test('local harness rejects a schema-only entity answer and queries the named record', async () => {
+test('local harness queries a named record before dispatching to the model', async () => {
   const toolManager = new ToolManager();
   toolManager.registerTool(new SqlTool());
   const responses = [
     { content: 'M_Employee has 67 columns. Would you like me to query a specific employee?' },
     { content: 'I still only have the schema metadata.' }
   ];
-  const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift(), maxIterations: 2 });
+  let modelCalls = 0;
+  const harness = new LocalModelHarness({ toolManager, dispatch: async () => { modelCalls++; return responses.shift(); }, maxIterations: 2 });
   const result = await harness.run({
     userMessage: 'th\u00f4ng tin chi ti\u1ebft nv t\u00ean Y\u00ean Duy', provider: localProvider,
     messages: [{ role: 'user', content: 'th\u00f4ng tin chi ti\u1ebft nv t\u00ean Y\u00ean Duy' }],
-    enabledToolNames: ['execute_sql_query'], context: { selectedTables: ['M_Employee'] }
+    enabledToolNames: ['execute_sql_query'], context: {
+      selectedTables: ['M_Employee'],
+      requestPlan: { intent: 'record_lookup', table: 'M_Employee', requiredColumns: [], outputs: { data: true, chart: false, export: false } }
+    }
   });
 
   const sqlCall = result.toolCalls.find(call => call.toolName === 'execute_sql_query' && call.success);
   assert.ok(sqlCall);
   assert.match(sqlCall.args.sql, /FROM \[M_Employee\]/i);
   assert.match(sqlCall.args.sql, /\[EmployeeName\]\s+LIKE\s+N'%Y\u00ean Duy%'/i);
-  assert.equal(result.trace.steps.some(step => step.type === 'INCOMPLETE_DATA_RESPONSE'), true);
-  assert.equal(result.trace.steps.some(step => step.type === 'ENTITY_LOOKUP_RECOVERY' && step.success), true);
+  assert.equal(modelCalls, 0);
+  assert.equal(result.trace.steps.some(step => step.type === 'DETERMINISTIC_ENTITY_LOOKUP' && step.success), true);
   assert.equal(result.trace.completionStatus, 'SUCCESS');
 });
 

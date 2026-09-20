@@ -17,6 +17,7 @@ const { trainingService } = require('../../training_core');
 const { ensureDownloadLink, buildSqlRowsFallbackReply, isUngroundedKnowledgeAnswer } = require('./grounded_reply');
 const { blockingSqlViolation, evaluateCompletion, stableFingerprint } = require('./completion_policy');
 const { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, extractNamedEntityValue, isSimpleEntityListRequest } = require('../../services/sql_enrichment_builder');
+const { buildCalculationReply } = require('./calculation_reply');
 
 function fingerprint(name, args) {
   return stableFingerprint(name, args);
@@ -112,15 +113,30 @@ function buildEntityLookupSql(userMessage = '', refs = {}, joinPlan = null) {
   const orderColumn = table.columns.find(column => new RegExp(`^${table.tableName}ID$`, 'i').test(column.columnName))
     || table.columns.find(column => /id$/i.test(column.columnName));
 
+  // A ready plan can contain every configured relationship of the table.
+  // Enrich this lookup only when the question asks for a mapped field.
+  const normalizeLabel = value => String(value || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+  const normalizedQuestion = normalizeLabel(question);
+  const detailedLookup = /\b(?:chi tiet|thong tin (?:day du|chi tiet)|ho so)\b/.test(normalizedQuestion);
+  const requestedEdges = (joinPlan?.edges || []).filter(edge => [
+    edge.businessRole,
+    edge.displayColumn,
+    ...(edge.columnPairs || []).flatMap(pair => [pair.sourceColumn, pair.targetColumn])
+  ].filter(Boolean).some(label => normalizedQuestion.includes(normalizeLabel(label))));
+  const requestedJoinPlan = detailedLookup && joinPlan?.edges?.length
+    ? joinPlan
+    : (requestedEdges.length ? { ...joinPlan, edges: requestedEdges } : null);
+
   const escapedTerm = searchTerm.replace(/'/g, "''");
-  if (joinPlan?.outcome === 'ready' && joinPlan.edges?.length && joinPlan.tableRefs?.length) {
+  if (requestedJoinPlan?.outcome === 'ready' && requestedJoinPlan.tableRefs?.length) {
     const quote = name => `[${String(name).replace(/\]/g, ']]')}]`;
-    const refsById = new Map(joinPlan.tableRefs.map(ref => [ref.tableRefId || ref.tableId, ref]));
-    const rootRef = joinPlan.tableRefs.find(ref => ref.tableName === table.tableName) || joinPlan.tableRefs[0];
-    const orderedEdges = joinPlan.edges.every(edge => edge.fromTableRefId && edge.toTableRefId)
-      ? joinPlan.edges.map(edge => ({ edge, nextTableId: edge.toTableId })) : [];
+    const refsById = new Map(requestedJoinPlan.tableRefs.map(ref => [ref.tableRefId || ref.tableId, ref]));
+    const rootRef = requestedJoinPlan.tableRefs.find(ref => ref.tableName === table.tableName) || requestedJoinPlan.tableRefs[0];
+    const orderedEdges = requestedJoinPlan.edges.every(edge => edge.fromTableRefId && edge.toTableRefId)
+      ? requestedJoinPlan.edges.map(edge => ({ edge, nextTableId: edge.toTableId })) : [];
     const joined = new Set([rootRef.tableId]);
-    const remaining = orderedEdges.length ? [] : [...joinPlan.edges];
+    const remaining = orderedEdges.length ? [] : [...requestedJoinPlan.edges];
     while (remaining.length) {
       const index = remaining.findIndex(edge => joined.has(edge.fromTableId) !== joined.has(edge.toTableId));
       if (index < 0) break;
@@ -129,8 +145,17 @@ function buildEntityLookupSql(userMessage = '', refs = {}, joinPlan = null) {
       orderedEdges.push({ edge, nextTableId });
       joined.add(nextTableId);
     }
-    if (orderedEdges.length === joinPlan.edges.length) {
-      const selectRefs = buildEnrichmentProjection((table.columns || []).map(column => column.columnName), joinPlan, rootRef.alias,
+    if (orderedEdges.length === requestedJoinPlan.edges.length) {
+      const visibleColumns = (table.columns || []).filter(column => column.isVisible !== false
+        && !/password|pwd|secret|token|credential|api.?key/i.test(column.columnName));
+      const requestedSourceColumns = new Set(requestedEdges.flatMap(edge => (edge.columnPairs || []).map(pair => pair.sourceColumn)));
+      const projectedColumns = detailedLookup
+        ? visibleColumns
+        : visibleColumns.filter(column => column === nameColumn
+          || column.isPrimaryKey
+          || /code$/i.test(column.columnName)
+          || requestedSourceColumns.has(column.columnName));
+      const selectRefs = buildEnrichmentProjection(projectedColumns.map(column => column.columnName), requestedJoinPlan, rootRef.alias,
         Object.fromEntries((table.columns || []).filter(column => column.displayName).map(column => [column.columnName, column.displayName])));
       const joins = orderedEdges.map(({ edge, nextTableId }) => {
         const from = refsById.get(edge.fromTableRefId || edge.fromTableId);
@@ -143,8 +168,15 @@ function buildEntityLookupSql(userMessage = '', refs = {}, joinPlan = null) {
       return `SELECT TOP 100 ${selectRefs} FROM ${quote(rootRef.schemaName || 'dbo')}.${quote(rootRef.tableName)} ${rootRef.alias} ${joins} WHERE ${rootRef.alias}.${quote(nameColumn.columnName)} LIKE N'%${escapedTerm}%'${orderClause}`;
     }
   }
+  const visibleColumns = table.columns.filter(column => column.isVisible !== false
+    && !/password|pwd|secret|token|credential|api.?key/i.test(column.columnName));
+  const selectedColumns = detailedLookup ? visibleColumns : visibleColumns.filter(column => column === nameColumn
+    || /code$/i.test(column.columnName)
+    || column.isPrimaryKey).slice(0, 4);
+  const projection = [...new Set(selectedColumns.length ? selectedColumns : [nameColumn])]
+    .map(column => `[${column.columnName}]${column.displayName ? ` AS [${String(column.displayName).replace(/\]/g, ']]')}]` : ''}`).join(', ');
   const orderClause = orderColumn ? ` ORDER BY [${orderColumn.columnName}]` : '';
-  return `SELECT TOP 100 * FROM [${table.tableName}] WHERE [${nameColumn.columnName}] LIKE N'%${escapedTerm}%'${orderClause}`;
+  return `SELECT TOP 100 ${projection} FROM [${table.tableName}] WHERE [${nameColumn.columnName}] LIKE N'%${escapedTerm}%'${orderClause}`;
 }
 
 function buildPlannedTablePreviewSql(plan = {}, joinPlan = null) {
@@ -483,6 +515,29 @@ class LocalModelHarness {
       }
     }
 
+    // Name-based record lookups have a deterministic schema-derived query.
+    // Run it before the local model so retries cannot drift into unrelated
+    // mapped IDs and exhaust the SQL repair budget.
+    let entityLookupAttempted = false;
+    if (finalText === null
+      && requestPolicy.dataRequired
+      && !requestPolicy.chartRequired
+      && !requestPolicy.exportRequired) {
+      const plannedTable = requestPlan.table
+        ? dictionaryService.getGroupedTables().find(table => table.tableName === requestPlan.table)
+        : null;
+      const lookupRefs = explicitSchemaRefs.tables.length
+        ? explicitSchemaRefs
+        : { ...explicitSchemaRefs, tables: plannedTable ? [plannedTable] : [] };
+      const lookupQuestion = contextualLookupQuestion(effectiveUserMessage, messages);
+      const entityLookupSql = buildEntityLookupSql(lookupQuestion, lookupRefs, context.joinPlan);
+      if (entityLookupSql) {
+        entityLookupAttempted = true;
+        const lookupExecution = await executeDeterministicTool('execute_sql_query', { sql: entityLookupSql }, 'DETERMINISTIC_ENTITY_LOOKUP');
+        if (lookupExecution?.success) finalText = buildSqlRowsFallbackReply(lookupExecution);
+      }
+    }
+
     while (finalText === null && trace.iterations < this.maxIterations) {
       trace.iterations += 1;
       const modelStartedAt = Date.now();
@@ -702,7 +757,6 @@ class LocalModelHarness {
         usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
       }
     }
-    let entityLookupAttempted = false;
     if (!usefulSql && requestPolicy.dataRequired) {
       const plannedTable = requestPlan.table
         ? dictionaryService.getGroupedTables().find(table => table.tableName === requestPlan.table)
@@ -754,10 +808,13 @@ class LocalModelHarness {
     if (dataRecoveryCompleted) finalText = null;
 
     const chartComplete = !requestPolicy.chartRequired || hasSuccessfulTool(toolCalls, 'render_chart');
+    const deterministicEntityLookupCompleted = trace.steps.some(step => step.type === 'DETERMINISTIC_ENTITY_LOOKUP' && step.success);
     const listAnswerMissingData = isListRequest(effectiveUserMessage)
       && usefulSql
       && !listAnswerMentionsRowValue(finalText, usefulSql);
-    if ((isInsufficientSqlAnswer(finalText) || listAnswerMissingData) && usefulSql && chartComplete && (toolCalls.length || forceSynthesis)) {
+    if (!deterministicEntityLookupCompleted
+      && (isInsufficientSqlAnswer(finalText) || listAnswerMissingData)
+      && usefulSql && chartComplete && (toolCalls.length || forceSynthesis)) {
       try {
         emitProgress(onProgress, { type: 'synthesis_started', label: 'Đang tổng hợp câu trả lời', status: 'running', icon: 'pen', providerName: activeProvider?.name });
         const synthesisData = compactToolResult({
@@ -816,6 +873,8 @@ class LocalModelHarness {
       finalText = 'Chưa thể xác minh dữ liệu đúng với yêu cầu. Vui lòng làm rõ bộ lọc hoặc khoảng thời gian cần tra cứu.';
     }
     if (!String(finalText || '').trim()) throw lastDispatchError || new Error('Local model returned an empty response.');
+    const calculationCall = [...toolCalls].reverse().find(call => call.toolName === 'calculate_expression' && call.success);
+    if (calculationCall) finalText = buildCalculationReply(effectiveUserMessage, calculationCall);
     finalText = sanitizeFinalText(finalText, hasSuccessfulTool(toolCalls, 'render_chart'));
     const responseEvaluation = evaluateCompletion({ reply: finalText, plan: requestPlan, toolCalls, context });
     trace.training.responseEvaluation = responseEvaluation;

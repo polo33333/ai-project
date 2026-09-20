@@ -1370,16 +1370,21 @@ async function sendPageChatMessage() {
     }
     const noAnswer = /local model returned an empty response|stream kết thúc mà không có câu trả lời cuối/i.test(String(err?.message || ''));
     const errorContent = noAnswer
-      ? '<strong>Chưa có câu trả lời phù hợp.</strong> Vui lòng thử lại.'
-      : `<strong>Lỗi kết nối AI:</strong> ${escapeChatMarkdown(err?.message || 'Không thể kết nối tới mô hình AI.')}`;
+      ? 'Chưa có câu trả lời phù hợp. Vui lòng thử lại.'
+      : `Không thể hoàn thành câu trả lời: ${escapeChatMarkdown(err?.message || 'Không thể kết nối tới mô hình AI.')}`;
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;';
     errDiv.innerHTML = `
       <div class="chat-ai-avatar" style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#6366f1 0%,#a855f7 100%);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">
         <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
       </div>
-      <div class="chat-ai-message-bubble" style="background:#fff;border:1px solid #fee2e2;padding:14px 18px;border-radius:14px;font-size:13.5px;color:#b91c1c;">
-        ${errorContent}
+      <div class="chat-ai-message-bubble" style="background:#fff;border:1px solid #e2e8f0;padding:14px 18px;border-radius:14px;max-width:85%;font-size:13.5px;box-shadow:0 4px 14px rgba(0,0,0,.03);line-height:1.6;flex:1;">
+        <div style="font-weight:700;color:#4338ca;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#a855f7);"><i class="fa-solid fa-robot" style="font-size:9px;color:#fff;"></i></span>
+          <span>${aiName}</span>
+          <span style="font-size:10.5px;font-weight:500;color:#94a3b8;">${aiRole}</span>
+        </div>
+        <div class="chat-ai-answer">${errorContent}</div>
       </div>
     `;
     appendChatMessage({ role: 'assistant', html: errDiv.outerHTML });

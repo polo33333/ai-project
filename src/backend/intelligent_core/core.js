@@ -25,6 +25,7 @@ const { estimateTokens, fitOptionalMessages, measureMessages } = require('../age
 const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 const { resolvePlan } = require('../agent_core/harness/completion_policy');
 const { createProviderBudget } = require('../agent_core/harness/guarded_agent_harness');
+const { buildCalculationReply } = require('../agent_core/harness/calculation_reply');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
 const REQUEST_TIMEOUT_MS  = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
@@ -511,6 +512,10 @@ ${strictSelectedKnowledge
       .replace(/\{\s*(?:sql|table)\s*\}/gi, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+
+    if (calcEntry?.toolName === 'calculate_expression') {
+      cleanReplyText = buildCalculationReply(question, calcEntry);
+    }
 
     const citationResult = citationService.buildVerifiedCitations(
       cleanReplyText,

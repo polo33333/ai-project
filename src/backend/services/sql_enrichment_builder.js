@@ -11,9 +11,12 @@ function isSimpleEntityListRequest(text = '') {
 }
 
 function extractNamedEntityValue(question = '') {
-  const match = String(question).trim().match(/t[eê]n\s*(?:l[aà])?\s*[:"']?\s*(.+)$/iu);
-  if (!match) return '';
-  return match[1]
+  const input = String(question).trim();
+  const match = input.match(/t[eê]n\s*(?:l[aà])?\s*[:"']?\s*(.+)$/iu);
+  const entityAfterSubject = input.match(/(?:nh[aâ]n\s*vi[eê]n|nv)\s+([\p{L}\p{N}][\p{L}\p{N}\s.'-]*)$/iu);
+  const candidate = match?.[1] || entityAfterSubject?.[1] || '';
+  if (!candidate || /^(?:n[aà]y|tr[eê]n|đ[oó]|v[aà]y)(?:\s|$)/iu.test(candidate.trim())) return '';
+  return candidate
     .replace(/\s+(?:trong|thu[oộ]c|[oở])\s+(?:b[aả]ng\s+)?[\s\S]*$/iu, '')
     .replace(/\s+l[aà]\s+(?:g[iì]|bao\s+nhi[eê]u)[\s\S]*$/iu, '')
     .replace(/\s+(?:kh[oô]ng|khong|ko)(?:\s+(?:v[aậ]y|n[aà]o))?\s*$/iu, '')
@@ -23,10 +26,12 @@ function extractNamedEntityValue(question = '') {
 
 function contextualLookupQuestion(question = '', messages = []) {
   if (extractNamedEntityValue(question)) return String(question);
-  return [...messages].reverse()
+  const previousEntity = [...messages].reverse()
     .filter(message => message?.role === 'user' && message.content !== question)
     .map(message => String(message.content || ''))
-    .find(content => extractNamedEntityValue(content)) || String(question);
+    .map(content => extractNamedEntityValue(content))
+    .find(Boolean);
+  return previousEntity ? `${String(question).trim()} tên ${previousEntity}` : String(question);
 }
 
 function mappedValueFilters(question = '', joinPlan = null, refs = new Map()) {

@@ -264,6 +264,31 @@ function selectAccountTab(tab) {
   document.querySelectorAll('[data-account-panel]').forEach(panel=>{panel.hidden=panel.dataset.accountPanel!==tab;});
   document.querySelectorAll('[data-account-tab]').forEach(button=>{const active=button.dataset.accountTab===tab;button.classList.toggle('active',active);button.setAttribute('aria-current',active?'page':'false');});
 }
+
+const AUTH_HEARTBEAT_INTERVAL_MS = 4 * 60 * 1000;
+let authHeartbeatTimer = null;
+
+async function refreshActiveSession() {
+  if (document.hidden) return;
+  try {
+    const response = await fetch('/api/auth/me', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.authenticated && !window.pageChatRequestController && !window.copilotRequestController) {
+      window.location.href = '/login.html';
+    }
+  } catch {
+    // A temporary network interruption must not sign out an active user.
+  }
+}
+
+function startAuthHeartbeat() {
+  if (authHeartbeatTimer) clearInterval(authHeartbeatTimer);
+  authHeartbeatTimer = setInterval(refreshActiveSession, AUTH_HEARTBEAT_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshActiveSession();
+  });
+}
 async function openChangePassword() {
   const modal=document.getElementById('change-password-modal');
   modal.querySelectorAll('form').forEach(form=>form.reset());document.getElementById('password-change-error').textContent='';
@@ -523,6 +548,26 @@ const MAIN_TAB_KEYS = new Set([
   'settings',
   'api-docs'
 ]);
+const TAB_DATA_CACHE_TTL_MS = 60_000;
+const tabDataLoadState = new Map();
+
+function loadTabData(tabKey, loaders = []) {
+  const callable = loaders.filter(loader => typeof loader === 'function');
+  if (!callable.length) return Promise.resolve();
+  const current = tabDataLoadState.get(tabKey) || {};
+  if (current.promise) return current.promise;
+  if (current.loadedAt && Date.now() - current.loadedAt < TAB_DATA_CACHE_TTL_MS) return Promise.resolve();
+  const promise = Promise.all(callable.map(loader => Promise.resolve().then(loader)))
+    .then(() => { tabDataLoadState.set(tabKey, { loadedAt: Date.now(), promise: null }); })
+    .catch(error => { tabDataLoadState.delete(tabKey); throw error; });
+  tabDataLoadState.set(tabKey, { ...current, promise });
+  return promise;
+}
+
+window.invalidateMainTabData = function invalidateMainTabData(tabKey) {
+  if (tabKey) tabDataLoadState.delete(normalizeMainTabKey(tabKey) || tabKey);
+  else tabDataLoadState.clear();
+};
 
 function normalizeMainTabKey(tabKey) {
   const rawKey = String(tabKey || '')
@@ -706,6 +751,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   });
 
   if (isDashboard) {
+    if (!document.getElementById('view-dashboard-logs')) await loadViewComponents('overview');
     const dashLogs = document.getElementById('view-dashboard-logs');
     if (dashLogs) dashLogs.style.display = 'block';
     requestAnimationFrame(() => {
@@ -718,7 +764,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   const targetId = viewMap[cleanKey] || `view-${cleanKey.replace(/_/g, '-')}`;
   let targetView = document.getElementById(targetId);
   if (!targetView && typeof loadViewComponents === 'function') {
-    await loadViewComponents();
+    await loadViewComponents(cleanKey);
     targetView = document.getElementById(targetId);
   }
 
@@ -728,64 +774,57 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     console.warn(`Không tìm thấy view: ${targetId}`);
   }
 
-  // Trigger Data Fetchers from Modules
-  if (typeof fetchSettings === 'function' && cleanKey === 'settings') fetchSettings();
-  if (typeof fetchAiProviders === 'function' && cleanKey.includes('provider')) fetchAiProviders();
-  if (typeof fetchDataDictionary === 'function' && cleanKey === 'dictionary') fetchDataDictionary();
-  if (typeof fetchGlossaryData === 'function' && cleanKey === 'glossary') fetchGlossaryData();
-  if (typeof fetchDbSources === 'function' && (cleanKey === 'sql' || cleanKey === 'sql_connector')) fetchDbSources();
-  if (typeof fetchLogs === 'function' && cleanKey.includes('log')) fetchLogs();
-  if (typeof fetchChatHistory === 'function' && cleanKey.includes('chat_history')) fetchChatHistory();
-  if (typeof fetchChatFeedback === 'function' && cleanKey === 'chat_feedback') fetchChatFeedback();
-  if (typeof fetchMcpServers === 'function' && cleanKey === 'mcp_sources') fetchMcpServers();
-  if (typeof fetchTrainingReport === 'function' && cleanKey === 'training_core') fetchTrainingReport();
-  if (typeof fetchSystemTools === 'function' && cleanKey === 'system_tools') fetchSystemTools();
-  if (typeof fetchApiKeys === 'function' && cleanKey === 'api_docs') fetchApiKeys();
-  if (typeof fetchEmbedConfigs === 'function' && cleanKey === 'api_docs') fetchEmbedConfigs();
-  if (typeof fetchLibraryDocuments === 'function' && cleanKey === 'library') fetchLibraryDocuments();
-  if (typeof fetchWatchFolderData === 'function' && cleanKey === 'watchfolder') fetchWatchFolderData();
-  if (typeof initWorkflowsView === 'function' && cleanKey === 'workflows') initWorkflowsView();
-  if (typeof initPageAnalyticsCharts === 'function' && cleanKey === 'analytics') initPageAnalyticsCharts();
-  if (typeof populateChatModelSelector === 'function' && cleanKey === 'page_chat') populateChatModelSelector();
-  if (typeof populateChatKnowledgeSources === 'function' && cleanKey === 'page_chat') populateChatKnowledgeSources();
+  const tabLoaders = {
+    settings: [window.fetchSettings],
+    ai_providers: [window.fetchAiProviders],
+    dictionary: [window.fetchDataDictionary],
+    glossary: [window.fetchGlossaryData],
+    sql: [window.fetchDbSources], sql_connector: [window.fetchDbSources],
+    system_logs: [window.fetchLogs],
+    chat_history: [window.fetchChatHistory],
+    chat_feedback: [window.fetchChatFeedback],
+    mcp_sources: [window.fetchMcpServers],
+    training_core: [window.fetchTrainingReport],
+    system_tools: [window.fetchSystemTools],
+    api_docs: [window.fetchApiKeys, window.fetchEmbedConfigs],
+    library: [window.fetchLibraryDocuments],
+    watchfolder: [window.fetchWatchFolderData],
+    workflows: [window.initWorkflowsView],
+    analytics: [window.initPageAnalyticsCharts]
+  };
+  loadTabData(tabKey, tabLoaders[cleanKey] || []).catch(error => console.error(`Không thể tải dữ liệu tab ${tabKey}:`, error));
   if (typeof renderChatSessionsList === 'function' && cleanKey === 'page_chat') renderChatSessionsList();
   if (typeof renderCurrentChatMessages === 'function' && cleanKey === 'page_chat') renderCurrentChatMessages();
-  if (typeof fetchAndRenderQuickPrompts === 'function' && cleanKey === 'page_chat') fetchAndRenderQuickPrompts();
+  if (cleanKey === 'page_chat') loadTabData(tabKey, [window.populateChatModelSelector, window.populateChatKnowledgeSources, window.fetchAndRenderQuickPrompts])
+    .catch(error => console.error('Không thể tải dữ liệu Trò chuyện AI:', error));
 };
 
 
 // Load Modular HTML Component Templates into #main-view-container
-async function loadViewComponents() {
+async function loadViewComponents(tabKey) {
   const container = document.getElementById('main-view-container');
   if (!container) return;
-  const views = [
-    'dashboard_logs.html',
-    'page_chat.html',
-    'dictionary.html',
-    'sql_connector.html',
-    'ai_providers.html',
-    'library.html',
-    'watchfolder.html',
-    'glossary.html',
-    'analytics.html',
-    'workflows.html',
-    'system_logs.html',
-    'chat_history.html',
-    'chat_feedback.html',
-    'training_core.html',
-    'mcp_sources.html',
-    'system_tools.html',
-    'settings.html',
-    'api_docs.html'
-  ];
+  const viewFiles = {
+    overview: 'dashboard_logs.html', page_chat: 'page_chat.html', dictionary: 'dictionary.html',
+    sql: 'sql_connector.html', sql_connector: 'sql_connector.html', ai_providers: 'ai_providers.html',
+    library: 'library.html', watchfolder: 'watchfolder.html', glossary: 'glossary.html', analytics: 'analytics.html',
+    workflows: 'workflows.html', system_logs: 'system_logs.html', chat_history: 'chat_history.html',
+    chat_feedback: 'chat_feedback.html', training_core: 'training_core.html', mcp_sources: 'mcp_sources.html',
+    system_tools: 'system_tools.html', settings: 'settings.html', api_docs: 'api_docs.html'
+  };
+  const file = viewFiles[String(tabKey || '').replace(/-/g, '_')];
+  if (!file || container.querySelector(`[data-view-file="${file}"]`)) return;
 
   try {
-    const htmlContents = await Promise.all(
-      views.map(v => fetch(`/views/${v}`).then(res => res.text()))
-    );
-    container.innerHTML = htmlContents.join('\n');
+    const response = await fetch(`/views/${file}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const template = document.createElement('template');
+    template.innerHTML = await response.text();
+    const firstView = template.content.firstElementChild;
+    if (firstView) firstView.dataset.viewFile = file;
+    container.appendChild(template.content);
   } catch (err) {
-    console.error("Lỗi khi tải các view module:", err);
+    console.error(`Lỗi khi tải view ${file}:`, err);
   }
 }
 
@@ -1654,7 +1693,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAccountMenu();
   initPwaInstall();
   await loadCurrentAccount();
-  await loadViewComponents();
+  startAuthHeartbeat();
   initGlobalFeatureSearch();
   await switchMainTab(getRememberedMainTab());
   populateCopilotModelSelector();

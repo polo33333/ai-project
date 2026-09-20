@@ -3841,6 +3841,74 @@ body.dictionary-modal-open {
   scrollbar-gutter: stable;
 }
 
+/* Compact scrollbars for the full chat page and model popup. */
+#page-chat-messages-container,
+.chat-tool-result-scroll,
+.copilot-chat-messages,
+#copilot-modal .chat-bubble table,
+.copilot-json-block,
+.copilot-result-table>div:last-child {
+  scrollbar-width: thin;
+  scrollbar-color: #a8b0bd transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  #page-chat-messages-container::-webkit-scrollbar,
+  .chat-tool-result-scroll::-webkit-scrollbar,
+  .copilot-chat-messages::-webkit-scrollbar,
+  #copilot-modal .chat-bubble table::-webkit-scrollbar,
+  .copilot-json-block::-webkit-scrollbar,
+  .copilot-result-table>div:last-child::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  #page-chat-messages-container::-webkit-scrollbar-thumb,
+  .chat-tool-result-scroll::-webkit-scrollbar-thumb,
+  .copilot-chat-messages::-webkit-scrollbar-thumb,
+  #copilot-modal .chat-bubble table::-webkit-scrollbar-thumb,
+  .copilot-json-block::-webkit-scrollbar-thumb,
+  .copilot-result-table>div:last-child::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #a8b0bd;
+    background-clip: padding-box;
+  }
+
+  #page-chat-messages-container::-webkit-scrollbar-thumb:horizontal,
+  .chat-tool-result-scroll::-webkit-scrollbar-thumb:horizontal,
+  .copilot-chat-messages::-webkit-scrollbar-thumb:horizontal,
+  #copilot-modal .chat-bubble table::-webkit-scrollbar-thumb:horizontal,
+  .copilot-json-block::-webkit-scrollbar-thumb:horizontal,
+  .copilot-result-table>div:last-child::-webkit-scrollbar-thumb:horizontal {
+    border-right: 22px solid transparent;
+    border-left: 22px solid transparent;
+  }
+
+  #page-chat-messages-container::-webkit-scrollbar-thumb:vertical,
+  .chat-tool-result-scroll::-webkit-scrollbar-thumb:vertical,
+  .copilot-chat-messages::-webkit-scrollbar-thumb:vertical,
+  #copilot-modal .chat-bubble table::-webkit-scrollbar-thumb:vertical,
+  .copilot-json-block::-webkit-scrollbar-thumb:vertical,
+  .copilot-result-table>div:last-child::-webkit-scrollbar-thumb:vertical {
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+  }
+
+  #page-chat-messages-container::-webkit-scrollbar-track,
+  .chat-tool-result-scroll::-webkit-scrollbar-track,
+  .copilot-chat-messages::-webkit-scrollbar-track,
+  #copilot-modal .chat-bubble table::-webkit-scrollbar-track,
+  .copilot-json-block::-webkit-scrollbar-track,
+  .copilot-result-table>div:last-child::-webkit-scrollbar-track { background: transparent; }
+
+  #page-chat-messages-container::-webkit-scrollbar-button,
+  .chat-tool-result-scroll::-webkit-scrollbar-button,
+  .copilot-chat-messages::-webkit-scrollbar-button,
+  #copilot-modal .chat-bubble table::-webkit-scrollbar-button,
+  .copilot-json-block::-webkit-scrollbar-button,
+  .copilot-result-table>div:last-child::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+}
+
 #page-chat-messages-container .chat-thinking-row {
   overflow-anchor: none;
 }

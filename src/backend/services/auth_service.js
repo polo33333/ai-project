@@ -150,6 +150,10 @@ class AuthService {
     const account = this.accounts.find(acc => acc.id === session.accountId && acc.isActive !== false);
     return this.publicAccount(account);
   }
+
+  getSessionMaxAge() {
+    return Math.floor(SESSION_TTL_MS / 1000);
+  }
 }
 
 function expectedSafeEqual(actual, expected) {
