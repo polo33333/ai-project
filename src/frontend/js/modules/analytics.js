@@ -4,6 +4,30 @@
 
 window.khCharts = window.khCharts || {};
 
+const DASHBOARD_RANGE_VALUES = ['today', '7d', '30d', '12m'];
+const DASHBOARD_ANALYTICS_RANGE_KEY = 'knowledgehub.dashboard.analyticsRange';
+const DASHBOARD_FEEDBACK_RANGE_KEY = 'knowledgehub.dashboard.feedbackRange';
+
+function readDashboardRange(key) {
+  try {
+    const value = localStorage.getItem(key);
+    return DASHBOARD_RANGE_VALUES.includes(value) ? value : '7d';
+  } catch {
+    return '7d';
+  }
+}
+
+function saveDashboardRange(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* Keep the selection for this page. */ }
+}
+
+function syncDashboardRangeControls() {
+  const analyticsRange = document.getElementById('dashboard-analytics-range');
+  const feedbackRange = document.getElementById('dashboard-feedback-range');
+  if (analyticsRange) analyticsRange.value = window.dashboardAnalyticsRange;
+  if (feedbackRange) feedbackRange.value = window.dashboardFeedbackRange;
+}
+
 function setAnalyticsLoading(targetIds, loading) {
   targetIds.forEach(id => {
     const target = document.getElementById(id);
@@ -23,13 +47,14 @@ function setAnalyticsLoading(targetIds, loading) {
     if (overlay) overlay.hidden = !loading;
   });
 }
-window.dashboardAnalyticsRange = window.dashboardAnalyticsRange || '7d';
+window.dashboardAnalyticsRange = window.dashboardAnalyticsRange || readDashboardRange(DASHBOARD_ANALYTICS_RANGE_KEY);
 window.dashboardAnalyticsHistory = window.dashboardAnalyticsHistory || [];
 window.dashboardAnalyticsProviders = window.dashboardAnalyticsProviders || [];
-window.dashboardFeedbackRange = window.dashboardFeedbackRange || '7d';
+window.dashboardFeedbackRange = window.dashboardFeedbackRange || readDashboardRange(DASHBOARD_FEEDBACK_RANGE_KEY);
 window.dashboardFeedbackData = window.dashboardFeedbackData || [];
 window.dashboardActivityYear = window.dashboardActivityYear || new Date().getFullYear();
 window.dashboardAnalyticsData = window.dashboardAnalyticsData || null;
+if (typeof document !== 'undefined') syncDashboardRangeControls();
 let dashboardAnalyticsRefreshPromise = null;
 const DASHBOARD_ANALYTICS_CACHE_MS = 30_000;
 
@@ -503,12 +528,14 @@ function renderDashboardFeedbackChart(feedback = []) {
 }
 
 function changeDashboardFeedbackRange(range) {
-  window.dashboardFeedbackRange = ['today', '7d', '30d', '12m'].includes(range) ? range : '7d';
+  window.dashboardFeedbackRange = DASHBOARD_RANGE_VALUES.includes(range) ? range : '7d';
+  saveDashboardRange(DASHBOARD_FEEDBACK_RANGE_KEY, window.dashboardFeedbackRange);
   renderDashboardFeedbackChart(window.dashboardFeedbackData || []);
 }
 
 function changeDashboardAnalyticsRange(range) {
-  window.dashboardAnalyticsRange = ['today', '7d', '30d', '12m'].includes(range) ? range : '7d';
+  window.dashboardAnalyticsRange = DASHBOARD_RANGE_VALUES.includes(range) ? range : '7d';
+  saveDashboardRange(DASHBOARD_ANALYTICS_RANGE_KEY, window.dashboardAnalyticsRange);
   renderDashboardChart(window.dashboardAnalyticsHistory || [], window.dashboardAnalyticsProviders || []);
 }
 
@@ -727,6 +754,7 @@ function renderDashboardAnalyticsData(data) {
   window.dashboardAnalyticsHistory = data.history;
   window.dashboardAnalyticsProviders = data.providers;
   window.dashboardFeedbackData = data.feedback;
+  syncDashboardRangeControls();
   updateMetricText(data);
   renderPageAnalytics(data);
   renderDashboardChart(data.history, data.providers);

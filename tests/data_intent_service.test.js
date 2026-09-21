@@ -11,7 +11,8 @@ const sqlConnector = require('../src/backend/services/sql_connector');
 async function fixture(run) {
   const oldTables = dictionaryService.tablesStore;
   const employee = withIdentity({ dbSourceId: 'src', dbName: 'ERP', schemaName: 'dbo', tableName: 'M_Employee', isActive: true,
-    columns: [{ columnName: 'EmployeeID', isPrimaryKey: true }, { columnName: 'EmployeeName' }, { columnName: 'GenderID' }] });
+    columns: [{ columnName: 'EmployeeID', isPrimaryKey: true }, { columnName: 'EmployeeName' },
+      { columnName: 'GenderID' }, { columnName: 'CreateDate', dataType: 'datetime' }] });
   const constant = withIdentity({ dbSourceId: 'src', dbName: 'ERP', schemaName: 'dbo', tableName: 'M_Constant', isActive: true,
     columns: [{ columnName: 'ConstantID', isPrimaryKey: true }, { columnName: 'ConstantName' }] });
   dictionaryService.tablesStore = [employee, constant];
@@ -55,6 +56,19 @@ test('SQL must apply every relationship filter selected by the model intent plan
   const wrong = validateSqlAgainstIntent("SELECT EmployeeName FROM M_Employee WHERE EmployeeName LIKE N'%nào giới tính nữ%'", plan, joinPlan);
   assert.equal(wrong.valid, false);
   assert.equal(wrong.code, 'DATA_INTENT_SQL_MISMATCH');
+}));
+
+test('timeseries intent converts a mistaken date entity lookup into a temporal filter', () => fixture(({ context, joinPlan }) => {
+  context.requestPlan = { timeColumn: 'CreateDate', temporalMonths: 7 };
+  const plan = validateIntentPlan({ intent: 'aggregate_timeseries', rootTable: 'M_Employee',
+    entityLookup: { field: 'CreateDate', value: '7 thang gan nhat' }
+  }, context);
+  assert.equal(plan.entityLookup, null);
+  assert.deepEqual(plan.temporalFilter, {
+    field: 'CreateDate', mode: 'latest_available_months', count: 7, from: null, to: null
+  });
+  const sql = "SELECT FORMAT(CreateDate, 'yyyy-MM') AS Month, COUNT(*) AS Total FROM M_Employee WHERE CreateDate >= DATEADD(MONTH, -6, (SELECT MAX(CreateDate) FROM M_Employee)) GROUP BY FORMAT(CreateDate, 'yyyy-MM')";
+  assert.equal(validateSqlAgainstIntent(sql, plan, joinPlan).valid, true);
 }));
 
 test('intent plan rejects invented relationship roles and fields', () => fixture(({ context }) => {

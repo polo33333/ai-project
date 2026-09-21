@@ -51,6 +51,17 @@ function relationshipForRootField(edges, rootTableId, field) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function isTemporalColumn(column = {}) {
+  return /date|time/.test(normalize(column.dataType))
+    || /date|time/.test(normalize(column.columnName));
+}
+
+function positiveInteger(value) {
+  const match = String(value ?? '').match(/\d+/);
+  const number = match ? Number(match[0]) : 0;
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
 function validateIntentPlan(input = {}, context = {}) {
   const tables = allowedTables(context);
   const root = tables.find(table => normalize(table.tableName) === normalize(input.rootTable));
@@ -71,6 +82,42 @@ function validateIntentPlan(input = {}, context = {}) {
   } : null;
   if (entityLookup && !entityLookup.field) fail('DATA_INTENT_FIELD_INVALID',
     `Cột lookup "${input.entityLookup.field || ''}" không thuộc bảng ${root.tableName}.`);
+  const requestedTimeField = input.temporalFilter?.field
+    || (intent === 'aggregate_timeseries' ? context.requestPlan?.timeColumn : null);
+  const temporalColumn = requestedTimeField
+    ? visibleColumns.find(column => normalize(column.columnName) === normalize(requestedTimeField))
+    : null;
+  if (input.temporalFilter?.field && (!temporalColumn || !isTemporalColumn(temporalColumn))) {
+    fail('DATA_INTENT_FIELD_INVALID', `Temporal filter field "${input.temporalFilter.field}" is not a date/time column of ${root.tableName}.`);
+  }
+  let temporalFilter = temporalColumn ? {
+    field: temporalColumn.columnName,
+    mode: input.temporalFilter?.mode || 'latest_available_months',
+    count: positiveInteger(input.temporalFilter?.count ?? context.requestPlan?.temporalMonths),
+    from: String(input.temporalFilter?.from || '').trim() || null,
+    to: String(input.temporalFilter?.to || '').trim() || null
+  } : null;
+  // Small models sometimes classify a time window as an entity value. Convert
+  // it so SQL is not forced to compare a date column with natural-language text.
+  if (entityLookup && intent === 'aggregate_timeseries') {
+    const lookupColumn = visibleColumns.find(column => normalize(column.columnName) === normalize(entityLookup.field));
+    if (isTemporalColumn(lookupColumn)) {
+      temporalFilter = temporalFilter || {
+        field: lookupColumn.columnName,
+        mode: 'latest_available_months',
+        count: positiveInteger(entityLookup.value) || positiveInteger(context.requestPlan?.temporalMonths),
+        from: null,
+        to: null
+      };
+      entityLookup = null;
+    }
+  }
+  if (temporalFilter?.mode === 'latest_available_months' && !temporalFilter.count) {
+    fail('DATA_INTENT_FILTER_INVALID', 'Latest-month temporal filter requires a positive month count.');
+  }
+  if (temporalFilter?.mode === 'calendar_range' && !temporalFilter.from && !temporalFilter.to) {
+    fail('DATA_INTENT_FILTER_INVALID', 'Calendar-range temporal filter requires from or to.');
+  }
   const relationshipFilters = (input.relationshipFilters || []).map(filter =>
     matchRelationshipFilter(filter, edges));
   // Foreign-key values such as GenderID="Female" describe a mapped business
@@ -100,7 +147,7 @@ function validateIntentPlan(input = {}, context = {}) {
     fail('DATA_INTENT_FILTER_INVALID', 'Record lookup cần entityLookup hoặc ít nhất một relationship filter.');
   }
   return { version: 1, intent, rootTable: root.tableName, rootTableId: root.tableId,
-    entityLookup, relationshipFilters, requestedFields: [...new Set(requestedFields)],
+    entityLookup, temporalFilter, relationshipFilters, requestedFields: [...new Set(requestedFields)],
     resultGrain: String(input.resultGrain || root.tableName), confidence: Math.max(0, Math.min(1, Number(input.confidence) || 0)) };
 }
 
@@ -118,6 +165,11 @@ function validateSqlAgainstIntent(sql, plan, joinPlan) {
   if (plan.entityLookup && (!new RegExp(`\\b${String(plan.entityLookup.field).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)
       || !sqlContainsValue(text, plan.entityLookup.value))) {
     return { valid: false, code: 'DATA_INTENT_SQL_MISMATCH', error: `SQL không áp dụng entity lookup ${plan.entityLookup.field} theo intent plan.` };
+  }
+  if (plan.temporalFilter
+      && !new RegExp(`\\b${String(plan.temporalFilter.field).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)) {
+    return { valid: false, code: 'DATA_INTENT_SQL_MISMATCH',
+      error: `SQL does not apply temporal filter ${plan.temporalFilter.field} from the intent plan.` };
   }
   for (const filter of plan.relationshipFilters || []) {
     const edge = (joinPlan?.edges || []).find(item => item.relationshipId === filter.relationshipId);

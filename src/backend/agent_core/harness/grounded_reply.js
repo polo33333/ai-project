@@ -1,10 +1,13 @@
 'use strict';
 
 function ensureDownloadLink(text, downloadUrl) {
-  const reply = String(text || '').trim();
+  let reply = String(text || '').trim();
   const url = String(downloadUrl || '').trim();
   if (!url) return reply;
   const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Collapse a malformed outer Markdown link around an already valid export link.
+  const nestedLinkPattern = new RegExp(`\\[(\\[[^\\]]+\\]\\(\\s*${escapedUrl}\\s*\\))\\]\\([^\\n)]*\\)`, 'i');
+  reply = reply.replace(nestedLinkPattern, '$1');
   if (new RegExp(`\\[[^\\]]+\\]\\(\\s*${escapedUrl}\\s*\\)`, 'i').test(reply)) return reply;
   const link = `[Tải file tại đây](${url})`;
   const codeUrlPattern = new RegExp('`' + escapedUrl + '`', 'i');

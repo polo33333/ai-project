@@ -5849,6 +5849,7 @@ body.dictionary-modal-open {
 
 .chat-chart-canvas {
   display: block;
+  image-rendering: auto;
   width: 100% !important;
   max-width: 100% !important;
   height: 100% !important;

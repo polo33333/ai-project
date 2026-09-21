@@ -6,12 +6,38 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function analyticsContext() {
-  const context = vm.createContext({ window: {}, Intl, Date, console });
+function analyticsContext(globals = {}) {
+  const context = vm.createContext({ window: {}, Intl, Date, console, ...globals });
   const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/analytics.js'), 'utf8');
   vm.runInContext(source, context);
   return context;
 }
+
+test('dashboard range selectors restore and persist their last choices independently', () => {
+  const values = new Map([
+    ['knowledgehub.dashboard.analyticsRange', '30d'],
+    ['knowledgehub.dashboard.feedbackRange', '12m']
+  ]);
+  const localStorage = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value)
+  };
+  const controls = {
+    'dashboard-analytics-range': { value: '7d' },
+    'dashboard-feedback-range': { value: '7d' }
+  };
+  const document = { getElementById: id => controls[id] || null };
+  const context = analyticsContext({ localStorage, document });
+  assert.equal(context.window.dashboardAnalyticsRange, '30d');
+  assert.equal(context.window.dashboardFeedbackRange, '12m');
+  assert.equal(controls['dashboard-analytics-range'].value, '30d');
+  assert.equal(controls['dashboard-feedback-range'].value, '12m');
+  context.renderDashboardChart = () => {};
+  context.renderDashboardFeedbackChart = () => {};
+  vm.runInContext("changeDashboardAnalyticsRange('today'); changeDashboardFeedbackRange('7d')", context);
+  assert.equal(values.get('knowledgehub.dashboard.analyticsRange'), 'today');
+  assert.equal(values.get('knowledgehub.dashboard.feedbackRange'), '7d');
+});
 
 test('SQL cards count only enabled tables belonging to the default database', () => {
   const context = analyticsContext();

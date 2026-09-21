@@ -25,6 +25,11 @@ function getDictionaryGraphTables() {
     || (table.columns || []).some(column => String(column.columnName || '').toLowerCase().includes(keyword))));
 }
 
+function getVerifiedDictionaryGraphRelationships() {
+  return (window.tableRelationshipsData || []).filter(relation =>
+    relation?.status === 'verified' && relation.isActive !== false);
+}
+
 function setDictionaryView(view) {
   window.dictionaryView = view === 'list' ? 'list' : 'graph';
   document.querySelector('#view-dictionary .dictionary-content-card')?.classList.toggle('is-graph-view', window.dictionaryView === 'graph');
@@ -96,6 +101,7 @@ function renderDictionaryGraph() {
 
   const domainIndexes = new Map(domains.sort((a, b) => a.localeCompare(b, 'vi')).map((domain, index) => [domain, index]));
   const aliasAssignments = buildDictionaryAliasAssignments(tables);
+  const verifiedRelationships = getVerifiedDictionaryGraphRelationships();
   const markup = [];
   rings.forEach((ring, ringIndex) => {
     const ringTables = ring.tables;
@@ -107,8 +113,8 @@ function renderDictionaryGraph() {
       const orbitX = Math.cos(currentAngle) * radiusX; const orbitY = Math.sin(currentAngle) * radiusY;
       const palette = table.domain ? DICTIONARY_GRAPH_COLORS[(domainIndexes.get(table.domain) || 0) % DICTIONARY_GRAPH_COLORS.length] : { border: '#cbd5e1', fill: '#f1f5f9', accent: '#64748b' };
       const selected = window.dictionaryGraphSelection === table.tableName;
-      const related = window.dictionaryGraphSelection && (window.tableRelationshipsData || []).some(relation => (relation.sourceTable === window.dictionaryGraphSelection && relation.targetTable === table.tableName) || (relation.targetTable === window.dictionaryGraphSelection && relation.sourceTable === table.tableName));
-      const relationTotal = (window.tableRelationshipsData || []).filter(relation => relation.sourceTable === table.tableName || relation.targetTable === table.tableName).length;
+      const related = window.dictionaryGraphSelection && verifiedRelationships.some(relation => (relation.sourceTable === window.dictionaryGraphSelection && relation.targetTable === table.tableName) || (relation.targetTable === window.dictionaryGraphSelection && relation.sourceTable === table.tableName));
+      const relationTotal = verifiedRelationships.filter(relation => relation.sourceTable === table.tableName || relation.targetTable === table.tableName).length;
       const aliases = aliasAssignments.get(table.tableName) || [];
       const satellites = aliases.slice(0, 6).map((alias, aliasIndex) => `<span class="dictionary-table-alias alias-${aliasIndex}" title="${escapeDictHtml(alias)}"><i></i>${escapeDictHtml(alias)}</span>`).join('');
       markup.push(`<div class="dictionary-orbit-item ${table.domain ? '' : 'is-unassigned'}" data-radius-x="${radiusX}" data-radius-y="${radiusY}" data-base-angle="${angle}" data-speed="${speed}" style="left:${centerX - 75}px;top:${centerY - 20}px;transform:translate3d(${orbitX}px,${orbitY}px,0);--domain-border:${palette.border};--domain-fill:${palette.fill};--domain-accent:${palette.accent}">${satellites}<button class="dictionary-graph-node ${selected ? 'selected' : ''} ${related ? 'related' : ''}" data-table="${escapeDictHtml(table.tableName)}" onclick="selectDictionaryGraphTable('${encodeURIComponent(table.tableName)}')"><span class="dictionary-node-icon"><i class="fa-solid fa-table"></i></span><span class="dictionary-node-copy"><strong>${escapeDictHtml(table.tableName)}</strong><small>${escapeDictHtml(table.tableDescription || `${(table.columns || []).length} cột dữ liệu`)}</small></span><span class="dictionary-node-meta">${escapeDictHtml(dictionaryDomainLabel(table.domain))} · ${(table.columns || []).length} cột${relationTotal ? ` · ${relationTotal} nối` : ''}</span></button></div>`);
@@ -158,7 +164,7 @@ function drawDictionaryGraphEdges() {
     hierarchy.push(`<path d="M ${from.x} ${from.y} L ${to.x} ${to.y}" class="dictionary-hierarchy-edge table-db ${wrapper.classList.contains('is-unassigned') ? 'unassigned' : ''}" marker-end="url(#dictionary-hierarchy-arrow)"></path>`);
     wrapper.querySelectorAll('.dictionary-table-alias').forEach(alias => { const [a, b] = nearestGraphPoints(alias, nodeIcon, graphRect, scale); hierarchy.push(`<path d="M ${a.x} ${a.y} L ${b.x} ${b.y}" class="dictionary-hierarchy-edge alias-table" marker-end="url(#dictionary-hierarchy-arrow)"></path>`); });
   });
-  const relations = (window.tableRelationshipsData || []).filter(relation => relation.isActive !== false).map(relation => {
+  const relations = getVerifiedDictionaryGraphRelationships().map(relation => {
     const source = graph.querySelector(`.dictionary-graph-node[data-table="${CSS.escape(relation.sourceTable)}"] .dictionary-node-icon`); const target = graph.querySelector(`.dictionary-graph-node[data-table="${CSS.escape(relation.targetTable)}"] .dictionary-node-icon`); if (!source || !target) return '';
     const [from, to] = nearestGraphPoints(source, target, graphRect, scale); const middleX = (from.x + to.x) / 2; const active = selected && (relation.sourceTable === selected || relation.targetTable === selected); const muted = selected && !active;
     return `<path d="M ${from.x} ${from.y} C ${middleX} ${from.y}, ${middleX} ${to.y}, ${to.x} ${to.y}" class="dictionary-domain-edge ${active ? 'active' : ''} ${muted ? 'muted' : ''}" marker-end="url(#dictionary-relation-arrow)"></path>`;

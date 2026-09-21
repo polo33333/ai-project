@@ -38,6 +38,14 @@ test('plain export URLs are normalized into clickable download links', () => {
   );
 });
 
+test('nested export links are collapsed to one clickable link', () => {
+  const url = '/api/exports/Bao_cao_1788438553837.xlsx';
+  assert.equal(
+    ensureDownloadLink(`[[Download file](${url})]([SYSTEM_PATH_HIDDEN])`, url),
+    `[Download file](${url})`
+  );
+});
+
 class SqlTool extends BaseTool {
   constructor(rows = [{ OutputMonth: new Date('2024-01-01T00:00:00Z'), TotalQty: 10 }]) {
     super({ name: 'execute_sql_query', description: 'Query data.', parameters: { type: 'object', properties: { sql: { type: 'string' } }, required: ['sql'] } });

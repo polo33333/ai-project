@@ -560,6 +560,12 @@ function renderChartSpec(canvasId, chartSpec) {
     const specPlugins = specOptions.plugins || {};
     const specScales = specOptions.scales || {};
     const isRadialChart = ['pie', 'doughnut', 'polarArea'].includes(chartSpec.type);
+    const readableFont = (font = {}, size = 13, weight = '600') => ({
+      ...font,
+      family: 'Inter, system-ui, sans-serif',
+      size: Math.max(size, Number(font.size) || 0),
+      weight: font.weight || weight
+    });
 
     // Normalize chartSpec
     const config = {
@@ -569,23 +575,23 @@ function renderChartSpec(canvasId, chartSpec) {
         responsive: true,
         ...specOptions,
         maintainAspectRatio: false,
-        devicePixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
+        devicePixelRatio: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
         plugins: {
           ...specPlugins,
           legend: {
             position: 'top',
             ...(specPlugins.legend || {}),
             labels: {
-              font: { family: 'Inter', size: 12, weight: '600' },
               ...(specPlugins.legend?.labels || {}),
+              font: readableFont(specPlugins.legend?.labels?.font, 13, '600'),
               color: themeColors.text
             }
           },
           title: {
             display: !!chartSpec.title,
             text: chartSpec.title || '',
-            font: { family: 'Inter', size: 14, weight: '700' },
             ...(specPlugins.title || {}),
+            font: readableFont(specPlugins.title?.font, 15, '700'),
             color: themeColors.text
           },
           tooltip: {
@@ -602,13 +608,15 @@ function renderChartSpec(canvasId, chartSpec) {
             ...(specScales.x || {}),
             grid: { ...(specScales.x?.grid || {}), color: themeColors.grid },
             border: { ...(specScales.x?.border || {}), color: themeColors.grid },
-            ticks: { font: { family: 'Inter', size: 12, weight: '500' }, ...(specScales.x?.ticks || {}), color: themeColors.text }
+            ticks: { ...(specScales.x?.ticks || {}), font: readableFont(specScales.x?.ticks?.font), color: themeColors.text,
+              padding: Math.max(8, Number(specScales.x?.ticks?.padding) || 0) }
           },
           y: {
             ...(specScales.y || {}),
             grid: { ...(specScales.y?.grid || {}), color: themeColors.grid },
             border: { ...(specScales.y?.border || {}), color: themeColors.grid },
-            ticks: { font: { family: 'Inter', size: 12, weight: '500' }, ...(specScales.y?.ticks || {}), color: themeColors.text }
+            ticks: { ...(specScales.y?.ticks || {}), font: readableFont(specScales.y?.ticks?.font), color: themeColors.text,
+              padding: Math.max(8, Number(specScales.y?.ticks?.padding) || 0) }
           }
         }
       }

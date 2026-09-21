@@ -199,6 +199,10 @@ class PlanDataQueryTool extends BaseTool {
           entityLookup: { type: 'object', properties: {
             field: { type: 'string' }, operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
           } },
+          temporalFilter: { type: 'object', description: 'Use for date/time windows such as the latest 7 months. Do not put time windows in entityLookup.', properties: {
+            field: { type: 'string' }, mode: { type: 'string', enum: ['latest_available_months', 'calendar_range'] },
+            count: { type: 'integer' }, from: { type: 'string' }, to: { type: 'string' }
+          }, required: ['field', 'mode'] },
           relationshipFilters: { type: 'array', items: { type: 'object', properties: {
             relationshipId: { type: 'string' }, relationshipRole: { type: 'string' },
             operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
