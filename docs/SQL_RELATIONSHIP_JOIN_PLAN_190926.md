@@ -13,7 +13,9 @@
 >
 > **Bối cảnh:** quy trình tạo/xác minh quan hệ trên UI Data Dictionary (real FK tự động,
 > quan hệ quy ước tạo tay + bấm xác minh) đã đúng. Vấn đề trong tài liệu này xảy ra **ngay
-> cả khi quy trình đó được làm đúng** — tức là bug kiến trúc, không phải lỗi thao tác.
+> cả khi quy trình đó được làm đúng**. Ngoài lỗi kiến trúc này, kế hoạch cũng phải xử lý
+> rủi ro người tạo quan hệ tay khai sai cardinality; bấm xác minh không tự chứng minh
+> cardinality đúng với ràng buộc và dữ liệu thực tế.
 >
 > Rà soát bổ sung: thêm JOIN-5 cho pattern nhiều cột FK cùng trỏ một bảng lookup dùng
 > chung (ví dụ `T_Contract` có 4 cột cùng trỏ `T_Constant` theo `constantId`) — đã xác
@@ -101,7 +103,8 @@ chọn vai trò cũng cần xử lý.
   bắt buộc đúng theo biểu thức boolean; giai đoạn đầu có thể từ chối ON chứa OR chưa
   chứng minh được, bằng mã lỗi không hỗ trợ.
 - Dùng tập edge thực sự được SQL sử dụng để kiểm tra grain; đảo columnPairs/cardinality
-  khi đảo chiều. Giữ các kiểm tra scope, CROSS JOIN và projection enrichment.
+  khi đảo chiều. Kiểm tra SUM/COUNT/**AVG** và cả SELECT liệt kê không aggregate theo
+  yêu cầu ở mục 2.4. Giữ các kiểm tra scope, CROSS JOIN và projection enrichment.
 - Đồng bộ cả `buildSchemaContext()` và `refineSchemaContext()`. Không yêu cầu mọi quan hệ
   cùng trỏ một bảng phải xuất hiện chỉ vì SQL có bảng đó. Tuy nhiên, SQL đúng quan hệ
   chưa chứng minh đã trả lời đủ yêu cầu nghiệp vụ; fallback không được bỏ qua yêu cầu này.
@@ -135,10 +138,60 @@ chọn vai trò cũng cần xử lý.
   Quy định cách ưu tiên cả đường đi, xử lý nhiều đường preferred; confidence phát hiện
   quan hệ không đồng nghĩa với đúng vai trò nghiệp vụ. Khi còn hòa, không tự chọn.
 
+### 2.4. Grain kết quả, fan-out và độ tin cậy của cardinality
+
+**Phạm vi triển khai:** JOIN-1 chịu trách nhiệm xác thực grain; JOIN-5/builder phải giữ
+grain khi enrichment; Dictionary API/UI và luồng xác minh quan hệ kiểm tra cardinality;
+JOIN-4 chuyển tiếp lỗi có cấu trúc. Đây là yêu cầu nghiệm thu bắt buộc, không phải cải
+thiện tùy chọn sau khi mở fallback.
+
+- **AVG sau JOIN một-nhiều:** khi yêu cầu trung bình theo thực thể phía một, AVG cột
+  phía một trên các dòng đã JOIN có thể bị tính trọng số theo số bản ghi con. Ví dụ hai
+  hợp đồng có giá trị 100 và 300, lần lượt có 1 và 3 dòng con: trung bình hợp đồng là
+  200 nhưng AVG sau JOIN là 250. Validator phải phát hiện nguy cơ cùng với SUM/COUNT,
+  yêu cầu SQL giữ một dòng mỗi thực thể trước khi tính AVG (hoặc dùng EXISTS nếu chỉ
+  lọc theo sự tồn tại của dòng con). Không sửa bằng `AVG(DISTINCT value)`: hai thực thể
+  khác nhau có cùng giá trị vẫn phải được tính riêng. Aggregate bảng con trước chỉ phù
+  hợp khi thực sự bảo đảm grain mong muốn; không lấy trung bình các trung bình một cách
+  máy móc. AVG theo dòng con vẫn hợp lệ nếu đó là grain người dùng yêu cầu.
+- **SELECT thường cũng có fan-out:** yêu cầu “danh sách hợp đồng, mỗi hợp đồng một dòng”
+  không được âm thầm thành nhiều dòng mỗi hợp đồng sau JOIN một-nhiều, dù không có hàm
+  aggregate. Truyền grain mong muốn và khóa thực thể từ request plan tới builder/validator;
+  xét cả chuỗi JOIN và nhiều nhánh con có thể nhân chéo số dòng. Nếu chỉ lọc theo bảng con,
+  ưu tiên EXISTS; nếu cần dữ liệu con trên một dòng cha, phải tổng hợp hoặc chọn dòng con
+  theo quy tắc nghiệp vụ rõ ràng trước khi JOIN. Không tự thêm DISTINCT/TOP để che lỗi:
+  DISTINCT có thể gộp các thực thể khác nhau, TOP/phân trang có thể cắt thiếu thực thể.
+  Nếu người dùng yêu cầu danh sách chi tiết từng dòng con, cho phép grain cha–con tương
+  ứng. Chưa xác định được grain thì yêu cầu làm rõ, không tự chặn mọi JOIN một-nhiều.
+- **Cardinality khai tay có thể sai:** phân biệt việc code đảo chiều cạnh đúng với việc
+  người dùng chọn sai many-to-one/one-to-many/one-to-one trên UI. UI phải ghi rõ chiều
+  nguồn → đích và ví dụ; backend kiểm tra cardinality khi tạo/sửa/xác minh quan hệ, không
+  chỉ tin giá trị gửi lên hoặc trạng thái verified. Với many-to-one, bộ khóa đích phải
+  duy nhất; one-to-many yêu cầu bộ khóa nguồn duy nhất; one-to-one yêu cầu cả hai phía.
+  Đối chiếu toàn bộ khóa ghép và ngữ nghĩa NULL/điều kiện JOIN, không xét từng cột riêng lẻ.
+- Ưu tiên bằng chứng PK/UNIQUE phù hợp với khóa JOIN. Nếu không có ràng buộc bảo đảm,
+  kiểm tra dữ liệu để phát hiện khóa trùng và ghi nguồn bằng chứng, thời điểm, revision;
+  dữ liệu hiện tại hoặc một mẫu không có trùng không bảo đảm dữ liệu tương lai. Tách trạng
+  thái xác minh quan hệ khỏi mức độ xác minh cardinality. Metadata mâu thuẫn phải được
+  đánh dấu và yêu cầu sửa/xác minh lại, không tự đổi chiều hoặc tiếp tục enrichment với
+  giả định “không fan-out”. Khi chưa đủ bằng chứng, xử lý như có nguy cơ fan-out và chỉ
+  cho phép kế hoạch chứng minh được grain; không mặc nhiên coi là many-to-one an toàn.
+- Khi cardinality hoặc bằng chứng thay đổi, tăng revision và vô hiệu hóa plan/cache liên
+  quan. JOIN-4 bổ sung `JOIN_GRAIN_UNSAFE`, `JOIN_CARDINALITY_MISMATCH` và
+  `JOIN_CARDINALITY_UNCONFIRMED`; phân biệt SQL cần sửa, metadata cần sửa và thiếu bằng
+  chứng xác minh để tránh vòng repair vô ích.
+
 ## 3. Rủi ro / lưu ý khi sửa
 
 - **JOIN-1** phải chuyển sang bằng chứng trên từng JOIN, không nới lỏng xác thực. Logic
   cũ đã chấp nhận sai ON chứa OR và alias phụ ON 1=1; cần sửa trước khi mở fallback.
+- **AVG và fan-out:** ON đúng vẫn có thể làm sai trung bình hoặc lặp thực thể trong SELECT
+  không aggregate. Phải kiểm tra grain trước LIMIT/TOP/phân trang; không dùng DISTINCT
+  hoặc AVG(DISTINCT) như cách sửa chung.
+- **Cardinality do con người khai sai:** quan hệ verified không bảo đảm phía lookup duy
+  nhất. Khai nhầm many-to-one có thể bỏ lọt cả lỗi aggregate lẫn lặp dòng enrichment.
+  Kiểm tra code đảo chiều cạnh không thay thế kiểm tra metadata nhập từ UI; bằng chứng
+  từ dữ liệu có thể hết hiệu lực khi dữ liệu thay đổi dù định nghĩa quan hệ không đổi.
 - **JOIN-2** cần thử với số bảng lớn hơn để đo lại độ trễ dựng context (nhiều bảng hơn =
   nhiều dòng "Relationships:" hơn trong prompt, ảnh hưởng ngân sách ngữ cảnh).
 - **JOIN-3** thêm trường `preferred` là thay đổi schema Dictionary — cần migration/mặc định
@@ -168,7 +221,11 @@ bị chặn. Bộ test hiện có chưa bao phủ các ca này.
 | Scope | Trùng tên bảng khác schema/nguồn, inactive/unverified, cột/bảng ngoài phạm vi, alias trùng giữa SELECT/CTE/subquery, self JOIN |
 | Lookup | Bốn FK cùng lookup/cùng displayColumn, alias đổi tên, hoán đổi tiêu đề, lọc đúng vai trò, FK NULL, hỏi một vai trò và hỏi chi tiết |
 | Giới hạn | 5 cạnh/6 bảng, 5–6 bảng đầu vào, bảng trung gian, thiếu context, bốn lookup edge với mặc định JOIN thường |
-| Grain/projection | SUM/COUNT phía một qua một-nhiều, đảo chiều quan hệ, COUNT DISTINCT, không lộ ID đã map trong enrichment |
+| Grain/projection | SUM/COUNT/AVG phía một qua một-nhiều, đảo chiều quan hệ trong code, COUNT DISTINCT, không lộ ID đã map trong enrichment |
+| AVG | Hai cha giá trị 100/300 với 1/3 con: phát hiện AVG 250 sai grain, SQL sửa trả 200; thêm hai cha có cùng giá trị để bác cách sửa AVG(DISTINCT); AVG theo grain con vẫn được phép |
+| Liệt kê không aggregate | SELECT thường sau one-to-many JOIN: yêu cầu một dòng/cha không được lặp; EXISTS giữ đúng tập cha; yêu cầu chi tiết cha–con được phép; kiểm tra hai nhánh con nhân chéo, LEFT JOIN với cha không có con, TOP/phân trang và hai cha khác khóa nhưng cùng giá trị hiển thị |
+| Cardinality nhập tay | Qua API/UI khai many-to-one nhưng khóa đích trùng; khai one-to-many sai chiều; khai one-to-one khi một phía không unique; khóa ghép/NULL; quan hệ đã verified vẫn phải phát hiện mâu thuẫn. Đây là test dữ liệu nhập sai, độc lập với test code đảo cạnh |
+| Bằng chứng cardinality | Có/không có PK/UNIQUE phù hợp; dữ liệu mẫu không trùng nhưng chưa chứng minh unique; thêm khóa trùng sau lần kiểm tra dữ liệu; sửa metadata làm đổi revision/vô hiệu hóa plan; không tiếp tục enrichment dựa trên giả định cardinality sai |
 | Tích hợp | Context → planner → builder/model → tool → validator → harness; mã lỗi được giữ, repair đúng loại, kết quả không nhân bản/mất dòng ngoài dự kiến |
 
 Trước nghiệm thu cuối, chạy SQL Server với dữ liệu kiểm soát được và đối chiếu kết quả
