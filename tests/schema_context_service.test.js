@@ -7,6 +7,7 @@ const dictionaryService = require('../src/backend/services/dictionary_service');
 const qdrantService = require('../src/backend/services/qdrant_service');
 const { withIdentity } = require('../src/backend/services/schema_identity');
 const { getDomainAliases, normalizeDomainAliases, normalizeDomainKey } = require('../src/backend/intelligent_core/domain_alias_service');
+const { validateSqlAgainstJoinPlan } = require('../src/backend/services/sql_join_validator');
 
 test('standalone statistics with an explicit number list bypass SQL schema retrieval', () => {
   assert.equal(
@@ -102,4 +103,37 @@ test('described lookup fields are automatically enriched for single-table querie
   assert.deepEqual(genderContext.selectedTables, ['M_Employee', 'M_Constant']);
   assert.equal(genderContext.joinPlan.outcome, 'ready');
   assert.equal(genderContext.joinPlan.edges.length, 1);
+});
+
+test('general multi-table context carries root grain into fan-out validation', async t => {
+  const previousTables = dictionaryService.tablesStore;
+  const previousRelationships = dictionaryService.tableRelationships;
+  const previousSearch = qdrantService.searchSchema;
+  const previousFlag = process.env.SQL_JOIN_PLANNER_ENABLED;
+  t.after(() => {
+    dictionaryService.tablesStore = previousTables;
+    dictionaryService.tableRelationships = previousRelationships;
+    qdrantService.searchSchema = previousSearch;
+    if (previousFlag === undefined) delete process.env.SQL_JOIN_PLANNER_ENABLED;
+    else process.env.SQL_JOIN_PLANNER_ENABLED = previousFlag;
+  });
+  const contract = withIdentity({ dbSourceId: 'source', dbName: 'ERP', schemaName: 'dbo', tableName: 'T_Contract',
+    isActive: true, tableDescription: 'contract detail listing', columns: [{ columnName: 'ContractID', dataType: 'INT', isPrimaryKey: true }] });
+  const detail = withIdentity({ dbSourceId: 'source', dbName: 'ERP', schemaName: 'dbo', tableName: 'T_ContractDetail',
+    isActive: true, tableDescription: 'contract detail listing', columns: [{ columnName: 'DetailID', dataType: 'INT', isPrimaryKey: true }, { columnName: 'ContractID', dataType: 'INT' }] });
+  dictionaryService.tablesStore = [contract, detail];
+  dictionaryService.tableRelationships = [{ id: 'contract_details', sourceTableId: contract.tableId, targetTableId: detail.tableId,
+    sourceTable: contract.tableName, targetTable: detail.tableName, columnPairs: [{ sourceColumn: 'ContractID', targetColumn: 'ContractID' }],
+    cardinality: 'one-to-many', status: 'verified', isActive: true, revision: 1 }];
+  qdrantService.searchSchema = async () => [];
+  process.env.SQL_JOIN_PLANNER_ENABLED = 'true';
+
+  const context = await buildSchemaContext('contract detail listing', { dbName: 'ERP', dbSourceId: 'source' });
+  assert.equal(context.joinPlan.outcome, 'ready');
+  assert.equal(context.joinPlan.rootTableId, contract.tableId);
+  assert.equal(context.joinPlan.expectedGrain, 'root');
+  const validation = validateSqlAgainstJoinPlan(
+    'SELECT p.ContractID FROM T_Contract p JOIN T_ContractDetail d ON p.ContractID = d.ContractID', context.joinPlan);
+  assert.equal(validation.valid, false);
+  assert.equal(validation.code, 'JOIN_GRAIN_UNSAFE');
 });

@@ -297,6 +297,15 @@ test('tool-result compactor serializes Date values as ISO strings', () => {
   assert.equal(compacted.result.rows[0].date, '2024-02-01T00:00:00.000Z');
 });
 
+test('tool-result compactor retains fields after the first forty columns', () => {
+  const row = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [`Field${index + 1}`, index + 1]));
+  row.Mobile = '0901234567';
+  row.Email = 'employee@example.com';
+  const compacted = JSON.parse(compactToolResult({ success: true, result: { rows: [row], rowCount: 1 } }, 20000));
+  assert.equal(compacted.result.rows[0].Mobile, '0901234567');
+  assert.equal(compacted.result.rows[0].Email, 'employee@example.com');
+});
+
 test('SQL result display formats ISO dates without changing ordinary values', () => {
   assert.equal(formatDisplayDate('2002-05-24T00:00:00.000Z'), '24/05/2002');
   assert.equal(formatDisplayDate('2026-09-20'), '20/09/2026');

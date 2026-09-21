@@ -170,7 +170,8 @@ async function buildSchemaContext(query, options = {}) {
   let joinPlan = enrichmentRelations.length
     ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
     : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && requestedIds.length > 1
-      ? joinPlannerService.planJoin(requestedIds, { dbSourceId, maxEdges: JOIN_MAX_EDGES, parallelRelationshipIds }) : null;
+      ? joinPlannerService.planJoin(requestedIds, { dbSourceId, maxEdges: JOIN_MAX_EDGES, parallelRelationshipIds,
+        rootTableId: requestedIds[0], expectedGrain: 'root' }) : null;
   if (joinPlan?.outcome === 'ready') {
     for (const ref of joinPlan.tableRefs) {
       if (selected.some(table => tableIdentity(table) === ref.tableId) || selected.length >= MAX_TABLES) continue;
@@ -199,8 +200,10 @@ async function buildSchemaContext(query, options = {}) {
   }
   if (process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
       && (!joinPlan || joinPlan.outcome !== 'ready' || !joinPlan.edges.length)) {
-    joinPlan = joinPlannerService.planJoin(selected.slice(0, MAX_TABLES).map(table => tableIdentity(table)), {
-      dbSourceId, maxEdges: JOIN_MAX_EDGES, parallelRelationshipIds: relationships.map(relation => relation.id)
+    const selectedIds = selected.slice(0, MAX_TABLES).map(table => tableIdentity(table));
+    joinPlan = joinPlannerService.planJoin(selectedIds, {
+      dbSourceId, maxEdges: JOIN_MAX_EDGES, parallelRelationshipIds: relationships.map(relation => relation.id),
+      rootTableId: selectedIds[0], expectedGrain: 'root'
     });
     if (joinPlan.outcome === 'ready') {
       const plannedIds = new Set(joinPlan.edges.map(edge => edge.relationshipId));
@@ -266,6 +269,7 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
     : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
       ? joinPlannerService.planJoin(selected.slice(0, MAX_TABLES).map(table => tableIdentity(table)), {
         dbSourceId, maxEdges: JOIN_MAX_EDGES,
+        rootTableId: tableIdentity(selected[0]), expectedGrain: 'root',
         parallelRelationshipIds: dictionaryService.getTableRelationships()
           .filter(relation => relation.isActive !== false && relation.status === 'verified'
             && relationshipRelevant(tokens(query), relation, activeTables)).map(relation => relation.id)

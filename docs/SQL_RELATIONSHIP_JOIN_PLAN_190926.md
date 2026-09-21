@@ -1,7 +1,8 @@
 # Kế hoạch sửa lỗi JOIN bị từ chối sai — Data Dictionary Relationships
 
 > **Trạng thái triển khai 21/09/2026:** đã triển khai JOIN-1 đến JOIN-5, kiểm tra ON/alias,
-> AVG/fan-out, bằng chứng cardinality, giới hạn context và mã lỗi có cấu trúc. `.env` đang
+> AVG/fan-out, bằng chứng cardinality, giới hạn context và mã lỗi có cấu trúc. JOIN-9 đã
+> truyền grain bảng gốc vào cả nhánh JOIN nhiều bảng tổng quát. `.env` đang
 > dùng đặt `SQL_JOIN_MAX_EDGES=5`, `SQL_AUTO_ENRICH_MAX_RELATIONSHIPS=6`. Toàn bộ test tự
 > động pass; chưa nghiệm thu end-to-end trên SQL Server thật và Qdrant local không hoạt động
 > trong lần kiểm tra schema context.
@@ -84,6 +85,7 @@ Vì ID trong bảng lookup đã xác nhận **duy nhất toàn bảng**, quan h�
 | JOIN-3 | Cân nhắc thêm `preferred` sau JOIN-1/5; vai trò được hỏi phải được xét trước ưu tiên mặc định. Không dùng confidenceScore làm căn cứ duy nhất để tự chọn khi vẫn mơ hồ | Planner, mô hình/lưu trữ quan hệ, Dictionary API/UI | Preferred giải quyết được lựa chọn mặc định có quy tắc rõ ràng; không ghi đè vai trò người dùng yêu cầu; còn mơ hồ thì yêu cầu làm rõ |
 | JOIN-4 | Trả mã lỗi có cấu trúc xuyên suốt planner/validator/tool/harness, phân biệt thiếu quan hệ, mơ hồ vai trò, vượt giới hạn, ON sai và ngoài phạm vi | Planner, validator, builtins, harness và lớp chuyển tiếp tool | Gợi ý đúng hành động theo nguyên nhân; lỗi SQL sửa được vẫn repair, lỗi metadata không lặp SQL vô ích |
 | JOIN-5 | Chọn quan hệ theo bảng gốc và vai trò cần hỏi, tạo ref/alias riêng cho từng lookup; đồng bộ planner, builder và validator theo quan hệ → alias → displayColumn → businessRole | Planner, schema context, SQL enrichment builder, validator, caller trong harness | Hỏi chi tiết cần bốn vai trò tạo bốn alias đúng kể cả khi lookup được chọn từ đầu; hỏi một vai trò không bị ép JOIN cả bốn; tiêu đề/bộ lọc đúng alias |
+| JOIN-9 | Truyền `rootTableId` của bảng xếp hạng cao nhất và `expectedGrain: 'root'` vào mọi lời gọi `planJoin()` của schema context, gồm lập plan ban đầu, retry sau khi bổ sung bảng và refine theo bảng model chọn | Schema context, join planner, validator | SELECT không tổng hợp qua JOIN một-nhiều ở nhánh nhiều bảng cũng bị chặn khi có thể lặp thực thể gốc; test phải đi từ schema context tới validator thay vì tự gán grain vào fixture |
 
 **Thứ tự triển khai:** JOIN-1 kèm siết ON/alias → JOIN-5 xuyên suốt planner/builder/validator
 → JOIN-2 → JOIN-4 tích hợp harness → JOIN-3. Xác định hợp đồng mã lỗi từ JOIN-1.

@@ -17,10 +17,11 @@ function preferredPath(paths = []) {
 function planJoin(tableIds = [], options = {}) {
   const requested = tableIds.filter(Boolean);
   if (requested.length < 2) return { outcome: 'ready', planId: crypto.randomUUID(), tableRefs: requested.map((tableId, index) => ({ tableId, alias: `t${index + 1}` })), edges: [] };
-  const root = requested[0];
+  const root = options.rootTableId && requested.includes(options.rootTableId) ? options.rootTableId : requested[0];
+  const orderedRequested = [root, ...requested.filter(tableId => tableId !== root)];
   const selectedEdges = [];
   const ambiguities = [];
-  for (const target of requested.slice(1)) {
+  for (const target of orderedRequested.slice(1)) {
     const paths = relationshipService.findPaths(root, target, options);
     if (!paths.length) return { outcome: 'no_path', code: 'JOIN_RELATIONSHIP_MISSING', reason: 'Không có đường quan hệ đã xác minh trong giới hạn.', sourceTableId: root, targetTableId: target };
     if (paths.length > 1) {

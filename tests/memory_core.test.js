@@ -209,15 +209,17 @@ test('references never cross account boundaries even with the same session id', 
   assert.equal(decision.reason, 'no_prior_context');
 });
 
-test('sensitive fields and raw SQL are sanitized before persistence', () => {
+test('email and phone remain available in memory while raw SQL is removed', () => {
   const memory = service();
   memory.persistSuccessfulExchange({
     sessionId: 'sanitize', question: 'email a@example.com', reply: '```sql\nSELECT * FROM Users\n```\nLiên hệ 0901234567',
     currentPlan: plan('M_Employee'), completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] }
   });
   const serialized = JSON.stringify(memory.getSession('sanitize'));
-  assert.doesNotMatch(serialized, /a@example\.com|0901234567|SELECT \* FROM/);
-  assert.match(serialized, /EMAIL_MASKED|PHONE_MASKED/);
+  assert.match(serialized, /a@example\.com/);
+  assert.match(serialized, /0901234567/);
+  assert.doesNotMatch(serialized, /SELECT \* FROM/);
+  assert.doesNotMatch(serialized, /EMAIL_MASKED|PHONE_MASKED/);
 });
 
 test('memory router fails closed to none', () => {

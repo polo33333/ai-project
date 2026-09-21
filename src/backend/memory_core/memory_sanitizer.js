@@ -4,10 +4,7 @@ const securityGuard = require('../intelligent_core/security_guard');
 const { normalizeAssistantResponse } = require('../agent_core/harness/tool_call_normalizer');
 
 function maskSensitive(value) {
-  let text = securityGuard.maskSensitiveData(String(value ?? ''));
-  text = text.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[EMAIL_MASKED]');
-  text = text.replace(/(?:\+?84|0)(?:[ .-]?\d){9,10}\b/g, '[PHONE_MASKED]');
-  return text;
+  return securityGuard.maskSensitiveData(String(value ?? ''));
 }
 
 function removeRawSql(text) {
