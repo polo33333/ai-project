@@ -9,6 +9,7 @@ const joinPlannerService = require('../services/join_planner_service');
 const MAX_TABLES = Math.max(1, parseInt(process.env.AI_SCHEMA_MAX_TABLES || '6', 10));
 const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COLUMNS_PER_TABLE || '40', 10));
 const MAX_CONTEXT_CHARS = Math.max(2000, parseInt(process.env.AI_SCHEMA_MAX_CONTEXT_CHARS || '18000', 10));
+const JOIN_MAX_EDGES = Math.max(1, Math.min(20, parseInt(process.env.SQL_JOIN_MAX_EDGES || '3', 10) || 3));
 const STOP_WORDS = new Set(['ai', 'ban', 'toi', 'la', 'cho', 'cua', 'va', 'voi', 'nay', 'kia', 'gi', 'co', 'khong', 'hay', 'theo', 'trong', 'duoc']);
 
 function normalize(value) {
@@ -161,12 +162,15 @@ async function buildSchemaContext(query, options = {}) {
     : rankedTables;
   const selected = tablePool.slice(0, Math.min(MAX_TABLES, tablePool.length)).map(item => item.table);
   const selectedNames = new Set(selected.map(table => table.tableName));
-  const requestedIds = selected.slice(0, 4).map(table => tableIdentity(table));
+  const requestedIds = selected.slice(0, MAX_TABLES).map(table => tableIdentity(table));
+  const parallelRelationshipIds = dictionaryService.getTableRelationships()
+    .filter(relation => relation.isActive !== false && relation.status === 'verified'
+      && relationshipRelevant(expandedTokens, relation, activeTables)).map(relation => relation.id);
   const enrichmentRelations = selected.length === 1 ? automaticEnrichmentRelations(selected[0], activeTables) : [];
   let joinPlan = enrichmentRelations.length
     ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
     : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && requestedIds.length > 1
-      ? joinPlannerService.planJoin(requestedIds, { dbSourceId, maxEdges: 3 }) : null;
+      ? joinPlannerService.planJoin(requestedIds, { dbSourceId, maxEdges: JOIN_MAX_EDGES, parallelRelationshipIds }) : null;
   if (joinPlan?.outcome === 'ready') {
     for (const ref of joinPlan.tableRefs) {
       if (selected.some(table => tableIdentity(table) === ref.tableId) || selected.length >= MAX_TABLES) continue;
@@ -195,7 +199,9 @@ async function buildSchemaContext(query, options = {}) {
   }
   if (process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
       && (!joinPlan || joinPlan.outcome !== 'ready' || !joinPlan.edges.length)) {
-    joinPlan = joinPlannerService.planJoin(selected.slice(0, 4).map(table => tableIdentity(table)), { dbSourceId, maxEdges: 3 });
+    joinPlan = joinPlannerService.planJoin(selected.slice(0, MAX_TABLES).map(table => tableIdentity(table)), {
+      dbSourceId, maxEdges: JOIN_MAX_EDGES, parallelRelationshipIds: relationships.map(relation => relation.id)
+    });
     if (joinPlan.outcome === 'ready') {
       const plannedIds = new Set(joinPlan.edges.map(edge => edge.relationshipId));
       relationships = relationships.filter(relation => plannedIds.has(relation.id));
@@ -226,6 +232,11 @@ async function buildSchemaContext(query, options = {}) {
     if (joinPlan?.purpose === 'enrichment') lines.push('Auto-enrichment requirement: when returning rows from the primary table, JOIN every relationship listed above and include the mapped display column instead of its foreign-key ID. Alias each mapped display value with the exact relationship role as the result header. Order result columns as identity Code/Name fields, mapped display values, other business fields, then unmapped ID fields. Use each planned alias separately when several fields point to the same lookup table.');
   }
 
+  if (joinPlan) {
+    joinPlan.allowedTableIds = selected.map(table => tableIdentity(table));
+    joinPlan.allowedTableNames = selected.map(table => table.tableName);
+    joinPlan.dbSourceId ||= dbSourceId;
+  }
   return {
     mode: 'data',
     schemaContext: lines.join('\n').slice(0, MAX_CONTEXT_CHARS),
@@ -253,7 +264,12 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   const joinPlan = enrichmentRelations.length
     ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
     : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
-      ? joinPlannerService.planJoin(selected.slice(0, 4).map(table => tableIdentity(table)), { dbSourceId, maxEdges: 3 }) : null;
+      ? joinPlannerService.planJoin(selected.slice(0, MAX_TABLES).map(table => tableIdentity(table)), {
+        dbSourceId, maxEdges: JOIN_MAX_EDGES,
+        parallelRelationshipIds: dictionaryService.getTableRelationships()
+          .filter(relation => relation.isActive !== false && relation.status === 'verified'
+            && relationshipRelevant(tokens(query), relation, activeTables)).map(relation => relation.id)
+      }) : null;
   if (joinPlan?.outcome === 'ready') for (const ref of joinPlan.tableRefs) {
     if (selected.some(table => tableIdentity(table) === ref.tableId) || selected.length >= MAX_TABLES) continue;
     const bridge = activeTables.find(table => tableIdentity(table) === ref.tableId);
@@ -297,6 +313,11 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
     lines.push('Relationships:');
     relationships.forEach(relation => lines.push(`- ${(relation.columnPairs || []).map(pair => `${relation.sourceTable}.${pair.sourceColumn} -> ${relation.targetTable}.${pair.targetColumn}`).join(' AND ')} (${relation.cardinality || relation.relationType || 'related'}; display=${relation.displayColumn || 'unspecified'})`));
     if (joinPlan?.purpose === 'enrichment') lines.push('Auto-enrichment requirement: when returning rows from the primary table, JOIN every relationship listed above and include the mapped display column instead of its foreign-key ID. Alias each mapped display value with the exact relationship role as the result header. Order result columns as identity Code/Name fields, mapped display values, other business fields, then unmapped ID fields. Use each planned alias separately when several fields point to the same lookup table.');
+  }
+  if (joinPlan) {
+    joinPlan.allowedTableIds = selected.map(table => tableIdentity(table));
+    joinPlan.allowedTableNames = selected.map(table => table.tableName);
+    joinPlan.dbSourceId ||= dbSourceId;
   }
   return {
     mode: 'data', useTools: true,

@@ -39,7 +39,8 @@ test('field mapping stores identity, ordered column pairs and suggested lifecycl
     ],
     cardinality: 'many-to-one',
     businessRole: 'employee_department',
-    displayColumn: 'DepartmentName'
+    displayColumn: 'DepartmentName',
+    preferred: true
   });
   assert.equal(relation.sourceTableId, employees.tableId);
   assert.equal(relation.targetTableId, departments.tableId);
@@ -47,6 +48,7 @@ test('field mapping stores identity, ordered column pairs and suggested lifecycl
   assert.equal(relation.status, 'suggested');
   assert.equal(relation.revision, 1);
   assert.equal(relation.displayColumn, 'DepartmentName');
+  assert.equal(relation.preferred, true);
   assert.equal(service.qdrantSyncCalls, 0);
 });
 
@@ -105,6 +107,38 @@ test('only explicit lifecycle action verifies a relationship', async () => {
   assert.equal(verified.revision, 2);
   assert.ok(verified.verifiedAt);
   await assert.rejects(service.setTableRelationshipStatus(relation.id, 'rejected', 1), /phiên làm việc khác/);
+});
+
+test('manual relationship cannot be verified without uniqueness evidence for its cardinality', async () => {
+  const service = serviceFixture();
+  const [employees, departments] = service.tablesStore;
+  departments.columns.find(column => column.columnName === 'DepartmentID').isPrimaryKey = false;
+  const relation = await service.addTableRelationship({ sourceTableId: employees.tableId, targetTableId: departments.tableId,
+    columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }], cardinality: 'many-to-one' });
+  await assert.rejects(service.setTableRelationshipStatus(relation.id, 'verified', 1), error => {
+    assert.equal(error.code, 'JOIN_CARDINALITY_UNCONFIRMED');
+    return true;
+  });
+});
+
+test('profiling records a cardinality mismatch and refuses verification', async t => {
+  const service = serviceFixture();
+  const [employees, departments] = service.tablesStore;
+  departments.columns.find(column => column.columnName === 'DepartmentID').isPrimaryKey = false;
+  const relation = await service.addTableRelationship({ sourceTableId: employees.tableId, targetTableId: departments.tableId,
+    columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }], cardinality: 'many-to-one' });
+  const original = sqlConnector.executeSqlQuery;
+  let calls = 0;
+  t.after(() => { sqlConnector.executeSqlQuery = original; });
+  sqlConnector.executeSqlQuery = async () => (++calls === 1
+    ? [{ totalRows: 10, nullKeyRows: 0, orphanRows: 0 }]
+    : [{ duplicateKeys: 2 }]);
+  const profiled = await service.profileTableRelationship(relation.id, 1);
+  assert.equal(profiled.evidence.cardinalityStatus, 'mismatch');
+  await assert.rejects(service.setTableRelationshipStatus(relation.id, 'verified', profiled.revision), error => {
+    assert.equal(error.code, 'JOIN_CARDINALITY_MISMATCH');
+    return true;
+  });
 });
 
 test('schema sync imports trusted composite foreign keys idempotently and marks changed keys stale', () => {

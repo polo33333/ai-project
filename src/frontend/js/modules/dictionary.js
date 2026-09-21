@@ -271,6 +271,7 @@ function renderDictionaryDrawer(table) {
               <label>Loại quan hệ<select data-role="cardinality" onchange="toggleManyToManyFields(this)"><option value="many-to-one">N:1</option><option value="one-to-many">1:N</option><option value="one-to-one">1:1</option><option value="many-to-many">N:N (qua bảng trung gian)</option></select></label>
               <label>Vai trò<input data-role="business-role" type="text" placeholder="VD: phòng ban của nhân viên"></label>
               <label>Cột hiển thị<select data-role="display-column"><option value="">Chọn cột trả về</option></select></label>
+              <label class="dictionary-preferred-option"><input data-role="preferred" type="checkbox"><span>Ưu tiên quan hệ này khi có nhiều đường JOIN tương đương</span></label>
             </div>
             <div class="dictionary-relation-pairs" data-role="column-pairs">
               ${renderFieldRelationshipPair(table, col.columnName, '', true)}
@@ -285,7 +286,7 @@ function renderDictionaryDrawer(table) {
               <label>Cột nối về ${escapeDictHtml(table.tableName)}<select data-role="bridge-source-column"><option value="">Chọn cột</option></select></label>
               <label>Cột nối tới bảng đích<select data-role="bridge-target-column"><option value="">Chọn cột</option></select></label>
             </div>
-            <p class="dictionary-relation-hint">Quan hệ tính từ <strong>${escapeDictHtml(table.tableName)}.${escapeDictHtml(col.columnName)}</strong> sang bảng đích. N:N cần cấu hình qua bảng trung gian trong sơ đồ quan hệ.</p>
+            <p class="dictionary-relation-hint">Quan hệ tính từ <strong>${escapeDictHtml(table.tableName)}.${escapeDictHtml(col.columnName)}</strong> sang bảng đích. N:1 yêu cầu khóa đích duy nhất; 1:N yêu cầu khóa nguồn duy nhất; 1:1 yêu cầu cả hai phía duy nhất. Hệ thống sẽ kiểm tra bằng metadata hoặc kết quả profiling trước khi xác minh. N:N cần cấu hình qua bảng trung gian.</p>
             <div class="dictionary-relation-actions"><button type="button" class="btn-secondary-sm" onclick="cancelFieldRelationship('${encodedCol}')">Hủy</button><button type="button" class="btn-primary" onclick="saveFieldRelationship('${encodedCol}')"><i class="fa-solid fa-plus"></i> Thêm vào thay đổi</button></div>
           </div>
           </div>
@@ -416,6 +417,8 @@ function cancelFieldRelationship(encodedColumnName) {
   const editor = getFieldRelationshipEditor(columnName);
   if (!editor) return;
   editor.querySelectorAll('input:not([data-role="pair-source"])').forEach(input => { input.value = ''; });
+  const preferred = editor.querySelector('[data-role="preferred"]');
+  if (preferred) preferred.checked = false;
   editor.querySelectorAll('select:not([data-role="pair-source"])').forEach(select => { select.selectedIndex = 0; });
   const fixedSource = editor.querySelector('[data-role="pair-source"]');
   if (fixedSource) fixedSource.value = columnName;
@@ -445,6 +448,7 @@ function editFieldRelationship(encodedId, encodedColumnName) {
   editor.querySelector('[data-role="cardinality"]').value = relation.cardinality || relation.relationType || 'many-to-one';
   toggleManyToManyFields(editor.querySelector('[data-role="cardinality"]'));
   editor.querySelector('[data-role="business-role"]').value = relation.businessRole || '';
+  editor.querySelector('[data-role="preferred"]').checked = relation.preferred === true;
 }
 
 async function saveFieldRelationship(encodedColumnName) {
@@ -475,7 +479,8 @@ async function saveFieldRelationship(encodedColumnName) {
   let endpoint = id ? '/api/dictionary/relationships/update' : '/api/dictionary/relationships/add';
   let payload = { sourceTableId: sourceTable.tableId, targetTableId, columnPairs,
     cardinality, relationType: cardinality, businessRole: editor.querySelector('[data-role="business-role"]').value.trim(),
-    displayColumn: editor.querySelector('[data-role="display-column"]')?.value || '' };
+    displayColumn: editor.querySelector('[data-role="display-column"]')?.value || '',
+    preferred: editor.querySelector('[data-role="preferred"]')?.checked === true };
   if (cardinality === 'many-to-many') {
     if (id) { showToast?.('Hãy xóa cấu hình cũ rồi tạo lại quan hệ N:N.', 'warning'); return; }
     const bridgeTableId = editor.querySelector('[data-role="bridge-table"]').value;
@@ -519,6 +524,7 @@ async function saveFieldRelationship(encodedColumnName) {
     relationType: cardinality,
     businessRole: payload.businessRole || '',
     displayColumn: payload.displayColumn || '',
+    preferred: payload.preferred === true,
     status: previous.status || 'suggested'
   };
   window.pendingDictionaryRelationshipPreviews ||= [];

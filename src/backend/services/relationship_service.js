@@ -3,11 +3,13 @@
 const dictionaryService = require('./dictionary_service');
 
 function verifiedRelationships(options = {}) {
+  const relationshipIds = options.relationshipIds ? new Set(options.relationshipIds) : null;
   const tables = dictionaryService.getGroupedTables();
   const columnVisible = (tableId, columnName) => tables.find(table => table.tableId === tableId)?.columns
     ?.find(column => column.columnName === columnName)?.isVisible !== false;
   return dictionaryService.getTableRelationships().filter(relation => relation.isActive !== false
     && relation.status === 'verified'
+    && (!relationshipIds || relationshipIds.has(relation.id))
     && (relation.columnPairs || []).every(pair => columnVisible(relation.sourceTableId, pair.sourceColumn)
       && columnVisible(relation.targetTableId, pair.targetColumn))
     && (!relation.displayColumn || columnVisible(relation.targetTableId, relation.displayColumn))

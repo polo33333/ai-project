@@ -162,6 +162,7 @@ class BaseTool {
           tool: this.name,
           result: null,
           error: rawResult.error || 'Lỗi nghiệp vụ khi thực thi tool',
+          code: rawResult.code || null,
           details: rawResult,
           durationMs: Date.now() - startTime
         };
@@ -186,6 +187,8 @@ class BaseTool {
         tool: this.name,
         result: null,
         error: error.message || 'Lỗi không xác định khi thực thi tool',
+        code: error.code || null,
+        details: error.details || null,
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         durationMs: Date.now() - startTime
       };

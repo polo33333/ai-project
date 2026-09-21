@@ -43,3 +43,34 @@ test('enrichment planner assigns a distinct alias when fields share a lookup tab
   assert.deepEqual(plan.tableRefs.map(ref => ref.alias), ['t1', 't2', 't3']);
   assert.notEqual(plan.edges[0].toTableRefId, plan.edges[1].toTableRefId);
 }));
+
+test('join planner uses requested parallel lookup roles with distinct aliases', () => withGraph(tables => {
+  const root = tables[0];
+  const lookup = tables[2];
+  dictionaryService.tableRelationships = ['gender', 'status'].map(id => ({
+    id, sourceTableId: root.tableId, targetTableId: lookup.tableId,
+    sourceTable: root.tableName, targetTable: lookup.tableName, revision: 1,
+    status: 'verified', isActive: true, cardinality: 'many-to-one', businessRole: id,
+    columnPairs: [{ sourceColumn: `${id}Id`, targetColumn: 'Id' }]
+  }));
+  const plan = planJoin([root.tableId, lookup.tableId], {
+    dbSourceId: 'src', parallelRelationshipIds: ['gender', 'status']
+  });
+  assert.equal(plan.outcome, 'ready');
+  assert.equal(plan.edges.length, 2);
+  assert.notEqual(plan.edges[0].toTableRefId, plan.edges[1].toTableRefId);
+}));
+
+test('join planner selects a uniquely preferred relationship when direct paths are ambiguous', () => withGraph(tables => {
+  const root = tables[0];
+  const target = tables[2];
+  dictionaryService.tableRelationships = [
+    { id: 'ordinary', sourceTableId: root.tableId, targetTableId: target.tableId, sourceTable: root.tableName, targetTable: target.tableName,
+      columnPairs: [{ sourceColumn: 'productId', targetColumn: 'Id' }], status: 'verified', isActive: true, revision: 1, cardinality: 'many-to-one' },
+    { id: 'preferred', sourceTableId: root.tableId, targetTableId: target.tableId, sourceTable: root.tableName, targetTable: target.tableName,
+      columnPairs: [{ sourceColumn: 'primaryProductId', targetColumn: 'Id' }], status: 'verified', isActive: true, revision: 1, cardinality: 'many-to-one', preferred: true }
+  ];
+  const plan = planJoin([root.tableId, target.tableId], { dbSourceId: 'src' });
+  assert.equal(plan.outcome, 'ready');
+  assert.deepEqual(plan.edges.map(edge => edge.relationshipId), ['preferred']);
+}));

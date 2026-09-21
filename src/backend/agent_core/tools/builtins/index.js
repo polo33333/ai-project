@@ -185,7 +185,45 @@ class ExportDataTool extends BaseTool {
   }
 }
 
-// ─── 3. Execute SQL Query ───────────────────────────────────────────────────
+// ─── 3. Plan Data Query ─────────────────────────────────────────────────────
+class PlanDataQueryTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'plan_data_query',
+      description: 'Phân loại ý định truy vấn dữ liệu trước khi viết SQL. Chọn bảng gốc, lookup theo tên/mã, bộ lọc quan hệ và grain từ schema/Relationships đã cung cấp. Không đưa SQL vào tool này.',
+      parameters: {
+        type: 'object',
+        properties: {
+          intent: { type: 'string', enum: ['list', 'record_lookup', 'aggregate', 'aggregate_timeseries', 'clarification'] },
+          rootTable: { type: 'string', description: 'Tên chính xác của bảng gốc trong schema context.' },
+          entityLookup: { type: 'object', properties: {
+            field: { type: 'string' }, operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
+          } },
+          relationshipFilters: { type: 'array', items: { type: 'object', properties: {
+            relationshipId: { type: 'string' }, relationshipRole: { type: 'string' },
+            operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
+          }, required: ['value'] } },
+          requestedFields: { type: 'array', items: { type: 'string' } },
+          resultGrain: { type: 'string' }, confidence: { type: 'number' }, clarification: { type: 'string' }
+        },
+        required: ['intent', 'rootTable']
+      },
+      timeoutMs: 5000
+    });
+  }
+
+  async run(args, context = {}) {
+    const { validateIntentPlan } = require('../../../services/data_intent_service');
+    const plan = validateIntentPlan(args, context);
+    context.modelIntentPlan = plan;
+    return { accepted: true, plan,
+      instruction: plan.intent === 'clarification'
+        ? 'Ask the clarification question and do not execute SQL.'
+        : 'Now write one SELECT matching this plan and call execute_sql_query.' };
+  }
+}
+
+// ─── 4. Execute SQL Query ───────────────────────────────────────────────────
 class ExecuteSqlTool extends BaseTool {
   constructor() {
     super({
@@ -206,13 +244,18 @@ class ExecuteSqlTool extends BaseTool {
 
   async run(args, context = {}) {
     const { sql } = args;
+    if (context.requireModelIntentPlan) {
+      const { validateSqlAgainstIntent } = require('../../../services/data_intent_service');
+      const intentCheck = validateSqlAgainstIntent(sql, context.modelIntentPlan, context.joinPlan);
+      if (!intentCheck.valid) throw Object.assign(new Error(intentCheck.error), { code: intentCheck.code });
+    }
     const check = securityGuard.validateSqlQuery(sql);
     if (!check.safe) {
       throw new Error(check.error || 'Câu lệnh SQL không an toàn.');
     }
     const { validateSqlAgainstJoinPlan } = require('../../../services/sql_join_validator');
     const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
-    if (!joinCheck.valid) throw new Error(joinCheck.error);
+    if (!joinCheck.valid) throw Object.assign(new Error(joinCheck.error), { code: joinCheck.code, details: joinCheck.details });
 
     const rawRows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
     const rows = securityGuard.sanitizeTabularRows(rawRows);
@@ -544,6 +587,7 @@ class SearchKnowledgeTool extends BaseTool {
 module.exports = {
   GetDateTimeTool,
   ExportDataTool,
+  PlanDataQueryTool,
   ExecuteSqlTool,
   RenderChartTool,
   CalculateStatsTool,

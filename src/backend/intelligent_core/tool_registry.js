@@ -543,7 +543,7 @@ class ToolRegistry {
     }
     const { validateSqlAgainstJoinPlan } = require('../services/sql_join_validator');
     const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
-    if (!joinCheck.valid) return { success: false, error: joinCheck.error };
+    if (!joinCheck.valid) return { success: false, error: joinCheck.error, code: joinCheck.code, details: joinCheck.details };
 
     try {
       const rows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);

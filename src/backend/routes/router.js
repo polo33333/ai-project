@@ -686,7 +686,8 @@ async function handleRequest(req, res) {
         result = selection.joinPlan || { outcome: 'no_path', reason: 'Câu hỏi không xác định được ít nhất hai bảng có quan hệ.' };
       } else {
         if (!Array.isArray(tableIds) || tableIds.length < 2) throw Object.assign(new Error('Cần câu hỏi hoặc ít nhất hai bảng để xem đường JOIN.'), { statusCode: 400 });
-        result = joinPlannerService.planJoin(tableIds, { dbSourceId, maxEdges: 3 });
+        const maxEdges = Math.max(1, Math.min(20, parseInt(process.env.SQL_JOIN_MAX_EDGES || '3', 10) || 3));
+        result = joinPlannerService.planJoin(tableIds, { dbSourceId, maxEdges });
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify(result));

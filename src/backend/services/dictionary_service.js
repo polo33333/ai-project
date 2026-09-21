@@ -160,6 +160,7 @@ class DictionaryService {
       cardinality: data.cardinality || data.relationType || 'many-to-one',
       businessRole: String(data.businessRole || ''),
       displayColumn: String(data.displayColumn || ''),
+      preferred: data.preferred === true,
       origin: data.origin || data.source || 'manual',
       source: data.source || data.origin || 'manual',
       status: data.status || 'suggested',
@@ -208,6 +209,47 @@ class DictionaryService {
     return { sourceTable, targetTable, pairs, cardinality };
   }
 
+  tableColumnsAreUnique(table, columnNames = []) {
+    const names = new Set(columnNames);
+    const columns = (table?.columns || []).filter(column => names.has(column.columnName));
+    if (columns.some(column => column.isUnique)) return true;
+    const primaryKeyColumns = (table?.columns || []).filter(column => column.isPrimaryKey).map(column => column.columnName);
+    if (primaryKeyColumns.length && primaryKeyColumns.every(name => names.has(name))) return true;
+    return (table?.uniqueConstraints || []).some(constraint => {
+      const constrained = new Set(constraint.columnNames || constraint.columns || []);
+      return constrained.size > 0 && [...constrained].every(name => names.has(name));
+    });
+  }
+
+  assertCardinalityEvidence(relationship) {
+    if (relationship.origin === 'foreign_key') return;
+    const source = this.findTable(relationship.sourceTableId, relationship.sourceTable);
+    const target = this.findTable(relationship.targetTableId, relationship.targetTable);
+    const pairs = relationship.columnPairs || [];
+    const profile = relationship.evidence?.profile || {};
+    const cardinality = relationship.cardinality || relationship.relationType;
+    const mismatch = (['many-to-one', 'one-to-one'].includes(cardinality) && profile.duplicateTargetKeys > 0)
+      || (['one-to-many', 'one-to-one'].includes(cardinality) && profile.duplicateSourceKeys > 0);
+    if (mismatch || relationship.evidence?.cardinalityStatus === 'mismatch') {
+      throw Object.assign(new Error('Dữ liệu profiling mâu thuẫn với cardinality đã chọn; hãy sửa chiều/loại quan hệ trước khi xác minh.'), {
+        statusCode: 409, code: 'JOIN_CARDINALITY_MISMATCH', details: { cardinality }
+      });
+    }
+    const sourceUnique = this.tableColumnsAreUnique(source, pairs.map(pair => pair.sourceColumn))
+      || profile.duplicateSourceKeys === 0;
+    const targetUnique = this.tableColumnsAreUnique(target, pairs.map(pair => pair.targetColumn))
+      || profile.duplicateTargetKeys === 0;
+    const sourceRequired = ['one-to-many', 'one-to-one'].includes(cardinality);
+    const targetRequired = ['many-to-one', 'one-to-one'].includes(cardinality);
+    if ((sourceRequired && !sourceUnique) || (targetRequired && !targetUnique)) {
+      const error = Object.assign(new Error('Chưa có bằng chứng UNIQUE phù hợp với cardinality đã chọn; hãy sửa chiều quan hệ hoặc chạy profiling trước khi xác minh.'), {
+        statusCode: 409, code: 'JOIN_CARDINALITY_UNCONFIRMED',
+        details: { sourceUnique, targetUnique, cardinality }
+      });
+      throw error;
+    }
+  }
+
   async addTableRelationship(data, options = {}) {
     const { sourceTable, targetTable, pairs, cardinality } = this.validateRelationship(data);
     const relationship = this.normalizeRelationship({ ...data, id: crypto.randomUUID(), sourceTableId: sourceTable.tableId,
@@ -254,11 +296,20 @@ class DictionaryService {
     if (data.expectedRevision !== undefined && Number(data.expectedRevision) !== relationship.revision) {
       throw Object.assign(new Error('Quan hệ đã được thay đổi bởi phiên làm việc khác.'), { statusCode: 409 });
     }
+    const beforeStructure = JSON.stringify({ sourceTableId: relationship.sourceTableId, targetTableId: relationship.targetTableId,
+      columnPairs: relationship.columnPairs, cardinality: relationship.cardinality });
     const merged = { ...relationship, ...data };
     const { sourceTable, targetTable, pairs, cardinality } = this.validateRelationship(merged, id);
     Object.assign(relationship, this.normalizeRelationship({ ...merged, sourceTableId: sourceTable.tableId,
       targetTableId: targetTable.tableId, sourceTable: sourceTable.tableName, targetTable: targetTable.tableName,
       columnPairs: pairs, cardinality, relationType: cardinality, revision: relationship.revision + 1 }));
+    const afterStructure = JSON.stringify({ sourceTableId: relationship.sourceTableId, targetTableId: relationship.targetTableId,
+      columnPairs: relationship.columnPairs, cardinality: relationship.cardinality });
+    if (wasVerified && beforeStructure !== afterStructure) {
+      relationship.status = 'stale';
+      relationship.verifiedBy = null;
+      relationship.verifiedAt = null;
+    }
     if (!options.deferPersistence) {
       this.persist();
       if (wasVerified || relationship.status === 'verified') await this.syncToQdrant();
@@ -274,6 +325,7 @@ class DictionaryService {
     if (expectedRevision !== undefined && Number(expectedRevision) !== relationship.revision) {
       throw Object.assign(new Error('Quan hệ đã được thay đổi bởi phiên làm việc khác.'), { statusCode: 409 });
     }
+    if (status === 'verified') this.assertCardinalityEvidence(relationship);
     relationship.status = status;
     relationship.revision += 1;
     relationship.verifiedBy = status === 'verified' ? (actorId || 'system') : null;
@@ -329,6 +381,7 @@ class DictionaryService {
     const sourceNull = pairs.map(pair => `s.${quote(pair.sourceColumn)} IS NULL`).join(' OR ');
     const targetMissing = pairs.map(pair => `t.${quote(pair.targetColumn)} IS NULL`).join(' AND ');
     const targetColumns = pairs.map(pair => quote(pair.targetColumn)).join(', ');
+    const sourceColumns = pairs.map(pair => quote(pair.sourceColumn)).join(', ');
     const sourceName = `${quote(source.schemaName || 'dbo')}.${quote(source.tableName)}`;
     const targetName = `${quote(target.schemaName || 'dbo')}.${quote(target.tableName)}`;
     const sqlConnector = require('./sql_connector');
@@ -340,10 +393,26 @@ class DictionaryService {
       SELECT ${targetColumns} FROM ${targetName} WHERE ${pairs.map(pair => `${quote(pair.targetColumn)} IS NOT NULL`).join(' AND ')}
       GROUP BY ${targetColumns} HAVING COUNT_BIG(*) > 1
     ) duplicate_groups`, source.dbSourceId);
+    const needsSourceUnique = ['one-to-many', 'one-to-one'].includes(relationship.cardinality || relationship.relationType);
+    const duplicateSourceRows = needsSourceUnique ? await sqlConnector.executeSqlQuery(`SELECT COUNT_BIG(*) AS duplicateKeys FROM (
+      SELECT ${sourceColumns} FROM ${sourceName} WHERE ${pairs.map(pair => `${quote(pair.sourceColumn)} IS NOT NULL`).join(' AND ')}
+      GROUP BY ${sourceColumns} HAVING COUNT_BIG(*) > 1
+    ) duplicate_groups`, source.dbSourceId) : [{ duplicateKeys: null }];
     relationship.evidence ||= {};
     relationship.evidence.profile = { scope: 'full', checkedAt: new Date().toISOString(),
       totalRows: Number(coverageRows[0]?.totalRows || 0), nullKeyRows: Number(coverageRows[0]?.nullKeyRows || 0),
       orphanRows: Number(coverageRows[0]?.orphanRows || 0), duplicateTargetKeys: Number(duplicateRows[0]?.duplicateKeys || 0) };
+    if (needsSourceUnique) relationship.evidence.profile.duplicateSourceKeys = Number(duplicateSourceRows[0]?.duplicateKeys || 0);
+    const profile = relationship.evidence.profile;
+    const cardinality = relationship.cardinality || relationship.relationType;
+    const mismatch = (['many-to-one', 'one-to-one'].includes(cardinality) && profile.duplicateTargetKeys > 0)
+      || (['one-to-many', 'one-to-one'].includes(cardinality) && profile.duplicateSourceKeys > 0);
+    relationship.evidence.cardinalityStatus = mismatch ? 'mismatch' : 'profiled';
+    if (mismatch && relationship.status === 'verified') {
+      relationship.status = 'stale';
+      relationship.verifiedBy = null;
+      relationship.verifiedAt = null;
+    }
     relationship.revision += 1;
     this.persist();
     return relationship;

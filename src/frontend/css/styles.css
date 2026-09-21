@@ -2635,7 +2635,7 @@ main.main-content.dictionary-workspace {
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 70;
+  z-index: 1200;
   display: none;
   background: rgba(15, 23, 42, 0.48);
   backdrop-filter: blur(2px);
@@ -2653,7 +2653,7 @@ body.dictionary-modal-open {
   position: fixed;
   top: 50%;
   left: 50%;
-  z-index: 80;
+  z-index: 1210;
   display: flex;
   flex-direction: column;
   width: min(1040px, calc(100vw - 48px));
@@ -2898,6 +2898,9 @@ body.dictionary-modal-open {
 .dictionary-relation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .dictionary-relation-grid label { display: grid; gap: 4px; color: #475569; font-size: 10.5px; font-weight: 750; }
 .dictionary-relation-grid select,.dictionary-relation-grid input { box-sizing: border-box; width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; color: #334155; background: #fff; }
+.dictionary-relation-grid .dictionary-preferred-option { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-height: 30px; cursor: pointer; }
+.dictionary-relation-grid .dictionary-preferred-option input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; border-radius: 4px; accent-color: #6257e8; cursor: pointer; }
+.dictionary-relation-grid .dictionary-preferred-option span { line-height: 1.35; }
 .dictionary-relation-pairs { display: grid; gap: 6px; }
 .dictionary-relation-pair { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) 26px; align-items: center; gap: 7px; }
 .dictionary-relation-pair select { min-height: 34px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; color: #334155; background: #fff; }

@@ -209,6 +209,40 @@ function buildPlannedTablePreviewSql(plan = {}, joinPlan = null) {
   return `SELECT TOP 100 ${columns.map(column => `[${column}]`).join(', ')} FROM [${table.tableName}]${orderClause}`;
 }
 
+function buildModelIntentRecoverySql(intentPlan = {}, requestPlan = {}, joinPlan = null) {
+  if (!intentPlan.rootTable || intentPlan.intent === 'clarification' || joinPlan?.outcome !== 'ready') return '';
+  const root = joinPlan.tableRefs?.find(ref => ref.tableName === intentPlan.rootTable) || joinPlan.tableRefs?.[0];
+  if (!root) return '';
+  const base = buildEnrichedListSql({
+    ...requestPlan,
+    table: intentPlan.rootTable,
+    intent: 'list',
+    question: '',
+    datasetReference: null
+  }, joinPlan);
+  if (!base) return '';
+  const quote = name => `[${String(name).replace(/\]/g, ']]')}]`;
+  const refs = new Map(joinPlan.tableRefs.map(ref => [ref.tableRefId || ref.tableId, ref]));
+  const filters = [];
+  if (intentPlan.entityLookup) {
+    const value = String(intentPlan.entityLookup.value).replace(/'/g, "''");
+    const operator = intentPlan.entityLookup.operator === 'equals' ? '=' : 'LIKE';
+    const literal = operator === 'LIKE' ? `N'%${value}%'` : `N'${value}'`;
+    filters.push(`${root.alias}.${quote(intentPlan.entityLookup.field)} ${operator} ${literal}`);
+  }
+  for (const filter of intentPlan.relationshipFilters || []) {
+    const edge = joinPlan.edges.find(item => item.relationshipId === filter.relationshipId);
+    const target = edge && refs.get(edge.toTableRefId || edge.toTableId);
+    const displayColumn = edge?.displayColumn || filter.displayColumn;
+    if (!target || !displayColumn) return '';
+    const value = String(filter.value).replace(/'/g, "''");
+    const operator = filter.operator === 'equals' ? '=' : 'LIKE';
+    const literal = operator === 'LIKE' ? `N'%${value}%'` : `N'${value}'`;
+    filters.push(`${target.alias}.${quote(displayColumn)} ${operator} ${literal}`);
+  }
+  return filters.length ? `${base} WHERE ${filters.join(' AND ')}` : base;
+}
+
 function buildLatestMonthsSql(toolCalls, months) {
   const sqlCalls = toolCalls.filter(call => call.toolName === 'execute_sql_query');
   for (const call of [...sqlCalls].reverse()) {
@@ -277,7 +311,9 @@ function localCandidates(selected) {
 }
 
 function buildToolFallbackReply(toolCalls = []) {
-  const successful = toolCalls.filter(call => call.success);
+  // A successful planning call is only an internal prerequisite. It cannot be
+  // presented as the answer when the requested data query never succeeded.
+  const successful = toolCalls.filter(call => call.success && call.toolName !== 'plan_data_query');
   if (!successful.length) return '';
   const last = successful[successful.length - 1];
   if (last.toolName === 'calculate_expression' && last.result?.value !== undefined) {
@@ -423,6 +459,13 @@ class LocalModelHarness {
       : inferredPolicy;
     const explicitSchemaRefs = getExplicitSchemaRefs(effectiveUserMessage);
     const requestPlan = context.requestPlan || trainingService.plan({ question: effectiveUserMessage, selectedTables: context.selectedTables || [] });
+    const intentPlannerEnabled = process.env.MODEL_DATA_INTENT_PLANNER_ENABLED === 'true'
+      && requestPolicy.dataRequired && toolDefs.some(definition => (definition.function || definition).name === 'plan_data_query');
+    context.requireModelIntentPlan = intentPlannerEnabled;
+    if (context.joinPlan?.outcome === 'ready' && ['list', 'record_lookup'].includes(requestPlan.intent)) {
+      const rootRef = context.joinPlan.tableRefs?.find(ref => ref.tableName === requestPlan.table) || context.joinPlan.tableRefs?.[0];
+      context.joinPlan = { ...context.joinPlan, rootTableId: rootRef?.tableId || context.joinPlan.rootTableId, expectedGrain: 'root' };
+    }
     const isQualifiedBusinessSqlCall = call => isBusinessSqlCall(call, explicitSchemaRefs)
       && trainingService.evaluateSql(call.args?.sql || call.result?.sql || '', requestPlan).valid;
     const knowledgeGrounding = context.knowledgeGrounding;
@@ -430,7 +473,9 @@ class LocalModelHarness {
     const fewShotEnabled = skillEnabled && process.env.LOCAL_MODEL_FEW_SHOT_ENABLED === 'true';
     const skillSelection = skillEnabled ? skillCore.selectSkill({ requestPlan, question: effectiveUserMessage }) : { matched: false, skill: null, reason: 'disabled' };
     const examples = fewShotEnabled && skillSelection.matched ? skillCore.selectExamples(skillSelection.skill, requestPlan) : [];
-    const conversation = buildLocalMessages(messages, toolDefs, requestPolicy, { skill: skillSelection.skill, examples });
+    const conversation = buildLocalMessages(messages, toolDefs, requestPolicy, {
+      skill: skillSelection.skill, examples, intentPlannerEnabled
+    });
     const trace = {
       harness: 'local', startTime: Date.now(), iterations: 0, steps: [], toolCalls: [], providerFallbacks: [],
       tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false },
@@ -503,7 +548,8 @@ class LocalModelHarness {
     // A plain entity list has no analytical decision for the model to make.
     // Build it from the reviewed schema/relationship plan so mapped JOINs and
     // business aliases cannot be omitted or rewritten by a small local model.
-    if (requestPolicy.dataRequired
+    if (!intentPlannerEnabled
+      && requestPolicy.dataRequired
       && requestPlan.intent === 'list'
       && !requestPolicy.chartRequired
       && !requestPolicy.exportRequired
@@ -519,7 +565,8 @@ class LocalModelHarness {
     // Run it before the local model so retries cannot drift into unrelated
     // mapped IDs and exhaust the SQL repair budget.
     let entityLookupAttempted = false;
-    if (finalText === null
+    if (!intentPlannerEnabled
+      && finalText === null
       && requestPolicy.dataRequired
       && !requestPolicy.chartRequired
       && !requestPolicy.exportRequired) {
@@ -581,7 +628,8 @@ class LocalModelHarness {
           });
           continue;
         }
-        const missingData = requestPolicy.dataRequired
+        const intentClarification = context.modelIntentPlan?.intent === 'clarification';
+        const missingData = requestPolicy.dataRequired && !intentClarification
           && !toolCalls.some(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
         if (missingData && trace.iterations < this.maxIterations) {
           trace.steps.push({ iteration: trace.iterations, type: 'INCOMPLETE_DATA_RESPONSE' });
@@ -647,6 +695,15 @@ class LocalModelHarness {
           });
         }
         conversation.push({ role: 'user', content: `Tool call rejected: ${validation.errors.join(' ')} Return one corrected tool call using the declared schema, or answer without a tool.` });
+        continue;
+      }
+
+      if (intentPlannerEnabled && call.name === 'execute_sql_query' && !context.modelIntentPlan) {
+        const error = 'Bạn phải gọi plan_data_query trước, phân loại entityLookup và relationshipFilters, rồi mới viết SQL.';
+        trace.steps.push({ iteration: trace.iterations, type: 'DATA_INTENT_REQUIRED', toolName: call.name, error });
+        conversation.push({ role: 'tool', tool_call_id: call.id, name: call.name,
+          content: JSON.stringify({ success: false, code: 'DATA_INTENT_REQUIRED', error }) });
+        conversation.push({ role: 'user', content: 'Call plan_data_query now. Do not guess a person name from an attribute phrase.' });
         continue;
       }
 
@@ -720,17 +777,23 @@ class LocalModelHarness {
       emitProgress(onProgress, { type: 'tool_started', label: toolLabel(call.name), status: 'running', icon: call.name === 'execute_sql_query' ? 'database' : call.name === 'render_chart' ? 'chart-column' : 'gear', iteration: trace.iterations, toolName: call.name });
       const execution = await this.toolManager.executeTool(call.name, validation.args, context);
       throwIfAborted();
-      const log = { toolName: call.name, args: validation.args, success: execution.success, result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs };
+      const log = { toolName: call.name, args: validation.args, success: execution.success, result: execution.result || null,
+        error: execution.error || null, code: execution.code || null, details: execution.details || null, durationMs: execution.durationMs };
       toolCalls.push(log);
       if (call.name === 'execute_sql_query' && !trace.training.sqlEvaluations.length) trace.training.sqlEvaluations.push(trainingService.evaluateSql(validation.args.sql, requestPlan));
       trace.toolCalls.push({ toolName: call.name, args: validation.args, success: execution.success, durationMs: execution.durationMs, source: call.source });
-      trace.steps.push({ iteration: trace.iterations, type: 'tool_call', toolName: call.name, success: execution.success });
+      trace.steps.push({ iteration: trace.iterations, type: execution.code || 'tool_call', toolName: call.name, success: execution.success });
       emitProgress(onProgress, {
         type: 'tool_completed', label: execution.success ? toolLabel(call.name, 'done', execution.result?.rowCount ?? execution.result?.rows?.length) : `${call.name} gặp lỗi, model sẽ điều chỉnh`,
         status: execution.success ? 'done' : 'error', icon: execution.success ? 'check' : 'xmark', iteration: trace.iterations,
         toolName: call.name, rowCount: execution.result?.rowCount ?? execution.result?.rows?.length, durationMs: execution.durationMs
       });
       conversation.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: compactToolResult(execution) });
+      if (!execution.success && ['JOIN_RELATIONSHIP_MISSING', 'JOIN_ROLE_AMBIGUOUS', 'JOIN_LIMIT_EXCEEDED',
+        'JOIN_SCOPE_DENIED', 'JOIN_CARDINALITY_MISMATCH', 'JOIN_CARDINALITY_UNCONFIRMED'].includes(execution.code)) {
+        forceSynthesis = true;
+        break;
+      }
       if (call.name === 'execute_sql_query' && execution.success && !hasUsefulRows(log) && requestPolicy.temporalMonths) {
         conversation.push({ role: 'user', content: requestPlan.allowLatestAvailableMonths
           ? `The user explicitly requested months with available data. Query the latest ${requestPolicy.temporalMonths} available monthly buckets while preserving all other requested filters.`
@@ -754,6 +817,13 @@ class LocalModelHarness {
       const repairedSql = repairInvalidColumnSql(toolCalls, effectiveUserMessage);
       if (repairedSql) {
         await executeDeterministicTool('execute_sql_query', { sql: repairedSql }, 'INVALID_COLUMN_RECOVERY');
+        usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
+      }
+    }
+    if (!usefulSql && requestPolicy.dataRequired && context.modelIntentPlan) {
+      const intentSql = buildModelIntentRecoverySql(context.modelIntentPlan, requestPlan, context.joinPlan);
+      if (intentSql) {
+        await executeDeterministicTool('execute_sql_query', { sql: intentSql }, 'MODEL_INTENT_RECOVERY');
         usefulSql = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call));
       }
     }
@@ -876,12 +946,16 @@ class LocalModelHarness {
     const calculationCall = [...toolCalls].reverse().find(call => call.toolName === 'calculate_expression' && call.success);
     if (calculationCall) finalText = buildCalculationReply(effectiveUserMessage, calculationCall);
     finalText = sanitizeFinalText(finalText, hasSuccessfulTool(toolCalls, 'render_chart'));
-    const responseEvaluation = evaluateCompletion({ reply: finalText, plan: requestPlan, toolCalls, context });
+    const intentClarification = context.modelIntentPlan?.intent === 'clarification';
+    const completionPlan = intentClarification
+      ? { ...requestPlan, intent: 'clarification', outputs: { ...(requestPlan.outputs || {}), data: false, chart: false, export: false } }
+      : requestPlan;
+    const responseEvaluation = evaluateCompletion({ reply: finalText, plan: completionPlan, toolCalls, context });
     trace.training.responseEvaluation = responseEvaluation;
     const requirementState = {
-      data: !requestPolicy.dataRequired || toolCalls.some(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call)),
-      chart: !requestPolicy.chartRequired || hasSuccessfulTool(toolCalls, 'render_chart'),
-      export: !requestPolicy.exportRequired || hasSuccessfulTool(toolCalls, 'export_data'),
+      data: intentClarification || !requestPolicy.dataRequired || toolCalls.some(call => call.toolName === 'execute_sql_query' && isQualifiedBusinessSqlCall(call)),
+      chart: intentClarification || !requestPolicy.chartRequired || hasSuccessfulTool(toolCalls, 'render_chart'),
+      export: intentClarification || !requestPolicy.exportRequired || hasSuccessfulTool(toolCalls, 'export_data'),
       knowledge: !knowledgeGrounding?.required || !isUngroundedKnowledgeAnswer(finalText),
       training: responseEvaluation.valid
     };
@@ -913,6 +987,7 @@ module.exports.isBusinessSqlCall = isBusinessSqlCall;
 module.exports.buildRequestedLatestMonthsSql = buildRequestedLatestMonthsSql;
 module.exports.buildEntityLookupSql = buildEntityLookupSql;
 module.exports.buildPlannedTablePreviewSql = buildPlannedTablePreviewSql;
+module.exports.buildModelIntentRecoverySql = buildModelIntentRecoverySql;
 module.exports.buildPlannedTimeSeriesSql = buildPlannedTimeSeriesSql;
 // Backward-compat alias: old name/signature is gone (now takes `refs` too),
 // keep this so any external import of the old name doesn't crash on require.

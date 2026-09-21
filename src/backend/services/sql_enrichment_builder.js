@@ -15,7 +15,9 @@ function extractNamedEntityValue(question = '') {
   const match = input.match(/t[eê]n\s*(?:l[aà])?\s*[:"']?\s*(.+)$/iu);
   const entityAfterSubject = input.match(/(?:nh[aâ]n\s*vi[eê]n|nv)\s+([\p{L}\p{N}][\p{L}\p{N}\s.'-]*)$/iu);
   const candidate = match?.[1] || entityAfterSubject?.[1] || '';
-  if (!candidate || /^(?:n[aà]y|tr[eê]n|đ[oó]|v[aà]y)(?:\s|$)/iu.test(candidate.trim())) return '';
+  // Without the explicit word "tên", only accept a likely proper identifier. Phrases
+  // such as "có nv nào giới tính nữ" describe filters and must not become a name LIKE.
+  if (!candidate || (!match && /^(?:n[aà]o|n[aà]y|tr[eê]n|đ[oó]|v[aà]y|c[oó]|gi[oớ]i\s*t[ií]nh|ph[oò]ng\s*ban|thu[oộ]c|đang|l[aà])(?:\s|$)/iu.test(candidate.trim()))) return '';
   return candidate
     .replace(/\s+(?:trong|thu[oộ]c|[oở])\s+(?:b[aả]ng\s+)?[\s\S]*$/iu, '')
     .replace(/\s+l[aà]\s+(?:g[iì]|bao\s+nhi[eê]u)[\s\S]*$/iu, '')

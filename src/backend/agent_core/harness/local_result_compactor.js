@@ -22,7 +22,8 @@ function compactValue(value, limits, depth = 0) {
 function compactToolResult(execution, maxChars = Number(process.env.LOCAL_MODEL_TOOL_RESULT_CHARS || 6000)) {
   const compacted = execution.success
     ? { success: true, result: compactValue(execution.result, { maxDepth: 5, maxArrayItems: 20, maxObjectKeys: 40, maxStringChars: 1500 }) }
-    : { success: false, error: execution.error };
+    : { success: false, error: execution.error, code: execution.code || undefined,
+      details: compactValue(execution.details, { maxDepth: 3, maxArrayItems: 10, maxObjectKeys: 20, maxStringChars: 500 }) };
   const serialized = JSON.stringify(compacted);
   if (serialized.length <= maxChars) return serialized;
   return JSON.stringify({

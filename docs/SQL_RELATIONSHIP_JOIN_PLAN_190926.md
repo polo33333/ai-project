@@ -1,9 +1,10 @@
 # Kế hoạch sửa lỗi JOIN bị từ chối sai — Data Dictionary Relationships
 
-> **Cập nhật rà soát 21/09/2026:** kế hoạch dưới đây đã bổ sung kiểm tra ON/alias,
-> giới hạn context và phân loại lỗi. Chưa triển khai thay đổi runtime. Lần rà soát bổ sung
-> không xác minh lại `.env` của dịch vụ đang chạy; các ca tái hiện chủ động bật planner
-> trong tiến trình kiểm tra.
+> **Trạng thái triển khai 21/09/2026:** đã triển khai JOIN-1 đến JOIN-5, kiểm tra ON/alias,
+> AVG/fan-out, bằng chứng cardinality, giới hạn context và mã lỗi có cấu trúc. `.env` đang
+> dùng đặt `SQL_JOIN_MAX_EDGES=5`, `SQL_AUTO_ENRICH_MAX_RELATIONSHIPS=6`. Toàn bộ test tự
+> động pass; chưa nghiệm thu end-to-end trên SQL Server thật và Qdrant local không hoạt động
+> trong lần kiểm tra schema context.
 
 > Phân tích ngày 20/09/2026, dựa trên đọc trực tiếp mã nguồn và đối chiếu với `.env` thực
 > tế đang chạy (`SQL_JOIN_PLANNER_ENABLED=true`, `SQL_RELATIONSHIP_DISCOVERY_ENABLED=true`).
@@ -180,6 +181,20 @@ thiện tùy chọn sau khi mở fallback.
   quan. JOIN-4 bổ sung `JOIN_GRAIN_UNSAFE`, `JOIN_CARDINALITY_MISMATCH` và
   `JOIN_CARDINALITY_UNCONFIRMED`; phân biệt SQL cần sửa, metadata cần sửa và thiếu bằng
   chứng xác minh để tránh vòng repair vô ích.
+
+### 2.5. Model phân loại ý định dữ liệu trước khi sinh SQL
+
+Đã bổ sung `plan_data_query`, bật bằng `MODEL_DATA_INTENT_PLANNER_ENABLED=true` cho local
+model. Với truy vấn dữ liệu, model phải chọn `rootTable`, `intent`, `entityLookup`,
+`relationshipFilters`, `requestedFields` và `resultGrain` trước khi gọi SQL. Backend đối
+chiếu lựa chọn này với bảng/cột/quan hệ trong context; SQL sau đó phải áp dụng đúng lookup
+và mọi bộ lọc quan hệ đã được model chọn.
+
+`entityLookup` chỉ dùng khi model xác định người dùng đang chỉ rõ tên/mã. Các thuộc tính
+nghiệp vụ như giới tính, phòng ban, trạng thái hoặc loại hợp đồng được biểu diễn bằng
+`relationshipFilters` lấy từ `businessRole` trong Dictionary, không phụ thuộc danh sách
+từ khóa thuộc tính viết cứng. Khi không đủ căn cứ, model trả intent `clarification` và
+không chạy SQL. Regex lookup cũ chỉ còn là fallback khi feature flag tắt.
 
 ## 3. Rủi ro / lưu ý khi sửa
 

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const BaseTool = require('../src/backend/agent_core/tools/base_tool');
 const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
 const LocalModelHarness = require('../src/backend/agent_core/harness/local_model_harness');
-const { buildRequestedLatestMonthsSql, buildEntityLookupSql, buildPlannedTablePreviewSql, isBusinessSqlCall, ensureDownloadLink, isInsufficientSqlAnswer } = LocalModelHarness;
+const { buildRequestedLatestMonthsSql, buildEntityLookupSql, buildPlannedTablePreviewSql, buildModelIntentRecoverySql, isBusinessSqlCall, ensureDownloadLink, isInsufficientSqlAnswer } = LocalModelHarness;
 const { formatDisplayDate } = require('../src/backend/agent_core/harness/grounded_reply');
 const { isLocalProvider } = require('../src/backend/agent_core/harness/provider_classifier');
 const { normalizeAssistantResponse } = require('../src/backend/agent_core/harness/tool_call_normalizer');
@@ -129,6 +129,16 @@ test('entity lookup recovery removes Vietnamese yes-no suffix from the name', ()
   assert.doesNotMatch(sql, /Duy ko/);
 });
 
+test('attribute filters after an employee subject are not treated as an employee name', () => {
+  const employee = { tableName: 'M_Employee', columns: [
+    { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
+    { columnName: 'EmployeeName', dataType: 'nvarchar' }
+  ] };
+  assert.equal(extractNamedEntityValue('có nv nào giới tính nữ'), '');
+  assert.equal(extractNamedEntityValue('có nhân viên nào phòng ban kế toán'), '');
+  assert.equal(buildEntityLookupSql('có nv nào giới tính nữ', { tables: [employee] }), '');
+});
+
 test('detailed entity lookup selects every visible column while a yes-no lookup stays compact', () => {
   const employee = { tableName: 'M_Employee', columns: [
     { columnName: 'EmployeeID', dataType: 'int', isPrimaryKey: true },
@@ -182,6 +192,20 @@ test('limited list recovery preserves TOP and enriches every planned lookup', ()
   assert.doesNotMatch(sql.split(/\s+FROM\s+/i)[0], /t1\.\[GenderID\]/);
   assert.match(sql, /LEFT JOIN \[dbo\]\.\[M_Constant\] t2 ON t1\.\[GenderID\] = t2\.\[ConstantID\]/);
   assert.match(sql, /WHERE t2\.\[ConstantName\] LIKE N'%nữ%'/);
+});
+
+test('gender list filter works without the optional word có after nào', () => {
+  const plan = { intent: 'list', table: 'M_Employee', rowLimit: 100, question: 'có nv nào giới tính nữ',
+    schemaColumns: ['EmployeeID', 'EmployeeCode', 'EmployeeName', 'GenderID'] };
+  const joinPlan = { outcome: 'ready', purpose: 'enrichment', tableRefs: [
+    { tableRefId: 'employee#1', tableId: 'employee', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+    { tableRefId: 'constant#2', tableId: 'constant', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+  ], edges: [{ relationshipId: 'gender', fromTableId: 'employee', toTableId: 'constant',
+    fromTableRefId: 'employee#1', toTableRefId: 'constant#2', joinType: 'LEFT', businessRole: 'Giới tính',
+    displayColumn: 'ConstantName', columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }] };
+  const sql = buildPlannedTablePreviewSql(plan, joinPlan);
+  assert.doesNotMatch(sql, /EmployeeName\] LIKE/);
+  assert.match(sql, /t2\.\[ConstantName\] LIKE N'%nữ%'/);
 });
 
 test('enrichment recovery filters a plural follow-up by verified dataset keys', () => {
@@ -901,6 +925,31 @@ test('SQL tool fallback renders row values instead of only a row count', () => {
   assert.match(reply, /EmployeeID/);
   assert.match(reply, /Yên Duy/);
   assert.doesNotMatch(reply, /^Đã truy vấn dữ liệu thành công/);
+});
+
+test('planning success is never used as the final data answer', () => {
+  const reply = LocalModelHarness.buildToolFallbackReply([{
+    toolName: 'plan_data_query', success: true, result: { intent: 'list' }
+  }]);
+  assert.equal(reply, '');
+});
+
+test('model intent recovery uses the current relationship value', () => {
+  const joinPlan = {
+    outcome: 'ready',
+    tableRefs: [
+      { tableId: 'employee', tableRefId: 'employee#1', tableName: 'M_Employee', schemaName: 'dbo', alias: 't1' },
+      { tableId: 'constant', tableRefId: 'constant#1', tableName: 'M_Constant', schemaName: 'dbo', alias: 't2' }
+    ],
+    edges: [{ relationshipId: 'employee_gender', fromTableId: 'employee', toTableId: 'constant',
+      fromTableRefId: 'employee#1', toTableRefId: 'constant#1', businessRole: 'Gender', displayColumn: 'ConstantName',
+      columnPairs: [{ sourceColumn: 'GenderID', targetColumn: 'ConstantID' }] }]
+  };
+  const sql = buildModelIntentRecoverySql({ rootTable: 'M_Employee', intent: 'list', relationshipFilters: [{
+    relationshipId: 'employee_gender', displayColumn: 'ConstantName', operator: 'contains', value: 'Nam'
+  }] }, { table: 'M_Employee', intent: 'list', schemaColumns: ['EmployeeName', 'GenderID'] }, joinPlan);
+  assert.match(sql, /t2\.\[ConstantName\] LIKE N'%Nam%'/);
+  assert.doesNotMatch(sql, /N'%Nữ%'/);
 });
 
 test('contract detail requests and truncated model text trigger the SQL rows fallback', () => {

@@ -26,6 +26,7 @@ function emitProgress(callback, event) {
 function toolLabel(toolName, phase = 'running', rowCount = null) {
   const labels = {
     execute_sql_query: ['Đang truy vấn dữ liệu', 'Truy vấn dữ liệu hoàn tất'],
+    plan_data_query: ['Đang phân loại ý định dữ liệu', 'Đã xác định ý định dữ liệu'],
     render_chart: ['Đang tạo biểu đồ', 'Đã tạo biểu đồ'],
     search_schema: ['Đang tìm bảng và cột phù hợp', 'Đã tìm schema phù hợp'],
     search_knowledge_base: ['Đang tìm trong kho tri thức', 'Đã tìm kiếm kho tri thức'],
