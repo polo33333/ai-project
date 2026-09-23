@@ -246,13 +246,11 @@ Trên Windows và macOS, `npm start` gọi `scripts/start.js` và tự động:
 
 1. Đọc `.env` và `.env.postgres`, giữ ưu tiên biến môi trường đã có.
 2. Khi backend là PostgreSQL cục bộ: dùng dịch vụ đang chạy nếu kết nối được; nếu chưa có thì kiểm tra Docker, mở Docker Desktop, bật hoặc tạo container từ `compose.docker.yml` và chờ database sẵn sàng. PostgreSQL remote bỏ bước Docker cục bộ. Bước này không tự chạy migration/import.
-3. Khởi động Ollama native nếu API `11434` chưa hoạt động.
-4. Tải `EMBEDDING_MODEL` nếu model chưa có trên máy.
-5. Warm-up endpoint embedding để model sẵn sàng trước khi nhận tài liệu.
-6. Kiểm tra/bật container `knowledgehub-qdrant` (Qdrant 1.18.3), tạo qua Compose stack `ai-project` nếu chưa có, và chờ API sẵn sàng. Không dùng `QDRANT_EXE`; Qdrant remote chỉ kiểm tra API.
-7. Kiểm tra/tải local chat model (`LOCAL_AI_MODEL`, mặc định trong script là `qwen3.5:9b`) và chạy KnowledgeHub qua supervisor. `[Startup] Completed.` chỉ in sau HTTP listen thành công.
+3. Kiểm tra/bật container `knowledgehub-qdrant` (Qdrant 1.18.3), tạo qua Compose stack `ai-project` nếu chưa có, và chờ API sẵn sàng. Không dùng `QDRANT_EXE`; Qdrant remote chỉ kiểm tra API.
+4. Nếu `EMBEDDING_PROVIDER=ollama`, kiểm tra API Ollama và các model được cấu hình. Thiếu Ollama hoặc model chỉ tạo cảnh báo, không chặn ứng dụng khởi động và không tự tải model.
+5. Chạy KnowledgeHub qua supervisor. `[Startup] Completed.` chỉ in sau HTTP listen thành công.
 
-Các lần chạy sau không tải lại model vì Ollama đã lưu model cục bộ. Nếu Ollama hoặc Qdrant đã chạy, script chỉ kiểm tra và sử dụng tiến trình hiện có. Trên Mac mini cần cài Docker Desktop, Ollama CLI và Node.js; `.env.postgres` cùng file khóa mã hóa phải có đường dẫn hợp lệ trên macOS. `scripts/start-local.ps1` vẫn là script Windows cũ, không còn được gọi bởi `npm start`.
+Ollama là tùy chọn ở bước khởi động; các chức năng cần embedding/model sẽ báo lỗi khi được dùng nếu dịch vụ chưa sẵn sàng. Trên Mac mini cần Node.js và Docker Desktop khi dùng PostgreSQL/Qdrant cục bộ; `.env.postgres` cùng file khóa mã hóa phải có đường dẫn hợp lệ trên macOS. `scripts/start-local.ps1` vẫn là script Windows cũ, không còn được gọi bởi `npm start`.
 
 Mở:
 

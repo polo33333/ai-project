@@ -114,45 +114,22 @@ async function ensureQdrant() {
   console.log('[OK] Qdrant is ready.');
 }
 
-function ollamaCommand() {
-  if (run('ollama', ['--version'], { quiet: true, timeout: 5000 })) return 'ollama';
-  if (process.platform === 'darwin') {
-    const candidate = '/Applications/Ollama.app/Contents/Resources/ollama';
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  if (process.platform === 'win32') {
-    const candidate = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Ollama', 'ollama.exe');
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  throw new Error('Ollama CLI was not found. Install Ollama or add it to PATH.');
-}
-
 async function ensureOllama() {
   if ((process.env.EMBEDDING_PROVIDER || 'ollama').toLowerCase() !== 'ollama') return;
   const base = (process.env.EMBEDDING_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
-  const command = ollamaCommand();
   if (!await reachable(`${base}/api/tags`)) {
-    if (!isLocal(base)) throw new Error('External Ollama is unavailable.');
-    console.log('[Startup] Starting Ollama...');
-    const child = spawn(command, ['serve'], { cwd: root, env: process.env, detached: true, stdio: 'ignore', windowsHide: true });
-    child.unref();
-    await waitFor(() => reachable(`${base}/api/tags`), 30000, 'Ollama');
-  }
-  const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(10000) });
-  if (!response.ok) throw new Error('Cannot list Ollama models.');
-  const installed = new Set(((await response.json()).models || []).map(model => model.name));
-  const names = [...new Set([process.env.EMBEDDING_MODEL || 'bge-m3', process.env.LOCAL_AI_MODEL || 'qwen3.5:9b'])];
-  for (const name of names) {
-    if (!installed.has(name) && !installed.has(`${name}:latest`) && !(name.endsWith(':latest') && installed.has(name.slice(0, -7)))) {
-      console.log(`[Startup] Pulling Ollama model: ${name}`);
-      if (!run(command, ['pull', name], { timeout: 0 })) throw new Error(`Cannot pull Ollama model: ${name}`);
-    }
+    console.warn(`[Startup] Ollama is unavailable at ${base}; continuing without the startup model check.`);
+    return;
   }
   try {
-    const warmup = await fetch(`${base}/api/embed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: names[0], input: 'KnowledgeHub startup warmup' }), signal: AbortSignal.timeout(120000) });
-    if (!warmup.ok) console.warn('[Startup] Embedding warm-up failed.');
-  } catch { console.warn('[Startup] Embedding warm-up failed.'); }
-  console.log('[OK] Ollama models are ready.');
+    const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const installed = new Set(((await response.json()).models || []).map(model => model.name));
+    const names = [...new Set([process.env.EMBEDDING_MODEL || 'bge-m3', process.env.LOCAL_AI_MODEL || 'qwen3.5:9b'])];
+    const missing = names.filter(name => !installed.has(name) && !installed.has(`${name}:latest`) && !(name.endsWith(':latest') && installed.has(name.slice(0, -7))));
+    if (missing.length) console.warn(`[Startup] Ollama models are not installed: ${missing.join(', ')}. Continuing.`);
+    else console.log('[OK] Ollama models are available.');
+  } catch (error) { console.warn(`[Startup] Could not check Ollama models (${error.message}). Continuing.`); }
 }
 
 async function startSupervisor() {
