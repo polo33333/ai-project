@@ -107,6 +107,9 @@ test('short web follow-ups reuse recent context and expand the search query', ()
     session: { id: 'web', lastPlan: previousPlan, messages: [], references: {} }
   });
   assert.equal(isShortContextualFollowup('tỉ số ntn'), true);
+  assert.equal(isShortContextualFollowup('chi tiết nv có mã nv007'), false);
+  assert.equal(isShortContextualFollowup('chi tiết hợp đồng có mã 02/HĐTQSDĐ.LG.2010'), false);
+  assert.equal(isShortContextualFollowup('chi tiết nv này'), true);
   assert.equal(decision.mode, 'recent');
   assert.equal(decision.reason, 'short_contextual_followup');
   assert.equal(buildContextualQuery('tỉ số ntn', [

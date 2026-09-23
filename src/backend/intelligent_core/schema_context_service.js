@@ -10,6 +10,7 @@ const MAX_TABLES = Math.max(1, parseInt(process.env.AI_SCHEMA_MAX_TABLES || '6',
 const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COLUMNS_PER_TABLE || '40', 10));
 const MAX_CONTEXT_CHARS = Math.max(2000, parseInt(process.env.AI_SCHEMA_MAX_CONTEXT_CHARS || '18000', 10));
 const JOIN_MAX_EDGES = Math.max(1, Math.min(20, parseInt(process.env.SQL_JOIN_MAX_EDGES || '3', 10) || 3));
+const SEMANTIC_MIN_SCORE = Math.max(0, Math.min(1, Number(process.env.AI_SCHEMA_SEMANTIC_MIN_SCORE || 0.5)));
 const STOP_WORDS = new Set(['ai', 'ban', 'toi', 'la', 'cho', 'cua', 'va', 'voi', 'nay', 'kia', 'gi', 'co', 'khong', 'hay', 'theo', 'trong', 'duoc']);
 
 function normalize(value) {
@@ -135,7 +136,16 @@ async function buildSchemaContext(query, options = {}) {
   const scores = new Map(lexicalScores);
   const vectorColumnNames = new Set();
   let vectorResults = [];
-  try { vectorResults = await qdrantService.searchSchema(expandedQuery, Math.max(12, MAX_TABLES * 3)); } catch (_) {}
+  let semanticSearch = { status: 'ok', errorCode: null };
+  try {
+    const result = await qdrantService.searchSchema(expandedQuery, Math.max(12, MAX_TABLES * 3), { detailed: true });
+    vectorResults = Array.isArray(result) ? result : result.results;
+    if (!Array.isArray(vectorResults)) throw new Error('Invalid schema search result');
+    if (!Array.isArray(result)) semanticSearch = { status: result.status, errorCode: result.errorCode || null };
+  } catch (error) {
+    semanticSearch = { status: 'degraded', errorCode: 'SCHEMA_SEARCH_FAILED' };
+    console.warn(`[schema_context] Semantic search degraded: ${semanticSearch.errorCode}`);
+  }
 
   vectorResults.forEach((result, index) => {
     const payload = result.payload || {};
@@ -160,7 +170,27 @@ async function buildSchemaContext(query, options = {}) {
   const tablePool = maxLexicalScore >= 4
     ? rankedTables.filter(item => (lexicalScores.get(tableIdentity(item.table)) || 0) >= strongLexicalThreshold)
     : rankedTables;
-  const selected = tablePool.slice(0, Math.min(MAX_TABLES, tablePool.length)).map(item => item.table);
+  const selected = tablePool.slice(0, MAX_TABLES).map(item => item.table);
+  const semanticCandidates = [];
+  const seenSemantic = new Set();
+  for (const result of vectorResults) {
+    if ((Number(result.score) || 0) < SEMANTIC_MIN_SCORE) continue;
+    const payload = result.payload || {};
+    const candidates = payload.tableId
+      ? activeTables.filter(table => tableIdentity(table) === payload.tableId)
+      : activeTables.filter(table => [payload.tableName, payload.sourceTable, payload.targetTable].includes(table.tableName));
+    if (candidates.length !== 1) continue;
+    const table = candidates[0];
+    const id = tableIdentity(table);
+    if (!seenSemantic.has(id)) { seenSemantic.add(id); semanticCandidates.push(table); }
+  }
+  if (maxLexicalScore >= 4 && MAX_TABLES > 1 && semanticCandidates.length) {
+    const candidate = semanticCandidates.find(table => !selected.some(item => tableIdentity(item) === tableIdentity(table)));
+    if (candidate) {
+      if (selected.length >= MAX_TABLES) selected.pop();
+      selected.push(candidate);
+    }
+  }
   const selectedNames = new Set(selected.map(table => table.tableName));
   const requestedIds = selected.slice(0, MAX_TABLES).map(table => tableIdentity(table));
   const parallelRelationshipIds = dictionaryService.getTableRelationships()
@@ -232,7 +262,7 @@ async function buildSchemaContext(query, options = {}) {
   if (relationships.length > 0) {
     lines.push('Relationships:');
     relationships.forEach(relation => lines.push(`- ${(relation.columnPairs || []).map(pair => `${relation.sourceTable}.${pair.sourceColumn} -> ${relation.targetTable}.${pair.targetColumn}`).join(' AND ')} (${relation.cardinality || relation.relationType || 'related'}; role=${relation.businessRole || 'unspecified'}; display=${relation.displayColumn || 'unspecified'})`));
-    if (joinPlan?.purpose === 'enrichment') lines.push('Auto-enrichment requirement: when returning rows from the primary table, JOIN every relationship listed above and include the mapped display column instead of its foreign-key ID. Alias each mapped display value with the exact relationship role as the result header. Order result columns as identity Code/Name fields, mapped display values, other business fields, then unmapped ID fields. Use each planned alias separately when several fields point to the same lookup table.');
+    if (joinPlan?.purpose === 'enrichment') lines.push('Auto-enrichment requirement: when returning rows from the primary table, LEFT JOIN every relationship listed above unless its join type explicitly requires otherwise. Never drop a primary-table row just because a customer, employee, or status lookup is missing. Include the mapped display column instead of its foreign-key ID. Alias each mapped display value with the exact relationship role as the result header. Order result columns as identity Code/Name fields, mapped display values, other business fields, then unmapped ID fields. Use each planned alias separately when several fields point to the same lookup table.');
   }
 
   if (joinPlan) {
@@ -247,7 +277,7 @@ async function buildSchemaContext(query, options = {}) {
     selectedTableIds: selected.map(table => tableIdentity(table)),
     useTools: true,
     joinPlan,
-    retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length },
+    retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length, semanticSearch },
     needsModelSelection: maxLexicalScore < 4,
     tableCatalog: activeTables.map(table => `${table.tableName}${table.domain ? ` [domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`).join('\n').slice(0, 12000)
   };

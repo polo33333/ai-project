@@ -13,6 +13,7 @@ const { isListRequest, listAnswerMentionsRowValue } = require('../src/backend/ag
 const { compactToolResult } = require('../src/backend/agent_core/harness/local_result_compactor');
 const { getRequestPolicy, validateCallAgainstPolicy, sanitizeFinalText } = require('../src/backend/agent_core/harness/local_execution_policy');
 const { sanitizeProgressEvent } = require('../src/backend/agent_core/harness/progress_events');
+const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
 const { buildEnrichedListSql, contextualLookupQuestion, extractNamedEntityValue } = require('../src/backend/services/sql_enrichment_builder');
 
 class EchoTool extends BaseTool {
@@ -36,6 +37,54 @@ test('plain export URLs are normalized into clickable download links', () => {
     ensureDownloadLink(`[Tải xuống](${url})`, url),
     `[Tải xuống](${url})`
   );
+});
+
+test('typo in contract-code lookup still requires real SQL rows', async () => {
+  assert.equal(getRequestPolicy({ intent: 'record_lookup', table: 'T_Contract', outputs: { data: false } }).dataRequired, true);
+  const toolManager = new ToolManager();
+  const failing = new SqlTool();
+  failing.run = async () => { throw new Error('SQL unavailable'); };
+  toolManager.registerTool(failing);
+  const responses = [
+    { content: '', tool_calls: [{ function: { name: 'execute_sql_query', arguments: { sql: "SELECT ContractNo FROM T_Contract WHERE ContractNo = N'02/HĐTQSDĐ.LG.2010'" } } }] },
+    { content: 'Hợp đồng có mã này được ký ngày 30/12/2023.' }
+  ];
+  const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift() || { content: '' }, maxIterations: 2 });
+  const result = await harness.run({
+    userMessage: 'chi tiets hđ có mã 02/HĐTQSDĐ.LG.2010', provider: localProvider,
+    messages: [{ role: 'user', content: 'chi tiets hđ có mã 02/HĐTQSDĐ.LG.2010' }],
+    enabledToolNames: ['execute_sql_query'],
+    context: { requestPlan: { intent: 'record_lookup', table: 'T_Contract', outputs: { data: false, chart: false, export: false } } }
+  });
+  assert.doesNotMatch(result.replyText, /30\/12\/2023/);
+  assert.match(result.replyText, /Chưa thể xác minh/);
+});
+
+test('rejected SQL projections do not exhaust the database attempt budget', async () => {
+  const toolManager = new ToolManager();
+  const sqlTool = new SqlTool([{ EmployeeCode: 'NV006' }]);
+  let executions = 0;
+  sqlTool.run = async args => {
+    executions++;
+    if (executions <= 2) throw Object.assign(new Error('Mapped ID cannot be projected'), { code: 'JOIN_PROJECTION_INVALID' });
+    return { sql: args.sql, rows: [{ EmployeeCode: 'NV006' }], rowCount: 1 };
+  };
+  toolManager.registerTool(sqlTool);
+  const responses = [1, 2, 3].map(limit => ({ content: '', tool_calls: [{ function: {
+    name: 'execute_sql_query', arguments: { sql: `SELECT TOP ${limit} EmployeeCode FROM M_Employee WHERE EmployeeCode = 'NV006'` }
+  } }] }));
+  responses.push({ content: 'Nhân viên NV006.' });
+  const budget = new RequestExecutionBudget({ maxSqlAttempts: 1 });
+  const harness = new LocalModelHarness({ toolManager, dispatch: async () => responses.shift(), maxIterations: 4 });
+  const result = await harness.run({
+    userMessage: 'chi tiết nv có mã nv006', provider: localProvider,
+    messages: [{ role: 'user', content: 'chi tiết nv có mã nv006' }],
+    enabledToolNames: ['execute_sql_query'],
+    context: { executionBudget: budget, requestPlan: { intent: 'record_lookup', table: 'M_Employee', outputs: { data: true } } }
+  });
+  assert.equal(result.toolCalls.filter(call => call.toolName === 'execute_sql_query' && call.success).length, 1);
+  assert.equal(budget.sqlAttempts, 1);
+  assert.match(result.replyText, /NV006/);
 });
 
 test('nested export links are collapsed to one clickable link', () => {
@@ -322,7 +371,8 @@ test('SQL result display formats ISO dates without changing ordinary values', ()
 });
 
 test('temporal chart policy rejects TOP raw rows and placeholder images', () => {
-  const policy = getRequestPolicy('vẽ biểu đồ sản lượng trong 5 tháng gần nhất');
+  const policy = getRequestPolicy({ intent: 'aggregate_timeseries', table: 'T_ElectricityOutput', temporalMonths: 5,
+    outputs: { data: true, chart: true } });
   assert.equal(policy.chartRequired, true);
   assert.equal(policy.temporalMonths, 5);
   assert.equal(policy.dataRequired, true);
@@ -338,13 +388,18 @@ test('temporal chart policy rejects TOP raw rows and placeholder images', () => 
 });
 
 test('local policy detects a required downloadable file', () => {
-  const policy = getRequestPolicy('vẽ biểu đồ 7 tháng gần nhất và gửi file Excel');
+  const policy = getRequestPolicy({ intent: 'aggregate_timeseries', table: 'T_ElectricityOutput', temporalMonths: 7,
+    outputs: { data: true, chart: true, export: true } });
   assert.equal(policy.chartRequired, true);
   assert.equal(policy.exportRequired, true);
 });
 
 test('local policy treats a detailed employee lookup as a data request', () => {
-  assert.equal(getRequestPolicy('thông tin chi tiết nv tên Duy').dataRequired, true);
+  assert.equal(getRequestPolicy({ intent: 'record_lookup', table: 'M_Employee', outputs: { data: false } }).dataRequired, true);
+  assert.equal(getRequestPolicy({ intent: 'clarification', outputs: { data: false } }).dataRequired, false);
+  assert.equal(getRequestPolicy({ intent: 'record_lookup', table: 'M_Employee', outputs: { data: true } }, { mode: 'knowledge' }).dataRequired, false);
+  assert.equal(getRequestPolicy({ intent: 'record_lookup', table: 'M_Employee', codeOnly: true, outputs: { data: true } }).dataRequired, false);
+  assert.equal(getRequestPolicy({ intent: 'general', outputs: { data: false } }).dataRequired, false);
 });
 
 test('local harness accepts a web-grounded price answer without demanding SQL', async () => {
@@ -882,8 +937,10 @@ test('list rendering includes all four SQL rows even when model text truncates o
     : { content: 'Có 4 hợp đồng:\n| ContractID | ContractNo |\n| --- | --- |\n| 105 | Contract-105 |\n| 57 | Contract-' } });
   const result = await harness.run({ userMessage: 'ds hợp đồng', provider: localProvider,
     messages: [{ role: 'user', content: 'ds hợp đồng' }], enabledToolNames: ['execute_sql_query'],
-    context: { requestPlan: { intent: 'list', table: 'T_Contract', requiredColumns: [], outputs: { data: true } } } });
+    context: { requestPlan: { intent: 'list', table: 'T_Contract', requiredColumns: [],
+      columnDisplayNames: { ContractNo: 'Số HĐ' }, outputs: { data: true } } } });
   for (const id of [105, 57, 11, 246]) assert.ok(result.replyText.includes(`Contract-${id}`));
+  assert.match(result.replyText, /\| ContractID \| Số HĐ \|/);
   assert.ok(result.trace.steps.some(step => step.type === 'GROUNDED_LIST_RENDER'));
 });
 

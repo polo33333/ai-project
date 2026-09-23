@@ -86,6 +86,9 @@ function isShortContextualFollowup(questionText) {
   const text = normalize(questionText).trim();
   if (!text || text.split(/\s+/).length > 8) return false;
   if (/^(?:hi|hello|hey|xin chao|chao|cam on|thanks?)\b/.test(text)) return false;
+  // A concrete record code identifies a new lookup even when the request
+  // starts with "chi tiết". Do not prepend the previous topic to its schema query.
+  if (/\b(?:ma|code|id)\s*[:#]?\s*(?=[\p{L}\d._/-]*\d)[\p{L}\d][\p{L}\d._/-]*/u.test(text)) return false;
   return /\b(?:ntn|ra sao|ket qua sao|ti so|ty so|chi tiet|cu the|con hom nay|con hom qua|doi nao|tran nao)\b/.test(text)
     || /^(?:co|khong|ok|okay|yes|duoc|dong y|uh|u|con|va|vay|vay con|the|the con)\b/.test(text);
 }

@@ -310,7 +310,12 @@ class QdrantService {
   /**
    * Search vector collection for relevant tables, columns & business glossary terms
    */
-  async searchSchema(queryText, limit = 5) {
+  async searchSchema(queryText, limit = 5, options = {}) {
+    const detail = await this.searchSchemaDetailed(queryText, limit);
+    return options.detailed ? detail : detail.results;
+  }
+
+  async searchSchemaDetailed(queryText, limit = 5) {
     try {
       await this.ensureCollection();
       const [queryVector] = await this.embedTexts([queryText], this.vectorSize);
@@ -321,10 +326,10 @@ class QdrantService {
         with_payload: true
       });
 
-      return searchRes.result || [];
+      return { results: searchRes.result || [], status: 'ok', errorCode: null };
     } catch (err) {
       console.error(`[Qdrant] Search error:`, err.message);
-      return [];
+      return { results: [], status: 'degraded', errorCode: 'SCHEMA_SEARCH_FAILED' };
     }
   }
 

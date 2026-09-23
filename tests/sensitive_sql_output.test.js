@@ -4,6 +4,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const securityGuard = require('../src/backend/intelligent_core/security_guard');
 
+test('SQL WHERE preserves Vietnamese lookup codes as Unicode literals', () => {
+  const sql = "SELECT ContractNo AS 'Số HĐ' FROM T_Contract WHERE ContractNo = '02/HĐTQSDĐ.LG.2010'";
+  const result = securityGuard.validateSqlQuery(sql);
+  assert.equal(result.safe, true);
+  assert.match(result.cleanedSql, /AS 'Số HĐ'/);
+  assert.match(result.cleanedSql, /ContractNo = N'02\/HĐTQSDĐ\.LG\.2010'/);
+  assert.equal(securityGuard.validateSqlQuery(result.cleanedSql).cleanedSql, result.cleanedSql);
+});
+
 test('SQL result sanitization removes authentication secrets regardless of casing', () => {
   const [row] = securityGuard.sanitizeTabularRows([{
     CustomerID: 4,

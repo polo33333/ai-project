@@ -185,7 +185,7 @@ class IntelligentCore {
         provider = dispatched.provider;
         collectUsage(dispatched.response.usage);
         const refined = schemaContextService.refineSchemaContext(contextualRequest, parseSelectedTableNames(dispatched.response.content), { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
-        if (refined) contextSelection = refined;
+        if (refined) contextSelection = { ...refined, retrieval: { ...contextSelection.retrieval, ...refined.retrieval } };
       } catch (error) {
         if (options.signal?.aborted || error?.name === 'AbortError') throw error;
         console.warn(`[Schema Retriever] Model table selector unavailable, using hybrid result: ${error.message}`);

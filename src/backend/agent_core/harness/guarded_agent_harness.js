@@ -83,8 +83,7 @@ class GuardedAgentHarness {
     const toolDefs = this.toolManager?.getToolDefinitions(toolContext) || [];
     // Use the actual permission-filtered definitions as the execution whitelist.
     toolContext.allowedToolNames = toolDefs.map(item => item.function?.name || item.name);
-    const policy = { ...getRequestPolicy(question), dataRequired: Boolean(plan.outputs?.data), chartRequired: Boolean(plan.outputs?.chart),
-      exportRequired: Boolean(plan.outputs?.export), maxSqlCalls: budget.maxSqlAttempts };
+    const policy = { ...getRequestPolicy(plan, context), maxSqlCalls: budget.maxSqlAttempts };
     const instruction = 'Complete the requested outputs using tools. For database data requests, execute SQL; printed SQL is not a result. '
       + 'Do not invent rows, charts or download links. Zero rows is a valid result; do not loosen filters. '
       + 'If the user requests only code or an explanation, answer directly without executing it.';
@@ -178,7 +177,7 @@ class GuardedAgentHarness {
             result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs });
           trace.toolCalls.push({ toolName: 'execute_sql_query', success: execution.success, durationMs: execution.durationMs, source: 'DETERMINISTIC_LIST_QUERY' });
           trace.steps.push({ type: 'DETERMINISTIC_LIST_QUERY', success: execution.success, toolName: 'execute_sql_query' });
-          if (execution.success) reply = buildSqlRowsFallbackReply({ toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: true, result: execution.result });
+          if (execution.success) reply = buildSqlRowsFallbackReply({ toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: true, result: execution.result }, plan.columnDisplayNames);
         } catch (error) {
           trace.steps.push({ type: error.code || 'DETERMINISTIC_LIST_QUERY_FAILED', error: error.message });
         }
@@ -306,7 +305,7 @@ class GuardedAgentHarness {
     const sql = qualifiedSql(toolCalls, plan).at(-1);
     // Render lists from executed rows so a fluent but truncated model answer cannot omit records.
     if (sql && (!reply || plan.intent === 'list' || sql.result.rows.length === 0)) {
-      reply = buildSqlRowsFallbackReply({ ...sql, result: { ...sql.result, rows: security.sanitizeTabularRows(sql.result.rows) } });
+      reply = buildSqlRowsFallbackReply({ ...sql, result: { ...sql.result, rows: security.sanitizeTabularRows(sql.result.rows) } }, plan.columnDisplayNames);
       finishReason = undefined;
       trace.steps.push({ type: 'GROUNDED_RESULT_RENDER' });
     }

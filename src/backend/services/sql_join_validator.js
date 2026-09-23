@@ -197,6 +197,10 @@ function validateSelect(select, ctes, plan) {
         toAlias: key(refForEdge(plan, edge, 'to')?.tableName) === ref.tableName ? ref.alias : left.alias }; break; }
     }
     if (!match) return failure('JOIN_RELATIONSHIP_MISSING', `SQL thiếu đủ khóa JOIN hoặc quan hệ đã xác minh cho bảng ${ref.tableName}.`, { tableName: ref.tableName });
+    if (plan.purpose === 'enrichment' && key(match.edge.joinType || 'LEFT') === 'left' && ref.join !== 'left join') {
+      return failure('JOIN_PRESERVATION_REQUIRED',
+        `Quan hệ bổ sung ${match.edge.relationshipId} cần LEFT JOIN để giữ bản ghi của bảng gốc khi thiếu dữ liệu liên kết.`);
+    }
     usedEdges.push(match.edge);
     bindings.push(match);
     prior.push(ref);

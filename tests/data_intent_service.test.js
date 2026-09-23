@@ -28,6 +28,21 @@ async function fixture(run) {
   finally { dictionaryService.tablesStore = oldTables; }
 }
 
+test('clarification works without a root and never creates an executable SQL plan', async () => fixture(async ({ context }) => {
+  const tool = new PlanDataQueryTool();
+  assert.deepEqual(tool.parameters.required, ['intent']);
+  const response = await tool.execute({ intent: 'clarification', clarification: 'Bạn muốn bảng nào?', confidence: 2 }, context);
+  assert.equal(response.success, true);
+  assert.equal(response.result.plan.rootTable, null);
+  assert.equal(response.result.plan.confidence, 1);
+  assert.equal(context.modelIntentPlan.intent, 'clarification');
+  assert.equal(validateIntentPlan({ intent: 'clarification', rootTable: 'Unknown', clarification: 'Bảng nào?' }, context).rootTable, null);
+  assert.equal(validateIntentPlan({ intent: 'clarification', rootTable: 'M_Employee', clarification: 'Bảng nào?' }, context).rootTable, 'M_Employee');
+  assert.throws(() => validateIntentPlan({ intent: 'clarification', clarification: ' ' }, context), error => error.code === 'DATA_INTENT_INVALID');
+  assert.throws(() => validateIntentPlan({ intent: 'list' }, context), error => error.code === 'DATA_INTENT_TABLE_INVALID');
+  assert.equal(validateSqlAgainstIntent('SELECT * FROM M_Employee', context.modelIntentPlan).valid, false);
+}));
+
 test('model intent plan maps an attribute value to a verified relationship instead of a person name', () => fixture(({ context }) => {
   const plan = validateIntentPlan({ intent: 'list', rootTable: 'M_Employee', entityLookup: null,
     relationshipFilters: [{ relationshipRole: 'Giới tính', operator: 'contains', value: 'nữ' }],

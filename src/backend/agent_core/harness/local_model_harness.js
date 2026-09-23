@@ -15,12 +15,16 @@ const { getRequestPolicy, validateCallAgainstPolicy, hasSuccessfulTool, sanitize
 const { emitProgress, toolLabel } = require('./progress_events');
 const { trainingService } = require('../../training_core');
 const { ensureDownloadLink, buildSqlRowsFallbackReply, isUngroundedKnowledgeAnswer } = require('./grounded_reply');
-const { blockingSqlViolation, evaluateCompletion, stableFingerprint } = require('./completion_policy');
+const { blockingSqlViolation, evaluateCompletion, resolvePlan, stableFingerprint } = require('./completion_policy');
 const { buildEnrichedListSql, buildEnrichmentProjection, contextualLookupQuestion, extractNamedEntityValue, isSimpleEntityListRequest } = require('../../services/sql_enrichment_builder');
 const { buildCalculationReply } = require('./calculation_reply');
 
 function fingerprint(name, args) {
   return stableFingerprint(name, args);
+}
+
+function isPreExecutionSqlRejection(execution) {
+  return execution?.success === false && /^(?:JOIN_|DATA_INTENT_|SQL_UNSAFE|SQL_POLICY_)/.test(String(execution.code || ''));
 }
 
 function extractSql(text = '') {
@@ -310,7 +314,7 @@ function localCandidates(selected) {
     .filter(Boolean);
 }
 
-function buildToolFallbackReply(toolCalls = []) {
+function buildToolFallbackReply(toolCalls = [], displayNames = {}) {
   // A successful planning call is only an internal prerequisite. It cannot be
   // presented as the answer when the requested data query never succeeded.
   const successful = toolCalls.filter(call => call.success && call.toolName !== 'plan_data_query');
@@ -324,7 +328,7 @@ function buildToolFallbackReply(toolCalls = []) {
   }
   if (last.toolName === 'get_current_datetime' && last.result?.display) return last.result.display;
   if (last.toolName === 'execute_sql_query') {
-    if (Array.isArray(last.result?.rows) && last.result.rows.length) return buildSqlRowsFallbackReply(last);
+    if (Array.isArray(last.result?.rows) && last.result.rows.length) return buildSqlRowsFallbackReply(last, displayNames);
     return 'Đã chạy truy vấn nhưng chưa thể xác minh nội dung dữ liệu trả về. Vui lòng thử lại.';
   }
   if (last.toolName === 'search_schema') {
@@ -450,15 +454,10 @@ class LocalModelHarness {
     const toolContext = { ...context, allowedToolNames: enabledToolNames };
     const toolDefs = this.toolManager ? this.toolManager.getToolDefinitions(toolContext) : [];
     const effectiveUserMessage = userMessage || [...messages].reverse().find(message => message.role === 'user')?.content || '';
-    const inferredPolicy = getRequestPolicy(effectiveUserMessage);
-    // Web-grounded "bao nhiêu" questions are not requests for records from
-    // the configured business database. SQL tools are intentionally disabled
-    // for Web Search, so do not discard a valid web answer for missing SQL.
-    const requestPolicy = context.webSearch || context.requestPlan?.codeOnly || ['general', 'knowledge'].includes(context.mode)
-      ? { ...inferredPolicy, chartRequired: false, exportRequired: false, dataRequired: false, temporalMonths: null }
-      : inferredPolicy;
+    const requestPlan = resolvePlan(effectiveUserMessage,
+      context.requestPlan || trainingService.plan({ question: effectiveUserMessage, selectedTables: context.selectedTables || [] }), context);
+    const requestPolicy = getRequestPolicy(requestPlan, context);
     const explicitSchemaRefs = getExplicitSchemaRefs(effectiveUserMessage);
-    const requestPlan = context.requestPlan || trainingService.plan({ question: effectiveUserMessage, selectedTables: context.selectedTables || [] });
     const intentPlannerEnabled = process.env.MODEL_DATA_INTENT_PLANNER_ENABLED === 'true'
       && requestPolicy.dataRequired && toolDefs.some(definition => (definition.function || definition).name === 'plan_data_query');
     context.requireModelIntentPlan = intentPlannerEnabled;
@@ -535,6 +534,7 @@ class LocalModelHarness {
       }
       emitProgress(onProgress, { type: 'tool_started', label: toolLabel(name), status: 'running', icon: name === 'execute_sql_query' ? 'database' : name === 'render_chart' ? 'chart-column' : 'gear', toolName: name });
       const execution = await this.toolManager.executeTool(name, args, context);
+      if (name === 'execute_sql_query' && isPreExecutionSqlRejection(execution)) executionBudget.refundSqlAttempt();
       throwIfAborted();
       const log = { toolName: name, args, success: execution.success, result: execution.result || null, error: execution.error || null, durationMs: execution.durationMs };
       toolCalls.push(log);
@@ -557,7 +557,7 @@ class LocalModelHarness {
       const listSql = buildPlannedTablePreviewSql({ ...requestPlan, datasetReference: context.memoryDecision?.reference }, context.joinPlan);
       if (listSql) {
         const listExecution = await executeDeterministicTool('execute_sql_query', { sql: listSql }, 'DETERMINISTIC_LIST_QUERY');
-        if (listExecution?.success) finalText = buildSqlRowsFallbackReply(listExecution);
+        if (listExecution?.success) finalText = buildSqlRowsFallbackReply(listExecution, requestPlan.columnDisplayNames);
       }
     }
 
@@ -581,7 +581,7 @@ class LocalModelHarness {
       if (entityLookupSql) {
         entityLookupAttempted = true;
         const lookupExecution = await executeDeterministicTool('execute_sql_query', { sql: entityLookupSql }, 'DETERMINISTIC_ENTITY_LOOKUP');
-        if (lookupExecution?.success) finalText = buildSqlRowsFallbackReply(lookupExecution);
+        if (lookupExecution?.success) finalText = buildSqlRowsFallbackReply(lookupExecution, requestPlan.columnDisplayNames);
       }
     }
 
@@ -776,6 +776,7 @@ class LocalModelHarness {
 
       emitProgress(onProgress, { type: 'tool_started', label: toolLabel(call.name), status: 'running', icon: call.name === 'execute_sql_query' ? 'database' : call.name === 'render_chart' ? 'chart-column' : 'gear', iteration: trace.iterations, toolName: call.name });
       const execution = await this.toolManager.executeTool(call.name, validation.args, context);
+      if (call.name === 'execute_sql_query' && isPreExecutionSqlRejection(execution)) executionBudget.refundSqlAttempt();
       throwIfAborted();
       const log = { toolName: call.name, args: validation.args, success: execution.success, result: execution.result || null,
         error: execution.error || null, code: execution.code || null, details: execution.details || null, durationMs: execution.durationMs };
@@ -920,7 +921,7 @@ class LocalModelHarness {
 
     if (usefulSql && (isInsufficientSqlAnswer(finalText)
       || (isListRequest(effectiveUserMessage) && !listAnswerMentionsRowValue(finalText, usefulSql)))) {
-      finalText = buildSqlRowsFallbackReply(usefulSql);
+      finalText = buildSqlRowsFallbackReply(usefulSql, requestPlan.columnDisplayNames);
       trace.steps.push({ type: 'DETERMINISTIC_SQL_ROWS_FALLBACK' });
     }
     if (!String(finalText || '').trim()) {
@@ -928,17 +929,20 @@ class LocalModelHarness {
         ? (hasSuccessfulTool(toolCalls, 'execute_sql_query')
             ? 'Đã truy vấn được dữ liệu nhưng chưa thể tạo biểu đồ hợp lệ. Vui lòng thử lại; hệ thống sẽ không hiển thị biểu đồ giả.'
             : 'Chưa thể truy vấn đủ dữ liệu để tạo biểu đồ.')
-        : buildToolFallbackReply(toolCalls);
+        : buildToolFallbackReply(toolCalls, requestPlan.columnDisplayNames);
       if (finalText) trace.steps.push({ type: 'DETERMINISTIC_TOOL_FALLBACK' });
     }
     // List tables are rendered from executed rows, not retyped by the model.
     // A fluent answer can still end halfway through a Markdown row.
     if (usefulSql?.result?.rows?.length > 1 && !requestPolicy.chartRequired && (requestPlan.intent === 'list' || isListRequest(effectiveUserMessage))) {
-      finalText = buildSqlRowsFallbackReply(usefulSql);
+      finalText = buildSqlRowsFallbackReply(usefulSql, requestPlan.columnDisplayNames);
       trace.steps.push({ type: 'GROUNDED_LIST_RENDER', rowCount: usefulSql.result.rows.length });
     }
     const exportCall = [...toolCalls].reverse().find(call => call.toolName === 'export_data' && call.success && call.result?.downloadUrl);
     if (requestPolicy.exportRequired && exportCall) finalText = ensureDownloadLink(finalText, exportCall.result.downloadUrl);
+    if (requestPolicy.dataRequired && context.modelIntentPlan?.intent !== 'clarification' && !usefulSql) {
+      finalText = 'Chưa thể xác minh dữ liệu đúng với yêu cầu. Vui lòng thử lại hoặc làm rõ điều kiện tra cứu.';
+    }
     if (!String(finalText || '').trim() && requestPolicy.dataRequired) {
       finalText = 'Chưa thể xác minh dữ liệu đúng với yêu cầu. Vui lòng làm rõ bộ lọc hoặc khoảng thời gian cần tra cứu.';
     }

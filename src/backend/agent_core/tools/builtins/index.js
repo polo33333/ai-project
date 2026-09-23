@@ -195,7 +195,7 @@ class PlanDataQueryTool extends BaseTool {
         type: 'object',
         properties: {
           intent: { type: 'string', enum: ['list', 'record_lookup', 'aggregate', 'aggregate_timeseries', 'clarification'] },
-          rootTable: { type: 'string', description: 'Tên chính xác của bảng gốc trong schema context.' },
+          rootTable: { type: 'string', description: 'Tên chính xác của bảng gốc trong schema context; bắt buộc với intent thực thi, có thể bỏ qua khi clarification.' },
           entityLookup: { type: 'object', properties: {
             field: { type: 'string' }, operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
           } },
@@ -210,7 +210,7 @@ class PlanDataQueryTool extends BaseTool {
           requestedFields: { type: 'array', items: { type: 'string' } },
           resultGrain: { type: 'string' }, confidence: { type: 'number' }, clarification: { type: 'string' }
         },
-        required: ['intent', 'rootTable']
+        required: ['intent']
       },
       timeoutMs: 5000
     });

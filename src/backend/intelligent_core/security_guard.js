@@ -119,6 +119,13 @@ class SecurityGuard {
       }
     }
 
+    // SQL Server interprets bare string literals through the database code page.
+    // Preserve Vietnamese identifiers used as lookup values in WHERE predicates.
+    cleaned = cleaned.replace(/\bWHERE\b[\s\S]*?(?=\bGROUP\s+BY\b|\bORDER\s+BY\b|$)/gi, clause =>
+      clause.replace(/'(?:(?:'')|[^'])*'/g, (literal, offset) => {
+        if (!/[^\x00-\x7F]/.test(literal) || /[Nn]/.test(clause[offset - 1] || '')) return literal;
+        return `N${literal}`;
+      }));
     return { safe: true, cleanedSql: cleaned };
   }
 

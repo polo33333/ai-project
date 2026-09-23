@@ -64,16 +64,16 @@ function positiveInteger(value) {
 
 function validateIntentPlan(input = {}, context = {}) {
   const tables = allowedTables(context);
-  const root = tables.find(table => normalize(table.tableName) === normalize(input.rootTable));
-  if (!root) fail('DATA_INTENT_TABLE_INVALID', `Bảng gốc "${input.rootTable || ''}" không thuộc schema context hiện tại.`);
   const allowedIntents = ['list', 'record_lookup', 'aggregate', 'aggregate_timeseries', 'clarification'];
   const intent = allowedIntents.includes(input.intent) ? input.intent : null;
   if (!intent) fail('DATA_INTENT_INVALID', 'Intent không hợp lệ.');
+  const root = tables.find(table => normalize(table.tableName) === normalize(input.rootTable));
   if (intent === 'clarification') {
-    if (!String(input.clarification || '').trim()) fail('DATA_INTENT_INVALID', 'Intent clarification phải có câu hỏi làm rõ.');
-    return { version: 1, intent, rootTable: root.tableName, clarification: String(input.clarification).trim(),
-      confidence: Number(input.confidence) || 0 };
+    if (typeof input.clarification !== 'string' || !input.clarification.trim()) fail('DATA_INTENT_INVALID', 'Intent clarification phải có câu hỏi làm rõ.');
+    return { version: 1, intent, rootTable: root?.tableName || null, clarification: input.clarification.trim(),
+      confidence: Math.max(0, Math.min(1, Number(input.confidence) || 0)) };
   }
+  if (!root) fail('DATA_INTENT_TABLE_INVALID', `Bảng gốc "${input.rootTable || ''}" không thuộc schema context hiện tại.`);
   const visibleColumns = (root.columns || []).filter(column => column.isVisible !== false);
   const edges = availableEdges(context, tables);
   let entityLookup = input.entityLookup?.value ? {

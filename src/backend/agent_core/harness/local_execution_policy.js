@@ -1,20 +1,20 @@
 'use strict';
 
-function normalize(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
-}
+const DATA_INTENTS = new Set(['list', 'record_lookup', 'aggregate', 'aggregate_timeseries']);
 
-function getRequestPolicy(userMessage = '') {
-  const query = normalize(userMessage);
-  const chartRequired = /\b(bieu do|do thi|chart|visuali[sz]e|ve)\b/.test(query);
-  const exportRequired = /\b(xuat|export|tai|download|gui)\b[^\n]{0,30}\b(file|tep|excel|xlsx|csv|pdf)\b|\b(file|tep|excel|xlsx|csv|pdf)\b[^\n]{0,30}\b(xuat|export|tai|download|gui)\b/.test(query);
-  const dataRequired = chartRequired || exportRequired || /\b(ds|danh sach|liet ke|top|bao nhieu|thong ke|thong tin chi tiet|chi tiet|du lieu|data|doanh thu|san luong|nhan vien|nv|khach hang|hop dong)\b/.test(query);
-  const monthMatch = query.match(/\b(\d+)\s*thang\b/);
+function getRequestPolicy(plan = {}, context = {}) {
+  const outputs = plan.outputs || {};
+  const informational = plan.codeOnly === true || context.webSearch === true || context.knowledgeGrounding?.required === true
+    || ['general', 'knowledge'].includes(context.mode);
+  const chartRequired = !informational && outputs.chart === true;
+  const exportRequired = !informational && outputs.export === true;
+  const dataRequired = !informational && (outputs.data === true
+    || (Boolean(plan.table) && DATA_INTENTS.has(plan.intent)) || chartRequired || exportRequired);
   return {
     chartRequired,
     exportRequired,
     dataRequired,
-    temporalMonths: monthMatch ? Number(monthMatch[1]) : null,
+    temporalMonths: !informational && Number(plan.temporalMonths) > 0 ? Number(plan.temporalMonths) : null,
     maxSqlCalls: Math.max(1, Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3))
   };
 }

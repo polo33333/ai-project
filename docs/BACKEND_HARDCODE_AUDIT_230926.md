@@ -1,0 +1,41 @@
+# Rà soát hardcode trong backend (23/09/2026)
+
+## Phạm vi và kết luận
+
+Rà soát tĩnh mã JavaScript trong `src/backend` (120 file), ưu tiên các hằng, regex và giả định có thể đổi **đường xử lý câu hỏi, bảng được chọn, SQL được sinh hoặc câu trả lời**. Đây là danh sách theo nhóm hành vi và điểm gọi chính, không phải bản kê mọi literal trong mã. Chưa chạy bộ câu hỏi hồi quy hoặc đối chiếu toàn bộ dữ liệu DB.
+
+`getRequestPolicy` trong `agent_core/harness/local_execution_policy.js` hiện lấy `intent` và `outputs` từ request plan; regex nhận diện ý định cũ đã được bỏ ở đây. Tuy nhiên plan đầu vào và các fallback phía sau vẫn dùng từ khóa cố định. Vì vậy chỉ sửa `getRequestPolicy` không đủ để giải quyết trường hợp hỏi mã hợp đồng/nhân viên có lúc tìm thấy, có lúc không.
+
+Không thấy tên bảng nghiệp vụ cụ thể như `T_Contract` hay `M_Employee` được cố định trong đường chat chính. Rủi ro lớn hơn là **từ khóa tiếng Việt, quy ước tên cột/bảng và các ngưỡng chọn schema** được cố định trong code.
+
+## Các điểm cần xử lý
+
+| Ưu tiên | Vị trí | Hardcode và tác động | Hướng thay thế |
+| --- | --- | --- | --- |
+| P0 | `training_core/request_planner.js` (`createRequestPlan`, khoảng dòng 37–94) | Regex cho danh sách, thống kê, thời gian, biểu đồ/xuất file; intent mặc định `record_lookup`. Câu viết tắt, sai chính tả hoặc hỏi mã có thể thành plan sai; `getRequestPolicy` sẽ kế thừa sai. | Tạo **request understanding** trả về JSON có schema (`intent`, `outputs`, `entity`, `filters`, `timeRange`, `confidence`) bằng model, có xác thực với dictionary/schema. Chỉ dùng quy tắc tối thiểu cho trường hợp chắc chắn và fallback khi model lỗi; không mặc định lookup nếu thiếu bằng chứng. |
+| P0 | `intelligent_core/schema_context_service.js` (`isGeneralConversation`, `isStandaloneCalculation`, `lexicalScore`, `buildSchemaContext`) | STOP_WORDS, regex `dataIntent`/greeting, điểm từ vựng/ngưỡng `>=4` và score semantic quyết định có truy vấn schema, chọn bảng và gọi model chọn lại hay không. Từ viết tắt hoặc mã không khớp có thể bị route sai trước khi SQL được tạo. | Gộp phân loại data/knowledge/general với bước hiểu yêu cầu; ưu tiên identifier match trên cột được dictionary đánh dấu mã, sau đó hybrid retrieval. Đo precision/recall trên chat thật trước khi đổi ngưỡng. Cho phép abstain/chọn lại khi điểm thấp. |
+| P0 | `agent_core/harness/local_model_harness.js` (`buildEntityLookupSql`, `buildPlannedTablePreviewSql`, `isListRequest`, các nhánh quanh dòng 556, 847–937) và `services/sql_enrichment_builder.js` (`isSimpleEntityListRequest`, `extractNamedEntityValue`, `mappedValueFilters`) | Fallback nhận `tên`, `chi tiết`, `ds` bằng regex; suy cột `...Name`, lọc giá trị theo token đầu và đo câu trả lời bằng chuỗi. Mã như `nv006` hoặc `02/HĐ.LG.2024` có thể không được chuyển thành điều kiện lọc đúng, hoặc trả preview không lọc. | Dùng entity/filter có cấu trúc từ plan; đối chiếu metadata cột mã/tên, kiểu dữ liệu và giá trị; sinh SQL có tham số. Nếu không xác định được cột/giá trị, yêu cầu plan lại hoặc báo thiếu điều kiện, không tự chạy preview thay cho lookup. Thống nhất một định nghĩa `list` xuyên suốt planner/harness/enrichment. |
+| P1 | `memory_core/memory_policy.js` (`REFERENCE_PRONOUN_PATTERN`, `REFERENCE_KEYWORDS`, `FALLBACK_DOMAIN_RULES`, `isShortContextualFollowup`) | Từ chỉ tham chiếu và tên miền dự phòng cố định cho vài nghiệp vụ; có thể gắn câu hỏi mã mới vào chủ đề cũ hoặc bỏ mất tham chiếu hợp lệ. | Dùng thực thể đã trích xuất và domain từ dictionary trước; chỉ kế thừa ngữ cảnh nếu câu mới thiếu thực thể rõ ràng và có độ tin cậy đủ cao. Giữ fallback từ khóa có telemetry, test câu độc lập xen giữa các follow-up. |
+| P1 | `intelligent_core/knowledge_intent.js` (`needsKnowledgeSearch`) và `services/web_search_service.js` (nhận ngày tương đối) | Danh sách từ khóa tài liệu và các cách viết “hôm nay” cố định. Câu hỏi tài liệu/thời gian diễn đạt khác dễ bị route hoặc chuẩn hóa sai. | Dùng classifier chung và metadata nguồn tài liệu; bộ phân tích thời gian có cấu trúc, hỗ trợ timezone và câu mơ hồ. |
+| P1 | `agent_core/harness/completion_policy.js` (`isCodeRequest`) và `intelligent_core/security_guard.js` (`checkScope`) | Regex “code”, “tạo”, “backend”, “dữ liệu”… quyết định code-only hoặc từ chối. Có thể chặn nhầm yêu cầu dữ liệu và cũng có thể bỏ lọt yêu cầu ngoài phạm vi. | Phân biệt scope/capability bằng classifier có output kiểm chứng được, dựa trên quyền người dùng và tool metadata. Quy tắc từ chối vẫn cần deterministic ở lớp phân quyền; không chuyển quyền truy cập cho model quyết định. |
+| P1 | `intelligent_core/core.js` (khoảng dòng 288–290) | Allowlist tool của chế độ general liệt kê tên tool thủ công; tool mới dễ bị thiếu hoặc cấp sai chế độ. Prompt chọn schema giới hạn “6” độc lập với cấu hình `AI_SCHEMA_MAX_TABLES`. | Khai báo capability/mode ngay trong tool registry; lọc theo metadata và quyền. Dùng cùng một cấu hình giới hạn bảng trong retrieval lẫn prompt. |
+| P1 | `services/data_intent_service.js` (`validateSqlAgainstIntent`), `training_core/sql_evaluator.js`, `agent_core/harness/local_execution_policy.js` (`validateCallAgainstPolicy`) | Kiểm tra SQL qua regex/chuỗi cho cột, bảng, giá trị, GROUP BY, bucket thời gian. SQL hợp lệ có alias/CTE/biểu thức khác có thể bị bác; SQL sai cũng có thể lọt. | Parse SQL Server thành AST; đối chiếu bảng/cột/filter với plan theo cấu trúc và lineage của alias. Duy trì giới hạn hiện hành cho tới khi parser và test hồi quy đủ bao phủ. |
+| P2 | `agent_core/harness/local_model_harness.js` (dòng 69–70, 75–100, 250) | Mặc định tiền tố bảng `T_`, gợi ý cột ngày `ToDate,PaymentDate,CreateDate`, suy metric/date từ tên cột và biến đổi truy vấn tháng bằng regex. Mở rộng schema dễ lệch. | Chuyển role của bảng/cột (identifier, name, date, metric) vào dictionary; lựa chọn qua type + metadata. Sinh query thời gian từ plan thay vì sửa chuỗi SQL đã tạo. |
+| P2 | `services/text2sql_agent.js` và route `/api/text2sql` trong `routes/router.js` (khoảng dòng 1703–1728) | Đường Text2SQL riêng song song với `/api/intelligent-core/chat`, có prompt/kiểm tra SQL riêng; cải tiến planner của chat không tự áp dụng ở đây. | Xác định rõ API này là legacy hay còn dùng. Nếu còn dùng, chia sẻ bước hiểu yêu cầu, policy SQL và kiểm tra quyền; kiểm thử cả hai entry point. |
+
+## Những hardcode nên giữ về mặt chính sách
+
+- `security_guard.js`: chỉ đọc, chặn câu lệnh nguy hiểm, giới hạn số dòng. Đây là ràng buộc an toàn; có thể thay **cách triển khai regex** bằng parser/permission, không bỏ ràng buộc.
+- `routes/router.js`: tên route, MIME type, mã HTTP, giới hạn body/rate mặc định là hợp đồng giao thức/cấu hình vận hành; không phải lỗi hiểu ngôn ngữ.
+- `tool_registry.js` và schema tham số tool: tên tool/intent là hợp đồng nội bộ. Nên tập trung bỏ danh sách capability lặp lại ở nơi khác, không biến tên tool thành nội dung do model tự do tạo.
+- Giới hạn `TOP`, timeout, budget và ngưỡng truy hồi: cần có giá trị mặc định kiểm soát tài nguyên. Chỉ đưa vào cấu hình/đo lường nếu cần tinh chỉnh; không xóa toàn bộ literal.
+
+## Thứ tự triển khai đề xuất
+
+1. Thu thập tập hồi quy từ chat: truy vấn theo mã hợp đồng/nhân viên (có dấu, không dấu, mã ngắn, mã có `/`/`.`), danh sách, chi tiết, follow-up, tài liệu và câu chào. Ghi expected route, bảng/cột, filter và kết quả; tránh dùng câu trả lời model làm oracle duy nhất.
+2. Xây một `RequestUnderstanding` có schema cố định và bước xác thực trên dictionary; bổ sung metadata `identifier/name/date/metric` cho cột, domain alias và display name. Đây là nguồn chung cho planner, schema routing và fallback SQL.
+3. Chuyển các nhánh P0 sang plan có cấu trúc, triển khai shadow mode so sánh plan mới/cũ trước khi bật. Khi không chắc về mã/bảng, thử retrieval/plan lại có giới hạn; không trả danh sách không lọc như kết quả lookup.
+4. Hợp nhất logic follow-up, knowledge/general routing và tool capability. Thay các kiểm tra SQL bằng parser theo từng bước, giữ chính sách read-only và giới hạn tài nguyên.
+5. Đo tỷ lệ chọn đúng route/bảng/cột, tỷ lệ lookup chính xác và false refusal trên tập hồi quy; chỉ xóa regex cũ sau khi các metric đạt mức chấp nhận.
+
+**Phạm vi của file này:** đề xuất hướng sửa, chưa sửa code. Các vị trí dòng là mốc tham chiếu ngày rà soát; tìm theo tên hàm khi code dịch chuyển.

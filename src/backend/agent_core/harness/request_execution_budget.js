@@ -52,6 +52,10 @@ class RequestExecutionBudget {
     this.sqlAttempts += 1;
   }
 
+  refundSqlAttempt() {
+    this.sqlAttempts = Math.max(0, this.sqlAttempts - 1);
+  }
+
   recordRepair() {
     this.repairAttempts += 1;
   }

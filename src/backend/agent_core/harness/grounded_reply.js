@@ -33,18 +33,20 @@ function markdownCell(value) {
   return normalized.replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
 }
 
-function buildSqlRowsFallbackReply(sqlCall) {
+function buildSqlRowsFallbackReply(sqlCall, displayNames = {}) {
   const rows = Array.isArray(sqlCall?.result?.rows) ? sqlCall.result.rows : [];
   if (!rows.length) return 'Không tìm thấy dữ liệu phù hợp.';
 
   const columns = Object.keys(rows[0] || {}).slice(0, 10);
+  const labels = columns.map(column => displayNames[column] || column);
+  const uniqueLabels = labels.map((label, index) => labels.indexOf(label) === index ? label : `${label} (${columns[index]})`);
   if (rows.length === 1) {
-    const details = columns.map(column => `- **${markdownCell(column)}:** ${markdownCell(rows[0]?.[column])}`).join('\n');
+    const details = columns.map((column, index) => `- **${markdownCell(uniqueLabels[index])}:** ${markdownCell(rows[0]?.[column])}`).join('\n');
     return `Tìm thấy **1** dòng kết quả:\n\n${details}`;
   }
 
   const visibleRows = rows.slice(0, 10);
-  const header = `| ${columns.map(markdownCell).join(' | ')} |`;
+  const header = `| ${uniqueLabels.map(markdownCell).join(' | ')} |`;
   const separator = `| ${columns.map(() => '---').join(' | ')} |`;
   const body = visibleRows.map(row => `| ${columns.map(column => markdownCell(row?.[column])).join(' | ')} |`).join('\n');
   const remainder = rows.length > visibleRows.length ? `\n\nHiển thị ${visibleRows.length}/${rows.length} kết quả.` : '';

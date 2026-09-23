@@ -185,7 +185,7 @@ class AgentHarness {
           extractedSqlQuery = execution.result?.sql || deterministicSql;
           extractedExecutionResult = execution.result;
           extractedSqlExecutions.push({ sql: extractedSqlQuery, rowCount: execution.result?.rowCount || 0, success: true });
-          finalText = buildSqlRowsFallbackReply(log);
+          finalText = buildSqlRowsFallbackReply(log, requestPlan.columnDisplayNames);
         }
       }
     }

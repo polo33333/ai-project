@@ -16,6 +16,62 @@ test('standalone statistics with an explicit number list bypass SQL schema retri
   );
 });
 
+test('semantic retrieval retains a strong table despite an unrelated lexical match', async t => {
+  const oldTables = dictionaryService.tablesStore;
+  const oldRelationships = dictionaryService.tableRelationships;
+  const oldSearch = qdrantService.searchSchema;
+  t.after(() => {
+    dictionaryService.tablesStore = oldTables;
+    dictionaryService.tableRelationships = oldRelationships;
+    qdrantService.searchSchema = oldSearch;
+  });
+  const semantic = withIdentity({ dbSourceId: 'source', dbName: 'ERP', schemaName: 'dbo', tableName: 'T_Invoice', isActive: true,
+    tableDescription: 'Invoices', columns: [{ columnName: 'InvoiceID', dataType: 'INT' }] });
+  const lexical = withIdentity({ dbSourceId: 'source', dbName: 'ERP', schemaName: 'dbo', tableName: 'T_Status', isActive: true,
+    tableDescription: 'status', columns: [{ columnName: 'StatusID', dataType: 'INT' }] });
+  dictionaryService.tablesStore = [semantic, lexical];
+  dictionaryService.tableRelationships = [];
+  qdrantService.searchSchema = async () => [{ score: 0.9, payload: { tableId: semantic.tableId, tableName: semantic.tableName } }];
+  const context = await buildSchemaContext('status of invioce', { dbSourceId: 'source' });
+  assert.equal(context.mode, 'data');
+  assert.ok(context.selectedTableIds.includes(semantic.tableId));
+  assert.match(context.schemaContext, /Table T_Invoice/);
+  qdrantService.searchSchema = async () => [{ score: 0.1, payload: { tableId: semantic.tableId } }];
+  const weak = await buildSchemaContext('status of invioce', { dbSourceId: 'source' });
+  assert.deepEqual(weak.selectedTableIds, [lexical.tableId]);
+});
+
+test('schema retrieval distinguishes an empty result from a failed search', async t => {
+  const oldSearch = qdrantService.searchSchema;
+  t.after(() => { qdrantService.searchSchema = oldSearch; });
+  qdrantService.searchSchema = async () => ({ results: [], status: 'ok', errorCode: null });
+  const empty = await buildSchemaContext('bảng hợp đồng', { dbName: 'IPMS' });
+  assert.equal(empty.retrieval.semanticSearch.status, 'ok');
+  qdrantService.searchSchema = async () => ({ results: [], status: 'degraded', errorCode: 'SCHEMA_SEARCH_FAILED' });
+  const degraded = await buildSchemaContext('bảng hợp đồng', { dbName: 'IPMS' });
+  assert.equal(degraded.retrieval.semanticSearch.status, 'degraded');
+  assert.equal(degraded.retrieval.vectorMatches, 0);
+});
+
+test('Qdrant detailed search reports failures while array API remains compatible', async t => {
+  const oldEnsure = qdrantService.ensureCollection;
+  const oldEmbed = qdrantService.embedTexts;
+  const oldRequest = qdrantService.request;
+  t.after(() => {
+    qdrantService.ensureCollection = oldEnsure;
+    qdrantService.embedTexts = oldEmbed;
+    qdrantService.request = oldRequest;
+  });
+  qdrantService.ensureCollection = async () => {};
+  qdrantService.embedTexts = async () => [[0.1]];
+  qdrantService.request = async () => ({ result: [] });
+  assert.deepEqual(await qdrantService.searchSchema('invoice'), []);
+  assert.equal((await qdrantService.searchSchema('invoice', 5, { detailed: true })).status, 'ok');
+  qdrantService.request = async () => { throw new Error('HTTP unavailable'); };
+  const failed = await qdrantService.searchSchema('invoice', 5, { detailed: true });
+  assert.deepEqual(failed, { results: [], status: 'degraded', errorCode: 'SCHEMA_SEARCH_FAILED' });
+});
+
 test('schema context routes the reported statistics prompt to general utility tools', async () => {
   const context = await buildSchemaContext(
     'Tính min, max, trung bình của dãy số: 120, 450, 230, 890, 340, 670',

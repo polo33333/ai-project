@@ -136,6 +136,9 @@ test('enrichment validator accepts display values with the configured business-r
   };
   const result = validateSqlAgainstJoinPlan('SELECT e.EmployeeName, c.ConstantName AS [Giới tính] FROM M_Employee e LEFT JOIN M_Constant c ON e.GenderID = c.ConstantID', enrichmentPlan);
   assert.equal(result.valid, true);
+  const droppedRoot = validateSqlAgainstJoinPlan('SELECT e.EmployeeName, c.ConstantName AS [Giới tính] FROM M_Employee e INNER JOIN M_Constant c ON e.GenderID = c.ConstantID', enrichmentPlan);
+  assert.equal(droppedRoot.valid, false);
+  assert.equal(droppedRoot.code, 'JOIN_PRESERVATION_REQUIRED');
 });
 
 test('enrichment validator binds each shared lookup role to its own SQL alias', () => {
