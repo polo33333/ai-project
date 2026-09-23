@@ -3,6 +3,7 @@
 const http = require('node:http');
 const storage = require('./src/backend/storage');
 const { handleStoredRequest } = require('./src/backend/storage/http');
+const backupGate = require('./src/backend/services/backup_gate');
 storage.loadEnvironment();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -22,6 +23,10 @@ async function start() {
     await storage.run(() => knowledgeCore.start());
     if (storage.enabled()) { outbox = require('./src/backend/storage/postgres/outbox'); outbox.start(); }
   }
+  backupGate.configure({
+    pause: async () => { if (knowledgeCore) await knowledgeCore.stop(); if (outbox) await outbox.stop(); },
+    resume: async () => { if (process.env.KNOWLEDGEHUB_WORKERS_ENABLED !== 'false') { if (knowledgeCore) await storage.run(() => knowledgeCore.start()); if (outbox) outbox.start(); } }
+  });
   server = http.createServer((req, res) => {
     const pathname = new URL(req.url, 'http://' + HOST).pathname;
     if (pathname === '/health/live') {
@@ -37,7 +42,9 @@ async function start() {
         res.end(JSON.stringify({ status: 'error', message: 'STORAGE_NOT_READY' }));
       }); return;
     }
-    Promise.resolve(handleStoredRequest(req, res, router.handleRequest)).catch(error => {
+    if (!backupGate.enter(req, res)) return;
+    const directBackup = pathname.startsWith('/api/backups/upload') || pathname.startsWith('/api/backups/download/');
+    Promise.resolve(directBackup ? storage.run(() => router.handleRequest(req, res)) : handleStoredRequest(req, res, router.handleRequest)).catch(error => {
       console.error('[HTTP] Request failed:', error.code || error.name);
       if (!res.headersSent) res.writeHead(error.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
       if (!res.writableEnded) res.end(JSON.stringify({ status: 'error', message: 'INVALID_REQUEST', requestId: req.requestId || null }));

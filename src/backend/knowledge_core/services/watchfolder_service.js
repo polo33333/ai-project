@@ -133,7 +133,15 @@ class WatchFolderService {
 
   stopFolder(id) { const watcher = this.watchers.get(id); if (watcher) watcher.close(); this.watchers.delete(id); }
   async start() { for (const folder of this.folders.filter(item => item.status === 'Active')) await this.startFolder(folder, true); }
-  async stop() { for (const id of [...this.watchers.keys()]) this.stopFolder(id); for (const timer of this.debounceTimers.values()) clearTimeout(timer); }
+  async stop() {
+    for (const id of [...this.watchers.keys()]) this.stopFolder(id);
+    for (const timer of this.debounceTimers.values()) clearTimeout(timer);
+    const deadline = Date.now() + 30000;
+    while (this.processing.size) {
+      if (Date.now() > deadline) throw new Error('Watchfolder tasks did not finish before backup.');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
 
   async addFolder(folderPath, filters) {
     const normalizedPath = this.validateDirectory(folderPath);

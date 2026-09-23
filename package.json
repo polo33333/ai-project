@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1",
+    "start": "node scripts/start.js",
     "dev": "node scripts/supervisor.js",
     "test": "node --require ./tests/helpers/setup_isolated_data.js --test \"tests/*.test.js\"",
     "test:ci": "npm test && npm run eval:local && npm run eval:sql",
@@ -35,6 +35,9 @@
     "data:pg:rehearse": "node scripts/postgres/rehearse.js",
     "backup:pg": "node scripts/postgres/backup.js backup",
     "restore:pg": "node scripts/postgres/backup.js restore",
+    "backup:all": "node scripts/backup_all.js backup",
+    "backup:verify": "node scripts/backup_all.js verify",
+    "backup:import": "node scripts/backup_all.js import",
     "data:pg:cutover": "node scripts/postgres/cutover.js"
   },
   "author": "kingdom",

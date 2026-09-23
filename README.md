@@ -240,19 +240,19 @@ Nếu dùng Ollama cho embedding, khởi động Ollama và tải `bge-m3`. LLM 
 npm start
 ```
 
-Nếu đã tự khởi động các dịch vụ phụ trợ, có thể chạy trực tiếp bằng `npm run dev` hoặc `node server.js`; cách này không gọi script PowerShell khởi động Ollama/Qdrant.
+Nếu đã tự khởi động các dịch vụ phụ trợ, có thể chạy trực tiếp bằng `npm run dev` hoặc `node server.js`; cách này không gọi launcher kiểm tra Docker/Ollama/Qdrant.
 
-Trên Windows, `npm start` gọi `scripts/start-local.ps1` và tự động:
+Trên Windows và macOS, `npm start` gọi `scripts/start.js` và tự động:
 
 1. Đọc `.env` và `.env.postgres`, giữ ưu tiên biến môi trường đã có.
-2. Khi backend là PostgreSQL cục bộ: kiểm tra Docker, mở Docker Desktop nếu cần, bật hoặc tạo container từ Compose và chờ database sẵn sàng. PostgreSQL remote bỏ bước Docker cục bộ. Bước này không tự chạy migration/import.
+2. Khi backend là PostgreSQL cục bộ: dùng dịch vụ đang chạy nếu kết nối được; nếu chưa có thì kiểm tra Docker, mở Docker Desktop, bật hoặc tạo container từ `compose.docker.yml` và chờ database sẵn sàng. PostgreSQL remote bỏ bước Docker cục bộ. Bước này không tự chạy migration/import.
 3. Khởi động Ollama native nếu API `11434` chưa hoạt động.
 4. Tải `EMBEDDING_MODEL` nếu model chưa có trên máy.
 5. Warm-up endpoint embedding để model sẵn sàng trước khi nhận tài liệu.
 6. Kiểm tra/bật container `knowledgehub-qdrant` (Qdrant 1.18.3), tạo qua Compose stack `ai-project` nếu chưa có, và chờ API sẵn sàng. Không dùng `QDRANT_EXE`; Qdrant remote chỉ kiểm tra API.
 7. Kiểm tra/tải local chat model (`LOCAL_AI_MODEL`, mặc định trong script là `qwen3.5:9b`) và chạy KnowledgeHub qua supervisor. `[Startup] Completed.` chỉ in sau HTTP listen thành công.
 
-Các lần chạy sau không tải lại model vì Ollama đã lưu model cục bộ. Nếu Ollama hoặc Qdrant đã chạy, script chỉ kiểm tra và sử dụng tiến trình hiện có.
+Các lần chạy sau không tải lại model vì Ollama đã lưu model cục bộ. Nếu Ollama hoặc Qdrant đã chạy, script chỉ kiểm tra và sử dụng tiến trình hiện có. Trên Mac mini cần cài Docker Desktop, Ollama CLI và Node.js; `.env.postgres` cùng file khóa mã hóa phải có đường dẫn hợp lệ trên macOS. `scripts/start-local.ps1` vẫn là script Windows cũ, không còn được gọi bởi `npm start`.
 
 Mở:
 
@@ -497,6 +497,22 @@ npm run backup:pg     # Dump schema app, gồm lịch sử giao diện
 npm run restore:pg -- <file.dump> knowledgehub_restore_kiemtra
 npm run data:pg:export -- <thu-muc-moi>
 ```
+
+Backup và import chung PostgreSQL + Qdrant (hai collection schema/tài liệu) và file thư viện:
+
+Trong giao diện admin, mở **Cài đặt hệ thống → PostgreSQL + Qdrant**. Nút **Tạo backup ngay** tự tạm dừng request và worker ghi của ứng dụng trong lúc chụp dữ liệu, rồi mở lại. Tải file `.khbackup` về để cất giữ; muốn restore thì tải file này lên, kiểm tra, xem kế hoạch và import vào database/collection mới. Các tiến trình ghi bên ngoài ứng dụng vẫn cần được quản lý riêng.
+
+```powershell
+# Dừng ứng dụng, supervisor và mọi job ghi PostgreSQL/Qdrant trước khi chạy.
+$env:BACKUP_APP_STOPPED='1'
+npm run backup:all
+npm run backup:verify -- <thu-muc-goi-backup>
+npm run backup:import -- <thu-muc-goi-backup> knowledgehub_restore_kiemtra --dry-run
+npm run backup:import -- <thu-muc-goi-backup> knowledgehub_restore_kiemtra
+Remove-Item Env:BACKUP_APP_STOPPED
+```
+
+Import tạo database mới và hai collection Qdrant mới có tiền tố `<ten_database>_`; không đổi cấu hình ứng dụng. File `library_files` và `library_content` được giữ trong `<goi>/files` để sao chép vào `KNOWLEDGEHUB_DATA_DIR` của môi trường đích khi cutover. Xem `*-import-report.json` ở thư mục cha gói trước khi chuyển traffic; chỉ chuyển khi `readyForCutover=true`. Khóa `APP_DATA_ENCRYPTION_KEY_FILE` phải được cấp riêng ở đích. Snapshot Qdrant cần server tương thích; nên diễn tập import ở môi trường riêng trước. Giữ gói backup ngoài máy chủ theo chính sách lưu giữ và bảo vệ như dữ liệu nhạy cảm.
 
 Restore chỉ tạo database mới tên `knowledgehub_restore_*`, không ghi đè database live. Backup/restore đã được rehearsal và đối soát dữ liệu hiện tại. Export JSON legacy chưa bao gồm `ui_chat_sessions`; phục hồi đầy đủ cần database dump, file tài liệu và khóa mã hóa. Sau khi PostgreSQL đã nhận ghi mới, không đổi về JSON cũ hoặc chạy importer ghi đè. Volume Docker không thay thế backup; lịch backup tự động/PITR chưa được cấu hình.
 

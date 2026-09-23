@@ -19,6 +19,7 @@ const apiKeyService = require('../services/api_key_service');
 const qdrantService = require('../services/qdrant_service');
 const authService = require('../services/auth_service');
 const settingsService = require('../services/settings_service').createSettingsService();
+const backupAdmin = require('../services/backup_admin_service');
 const embedChatService = require('../services/embed_chat_service');
 const { memoryService: conversationMemoryService } = require('../memory_core');
 const knowledgeCore = require('../knowledge_core');
@@ -194,7 +195,7 @@ function isAdminMutation(pathname, method) {
 }
 
 function isAdminOnlyResource(pathname) {
-  return /^\/api\/(settings|providers|ai-providers|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
+  return /^\/api\/(settings|backups|providers|ai-providers|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
 }
 
 function getSessionToken(req) {
@@ -338,6 +339,39 @@ async function handleRequest(req, res) {
   if (currentAccount?.role !== 'admin' && (isAdminOnlyResource(pathname) || isAdminMutation(pathname, req.method) || pathname.startsWith('/api/exports/'))) {
     res.writeHead(403, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ status: 'error', message: 'FORBIDDEN', requestId }));
+    return;
+  }
+
+  if (pathname === '/api/backups' || pathname.startsWith('/api/backups/')) {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      if (pathname.startsWith('/api/backups/download/') && req.method === 'GET') {
+        const id = decodeURIComponent(pathname.slice('/api/backups/download/'.length));
+        const { stream, bytes, filename } = await backupAdmin.download(id);
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${filename}"`, 'Content-Length': bytes });
+        await new Promise((resolve, reject) => { stream.on('error', reject); res.on('error', reject); res.on('finish', resolve); res.on('close', () => reject(new Error('Download interrupted.'))); stream.pipe(res); });
+        return;
+      }
+      if (pathname === '/api/backups/upload' && req.method === 'POST') {
+        if (req.headers['content-type'] !== 'application/octet-stream') throw Object.assign(new Error('Chỉ nhận file .khbackup.'), { statusCode: 415 });
+        const result = await backupAdmin.upload(req);
+        res.writeHead(201, { 'Content-Type': 'application/json; charset=UTF-8' }); res.end(JSON.stringify(result)); return;
+      }
+      res.setHeader('Content-Type', 'application/json; charset=UTF-8');
+      let result;
+      if (pathname === '/api/backups' && req.method === 'GET') result = await backupAdmin.list();
+      else if (pathname === '/api/backups/status' && req.method === 'GET') result = backupAdmin.status();
+      else if (pathname === '/api/backups/create' && req.method === 'POST') result = backupAdmin.start('backup');
+      else if (pathname === '/api/backups/verify' && req.method === 'POST') result = backupAdmin.start('verify', await readJsonBody(req));
+      else if (pathname === '/api/backups/import' && req.method === 'POST') result = backupAdmin.start('import', await readJsonBody(req));
+      else { res.writeHead(405); res.end(JSON.stringify({ message: 'Phương thức không được hỗ trợ.' })); return; }
+      res.writeHead(pathname === '/api/backups' || pathname.endsWith('/status') ? 200 : 202);
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      if (res.headersSent) { if (!res.writableEnded) res.destroy(); return; }
+      res.writeHead(error.statusCode || 400);
+      res.end(JSON.stringify({ message: error.statusCode ? error.message : 'Không thể thực hiện thao tác backup.' }));
+    }
     return;
   }
 

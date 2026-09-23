@@ -47,10 +47,10 @@ function Ensure-PostgresDocker {
         }
     } else {
         if ($postgresContainer -ne 'knowledgehub-postgres') { throw 'Configured PostgreSQL container does not exist. Create it before starting the app.' }
-        $composeFile = Join-Path $ProjectRoot 'compose.postgres.yml'
+        $composeFile = Join-Path $ProjectRoot 'compose.docker.yml'
         $postgresEnv = Join-Path $ProjectRoot '.env.postgres'
         if (-not (Test-Path -LiteralPath $composeFile) -or -not (Test-Path -LiteralPath $postgresEnv)) {
-            throw 'compose.postgres.yml and .env.postgres are required to create PostgreSQL.'
+            throw 'compose.docker.yml and .env.postgres are required to create PostgreSQL.'
         }
         Write-Host '[Startup] Creating PostgreSQL container from Compose...'
         if ((Invoke-StartupDocker -DockerArguments @('compose', '--project-directory', $ProjectRoot, '--env-file', $postgresEnv, '-f', $composeFile, 'up', '-d', 'postgres')) -ne 0) {

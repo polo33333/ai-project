@@ -14,10 +14,10 @@ function Ensure-QdrantDocker {
             throw 'Cannot start Qdrant container. Check Docker status and port conflicts.'
         }
     } else {
-        $composeFile = Join-Path $ProjectRoot 'compose.postgres.yml'
+        $composeFile = Join-Path $ProjectRoot 'compose.docker.yml'
         $postgresEnv = Join-Path $ProjectRoot '.env.postgres'
         if (-not (Test-Path -LiteralPath $composeFile) -or -not (Test-Path -LiteralPath $postgresEnv)) {
-            throw 'compose.postgres.yml and .env.postgres are required to create Qdrant.'
+            throw 'compose.docker.yml and .env.postgres are required to create Qdrant.'
         }
         if ((Invoke-StartupDocker -DockerArguments @('compose', '--project-directory', $ProjectRoot, '--env-file', $postgresEnv, '-f', $composeFile, 'up', '-d', '--no-deps', 'qdrant')) -ne 0) {
             throw 'Cannot create Qdrant container. Check Compose configuration and port conflicts.'

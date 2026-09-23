@@ -99,6 +99,7 @@
       if (!response.ok) throw new Error(data.message || 'Không thể tải cấu hình.');
       renderSettings(data); showMessage('Có thể chỉnh sửa các thuộc tính bên dưới. Các thay đổi sẽ có hiệu lực sau khi khởi động lại.', 'success');
       window.checkSettingsConnection(true);
+      window.loadStorageBackups();
     } catch (error) { el('settings-fields')?.replaceChildren(); showMessage(error.message, 'error'); }
     finally { loading = false; }
   };
@@ -205,5 +206,76 @@
       if (buttonIcon) buttonIcon.className = 'fa-solid fa-rotate';
       if (buttonLabel) buttonLabel.textContent = 'Kiểm tra lại';
     }
+  };
+
+  let backupJobTimer;
+  const backupMessage = (message, error = false) => { const node = el('settings-backup-message'); if (node) { node.textContent = message; node.dataset.tone = error ? 'error' : ''; } };
+  const backupResult = value => { const node = el('settings-backup-result'); if (node) node.textContent = value ? JSON.stringify(value, null, 2) : ''; if (value && el('settings-backup-details')) el('settings-backup-details').open = true; };
+  async function backupApi(route, body) {
+    const response = await fetch(`/api/backups${route}`, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+    return data;
+  }
+  window.loadStorageBackups = async function (preserveMessage = false) {
+    try {
+      const data = await backupApi('');
+      const select = el('settings-backup-select'); const selected = select.value;
+      select.replaceChildren();
+      for (const item of data.packages) { const option = document.createElement('option'); option.value = item.id; option.textContent = `${item.id} · ${item.components} thành phần`; select.append(option); }
+      if (data.packages.some(item => item.id === selected)) select.value = selected;
+      el('settings-backup-mode').textContent = data.available ? 'Sẵn sàng' : 'Cần PostgreSQL';
+      el('settings-backup-create').disabled = !data.available;
+      el('settings-backup-import').disabled = !data.available || data.packages.length === 0;
+      if (!preserveMessage) backupMessage(data.available ? 'Có thể tạo backup ngay. Tác vụ sẽ tạm dừng ghi trong lúc chụp dữ liệu.' : 'Chức năng này cần APP_STORAGE_BACKEND=postgres.');
+      const status = await backupApi('/status');
+      if (status.job?.state === 'running') watchBackupJob();
+      else if (status.job) { backupResult(status.job); if (status.job.state === 'failed') backupMessage(status.job.error || 'Tác vụ thất bại.', true); }
+    } catch (error) { backupMessage(error.message, true); }
+  };
+  async function startBackupAction(route, body) {
+    try {
+      const data = await backupApi(route, body);
+      backupResult(data.job);
+      backupMessage('Tác vụ đang chạy. Kết quả sẽ cập nhật tự động.');
+      watchBackupJob();
+    } catch (error) { backupMessage(error.message, true); }
+  }
+  function watchBackupJob() {
+    clearTimeout(backupJobTimer);
+    const poll = async () => {
+      try {
+        const { job } = await backupApi('/status');
+        backupResult(job);
+        if (job?.state === 'running') { backupJobTimer = setTimeout(poll, 1500); return; }
+        backupMessage(job?.state === 'complete' ? 'Tác vụ hoàn tất. Xem kết quả bên dưới.' : job?.error || 'Tác vụ thất bại.', job?.state !== 'complete');
+        if (job?.state === 'complete') await window.loadStorageBackups(true);
+      } catch (error) { backupMessage(error.message, true); }
+    };
+    poll();
+  }
+  window.startStorageBackup = () => startBackupAction('/create', {});
+  window.downloadStorageBackup = () => { const id = el('settings-backup-select').value; if (id) window.location.href = `/api/backups/download/${encodeURIComponent(id)}`; };
+  window.updateStorageBackupFileName = () => { const file = el('settings-backup-file').files[0]; el('settings-backup-file-name').textContent = file ? file.name : 'Chưa chọn file .khbackup'; };
+  window.uploadStorageBackup = async () => {
+    const file = el('settings-backup-file').files[0];
+    if (!file || !file.name.endsWith('.khbackup')) { backupMessage('Chọn file .khbackup để tải lên.', true); return; }
+    backupMessage('Đang tải file lên và kiểm tra checksum…');
+    try {
+      const response = await fetch('/api/backups/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || `HTTP ${response.status}`);
+      await window.loadStorageBackups();
+      el('settings-backup-select').value = result.id;
+      backupResult(result);
+      backupMessage('Đã tải lên và kiểm tra gói. Có thể xem kế hoạch rồi restore vào đích mới.');
+    } catch (error) { backupMessage(error.message, true); }
+  };
+  window.verifyStorageBackup = () => { const id = el('settings-backup-select').value; if (id) startBackupAction('/verify', { id }); };
+  window.importStorageBackup = dryRun => {
+    const id = el('settings-backup-select').value; const target = el('settings-backup-target').value.trim();
+    if (!id || !/^knowledgehub_restore_[a-z0-9_]+$/.test(target)) { backupMessage('Chọn gói và nhập tên database đích bắt đầu bằng knowledgehub_restore_.', true); return; }
+    if (!dryRun && !window.confirm(`Import gói ${id} vào database và collection mới có tiền tố ${target}?`)) return;
+    startBackupAction('/import', { id, target, dryRun });
   };
 })();

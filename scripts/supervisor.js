@@ -13,16 +13,20 @@ let restartRequested = false;
 
 function readEnvFile() {
   const values = {};
-  if (!fs.existsSync(envPath)) return values;
-  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const match = line.trim().match(/^([A-Z][A-Z0-9_]*)\s*=(.*)$/);
-    if (match) values[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+  for (const file of [envPath, path.join(root, '.env.postgres')]) {
+    if (!fs.existsSync(file)) continue;
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      const match = line.trim().match(/^([A-Z][A-Z0-9_]*)\s*=(.*)$/);
+      if (match && values[match[1]] === undefined) values[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+    }
   }
   return values;
 }
 
 function start() {
-  const env = { ...process.env, ...readEnvFile(), KNOWLEDGEHUB_SUPERVISED: 'true' };
+  const explicit = { ...process.env };
+  for (const key of (process.env.KNOWLEDGEHUB_STARTUP_LOADED_KEYS || '').split(',').filter(Boolean)) delete explicit[key];
+  const env = { ...readEnvFile(), ...explicit, KNOWLEDGEHUB_SUPERVISED: 'true' };
   child = fork(serverPath, [], { cwd: root, env, stdio: ['inherit', 'inherit', 'inherit', 'ipc'] });
   console.log(`[Supervisor] Server started (PID ${child.pid}).`);
 
