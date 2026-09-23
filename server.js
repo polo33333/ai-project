@@ -1,9 +1,11 @@
 ﻿'use strict';
 
 const http = require('node:http');
+const https = require('node:https');
 const storage = require('./src/backend/storage');
 const { handleStoredRequest } = require('./src/backend/storage/http');
 const backupGate = require('./src/backend/services/backup_gate');
+const { loadTlsConfig } = require('./src/backend/services/tls_config');
 storage.loadEnvironment();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -13,6 +15,7 @@ let knowledgeCore;
 let outbox;
 let shuttingDown = false;
 async function start() {
+  const tls = loadTlsConfig(process.env, __dirname);
   await storage.bootstrapStorage();
   let router;
   await storage.run(async () => {
@@ -27,7 +30,7 @@ async function start() {
     pause: async () => { if (knowledgeCore) await knowledgeCore.stop(); if (outbox) await outbox.stop(); },
     resume: async () => { if (process.env.KNOWLEDGEHUB_WORKERS_ENABLED !== 'false') { if (knowledgeCore) await storage.run(() => knowledgeCore.start()); if (outbox) outbox.start(); } }
   });
-  server = http.createServer((req, res) => {
+  const handleRequest = (req, res) => {
     const pathname = new URL(req.url, 'http://' + HOST).pathname;
     if (pathname === '/health/live') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -49,10 +52,12 @@ async function start() {
       if (!res.headersSent) res.writeHead(error.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
       if (!res.writableEnded) res.end(JSON.stringify({ status: 'error', message: 'INVALID_REQUEST', requestId: req.requestId || null }));
     });
-  });
+  };
+  server = tls ? https.createServer(tls, handleRequest) : http.createServer(handleRequest);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(PORT, HOST, resolve); });
-  console.log('[KnowledgeHub] http://' + (HOST === '0.0.0.0' ? 'localhost' : HOST) + ':' + PORT + ' storage=' + (process.env.APP_STORAGE_BACKEND || 'json'));
-  if (HOST === '0.0.0.0') console.log(`[KnowledgeHub] LAN access: http://<mac-mini-ip>:${PORT}`);
+  const protocol = tls ? 'https' : 'http';
+  console.log(`[KnowledgeHub] ${protocol}://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT} storage=${process.env.APP_STORAGE_BACKEND || 'json'}`);
+  if (HOST === '0.0.0.0') console.log(`[KnowledgeHub] LAN access: ${protocol}://<mac-mini-ip>:${PORT}`);
   if (process.env.KNOWLEDGEHUB_SUPERVISED === 'true') console.log('[Startup] Completed.');
 }
 async function shutdown(signal) {
@@ -69,6 +74,8 @@ async function shutdown(signal) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 start().catch(async error => {
-  console.error('[Startup] Failed:', error.code || error.message);
+  if (error.message === 'Unsupported state or unable to authenticate data') {
+    console.error('[Startup] Failed: PostgreSQL contains encrypted data that cannot be decrypted with the configured APP_DATA_ENCRYPTION_KEY or APP_DATA_ENCRYPTION_KEY_FILE. After a restore, use the encryption key from the machine that created the backup; changing database credentials will not fix this.');
+  } else console.error('[Startup] Failed:', error.code || error.message);
   await storage.close().catch(() => {}); process.exitCode = 1;
 });

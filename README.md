@@ -259,6 +259,8 @@ Mở:
 
 Để mở ứng dụng từ máy khác trong cùng mạng LAN, đặt `HOST=0.0.0.0` và `PORT=5500` trong `.env` **trên máy chạy server**, khởi động lại bằng `npm start`, rồi truy cập `http://<IP-của-máy-chạy-server>:5500`. `0.0.0.0` là địa chỉ lắng nghe, không dùng làm địa chỉ truy cập trong trình duyệt. Nếu Mac mini vẫn không nhận kết nối, kiểm tra Firewall của macOS có cho phép kết nối đến Node.js và hai máy có thể liên lạc trong cùng mạng. Các URL `localhost` ở trên chỉ dùng khi truy cập ngay trên máy chạy server.
 
+Để bật HTTPS trực tiếp, đặt `HTTPS_CERT_FILE` và `HTTPS_KEY_FILE` trong `.env` tới certificate và private key dạng PEM rồi khởi động lại. Ví dụ trên Mac: `HTTPS_CERT_FILE=/Users/kdone/certs/server.crt` và `HTTPS_KEY_FILE=/Users/kdone/certs/server.key`. Khi đó truy cập `https://<IP-hoặc-tên-máy>:5500`; cổng này chỉ nhận HTTPS. Certificate phải hợp lệ với IP hoặc tên máy dùng trên trình duyệt; certificate tự ký sẽ cần được tin cậy trên máy khách. Không lưu private key vào Git. Nếu dùng reverse proxy xử lý TLS, để trống hai biến này và giữ backend ở HTTP.
+
 Tài khoản khởi tạo lần đầu:
 
 ```text

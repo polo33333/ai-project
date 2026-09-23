@@ -185,7 +185,8 @@ function configuredOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return null;
   if (configured.includes(origin)) return origin;
-  const hostOrigin = `${process.env.TRUST_PROXY === 'true' && req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
+  const protocol = process.env.TRUST_PROXY === 'true' ? String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() : '';
+  const hostOrigin = `${protocol || (req.socket?.encrypted ? 'https' : 'http')}://${req.headers.host}`;
   return origin === hostOrigin ? origin : null;
 }
 
@@ -202,12 +203,16 @@ function getSessionToken(req) {
   return parseCookies(req).kh_session || '';
 }
 
-function setSessionCookie(res, token, maxAge) {
-  res.setHeader('Set-Cookie', `kh_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`);
+function secureRequest(req) {
+  return Boolean(req.socket?.encrypted || (process.env.TRUST_PROXY === 'true' && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https'));
 }
 
-function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', 'kh_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+function setSessionCookie(req, res, token, maxAge) {
+  res.setHeader('Set-Cookie', `kh_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureRequest(req) ? '; Secure' : ''}`);
+}
+
+function clearSessionCookie(req, res) {
+  res.setHeader('Set-Cookie', `kh_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureRequest(req) ? '; Secure' : ''}`);
 }
 
 function isPublicPath(pathname) {
@@ -266,7 +271,7 @@ async function handleRequest(req, res) {
   // Without this refresh, the browser drops an otherwise active session eight
   // hours after the original login.
   if (currentAccount && pathname.startsWith('/api/')) {
-    setSessionCookie(res, sessionToken, authService.getSessionMaxAge());
+    setSessionCookie(req, res, sessionToken, authService.getSessionMaxAge());
   }
   if(currentAccount) req.storageOwner=`account:${currentAccount.id}`;
   if (pathname === '/health/live' || pathname === '/health/ready') {
@@ -306,7 +311,7 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ status: 'error', message: 'Sai tài khoản hoặc mật khẩu.' }));
         return;
       }
-      setSessionCookie(res, result.token, result.maxAge);
+      setSessionCookie(req, res, result.token, result.maxAge);
       loggerService.addLog('SUCCESS', 'Authentication', `Đăng nhập thành công: ${result.account.username}`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', account: result.account }));
@@ -319,7 +324,7 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/auth/logout' && req.method === 'POST') {
     authService.logout(getSessionToken(req));
-    clearSessionCookie(res);
+    clearSessionCookie(req, res);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ status: 'success' }));
     return;
@@ -388,7 +393,7 @@ async function handleRequest(req, res) {
       if(!checkChatRateLimit('password-change:'+currentAccount.id)) throw Object.assign(new Error('Bạn thao tác quá nhanh. Hãy thử lại sau.'),{statusCode:429});
       const {currentPassword,newPassword}=await readJsonBody(req);
       authService.changePassword(currentAccount.id,currentPassword,newPassword);
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
       res.end(JSON.stringify({status:'success',message:'Đã đổi mật khẩu. Vui lòng đăng nhập lại.'}));
     } catch(error) {
