@@ -160,8 +160,7 @@ main.main-content.settings-workspace { overflow-y:auto; overscroll-behavior-y:co
 .settings-backup-message { padding:10px 12px; border:1px solid #dbeafe; border-radius:9px; background:#f7fbff; }
 .settings-backup-message[data-tone="error"] { color:#c23b51; border-color:#edc5cc; background:#fff0f2; }
 .settings-backup-grid { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(0,1.5fr); gap:14px; align-items:stretch; }
-.settings-backup-pane { display:flex; flex-direction:column; gap:18px; min-width:0; padding:20px; border:1px solid #ddd9fa; border-radius:12px; background:#faf9ff; }
-.settings-backup-pane + .settings-backup-pane { border-color:#cfe8e7; background:#f7fdfc; }
+.settings-backup-pane { display:flex; flex-direction:column; gap:18px; min-width:0; padding:20px; border:1px solid #dbe3ef; border-radius:12px; background:#f7f9fd; }
 .settings-backup-pane-heading { display:flex; align-items:flex-start; gap:12px; }
 .settings-backup-pane-icon { display:grid; place-items:center; flex:0 0 38px; width:38px; height:38px; border-radius:10px; color:var(--primary); background:var(--primary-light); }
 .settings-backup-pane h4 { margin:1px 0 5px; color:var(--text-primary); font-size:15px; }
@@ -193,12 +192,22 @@ main.main-content.settings-workspace { overflow-y:auto; overscroll-behavior-y:co
 .settings-backup-details pre { margin:0; padding:12px 13px; max-height:240px; overflow:auto; border-top:1px solid var(--border-color); color:var(--text-secondary); font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
 @media(max-width:1120px) { .settings-backup-grid { grid-template-columns:1fr; } }
 @media(max-width:680px) { .settings-backup-card { padding:16px; } .settings-backup-heading { flex-direction:column; gap:8px; } .settings-backup-pane { padding:15px; } .settings-backup-control-row { flex-wrap:wrap; } .settings-backup-control-row .form-control { flex-basis:100%; width:100%; } }
-:root[data-theme="dark"] .settings-backup-pane { border-color:#494277; background:#211f38; }
-:root[data-theme="dark"] .settings-backup-pane + .settings-backup-pane { border-color:#2c6163; background:#192d33; }
-:root[data-theme="dark"] .settings-backup-message, :root[data-theme="dark"] .settings-backup-details { border-color:#40516d; background:#17253a; }
-:root[data-theme="dark"] .settings-backup-file-picker { border-color:#53637c; background:#111d30; }
-:root[data-theme="dark"] .settings-backup-step-content .settings-backup-file-button { border-color:#635ca5; color:#ded9ff; background:#37315f; }
-:root[data-theme="dark"] .settings-backup-step-content .settings-backup-file-button:hover { background:#49417c; }
+:root[data-theme="dark"] .settings-backup-card { border-color:#3a4b65; background:#1b283b; }
+:root[data-theme="dark"] .settings-backup-heading > strong { color:#c4d2e6; background:#29394e; }
+:root[data-theme="dark"] .settings-backup-pane { border-color:#43516d; background:#243047; }
+:root[data-theme="dark"] .settings-backup-pane-icon, :root[data-theme="dark"] .settings-backup-step-number { color:#c2b8ff; background:#39385c; }
+:root[data-theme="dark"] .settings-backup-pane + .settings-backup-pane .settings-backup-pane-icon { color:#a1e5d6; background:#2c4c50; }
+:root[data-theme="dark"] .settings-backup-message, :root[data-theme="dark"] .settings-backup-details { border-color:#445872; background:#22334a; }
+:root[data-theme="dark"] .settings-backup-message[data-tone="error"] { color:#ffbdc5; border-color:#8a5260; background:#482c39; }
+:root[data-theme="dark"] .settings-backup-hint { border-color:#42516c; }
+:root[data-theme="dark"] .settings-backup-hint code { color:#c9bfff; }
+:root[data-theme="dark"] .settings-backup-control-row .form-control, :root[data-theme="dark"] .settings-backup-file-picker { color:#edf3fd; border-color:#52657d; background:#17263a; }
+:root[data-theme="dark"] .settings-backup-control-row .form-control:focus, :root[data-theme="dark"] .settings-backup-file-picker:focus-within { border-color:#a99bff; box-shadow:0 0 0 3px #a99bff30; }
+:root[data-theme="dark"] .settings-backup-step-content .settings-backup-file-button { border-color:#766eb3; color:#eeeaff; background:#494476; }
+:root[data-theme="dark"] .settings-backup-step-content .settings-backup-file-button:hover { border-color:#958bcf; background:#5a528e; }
+:root[data-theme="dark"] .settings-backup-control-row .btn-secondary-sm, :root[data-theme="dark"] .settings-backup-pane-actions .btn-secondary-sm { color:#d8e4f5; border-color:#50627b; background:#2b3c51; }
+:root[data-theme="dark"] .settings-backup-control-row .btn-secondary-sm:hover, :root[data-theme="dark"] .settings-backup-pane-actions .btn-secondary-sm:hover { border-color:#7184a0; background:#364b64; }
+:root[data-theme="dark"] .settings-backup-details pre { border-color:#445872; }
 @media(max-width:1100px) { .settings-qdrant-card { grid-template-columns:auto minmax(0,1fr) 136px; } .settings-qdrant-metrics { grid-column:2 / -1; grid-row:2; min-width:0; } }
 @media(max-width:900px) { .settings-layout { grid-template-columns:1fr; } }
 @media(max-width:680px) { .settings-qdrant-card { grid-template-columns:auto minmax(0,1fr); } .settings-qdrant-action, .settings-qdrant-metrics { grid-column:1 / -1; width:100%; } .settings-qdrant-action { margin-bottom:12px; } .settings-qdrant-action .btn-primary { width:100%; } .settings-qdrant-metrics { grid-row:auto; } .settings-toolbar { grid-template-columns:1fr auto; } .settings-toolbar-title { grid-column:1 / -1; } .settings-search-wrap { max-width:none; } .settings-toolbar-actions > span { display:none; } .settings-property { grid-template-columns:1fr; gap:10px; } .settings-property-result { text-align:left; } .settings-input, .settings-value, .settings-switch { width:100%; margin-left:0; } .settings-switch { justify-content:flex-start; } }

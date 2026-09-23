@@ -181,7 +181,7 @@ function parseCookies(req) {
 }
 
 function configuredOrigin(req) {
-  const configured = String(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
+  const configured = String(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(value => value.trim().replace(/\/$/, '')).filter(Boolean);
   const origin = req.headers.origin;
   if (!origin) return null;
   if (configured.includes(origin)) return origin;
