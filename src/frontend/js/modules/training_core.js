@@ -73,7 +73,7 @@ window.renderSkillEditor = function renderSkillEditor() {
   const data = window.skillEditorData;
   if (!data) return;
   const list = document.getElementById('skill-editor-items');
-  if (list) list.innerHTML = (data.skills || []).map(skill => `<button type="button" class="skill-editor-item ${skill.id === window.selectedSkillId ? 'active' : ''}" onclick="selectSkillForEditing(decodeURIComponent('${encodeURIComponent(skill.id)}'))"><span>${escapeTrainingHtml(skill.name)}</span><small>${escapeTrainingHtml(skill.id)}</small><i class="fa-solid ${skill.enabled ? 'fa-circle-check' : 'fa-circle-pause'}"></i></button>`).join('') || '<div class="training-empty">Chưa có skill.</div>';
+  if (list) list.innerHTML = (data.skills || []).map(skill => `<button type="button" class="skill-editor-item ${skill.id === window.selectedSkillId ? 'active' : ''}" aria-current="${skill.id === window.selectedSkillId}" onclick="selectSkillForEditing(decodeURIComponent('${encodeURIComponent(skill.id)}'))"><span>${escapeTrainingHtml(skill.name)}</span><small>${escapeTrainingHtml(skill.id)}</small><i class="fa-solid ${skill.enabled ? 'fa-circle-check' : 'fa-circle-pause'}" aria-hidden="true"></i></button>`).join('') || '<div class="training-empty">Chưa có skill.</div>';
   const skill = selectedSkill();
   const form = document.getElementById('skill-editor-form');
   if (form) form.hidden = !skill;
@@ -208,10 +208,10 @@ window.renderTrainingCases = function renderTrainingCases() {
     if (!groupedCases.has(groupCode)) groupedCases.set(groupCode, []);
     groupedCases.get(groupCode).push(item);
   });
-  const caseMarkup = item => `
+  const caseMarkup = (item, groupCode) => `
     <div class="training-case-shell">
       <details class="training-case">
-        <summary><div class="training-case-main"><div class="training-case-identity"><time><i class="fa-regular fa-calendar"></i>${escapeTrainingHtml(formatTrainingTime(item.timestamp))}</time><span class="training-case-meta-separator" aria-hidden="true"></span><span class="training-case-id"><i class="fa-solid fa-hashtag" aria-hidden="true"></i>${escapeTrainingHtml(item.id)}</span></div><strong>${escapeTrainingHtml(item.question)}</strong><div>${item.failures.map(code => `<span class="training-failure-chip">${escapeTrainingHtml(trainingFailureLabel(code))}</span>`).join('')}</div></div><div class="training-case-meta"><span class="training-status ${String(item.rating || 'none')}">${escapeTrainingHtml(item.rating || 'chưa đánh giá')}</span><i class="fa-solid fa-chevron-down"></i></div></summary>
+        <summary><div class="training-case-main"><div class="training-case-identity"><time><i class="fa-regular fa-calendar"></i>${escapeTrainingHtml(formatTrainingTime(item.timestamp))}</time><span class="training-case-meta-separator" aria-hidden="true"></span><span class="training-case-id"><i class="fa-solid fa-hashtag" aria-hidden="true"></i>${escapeTrainingHtml(item.id)}</span></div><strong>${escapeTrainingHtml(item.question)}</strong><div>${item.failures.filter(code => code !== groupCode).map(code => `<span class="training-failure-chip">${escapeTrainingHtml(trainingFailureLabel(code))}</span>`).join('')}</div></div><div class="training-case-meta"><span class="training-status ${String(item.rating || 'none')}">${escapeTrainingHtml(item.rating || 'chưa đánh giá')}</span><i class="fa-solid fa-chevron-down"></i></div></summary>
         <div class="training-case-body">
           <section><h4>Câu trả lời hiện tại</h4><pre>${escapeTrainingHtml(item.reply || '—')}</pre></section>
           <section><h4>SQL</h4><pre>${escapeTrainingHtml(item.sql || 'Chưa có SQL')}</pre></section>
@@ -225,6 +225,6 @@ window.renderTrainingCases = function renderTrainingCases() {
   document.getElementById('training-cases').innerHTML = [...groupedCases.entries()].map(([code, items]) => `
     <section class="training-case-group">
       <header><span><i class="fa-solid fa-triangle-exclamation"></i>${escapeTrainingHtml(trainingFailureLabel(code))}</span><strong>${items.length} case</strong></header>
-      <div>${items.map(caseMarkup).join('')}</div>
+      <div>${items.map(item => caseMarkup(item, code)).join('')}</div>
     </section>`).join('') || '<div class="training-empty"><i class="fa-solid fa-circle-check"></i> Không có case phù hợp bộ lọc.</div>';
 };

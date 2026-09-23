@@ -32,7 +32,10 @@ aside.sidebar { padding: 22px 14px 14px; }
 .copilot-btn-text { gap: 3px; }
 .copilot-title { font-size: 13px; font-weight: 600; }
 .copilot-subtitle { font-size: 10px; }
-.sidebar-nav { min-height: 0; padding: 0 2px; scrollbar-width: thin; scrollbar-color: #dde0ed transparent; }
+.sidebar-nav { min-height: 0; padding: 0 12px 0 2px; scrollbar-width: thin; scrollbar-color: #c7d2e3 transparent; }
+.sidebar-nav::-webkit-scrollbar { width: 6px; }
+.sidebar-nav::-webkit-scrollbar-thumb { border-radius: 999px; background: #c7d2e3; }
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: #9baaca; }
 .nav-section { margin-bottom: 20px; }
 .nav-section-title { font-size: 9px; letter-spacing: 1.1px; padding: 0 12px 9px; color: #838ba2; }
 .nav-list { gap: 3px; }

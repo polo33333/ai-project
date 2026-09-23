@@ -9,8 +9,10 @@
   <div id="training-cases-view" class="training-layout audit-data-panel">
     <main class="training-cases-panel">
       <div class="training-toolbar">
+        <div class="training-toolbar-head">
         <div class="training-panel-title"><span><i class="fa-solid fa-list-check"></i> Case cải tiến</span><small id="training-case-count"></small></div>
         <div class="training-status-tabs" role="tablist"><button id="training-tab-pending" class="active" type="button" role="tab" onclick="setTrainingStatusTab('pending')"><i class="fa-regular fa-clock"></i> Cần xử lý <b>0</b></button><button id="training-tab-resolved" type="button" role="tab" onclick="setTrainingStatusTab('resolved')"><i class="fa-solid fa-circle-check"></i> Đã xử lý <b>0</b></button></div>
+        </div>
         <div class="training-filters">
           <label><i class="fa-solid fa-magnifying-glass"></i><input id="training-search" placeholder="Tìm câu hỏi, ID..." oninput="renderTrainingCases()"></label>
           <select id="training-failure-filter" onchange="renderTrainingCases()"><option value="">Tất cả lỗi</option></select>
@@ -21,12 +23,12 @@
     </main>
   </div>
   <div id="training-skills-view" class="skill-editor-layout audit-data-panel" hidden>
-    <aside class="skill-editor-list"><div class="training-panel-title"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Skills</span></div><div id="skill-editor-items"></div></aside>
+    <aside class="skill-editor-list"><div class="training-panel-title"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Danh sách skill</span></div><div id="skill-editor-items"></div></aside>
     <main class="skill-editor-form"><div class="skill-editor-form-inner"><header class="skill-editor-heading"><div><span>CẤU HÌNH SKILL</span><h3>Chỉnh hướng dẫn cho model</h3><p>Chọn skill bên trái, chỉnh nội dung rồi lưu để áp dụng cho lượt chat mới.</p></div><div id="skill-editor-status" class="skill-editor-status"></div></header><form id="skill-editor-form" onsubmit="saveSelectedSkill(event)">
-      <div class="skill-form-row"><label>Tên hiển thị<input id="skill-editor-name" maxlength="100" required></label><label>Mã skill<input id="skill-editor-id" readonly></label></div>
+      <div class="skill-form-row"><label for="skill-editor-name">Tên hiển thị<input id="skill-editor-name" maxlength="100" required></label><label for="skill-editor-id">Mã skill<input id="skill-editor-id" readonly></label></div>
       <div class="skill-editor-work-grid">
-        <section class="skill-editor-main-field"><label>Hướng dẫn xử lý<textarea id="skill-editor-instructions" maxlength="6000" rows="12" required oninput="updateSkillCharacterCount()" placeholder="Mô tả cách model cần xử lý yêu cầu thuộc skill này..."></textarea><small id="skill-editor-char-count">0/6000</small></label><p><i class="fa-solid fa-circle-info"></i> Hướng dẫn này được thêm vào prompt hệ thống. Nên viết ngắn, rõ và không chứa dữ liệu mẫu nhạy cảm.</p></section>
-        <aside class="skill-editor-options"><div class="skill-editor-option-head"><span>Thiết lập</span><label class="skill-toggle"><input id="skill-editor-enabled" type="checkbox"><span>Bật skill</span></label></div><label>Áp dụng cho<input id="skill-editor-intents" readonly></label><fieldset><legend>Ví dụ gợi ý</legend><div id="skill-editor-examples"></div></fieldset></aside>
+        <section class="skill-editor-main-field"><label for="skill-editor-instructions">Hướng dẫn xử lý</label><textarea id="skill-editor-instructions" maxlength="6000" rows="12" required oninput="updateSkillCharacterCount()" placeholder="Mô tả cách model cần xử lý yêu cầu thuộc skill này..."></textarea><div class="skill-editor-field-meta"><p><i class="fa-solid fa-circle-info"></i> Hướng dẫn được thêm vào prompt hệ thống. Viết ngắn gọn và không chứa dữ liệu nhạy cảm.</p><small id="skill-editor-char-count">0/6000</small></div></section>
+        <div class="skill-editor-options-wrap"><span class="skill-editor-options-title">Thiết lập</span><aside class="skill-editor-options"><div class="skill-editor-option-head"><label class="skill-toggle"><input id="skill-editor-enabled" type="checkbox"><span>Bật skill</span></label></div><label for="skill-editor-intents">Áp dụng cho<input id="skill-editor-intents" readonly></label><fieldset><legend>Ví dụ gợi ý</legend><div id="skill-editor-examples"></div></fieldset></aside></div>
       </div>
       <div class="skill-editor-actions"><span><i class="fa-regular fa-circle-check"></i> Chỉ các lượt chat mới nhận thay đổi</span><div><button class="btn-secondary-sm" type="button" onclick="resetSelectedSkill()"><i class="fa-solid fa-rotate-left"></i> Hoàn tác</button><button id="skill-editor-save" class="btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi</button></div></div>
     </form></div></main>

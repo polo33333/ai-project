@@ -36,17 +36,22 @@
     const input = backdrop.querySelector('.ui-dialog-input');
     if (input) input.value = options.defaultValue || '';
     const submit = backdrop.querySelector('.ui-dialog-submit');
+    if (input && options.requiredValue !== undefined) {
+      const updateSubmit = () => { submit.disabled = input.value !== options.requiredValue; };
+      input.addEventListener('input', updateSubmit);
+      updateSubmit();
+    }
 
     return new Promise(resolve => {
       const finish = confirmed => closeDialog(confirmed ? (input ? input.value : true) : null);
       const keyHandler = event => {
         if (event.key === 'Escape') finish(false);
-        if (event.key === 'Enter' && (!input || !event.shiftKey)) { event.preventDefault(); finish(true); }
+        if (event.key === 'Enter' && (!input || !event.shiftKey) && !submit.disabled) { event.preventDefault(); finish(true); }
       };
       activeDialog = { backdrop, resolve, previousFocus: document.activeElement, keyHandler };
       backdrop.querySelector('.ui-dialog-close').onclick = () => finish(false);
       backdrop.querySelector('.ui-dialog-cancel').onclick = () => finish(false);
-      submit.onclick = () => finish(true);
+      submit.onclick = () => { if (!submit.disabled) finish(true); };
       backdrop.onclick = event => { if (event.target === backdrop) finish(false); };
       document.addEventListener('keydown', keyHandler);
       document.body.appendChild(backdrop);

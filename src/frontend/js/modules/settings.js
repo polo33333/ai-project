@@ -281,7 +281,11 @@
       catch (error) { backupMessage(error.message, true); }
       return;
     }
-    const confirm = window.prompt(`Thao tác này sẽ ghi đè database ${database} và hai collection Qdrant hiện tại. Nhập chính xác tên database để xác nhận:`, '');
+    const confirm = await window.showUiPrompt(
+      `Thao tác này sẽ ghi đè database ${database} và hai collection Qdrant hiện tại. Nhập chính xác tên database để xác nhận:`,
+      '',
+      { title: 'Xác nhận khôi phục Database', confirmText: 'Khôi phục DB hiện tại', icon: 'fa-database', tone: 'danger', requiredValue: database }
+    );
     if (confirm !== database) { if (confirm !== null) backupMessage('Tên xác nhận không khớp; chưa khôi phục.', true); return; }
     try {
       const result = await backupApi('/restore-current', { id, confirm });
