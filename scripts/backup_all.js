@@ -97,7 +97,9 @@ async function verify(directory) {
     if (!stat.isFile() || stat.size !== item.bytes || await digest(parent) !== item.sha256) throw new Error(`Backup checksum failed: ${item.relativePath}`);
   }
   const required = collectionsFromManifest(manifest);
-  if (!names.has('postgres/app.dump') || required.some(c => !names.has(`qdrant/${c}.snapshot`))) throw new Error('Backup lacks required storage components.');
+  const absent = manifest.absentCollections || [];
+  if (!Array.isArray(absent) || new Set(absent).size !== absent.length || absent.some(c => !required.includes(c))) throw new Error('Invalid absent collection list.');
+  if (!names.has('postgres/app.dump') || required.some(c => names.has(`qdrant/${c}.snapshot`) === absent.includes(c))) throw new Error('Backup lacks required storage components.');
   return manifest;
 }
 
@@ -106,7 +108,7 @@ function collectionsFromManifest(manifest) {
   return manifest.collections;
 }
 
-async function backup({ coordinated = false } = {}) {
+async function backup({ coordinated = false, allowMissingCollections = false } = {}) {
   if (process.env.APP_STORAGE_BACKEND !== 'postgres') throw new Error('APP_STORAGE_BACKEND=postgres is required.');
   if (!coordinated && process.env.BACKUP_APP_STOPPED !== '1') throw new Error('Stop the app and all writers, then set BACKUP_APP_STOPPED=1.');
   const names = collections();
@@ -117,6 +119,7 @@ async function backup({ coordinated = false } = {}) {
   const base = path.join(backupRoot, `${backupId}.partial`);
   await fsp.mkdir(base, { mode: 0o700 });
   const components = [];
+  const absentCollections = [];
   try {
     await fsp.mkdir(path.join(base, 'postgres'));
     await fsp.mkdir(path.join(base, 'qdrant'));
@@ -126,7 +129,12 @@ async function backup({ coordinated = false } = {}) {
     const qdrantVersion = (await request(new URL('/', endpoint))).version;
     for (const name of names) {
       const route = `/collections/${encodeURIComponent(name)}`;
-      const info = (await request(new URL(route, endpoint))).result;
+      let info;
+      try { info = (await request(new URL(route, endpoint))).result; }
+      catch (error) {
+        if (allowMissingCollections && /\(HTTP 404\)/.test(error.message)) { absentCollections.push(name); continue; }
+        throw error;
+      }
       if (!info) throw new Error(`Qdrant collection missing: ${name}`);
       const created = (await request(new URL(`${route}/snapshots?wait=true`, endpoint), 'POST')).result;
       if (!safeName(created?.name)) throw new Error('Qdrant returned an unsafe snapshot name.');
@@ -137,7 +145,7 @@ async function backup({ coordinated = false } = {}) {
     const dataDir = path.resolve(process.env.KNOWLEDGEHUB_DATA_DIR || path.join(root, 'data'));
     for (const folder of ['library_files', 'library_content']) await copyTree(path.join(dataDir, folder), path.join(base, 'files', folder), base, components);
     const database = process.env.APP_PG_DATABASE || process.env.POSTGRES_DB || 'knowledgehub_app';
-    const manifest = { version: 1, backupId, status: 'complete', createdAt: new Date().toISOString(), storageBackend: 'postgres', consistencyMode: coordinated ? 'http-writers-paused' : 'application-stopped', postgresDatabase: database, qdrantVersion, collections: names, embeddingModel: process.env.EMBEDDING_MODEL || 'bge-m3', encryptionKeyRequired: true, components };
+    const manifest = { version: 1, backupId, status: 'complete', createdAt: new Date().toISOString(), storageBackend: 'postgres', consistencyMode: coordinated ? 'http-writers-paused' : 'application-stopped', postgresDatabase: database, qdrantVersion, collections: names, absentCollections, embeddingModel: process.env.EMBEDDING_MODEL || 'bge-m3', encryptionKeyRequired: true, components };
     await fsp.writeFile(path.join(base, 'manifest.json'), JSON.stringify(manifest, null, 2), { flag: 'wx', mode: 0o600 });
     await verify(base);
     const destination = path.join(backupRoot, backupId);
@@ -152,6 +160,7 @@ async function backup({ coordinated = false } = {}) {
 async function importPackage(directory, target, { dryRun = false } = {}) {
   const base = path.resolve(directory);
   const manifest = await verify(base);
+  if (manifest.absentCollections?.length) throw new Error('Cannot import a backup with missing Qdrant collections.');
   if (!/^knowledgehub_restore_[a-z0-9_]+$/.test(target || '')) throw new Error('Target must be a NEW knowledgehub_restore_* database.');
   const targetCollections = collectionsFromManifest(manifest).map(name => `${target}_${name}`);
   if (targetCollections.some(name => !safeName(name))) throw new Error('Unsafe target collection name.');
@@ -211,6 +220,7 @@ async function importPackage(directory, target, { dryRun = false } = {}) {
 async function restoreCurrent(directory, { dryRun = false } = {}) {
   const base = path.resolve(directory);
   const manifest = await verify(base);
+  if (manifest.absentCollections?.length) throw new Error('Cannot restore from a backup with missing Qdrant collections.');
   const database = process.env.APP_PG_DATABASE || process.env.POSTGRES_DB || 'knowledgehub_app';
   const names = collections();
   if (process.env.APP_STORAGE_BACKEND !== 'postgres') throw new Error('Current storage backend must be PostgreSQL.');
@@ -222,7 +232,7 @@ async function restoreCurrent(directory, { dryRun = false } = {}) {
   const targetVersion = (await request(new URL('/', endpoint))).version;
   if (manifest.qdrantVersion && targetVersion && manifest.qdrantVersion.split('.').slice(0, 2).join('.') !== targetVersion.split('.').slice(0, 2).join('.')) throw new Error('Qdrant version mismatch.');
   // Save the live state before the first destructive operation. The caller keeps the app stopped on failure.
-  const safety = await backup();
+  const safety = await backup({ allowMissingCollections: true });
   const report = { ...plan, safetyBackup: safety.backup, readyForRestart: false, steps: [] };
   const reportFile = path.join(path.dirname(base), `${manifest.backupId}-restore-current-report.json`);
   try {

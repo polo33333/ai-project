@@ -34,6 +34,22 @@ test('backup package rejects traversal entries', async () => {
   } finally { await fs.rm(base, { recursive: true, force: true }); }
 });
 
+test('safety backup records absent Qdrant collections but cannot be restored', async () => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'kh-backup-test-'));
+  try {
+    const relativePath = 'postgres/app.dump';
+    await fs.mkdir(path.join(base, 'postgres'));
+    await fs.writeFile(path.join(base, relativePath), relativePath);
+    const manifest = { version: 1, status: 'complete', collections: ['schema', 'documents'], absentCollections: ['schema', 'documents'], components: [{ relativePath, bytes: Buffer.byteLength(relativePath), sha256: crypto.createHash('sha256').update(relativePath).digest('hex') }] };
+    await fs.writeFile(path.join(base, 'manifest.json'), JSON.stringify(manifest));
+    await verify(base);
+    await assert.rejects(restoreCurrent(base, { dryRun: true }), /missing Qdrant collections/);
+    delete manifest.absentCollections;
+    await fs.writeFile(path.join(base, 'manifest.json'), JSON.stringify(manifest));
+    await assert.rejects(verify(base), /lacks required storage components/);
+  } finally { await fs.rm(base, { recursive: true, force: true }); }
+});
+
 test('restore-current preview targets configured live database and collections', async () => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'kh-backup-test-'));
   const previous = Object.fromEntries(['APP_STORAGE_BACKEND', 'APP_PG_DATABASE', 'QDRANT_COLLECTION', 'QDRANT_DOCUMENT_COLLECTION'].map(key => [key, process.env[key]]));
