@@ -51,7 +51,8 @@ async function start() {
     });
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(PORT, HOST, resolve); });
-  console.log('[KnowledgeHub] http://' + HOST + ':' + PORT + ' storage=' + (process.env.APP_STORAGE_BACKEND || 'json'));
+  console.log('[KnowledgeHub] http://' + (HOST === '0.0.0.0' ? 'localhost' : HOST) + ':' + PORT + ' storage=' + (process.env.APP_STORAGE_BACKEND || 'json'));
+  if (HOST === '0.0.0.0') console.log(`[KnowledgeHub] LAN access: http://<mac-mini-ip>:${PORT}`);
   if (process.env.KNOWLEDGEHUB_SUPERVISED === 'true') console.log('[Startup] Completed.');
 }
 async function shutdown(signal) {

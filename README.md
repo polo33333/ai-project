@@ -254,8 +254,10 @@ Ollama là tùy chọn ở bước khởi động; các chức năng cần embed
 
 Mở:
 
-- Dashboard: <http://localhost:3000>
-- Login: <http://localhost:3000/login.html>
+- Dashboard trên máy chạy server: `http://localhost:<PORT>/`
+- Đăng nhập trên máy chạy server: `http://localhost:<PORT>/login.html`
+
+Để mở ứng dụng từ máy khác trong cùng mạng LAN, đặt `HOST=0.0.0.0` và `PORT=5500` trong `.env` **trên máy chạy server**, khởi động lại bằng `npm start`, rồi truy cập `http://<IP-của-máy-chạy-server>:5500`. `0.0.0.0` là địa chỉ lắng nghe, không dùng làm địa chỉ truy cập trong trình duyệt. Nếu Mac mini vẫn không nhận kết nối, kiểm tra Firewall của macOS có cho phép kết nối đến Node.js và hai máy có thể liên lạc trong cùng mạng. Các URL `localhost` ở trên chỉ dùng khi truy cập ngay trên máy chạy server.
 
 Tài khoản khởi tạo lần đầu:
 
