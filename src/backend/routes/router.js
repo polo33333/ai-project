@@ -364,6 +364,7 @@ async function handleRequest(req, res) {
       else if (pathname === '/api/backups/create' && req.method === 'POST') result = backupAdmin.start('backup');
       else if (pathname === '/api/backups/verify' && req.method === 'POST') result = backupAdmin.start('verify', await readJsonBody(req));
       else if (pathname === '/api/backups/import' && req.method === 'POST') result = backupAdmin.start('import', await readJsonBody(req));
+      else if (pathname === '/api/backups/restore-current' && req.method === 'POST') result = await backupAdmin.restoreIntoCurrent(await readJsonBody(req));
       else { res.writeHead(405); res.end(JSON.stringify({ message: 'Phương thức không được hỗ trợ.' })); return; }
       res.writeHead(pathname === '/api/backups' || pathname.endsWith('/status') ? 200 : 202);
       res.end(JSON.stringify(result));

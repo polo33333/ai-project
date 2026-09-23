@@ -3,7 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { backup, verify, importPackage } = require('../../../scripts/backup_all');
+const { backup, verify, importPackage, restoreCurrent } = require('../../../scripts/backup_all');
 const { createStream, unpack, receiveUpload } = require('./backup_bundle');
 const backupGate = require('./backup_gate');
 const { loadEnvironment } = require('../storage/postgres/config');
@@ -32,10 +32,22 @@ async function list() {
     packages.push({ id: entry.name, createdAt: manifest.createdAt, components: manifest.components?.length || 0, collections: manifest.collections || [] });
   }
   packages.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { available: available(), packages };
+  return { available: available(), currentDatabase: process.env.APP_PG_DATABASE || process.env.POSTGRES_DB || 'knowledgehub_app', packages };
 }
 
 function status() { return { available: available(), job }; }
+
+async function restoreIntoCurrent(input = {}) {
+  if (!available()) throw Object.assign(new Error('Cần APP_STORAGE_BACKEND=postgres.'), { statusCode: 409 });
+  if (job?.state === 'running') throw Object.assign(new Error('Đang có tác vụ khác chạy.'), { statusCode: 409 });
+  const directory = await packageDirectory(input.id);
+  const plan = await restoreCurrent(directory, { dryRun: true });
+  if (input.dryRun === true) return plan;
+  if (input.confirm !== plan.database) throw Object.assign(new Error('Nhập đúng tên database hiện tại để xác nhận ghi đè.'), { statusCode: 400 });
+  if (process.env.KNOWLEDGEHUB_SUPERVISED !== 'true' || typeof process.send !== 'function') throw Object.assign(new Error('Khôi phục DB hiện tại cần chạy ứng dụng bằng npm start.'), { statusCode: 409 });
+  setTimeout(() => process.send?.({ type: 'restore-current', id: input.id }), 500).unref();
+  return { scheduled: true, ...plan, message: 'Máy chủ sẽ dừng, tạo backup an toàn, khôi phục DB hiện tại rồi khởi động lại.' };
+}
 
 async function download(id) { return createStream(await packageDirectory(id)); }
 
@@ -79,4 +91,4 @@ function start(action, input = {}) {
   return { accepted: true, job: current };
 }
 
-module.exports = { list, status, start, download, upload };
+module.exports = { list, status, start, download, upload, restoreIntoCurrent };

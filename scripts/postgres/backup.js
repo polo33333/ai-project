@@ -10,7 +10,7 @@ const { createPool } = require('../../src/backend/storage/postgres/pool');
 const { sha256 } = require('../../src/backend/storage/postgres/crypto');
 
 function docker(command, args, { output, input, database } = {}) {
-  const config = connectionConfig();
+  const config = process.env.APP_PG_USER && process.env.APP_PG_PASSWORD ? connectionConfig() : connectionConfig({ bootstrap: true });
   const container = process.env.APP_PG_DOCKER_CONTAINER || 'knowledgehub-postgres';
   const child = spawn('docker', ['exec', ...(input ? ['-i'] : []), '-e', 'PGPASSWORD', container, command,
     '-h', '127.0.0.1', '-U', config.user, '-d', database || config.database, ...args], {

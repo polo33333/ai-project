@@ -225,6 +225,7 @@
       for (const item of data.packages) { const option = document.createElement('option'); option.value = item.id; option.textContent = `${item.id} · ${item.components} thành phần`; select.append(option); }
       if (data.packages.some(item => item.id === selected)) select.value = selected;
       el('settings-backup-mode').textContent = data.available ? 'Sẵn sàng' : 'Cần PostgreSQL';
+      el('settings-backup-target').value = data.currentDatabase || 'Chưa xác định';
       el('settings-backup-create').disabled = !data.available;
       el('settings-backup-import').disabled = !data.available || data.packages.length === 0;
       if (!preserveMessage) backupMessage(data.available ? 'Có thể tạo backup ngay. Tác vụ sẽ tạm dừng ghi trong lúc chụp dữ liệu.' : 'Chức năng này cần APP_STORAGE_BACKEND=postgres.');
@@ -272,10 +273,28 @@
     } catch (error) { backupMessage(error.message, true); }
   };
   window.verifyStorageBackup = () => { const id = el('settings-backup-select').value; if (id) startBackupAction('/verify', { id }); };
-  window.importStorageBackup = dryRun => {
-    const id = el('settings-backup-select').value; const target = el('settings-backup-target').value.trim();
-    if (!id || !/^knowledgehub_restore_[a-z0-9_]+$/.test(target)) { backupMessage('Chọn gói và nhập tên database đích bắt đầu bằng knowledgehub_restore_.', true); return; }
-    if (!dryRun && !window.confirm(`Import gói ${id} vào database và collection mới có tiền tố ${target}?`)) return;
-    startBackupAction('/import', { id, target, dryRun });
+  window.importStorageBackup = async dryRun => {
+    const id = el('settings-backup-select').value; const database = el('settings-backup-target').value.trim();
+    if (!id || !database || database === 'Chưa xác định') { backupMessage('Chọn gói backup hợp lệ.', true); return; }
+    if (dryRun) {
+      try { const result = await backupApi('/restore-current', { id, dryRun: true }); backupResult(result); backupMessage('Đã kiểm tra kế hoạch ghi đè DB hiện tại.'); }
+      catch (error) { backupMessage(error.message, true); }
+      return;
+    }
+    const confirm = window.prompt(`Thao tác này sẽ ghi đè database ${database} và hai collection Qdrant hiện tại. Nhập chính xác tên database để xác nhận:`, '');
+    if (confirm !== database) { if (confirm !== null) backupMessage('Tên xác nhận không khớp; chưa khôi phục.', true); return; }
+    try {
+      const result = await backupApi('/restore-current', { id, confirm });
+      backupResult(result); backupMessage('Máy chủ đang dừng để khôi phục. Trang sẽ tải lại khi hoàn tất.');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const deadline = Date.now() + 5 * 60 * 1000;
+      let sawServerStop = false;
+      while (Date.now() < deadline) {
+        try { const response = await fetch('/health/ready', { cache: 'no-store' }); if (!response.ok) sawServerStop = true; else if (sawServerStop) { window.location.reload(); return; } }
+        catch (_) { sawServerStop = true; }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      backupMessage('Chưa thấy máy chủ khởi động lại. Kiểm tra log supervisor và báo cáo restore trên máy chủ.', true);
+    } catch (error) { backupMessage(error.message, true); }
   };
 })();

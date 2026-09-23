@@ -168,6 +168,8 @@ main.main-content.settings-workspace { overflow-y:auto; overscroll-behavior-y:co
 .settings-backup-pane-heading p { max-width:600px; font-size:12px; }
 .settings-backup-pane-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:4px; }
 .settings-backup-pane-actions button, .settings-backup-control-row button { min-height:38px; white-space:nowrap; }
+.settings-backup-control-row .settings-backup-danger { border-color:#b91c1c; background:#b91c1c; color:#fff; }
+.settings-backup-control-row .settings-backup-danger:hover:not(:disabled) { border-color:#991b1b; background:#991b1b; }
 .settings-backup-hint { margin-top:auto !important; padding-top:15px; border-top:1px solid var(--border-color); font-size:12px !important; }
 .settings-backup-hint code { color:var(--primary); }
 .settings-backup-step { display:grid; grid-template-columns:24px minmax(0,1fr); gap:10px; }
