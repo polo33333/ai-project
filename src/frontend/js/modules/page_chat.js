@@ -671,7 +671,7 @@ function createThinkingBubble(containerId) {
         <canvas class="chat-thinking-spinner" width="22" height="22" aria-hidden="true"></canvas>
         <div class="chat-thinking-copy">
           <strong>Đang xử lý yêu cầu</strong>
-          <span id="${containerId}-current">AI đang phân tích yêu cầu của bạn...</span>
+          <span id="${containerId}-current">Phân tích yêu cầu của bạn...</span>
         </div>
         <button type="button" class="chat-thinking-toggle" aria-label="Xem chi tiết quá trình xử lý" aria-expanded="false">
           <i class="fa-solid fa-chevron-down"></i>

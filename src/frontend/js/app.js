@@ -1570,7 +1570,7 @@ window.sendChatMessage = async function sendChatMessage() {
       <div class="chat-thinking-card">
         <div class="chat-thinking-head">
           <canvas class="chat-thinking-spinner" width="22" height="22"></canvas>
-          <div class="chat-thinking-copy"><strong>Thinking</strong><span id="${thinkingId}-current">AI đang phân tích yêu cầu của bạn...</span></div>
+          <div class="chat-thinking-copy"><strong>Thinking</strong><span id="${thinkingId}-current">Phân tích yêu cầu của bạn...</span></div>
           <button type="button" class="chat-thinking-toggle" aria-label="Xem chi tiết quá trình xử lý" aria-expanded="false"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
         <div id="${thinkingId}-steps" class="chat-thinking-steps" hidden></div>
