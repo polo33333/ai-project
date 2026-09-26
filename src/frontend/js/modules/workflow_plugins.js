@@ -11,7 +11,7 @@
   }
   function notify(message, failed = false) { const box = document.getElementById('wp-message'); if (box) { box.textContent = message; box.style.color = failed ? '#b91c1c' : ''; } else if (typeof showToast === 'function') showToast(message, failed ? 'error' : 'success'); }
   function button(text, action) { const element = document.createElement('button'); element.type = 'button'; element.className = 'btn-secondary-sm'; element.textContent = text; element.onclick = async () => { element.disabled = true; try { await action(); } catch (failure) { notify(failure.message, true); } finally { element.disabled = false; } }; return element; }
-  const nodeIcons = { transform: 'fa-wand-magic-sparkles', condition: 'fa-code-branch', assert: 'fa-shield-halved', collect: 'fa-list-check', delay: 'fa-clock', sql: 'fa-database', source: 'fa-layer-group', export: 'fa-file-export' };
+  const nodeIcons = { chart: 'fa-chart-column', transform: 'fa-wand-magic-sparkles', condition: 'fa-code-branch', assert: 'fa-shield-halved', collect: 'fa-list-check', delay: 'fa-clock', sql: 'fa-database', source: 'fa-layer-group', export: 'fa-file-export' };
   function icon(className) { const element = document.createElement('i'); element.className = `fa-solid ${className}`; element.setAttribute('aria-hidden', 'true'); return element; }
   function confirmDelete(message) {
     return new Promise(resolve => {
@@ -479,6 +479,7 @@
     const choose = (key, label, options, fallback) => {
       const wrap = document.createElement('label'); wrap.textContent = label; const select = document.createElement('select'); select.setAttribute('aria-label',label); options.forEach(([key, name]) => select.appendChild(new Option(name, key))); select.value = value[key] ?? fallback; wrap.appendChild(select); container.appendChild(wrap); readers[key] = () => select.value;
     };
+    if (type === 'chart') { readers.data = valueEditor(container, value.data ?? '', 'Dữ liệu biểu đồ'); text('x', 'Cột tháng'); text('y', 'Cột sản lượng'); text('title', 'Tiêu đề'); text('unit', 'Đơn vị', 'kWh'); }
     if (type === 'transform') readers.mapping = valueEditor(container, value.mapping || {}, 'Trường dữ liệu cần tạo');
     if (['condition', 'assert'].includes(type)) {
       choose('operator', 'Phép so sánh', [['equals', 'Bằng'], ['notEquals', 'Khác'], ['greaterThan', 'Lớn hơn'], ['lessThan', 'Nhỏ hơn'], ['exists', 'Có giá trị'], ['contains', 'Chứa'], ['in', 'Thuộc danh sách']], 'equals');
@@ -665,7 +666,7 @@
         const badge = document.createElement('small'); badge.textContent = step.type; stepButton.appendChild(badge);
         const stepName = field(wrapper, 'Tên bước', step.name || step.id), stepId = field(wrapper, 'ID bước', step.id);
         const typeLabel = document.createElement('label'); typeLabel.textContent = 'Thao tác của bước';
-        const type = document.createElement('select'); type.setAttribute('aria-label', 'Thao tác của bước'); Object.entries({ transform: 'Chuẩn hóa dữ liệu', condition: 'Kiểm tra điều kiện', assert: 'Xác thực dữ liệu', collect: 'Thu thập thông tin', delay: 'Chờ', sql: 'Truy vấn SQL', source: 'Đọc nguồn SQL / API / file / bước trước', export: 'Xuất file' }).forEach(([value, text]) => type.appendChild(new Option(text, value))); type.value = step.type; typeLabel.appendChild(type); wrapper.appendChild(typeLabel);
+        const type = document.createElement('select'); type.setAttribute('aria-label', 'Thao tác của bước'); Object.entries({ chart: 'Biểu đồ sản lượng', transform: 'Chuẩn hóa dữ liệu', condition: 'Kiểm tra điều kiện', assert: 'Xác thực dữ liệu', collect: 'Thu thập thông tin', delay: 'Chờ', sql: 'Truy vấn SQL', source: 'Đọc nguồn SQL / API / file / bước trước', export: 'Xuất file' }).forEach(([value, text]) => type.appendChild(new Option(text, value))); type.value = step.type; typeLabel.appendChild(type); wrapper.appendChild(typeLabel);
         const configHost = document.createElement('div'); wrapper.appendChild(configHost);
         const savedConfigs = { [step.type]: structuredClone(step.config || {}) }; let activeType = step.type;
         const sourceSelected = (bindingRef, sourceType) => {
@@ -718,7 +719,7 @@
         if (index === 2) section.classList.add('wp-bindings-section');
       });
       configTabs(shared, activeConfigTab, index => { activeConfigTab = index; });
-      saveCurrent = () => { Object.assign(template, { id: templateId.value.trim(), name: name.value, description: description.value, enabled: enabled.checked, examples: examples.value.split('\n').map(value => value.trim()).filter(Boolean), instructions: instructions.value, inputs: slots(), bindings: bindings(), output: output(), fixtures: fixtures(), workflow: { steps: stepEditors.map(read => read()) } }); template.allowedCapabilities = [...new Set(template.workflow.steps.map(step => ({ transform: 'data.transform', condition: 'data.condition', assert: 'data.validate', collect: 'input.collect', delay: 'runtime.delay', sql: 'sql.read', source: 'data.read', export: 'artifact.export' }[step.type])))]; };
+      saveCurrent = () => { Object.assign(template, { id: templateId.value.trim(), name: name.value, description: description.value, enabled: enabled.checked, examples: examples.value.split('\n').map(value => value.trim()).filter(Boolean), instructions: instructions.value, inputs: slots(), bindings: bindings(), output: output(), fixtures: fixtures(), workflow: { steps: stepEditors.map(read => read()) } }); template.allowedCapabilities = [...new Set(template.workflow.steps.map(step => ({ chart: 'data.chart', transform: 'data.transform', condition: 'data.condition', assert: 'data.validate', collect: 'input.collect', delay: 'runtime.delay', sql: 'sql.read', source: 'data.read', export: 'artifact.export' }[step.type])))]; };
     }
     let previous = String(initialIndex); select.onchange = () => { const next = select.value; select.value = previous; try { saveCurrent(); previous = next; updateOptions(next); renderTemplate(); } catch (failure) { notify(failure.message, true); } }; renderTemplate();
     const errors = document.createElement('p'); errors.setAttribute('role', 'alert'); dialog.body.appendChild(errors);
@@ -777,6 +778,40 @@
     return typeof value === 'object' ? JSON.stringify(value) : String(value);
   }
   function renderResult(value, presentation = {}, prefix = '') {
+    if (value?.kind === 'bar-chart' && Array.isArray(value.points)) {
+      const figure = document.createElement('figure');
+      const caption = document.createElement('figcaption'); caption.textContent = value.title + ' (' + value.unit + ')'; figure.appendChild(caption);
+      if (!value.points.length) { const empty = document.createElement('p'); empty.textContent = 'Không có dữ liệu sản lượng điện bán ra.'; figure.appendChild(empty); return figure; }
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 800 360'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', caption.textContent);
+      svg.style.cssText = 'display:block;width:100%;max-width:1000px;height:auto;background:#fff;color:#334155';
+      const draw = (tag, attributes, text) => {
+        const node = document.createElementNS(svg.namespaceURI, tag);
+        for (const [key, val] of Object.entries(attributes)) node.setAttribute(key, String(val));
+        if (text !== undefined) node.textContent = text;
+        svg.appendChild(node); return node;
+      };
+      const max = Math.max(1, ...value.points.map(point => point.value)) * 1.15;
+      for (let i = 0; i <= 4; i++) {
+        const y = 300 - i * 65;
+        draw('line', { x1: 95, y1: y, x2: 780, y2: y, stroke: '#e2e8f0' });
+        draw('text', { x: 85, y: y + 4, 'text-anchor': 'end', 'font-size': 12, fill: '#475569' }, new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, notation: 'compact' }).format(max * i / 4));
+      }
+      draw('path', { d: 'M95 35 V300 H780', fill: 'none', stroke: '#64748b', 'stroke-width': 2 });
+      draw('text', { x: 95, y: 20, 'font-size': 12, fill: '#475569' }, value.unit);
+      const slot = 685 / value.points.length;
+      value.points.forEach((point, index) => {
+        const x = 95 + slot * (index + 0.5), height = point.value / max * 260;
+        const bar = draw('rect', { x: x - slot * 0.3, y: 300 - height, width: slot * 0.6, height, fill: '#2563eb', rx: 3 });
+        const title = document.createElementNS(svg.namespaceURI, 'title'); title.textContent = `${point.label}: ${resultText(point.value)} ${value.unit}`; bar.appendChild(title);
+        if (point.value === 0) draw('circle', { cx: x, cy: 300, r: 3, fill: '#2563eb' });
+        draw('text', { x, y: 290 - height, 'text-anchor': 'middle', 'font-size': 12, fill: '#1e293b' }, resultText(point.value));
+        draw('text', { x, y: 323, 'text-anchor': 'middle', 'font-size': 12, fill: '#475569' }, point.label);
+      });
+      draw('text', { x: 780, y: 350, 'text-anchor': 'end', 'font-size': 12, fill: '#475569' }, 'Tháng');
+      figure.appendChild(svg);
+      return figure;
+    }
     const label = key => presentation.labels?.[prefix ? `${prefix}.${key}` : key] || key;
     if (Array.isArray(value) && value.every(row => row && typeof row === 'object' && !Array.isArray(row))) {
       const wrapper = document.createElement('div'); wrapper.className = 'workflow-result-table';
@@ -797,6 +832,7 @@
         const summary = document.createElement('div'); summary.className = 'wp-result-summary';
         for (const [key, child] of Object.entries(value)) {
           if (tables.some(([tableKey]) => tableKey === key) || (key === 'empty' && typeof child === 'boolean')) continue;
+          if (child?.kind === 'bar-chart') { section.appendChild(renderResult(child, presentation)); continue; }
           const badge = document.createElement('span'); badge.textContent = `${label(key)}: ${resultText(child)}`; summary.appendChild(badge);
         }
         if (summary.childElementCount) section.appendChild(summary);
@@ -822,7 +858,7 @@
     const title = document.createElement('strong'); title.textContent = `${execution.name} · ${statuses[execution.status] || execution.status}`; node.appendChild(title);
     const actions = document.createElement('div'); actions.className = 'wp-execution-actions';
     if (processing) { const loading = document.createElement('div'); loading.className = 'wp-execution-loading'; loading.setAttribute('role', 'status'); loading.innerHTML = '<span class="wp-loading-spinner" aria-hidden="true"></span><span>Đang xử lý yêu cầu…</span>'; node.appendChild(loading); }
-    if (execution.steps?.length) { const list = document.createElement('ol'); for (const step of execution.steps) { const item = document.createElement('li'); item.textContent = `${step.name}: ${statuses[step.status] || ({ PENDING: 'Chưa chạy', SKIPPED: 'Bỏ qua' }[step.status]) || step.status}`; list.appendChild(item); } if (done(execution.status)) { const details = document.createElement('details'); details.className = 'wp-execution-details'; const summary = document.createElement('summary'); summary.textContent = 'Chi tiết thực hiện'; details.append(summary, list); node.appendChild(details); } else node.appendChild(list); }
+    if (execution.steps?.length) { const list = document.createElement('ol'); for (const step of execution.steps) { const item = document.createElement('li'); item.textContent = `${step.name}: ${statuses[step.status] || ({ PENDING: 'Chưa chạy', SKIPPED: 'Bỏ qua' }[step.status]) || step.status}`; list.appendChild(item); } if (done(execution.status) || execution.status === 'WAITING_INPUT') { const details = document.createElement('details'); details.className = 'wp-execution-details'; const summary = document.createElement('summary'); summary.textContent = 'Chi tiết thực hiện'; details.append(summary, list); node.appendChild(details); } else node.appendChild(list); }
     if (execution.error) { const message = document.createElement('p'); message.textContent = execution.error; node.appendChild(message); }
     if (execution.status === 'WAITING_INPUT') {
       const form = document.createElement('form'); const inputs = [];

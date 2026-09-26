@@ -2,7 +2,7 @@
 const crypto = require('node:crypto');
 const ID = /^[a-zA-Z][a-zA-Z0-9_.-]{0,99}$/;
 const forbidden = new Set(['__proto__', 'constructor', 'prototype']);
-const CAPABILITIES = Object.freeze({ transform: 'data.transform', condition: 'data.condition', assert: 'data.validate', collect: 'input.collect', delay: 'runtime.delay', sql: 'sql.read', source: 'data.read', export: 'artifact.export' });
+const CAPABILITIES = Object.freeze({ chart: 'data.chart', transform: 'data.transform', condition: 'data.condition', assert: 'data.validate', collect: 'input.collect', delay: 'runtime.delay', sql: 'sql.read', source: 'data.read', export: 'artifact.export' });
 const error = (message, statusCode = 400) => Object.assign(new Error(message), { statusCode });
 function ensure(condition, message) { if (!condition) throw error(message); }
 function safeObject(value, depth = 0) {

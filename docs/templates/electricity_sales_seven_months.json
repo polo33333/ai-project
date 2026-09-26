@@ -1,0 +1,601 @@
+{
+  "manifest": {
+    "id": "electricity_sales",
+    "name": "Báo cáo điện bán ra",
+    "version": 3,
+    "engineContractVersion": 1,
+    "domain": "Điện",
+    "tags": [
+      "sản lượng",
+      "biểu đồ",
+      "Excel"
+    ]
+  },
+  "templates": [
+    {
+      "id": "last_seven_months",
+      "name": "Chi tiết sản lượng điện bán ra",
+      "enabled": true,
+      "description": "Báo cáo sản lượng điện bán ra theo các tháng có dữ liệu mới nhất trong DB. Thu thập số tháng, lựa chọn vẽ biểu đồ và xuất Excel trước khi chạy. Có ít tháng hơn yêu cầu thì chỉ trả số tháng thực có.",
+      "examples": [
+        "Chi tiết sản lượng điện bán ra",
+        "Báo cáo sản lượng điện bán ra",
+        "Vẽ biểu đồ sản lượng điện bán ra 7 tháng gần nhất và xuất file"
+      ],
+      "instructions": "Chọn mẫu khi yêu cầu báo cáo sản lượng điện bán ra. Bắt buộc thu thập months, drawChart, exportFile; không tự gán mặc định. Chỉ trích xuất những lựa chọn được người dùng nêu rõ. Hỏi lại phần còn thiếu. Câu hỏi chung chưa nêu tháng hoặc lựa chọn biểu đồ/xuất file phải chờ bổ sung. Có hoặc không đều là câu trả lời hợp lệ cho lựa chọn boolean. Lấy N tháng có dữ liệu mới nhất trong DB, không dựa vào ngày hiện tại, không chèn tháng trống. SUM(TotalQty) theo ElectricityOutputDate, đơn vị kWh. Chỉ vẽ biểu đồ khi drawChart=true; chỉ xuất Excel khi exportFile=true.",
+      "inputs": {
+        "months": {
+          "label": "Số tháng gần nhất trong DB",
+          "ask": "Bạn muốn xem bao nhiêu tháng có dữ liệu gần nhất (1–100 tháng)?",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "drawChart": {
+          "label": "Vẽ biểu đồ",
+          "ask": "Bạn có muốn vẽ biểu đồ không?",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        "exportFile": {
+          "label": "Xuất file Excel",
+          "ask": "Bạn có muốn xuất file Excel không?",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      },
+      "allowedCapabilities": [
+        "input.collect",
+        "data.transform",
+        "data.condition",
+        "sql.read",
+        "data.validate",
+        "data.chart",
+        "artifact.export"
+      ],
+      "bindings": {
+        "electricity": {
+          "dbSourceId": "db-src-1785684548077",
+          "tables": [
+            "dbo.T_ElectricityOutput"
+          ],
+          "parameters": {
+            "months": {
+              "slot": "months",
+              "type": "integer"
+            }
+          },
+          "sql": "SELECT Thang, SanLuong_kWh FROM (\nSELECT CONVERT(varchar(7), ElectricityOutputDate, 120) AS Thang,\nROW_NUMBER() OVER (ORDER BY CONVERT(varchar(7), ElectricityOutputDate, 120) DESC) AS MonthRank,\nCOALESCE(SUM(TotalQty), 0) AS SanLuong_kWh\nFROM dbo.T_ElectricityOutput\nWHERE ElectricityOutputDate IS NOT NULL\nGROUP BY CONVERT(varchar(7), ElectricityOutputDate, 120)\n ) AS LatestMonths WHERE MonthRank <= @months ORDER BY Thang ASC"
+        }
+      },
+      "workflow": {
+        "steps": [
+          {
+            "id": "collect",
+            "name": "1. Thu thập yêu cầu báo cáo",
+            "type": "collect",
+            "config": {
+              "slots": [
+                "months",
+                "drawChart",
+                "exportFile"
+              ]
+            }
+          },
+          {
+            "id": "prepare",
+            "name": "2. Xác định phạm vi báo cáo",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "months": "{{input.months}}",
+                "period": "Tối đa {{input.months}} tháng có dữ liệu mới nhất trong DB",
+                "unit": "kWh"
+              }
+            }
+          },
+          {
+            "id": "query",
+            "name": "3. Tổng hợp điện bán ra theo tháng",
+            "type": "sql",
+            "config": {
+              "bindingRef": "electricity"
+            }
+          },
+          {
+            "id": "validate",
+            "name": "4. Kiểm tra giới hạn số tháng",
+            "type": "condition",
+            "config": {
+              "left": "{{input.months}}",
+              "operator": "lessThan",
+              "right": "{{steps.query.rows.length}}"
+            }
+          },
+          {
+            "id": "check",
+            "name": "5. Xác thực số tháng",
+            "type": "assert",
+            "config": {
+              "left": "{{steps.validate}}",
+              "operator": "equals",
+              "right": false,
+              "message": "Kết quả vượt quá số tháng yêu cầu."
+            }
+          },
+          {
+            "id": "normalize",
+            "name": "6. Chuẩn bị bảng sản lượng",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "rows": "{{steps.query.rows}}",
+                "unit": "{{steps.prepare.unit}}"
+              }
+            }
+          },
+          {
+            "id": "chart",
+            "name": "7. Vẽ biểu đồ khi được yêu cầu",
+            "type": "chart",
+            "when": {
+              "left": "{{input.drawChart}}",
+              "operator": "equals",
+              "right": true
+            },
+            "config": {
+              "data": "{{steps.normalize.rows}}",
+              "x": "Thang",
+              "y": "SanLuong_kWh",
+              "title": "Sản lượng điện bán ra theo tháng",
+              "unit": "kWh"
+            }
+          },
+          {
+            "id": "export",
+            "name": "8. Xuất Excel khi được yêu cầu",
+            "type": "export",
+            "when": {
+              "left": "{{input.exportFile}}",
+              "operator": "equals",
+              "right": true
+            },
+            "config": {
+              "data": "{{steps.normalize.rows}}",
+              "format": "xlsx",
+              "filename": "San_luong_dien_ban_ra_{{input.months}}_thang"
+            }
+          },
+          {
+            "id": "complete",
+            "name": "9. Tổng hợp kết quả báo cáo",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "period": "{{steps.prepare.period}}",
+                "chart": "{{steps.chart}}",
+                "rows": "{{steps.normalize.rows}}",
+                "filename": "{{steps.export.filename}}"
+              }
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "period": "{{steps.complete.period}}",
+          "chart": "{{steps.complete.chart}}",
+          "rows": "{{steps.complete.rows}}",
+          "filename": "{{steps.complete.filename}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "period": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "Thang": {
+                    "type": "string"
+                  },
+                  "SanLuong_kWh": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "Thang",
+                  "SanLuong_kWh"
+                ]
+              }
+            }
+          },
+          "required": [
+            "period",
+            "rows"
+          ]
+        },
+        "presentation": {
+          "labels": {
+            "period": "Kỳ báo cáo",
+            "rows": "Sản lượng theo tháng",
+            "rows.Thang": "Tháng",
+            "rows.SanLuong_kWh": "Sản lượng (kWh)",
+            "filename": "File Excel",
+            "chart": "Biểu đồ"
+          }
+        }
+      },
+      "fixtures": [
+        {
+          "input": {
+            "months": 7,
+            "drawChart": true,
+            "exportFile": true
+          },
+          "stepResults": {
+            "query": {
+              "rows": [
+                {
+                  "Thang": "2026-02",
+                  "SanLuong_kWh": 1000
+                },
+                {
+                  "Thang": "2026-03",
+                  "SanLuong_kWh": 2000
+                },
+                {
+                  "Thang": "2026-04",
+                  "SanLuong_kWh": 3000
+                },
+                {
+                  "Thang": "2026-05",
+                  "SanLuong_kWh": 4000
+                },
+                {
+                  "Thang": "2026-06",
+                  "SanLuong_kWh": 5000
+                },
+                {
+                  "Thang": "2026-07",
+                  "SanLuong_kWh": 6000
+                },
+                {
+                  "Thang": "2026-08",
+                  "SanLuong_kWh": 7000
+                }
+              ],
+              "rowCount": 7
+            }
+          },
+          "expected": {
+            "period": "Tối đa 7 tháng có dữ liệu mới nhất trong DB",
+            "chart": {
+              "kind": "bar-chart",
+              "title": "Sản lượng điện bán ra theo tháng",
+              "unit": "kWh",
+              "points": [
+                {
+                  "label": "2026-02",
+                  "value": 1000
+                },
+                {
+                  "label": "2026-03",
+                  "value": 2000
+                },
+                {
+                  "label": "2026-04",
+                  "value": 3000
+                },
+                {
+                  "label": "2026-05",
+                  "value": 4000
+                },
+                {
+                  "label": "2026-06",
+                  "value": 5000
+                },
+                {
+                  "label": "2026-07",
+                  "value": 6000
+                },
+                {
+                  "label": "2026-08",
+                  "value": 7000
+                }
+              ]
+            },
+            "rows": [
+              {
+                "Thang": "2026-02",
+                "SanLuong_kWh": 1000
+              },
+              {
+                "Thang": "2026-03",
+                "SanLuong_kWh": 2000
+              },
+              {
+                "Thang": "2026-04",
+                "SanLuong_kWh": 3000
+              },
+              {
+                "Thang": "2026-05",
+                "SanLuong_kWh": 4000
+              },
+              {
+                "Thang": "2026-06",
+                "SanLuong_kWh": 5000
+              },
+              {
+                "Thang": "2026-07",
+                "SanLuong_kWh": 6000
+              },
+              {
+                "Thang": "2026-08",
+                "SanLuong_kWh": 7000
+              }
+            ],
+            "filename": "fixture.csv"
+          }
+        },
+        {
+          "input": {
+            "months": 7,
+            "drawChart": true,
+            "exportFile": true
+          },
+          "stepResults": {
+            "query": {
+              "rows": [
+                {
+                  "Thang": "2026-02",
+                  "SanLuong_kWh": 1000
+                },
+                {
+                  "Thang": "2026-03",
+                  "SanLuong_kWh": 2000
+                }
+              ],
+              "rowCount": 2
+            }
+          },
+          "expected": {
+            "period": "Tối đa 7 tháng có dữ liệu mới nhất trong DB",
+            "chart": {
+              "kind": "bar-chart",
+              "title": "Sản lượng điện bán ra theo tháng",
+              "unit": "kWh",
+              "points": [
+                {
+                  "label": "2026-02",
+                  "value": 1000
+                },
+                {
+                  "label": "2026-03",
+                  "value": 2000
+                }
+              ]
+            },
+            "rows": [
+              {
+                "Thang": "2026-02",
+                "SanLuong_kWh": 1000
+              },
+              {
+                "Thang": "2026-03",
+                "SanLuong_kWh": 2000
+              }
+            ],
+            "filename": "fixture.csv"
+          }
+        },
+        {
+          "input": {
+            "months": 7,
+            "drawChart": true,
+            "exportFile": true
+          },
+          "stepResults": {
+            "query": {
+              "rows": [],
+              "rowCount": 0
+            }
+          },
+          "expected": {
+            "period": "Tối đa 7 tháng có dữ liệu mới nhất trong DB",
+            "chart": {
+              "kind": "bar-chart",
+              "title": "Sản lượng điện bán ra theo tháng",
+              "unit": "kWh",
+              "points": []
+            },
+            "rows": [],
+            "filename": "fixture.csv"
+          }
+        },
+        {
+          "input": {
+            "months": 2,
+            "drawChart": false,
+            "exportFile": false
+          },
+          "stepResults": {
+            "query": {
+              "rows": [
+                {
+                  "Thang": "2026-02",
+                  "SanLuong_kWh": 1000
+                },
+                {
+                  "Thang": "2026-03",
+                  "SanLuong_kWh": 2000
+                }
+              ],
+              "rowCount": 2
+            }
+          },
+          "expected": {
+            "period": "Tối đa 2 tháng có dữ liệu mới nhất trong DB",
+            "rows": [
+              {
+                "Thang": "2026-02",
+                "SanLuong_kWh": 1000
+              },
+              {
+                "Thang": "2026-03",
+                "SanLuong_kWh": 2000
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "months": 2,
+            "drawChart": false,
+            "exportFile": true
+          },
+          "stepResults": {
+            "query": {
+              "rows": [
+                {
+                  "Thang": "2026-02",
+                  "SanLuong_kWh": 1000
+                },
+                {
+                  "Thang": "2026-03",
+                  "SanLuong_kWh": 2000
+                }
+              ],
+              "rowCount": 2
+            }
+          },
+          "expected": {
+            "period": "Tối đa 2 tháng có dữ liệu mới nhất trong DB",
+            "rows": [
+              {
+                "Thang": "2026-02",
+                "SanLuong_kWh": 1000
+              },
+              {
+                "Thang": "2026-03",
+                "SanLuong_kWh": 2000
+              }
+            ],
+            "filename": "fixture.csv"
+          }
+        },
+        {
+          "input": {
+            "months": 2,
+            "drawChart": true,
+            "exportFile": false
+          },
+          "stepResults": {
+            "query": {
+              "rows": [
+                {
+                  "Thang": "2026-02",
+                  "SanLuong_kWh": 1000
+                },
+                {
+                  "Thang": "2026-03",
+                  "SanLuong_kWh": 2000
+                }
+              ],
+              "rowCount": 2
+            }
+          },
+          "expected": {
+            "period": "Tối đa 2 tháng có dữ liệu mới nhất trong DB",
+            "rows": [
+              {
+                "Thang": "2026-02",
+                "SanLuong_kWh": 1000
+              },
+              {
+                "Thang": "2026-03",
+                "SanLuong_kWh": 2000
+              }
+            ],
+            "chart": {
+              "kind": "bar-chart",
+              "title": "Sản lượng điện bán ra theo tháng",
+              "unit": "kWh",
+              "points": [
+                {
+                  "label": "2026-02",
+                  "value": 1000
+                },
+                {
+                  "label": "2026-03",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        {
+          "input": {
+            "months": 2,
+            "drawChart": true,
+            "exportFile": true
+          },
+          "stepResults": {
+            "query": {
+              "rows": [
+                {
+                  "Thang": "2026-02",
+                  "SanLuong_kWh": 1000
+                },
+                {
+                  "Thang": "2026-03",
+                  "SanLuong_kWh": 2000
+                }
+              ],
+              "rowCount": 2
+            }
+          },
+          "expected": {
+            "period": "Tối đa 2 tháng có dữ liệu mới nhất trong DB",
+            "rows": [
+              {
+                "Thang": "2026-02",
+                "SanLuong_kWh": 1000
+              },
+              {
+                "Thang": "2026-03",
+                "SanLuong_kWh": 2000
+              }
+            ],
+            "chart": {
+              "kind": "bar-chart",
+              "title": "Sản lượng điện bán ra theo tháng",
+              "unit": "kWh",
+              "points": [
+                {
+                  "label": "2026-02",
+                  "value": 1000
+                },
+                {
+                  "label": "2026-03",
+                  "value": 2000
+                }
+              ]
+            },
+            "filename": "fixture.csv"
+          }
+        }
+      ]
+    }
+  ]
+}

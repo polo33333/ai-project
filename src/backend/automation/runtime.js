@@ -19,6 +19,7 @@ function event(run, type, detail = {}) {
   run.events ||= []; run.events.push({ id: run.events.length + 1, type, at: new Date().toISOString(), ...detail });
 }
 async function executePure(step, state) {
+  if (step.type === 'chart') return require('./chart').createChart(resolve(step.config, state));
   if (step.type === 'transform') return resolve(step.config?.mapping || {}, state);
   if (step.type === 'condition') return condition(step.config, state);
   if (step.type === 'assert') { ensure(condition(step.config, state), step.config.message || 'Điều kiện kết quả chưa đạt.'); return { valid: true }; }
