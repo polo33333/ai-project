@@ -120,6 +120,13 @@
   };
   const chartColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#a855f7', '#14b8a6', '#f97316'];
   const renderEmbedChart = spec => {
+    if (spec?.kind === 'bar-chart' && Array.isArray(spec.points)) {
+      if (!spec.points.length) return '<section class="kh-embed-chart">Không có dữ liệu sản lượng để vẽ biểu đồ.</section>';
+      spec = {
+        type: 'bar', title: `${spec.title || 'Biểu đồ dữ liệu'}${spec.unit ? ` (${spec.unit})` : ''}`,
+        data: { labels: spec.points.map(point => point.label), datasets: [{ data: spec.points.map(point => point.value) }] }
+      };
+    }
     if (!spec || !spec.data || !Array.isArray(spec.data.datasets)) return '';
     const labels = Array.isArray(spec.data.labels) ? spec.data.labels : [];
     const datasets = spec.data.datasets.filter(item => Array.isArray(item.data));
@@ -260,6 +267,7 @@
     for(const [key,value] of Object.entries(execution.result||{})){
       if(key==='empty'&&typeof value==='boolean')continue;
       const title=document.createElement('h4');title.textContent=execution.presentation?.labels?.[key]||key;node.appendChild(title);
+      if(value?.kind==='bar-chart'&&Array.isArray(value.points)){const wrapper=document.createElement('div');wrapper.innerHTML=renderEmbedChart(value);node.appendChild(wrapper);continue;}
       if(Array.isArray(value)&&value.every(row=>row&&typeof row==='object')){const keys=execution.presentation?.columns?.[key]||[...new Set(value.flatMap(row=>Object.keys(row)))];const wrapper=document.createElement('div');wrapper.className='kh-embed-table-wrap';wrapper.innerHTML=value.length?`<table><thead><tr>${keys.map(column=>`<th>${escapeHtml(execution.presentation?.labels?.[`${key}.${column}`]||column)}</th>`).join('')}</tr></thead><tbody>${value.map(row=>`<tr>${keys.map(column=>`<td>${escapeHtml(formatDisplayValue(row[column],column))}</td>`).join('')}</tr>`).join('')}</tbody></table>`:escapeHtml(execution.presentation?.emptyText||'Không có dữ liệu.');node.appendChild(wrapper);}
       else {const text=document.createElement('span');text.textContent=formatDisplayValue(value);node.appendChild(text);}
     }
