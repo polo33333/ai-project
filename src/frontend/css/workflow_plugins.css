@@ -609,3 +609,5 @@
   --wp-chart-value: #e2e8f0;
   --wp-chart-bar: #60a5fa;
 }
+.wp-step-check { color:#15803d; font-weight:700; }
+:root[data-theme="dark"] .wp-step-check { color:#4ade80; }
