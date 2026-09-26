@@ -19,6 +19,7 @@ async function interpret(question, definitions, current, options) {
       { role: 'system', content: 'Separate business intent from input completeness. An explicit request to run a catalog business operation is workflow even when required input values are absent: select its templateId and return empty inputs so the runtime can ask for missing fields. Missing inputs do not make the request chat or unclear. Do not provide application navigation instructions instead of selecting a relevant workflow.' }
     ];
     messages.push({ role: 'system', content: 'Match the requested business meaning, not exact wording. Examples are illustrative, not an exhaustive list of trigger phrases. A short request may omit a template\'s presentation or export details and still request its business operation. Use only defaults declared in the definition; never invent inputs. Distinguish unspecified details from explicit conflicting requirements. If multiple templates plausibly fit or the requested operation conflicts with the template, do not execute the closest template.' });
+    messages.push({ role: 'system', content: 'For a purely social turn (greeting, thanks, farewell) with no business request, question needing information, slot answer or cancellation, return intent="chat", templateId=null, inputs={}, evidence={}, chatKind="social", replyText=<a brief friendly reply in the user\'s language>. This reply will be shown directly, so do not claim actions, data access or workflow progress. Mixed social and business requests must follow normal workflow routing; never label them social. Other chat intents must omit chatKind and replyText.' });
     // Give each model call its own deadline; verification must not inherit the
     // milliseconds left over from classification.
     const dispatch = async (...args) => {
@@ -31,6 +32,13 @@ async function interpret(question, definitions, current, options) {
     };
     const parse = response => JSON.parse(String(response.content || '').replace(/^```(?:json)?\s*|\s*```$/g, ''));
     let parsed = parse(await dispatch({ ...provider, temperature: 0 }, messages, [], controller.signal));
+    safeObject(parsed);
+    if (parsed.intent === 'chat' && parsed.chatKind === 'social' && parsed.templateId === null
+      && parsed.inputs && typeof parsed.inputs === 'object' && !Array.isArray(parsed.inputs) && !Object.keys(parsed.inputs).length
+      && typeof parsed.replyText === 'string' && parsed.replyText.trim() && parsed.replyText.length <= 1000) {
+      report('social_reply', { stage });
+      return { templateId: null, inputs: {}, cancel: false, newTopic: true, replyText: parsed.replyText.trim() };
+    }
     if (!current && ['chat', 'unclear'].includes(parsed.intent)) {
       stage = 'semantic_review';
       // Review a negative classification once against the catalog itself. No
@@ -110,9 +118,11 @@ async function handle(question, options = {}) {
   const conversationId = options.session.id;
   const definitions = await automation.registry.list(context);
   const current = await automation.runtime.pending(context, conversationId);
+  const socialReply = interpreted => ({ success: true, replyText: interpreted.replyText, executionMode: 'chat', tokenUsage, toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'SUCCESS', workflowRouting: { reason: 'social_reply' } } });
   if (current) {
     let values = {};
     const interpreted = await interpret(question, [current.definition], current, options);
+    if (interpreted?.replyText) return socialReply(interpreted);
     if (interpreted?.cancel) return result(await automation.runtime.cancel(current.id, context, current.revision));
     if (interpreted?.newTopic) return null; // Keep the pending run; the chat can handle a new topic.
     if (interpreted && !interpreted.templateId && !Object.keys(interpreted.inputs).length) return null;
@@ -124,6 +134,7 @@ async function handle(question, options = {}) {
   const matched = await automation.registry.match(question, context);
   let definition = matched.candidates[0]?.exact && matched.status === 'matched' ? matched.definition : null, inputs = {};
   const interpreted = await interpret(question, definitions, null, options);
+  if (interpreted?.replyText) return socialReply(interpreted);
   if (interpreted && !interpreted.templateId) return null;
   if (interpreted?.templateId) { definition = definitions.find(item => item.id === interpreted.templateId); inputs = interpreted.inputs; }
   if (!definition) {

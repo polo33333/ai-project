@@ -100,6 +100,18 @@ test('shared workflow interpretation rejects invented IDs/slots and keeps semant
     assert.equal(await orchestrator.handle(message, options('evidence')), null);
   }
   assert.equal((await automation.runtime.pending(admin, 'evidence')).input.code, undefined);
+  answer = { intent: 'chat', chatKind: 'social', replyText: 'Xin chào! Bạn cần hỗ trợ gì?', templateId: null, inputs: {}, evidence: {} };
+  for (const session of ['social-new', 'evidence']) {
+    const before = adapters.dispatchToProvider.mock.callCount();
+    const social = await orchestrator.handle('hi', options(session));
+    assert.equal(social.replyText, answer.replyText);
+    assert.equal(social.executionMode, 'chat');
+    assert.equal(social.execution, undefined);
+    assert.equal(social.tokenUsage.calls, 1);
+    assert.equal(adapters.dispatchToProvider.mock.callCount() - before, 1);
+  }
+  assert.equal((await automation.runtime.pending(admin, 'evidence')).status, 'WAITING_INPUT');
+  answer = { intent: 'chat', templateId: null, inputs: {}, evidence: {} };
   assert.equal(await orchestrator.handle('Giải thích thuyết tương đối', options('unrelated')), null);
   answer = { templateId: null, inputs: {}, evidence: {} };
   assert.equal(await orchestrator.handle('Tra cứu đối tượng', options('abstain')), null);
