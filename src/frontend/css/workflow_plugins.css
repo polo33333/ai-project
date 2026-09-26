@@ -593,3 +593,19 @@
   .wp-business-editor .wp-bindings-section .wp-value-row > div { grid-column:1 / -1; grid-row:2; }
   .wp-business-editor .wp-bindings-section .wp-array-row > div { grid-column:1; grid-row:1; }
 }
+.wp-result-chart {
+  --wp-chart-bg: #fff;
+  --wp-chart-grid: #e2e8f0;
+  --wp-chart-label: #475569;
+  --wp-chart-axis: #64748b;
+  --wp-chart-value: #1e293b;
+  --wp-chart-bar: #2563eb;
+}
+:root[data-theme="dark"] .wp-result-chart {
+  --wp-chart-bg: #1e293b;
+  --wp-chart-grid: #334155;
+  --wp-chart-label: #b5c3d8;
+  --wp-chart-axis: #94a3b8;
+  --wp-chart-value: #e2e8f0;
+  --wp-chart-bar: #60a5fa;
+}

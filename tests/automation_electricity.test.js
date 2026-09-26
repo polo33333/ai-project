@@ -72,6 +72,7 @@ test('browser draws columns, axes, zero markers and empty message', { skip: proc
     const page = await browser.newPage();
     const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/workflow_plugins.js'), 'utf8');
     await page.evaluate('(() => {' + source.slice(source.indexOf('  function resultText('), source.indexOf('  function mount(')) + '; window.renderResult = renderResult; })()');
+    await page.addStyleTag({ content: fs.readFileSync(path.join(__dirname, '../src/frontend/css/workflow_plugins.css'), 'utf8') });
     for (const values of [[1000, 2000], [0, 0], []]) {
       await page.evaluate(values => document.body.replaceChildren(window.renderResult({ kind: 'bar-chart', title: 'Test', unit: 'kWh', points: values.map((value, i) => ({ label: `2024-0${i + 1}`, value })) })), values);
       assert.equal(await page.locator('svg rect').count(), values.length);
@@ -79,6 +80,12 @@ test('browser draws columns, axes, zero markers and empty message', { skip: proc
         assert.equal(await page.locator('svg path').count(), 1);
         assert.equal(await page.locator('svg circle').count(), values[0] === 0 ? 2 : 0);
         assert.ok((await page.locator('svg').boundingBox()).height > 100);
+        assert.equal(await page.locator('svg').evaluate(svg => getComputedStyle(svg).backgroundColor), 'rgb(255, 255, 255)');
+        await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+        assert.equal(await page.locator('svg').evaluate(svg => getComputedStyle(svg).backgroundColor), 'rgb(30, 41, 59)');
+        assert.equal(await page.locator('svg text').first().evaluate(text => getComputedStyle(text).fill), 'rgb(181, 195, 216)');
+        assert.equal(await page.locator('svg rect').first().evaluate(rect => getComputedStyle(rect).fill), 'rgb(96, 165, 250)');
+        await page.evaluate(() => document.documentElement.dataset.theme = 'light');
       } else assert.match(await page.locator('figure').innerText(), /Không có dữ liệu/);
     }
   } finally { await browser.close(); }

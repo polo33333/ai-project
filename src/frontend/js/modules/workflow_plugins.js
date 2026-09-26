@@ -779,12 +779,12 @@
   }
   function renderResult(value, presentation = {}, prefix = '') {
     if (value?.kind === 'bar-chart' && Array.isArray(value.points)) {
-      const figure = document.createElement('figure');
+      const figure = document.createElement('figure'); figure.className = 'wp-result-chart';
       const caption = document.createElement('figcaption'); caption.textContent = value.title + ' (' + value.unit + ')'; figure.appendChild(caption);
       if (!value.points.length) { const empty = document.createElement('p'); empty.textContent = 'Không có dữ liệu sản lượng điện bán ra.'; figure.appendChild(empty); return figure; }
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 800 360'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', caption.textContent);
-      svg.style.cssText = 'display:block;width:100%;max-width:1000px;height:auto;background:#fff;color:#334155';
+      svg.style.cssText = 'display:block;width:100%;max-width:1000px;height:auto;background:var(--wp-chart-bg,#fff);color:var(--wp-chart-label,#475569)';
       const draw = (tag, attributes, text) => {
         const node = document.createElementNS(svg.namespaceURI, tag);
         for (const [key, val] of Object.entries(attributes)) node.setAttribute(key, String(val));
@@ -794,21 +794,21 @@
       const max = Math.max(1, ...value.points.map(point => point.value)) * 1.15;
       for (let i = 0; i <= 4; i++) {
         const y = 300 - i * 65;
-        draw('line', { x1: 95, y1: y, x2: 780, y2: y, stroke: '#e2e8f0' });
-        draw('text', { x: 85, y: y + 4, 'text-anchor': 'end', 'font-size': 12, fill: '#475569' }, new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, notation: 'compact' }).format(max * i / 4));
+        draw('line', { x1: 95, y1: y, x2: 780, y2: y, stroke: 'var(--wp-chart-grid,#e2e8f0)' });
+        draw('text', { x: 85, y: y + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--wp-chart-label,#475569)' }, new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, notation: 'compact' }).format(max * i / 4));
       }
-      draw('path', { d: 'M95 35 V300 H780', fill: 'none', stroke: '#64748b', 'stroke-width': 2 });
-      draw('text', { x: 95, y: 20, 'font-size': 12, fill: '#475569' }, value.unit);
+      draw('path', { d: 'M95 35 V300 H780', fill: 'none', stroke: 'var(--wp-chart-axis,#64748b)', 'stroke-width': 2 });
+      draw('text', { x: 95, y: 20, 'font-size': 12, fill: 'var(--wp-chart-label,#475569)' }, value.unit);
       const slot = 685 / value.points.length;
       value.points.forEach((point, index) => {
         const x = 95 + slot * (index + 0.5), height = point.value / max * 260;
-        const bar = draw('rect', { x: x - slot * 0.3, y: 300 - height, width: slot * 0.6, height, fill: '#2563eb', rx: 3 });
+        const bar = draw('rect', { x: x - slot * 0.3, y: 300 - height, width: slot * 0.6, height, fill: 'var(--wp-chart-bar,#2563eb)', rx: 3 });
         const title = document.createElementNS(svg.namespaceURI, 'title'); title.textContent = `${point.label}: ${resultText(point.value)} ${value.unit}`; bar.appendChild(title);
-        if (point.value === 0) draw('circle', { cx: x, cy: 300, r: 3, fill: '#2563eb' });
-        draw('text', { x, y: 290 - height, 'text-anchor': 'middle', 'font-size': 12, fill: '#1e293b' }, resultText(point.value));
-        draw('text', { x, y: 323, 'text-anchor': 'middle', 'font-size': 12, fill: '#475569' }, point.label);
+        if (point.value === 0) draw('circle', { cx: x, cy: 300, r: 3, fill: 'var(--wp-chart-bar,#2563eb)' });
+        draw('text', { x, y: 290 - height, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--wp-chart-value,#1e293b)' }, resultText(point.value));
+        draw('text', { x, y: 323, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--wp-chart-label,#475569)' }, point.label);
       });
-      draw('text', { x: 780, y: 350, 'text-anchor': 'end', 'font-size': 12, fill: '#475569' }, 'Tháng');
+      draw('text', { x: 780, y: 350, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--wp-chart-label,#475569)' }, 'Tháng');
       figure.appendChild(svg);
       return figure;
     }
