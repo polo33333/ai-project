@@ -125,7 +125,8 @@ function validatePackage(bundle) {
       if (slot.requiredWhen) condition(slot.requiredWhen, {});
     }
     ensure(Array.isArray(template.allowedCapabilities), 'Thiếu allowedCapabilities.');
-    ensure(template.allowedCapabilities.every(value => Object.values(CAPABILITIES).includes(value)), 'Capability chưa hỗ trợ ở phase 1.');
+    const unsupportedCapabilities = template.allowedCapabilities.filter(value => !Object.values(CAPABILITIES).includes(value));
+    ensure(!unsupportedCapabilities.length, `Máy chủ chưa hỗ trợ capability: ${unsupportedCapabilities.join(', ')}. Cập nhật phiên bản ứng dụng hỗ trợ các capability này rồi nhập lại mẫu.`);
     ensure(template.workflow && Array.isArray(template.workflow.steps) && template.workflow.steps.length > 0 && template.workflow.steps.length <= 50, 'Workflow cần 1–50 bước.');
     const steps = new Set();
     function references(value, allowedSteps) {

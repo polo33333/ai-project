@@ -19,3 +19,22 @@ Tái tạo JSON: node scripts/create_electricity_template.js
 Kiểm tra nguồn thật và cập nhật mẫu: node scripts/create_electricity_template.js --install
 
 Lượt chạy cũ giữ phiên bản cũ; tạo lượt mới để dùng mẫu mới. Quy tắc hỏi và điều kiện chạy nằm trong mẫu, không thêm từ khóa nghiệp vụ vào bộ định tuyến.
+
+## Import trên host
+
+Mẫu có capability `data.chart`. Host phải triển khai mã nguồn hỗ trợ node biểu đồ, không chỉ nhận file JSON. Lỗi `Capability chưa hỗ trợ ở phase 1.` thường xuất hiện khi host còn chạy phiên bản trước khi bổ sung node này.
+
+Cập nhật phiên bản ứng dụng chứa đồng thời các file sau rồi khởi động lại backend và tải lại trang:
+
+- `src/backend/automation/contract.js`: khai báo `data.chart`.
+- `src/backend/automation/chart.js`: tạo dữ liệu biểu đồ.
+- `src/backend/automation/runtime.js`: thực thi node `chart`.
+- `src/frontend/js/modules/workflow_plugins.js`: chỉnh sửa node và hiển thị biểu đồ.
+
+Kiểm tra tại thư mục ứng dụng đang chạy trên host:
+
+```sh
+node -p "require('./src/backend/automation/contract').CAPABILITIES.chart"
+```
+
+Kết quả cần là `data.chart`. Nếu dùng container, kiểm tra bên trong container đang phục vụ ứng dụng. Sau cập nhật, nhập lại JSON; chọn lại nguồn DB nếu ID nguồn trên host khác môi trường tạo mẫu. Không xóa capability để lách kiểm tra vì node biểu đồ vẫn cần mã thực thi.
