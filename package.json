@@ -12,6 +12,7 @@
     "test": "node --require ./tests/helpers/setup_isolated_data.js --test \"tests/*.test.js\"",
     "test:ci": "npm test && npm run eval:local && npm run eval:sql",
     "eval:sql": "node --test tests/sql_security_corpus.test.js",
+    "eval:workflows": "node --require ./tests/helpers/setup_isolated_data.js --test tests/automation_*.test.js",
     "benchmark:http": "node scripts/benchmark_http.js",
     "backup": "node scripts/backup_restore.js backup",
     "restore": "node scripts/backup_restore.js restore",

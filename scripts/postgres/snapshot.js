@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { sources } = require('../../src/backend/storage/postgres/catalog');
 const { sha256 } = require('../../src/backend/storage/postgres/crypto');
 const { canonical, buildModel } = require('./model');
+const automationTransfer = require('../../src/backend/automation/transfer');
 
 async function inventory(root) {
   const entries = [];
@@ -45,7 +46,7 @@ async function snapshot(dataDirectory, backupRoot) {
   if (canonical(before) !== canonical(copied) || canonical(before) !== canonical(after)) {
     throw new Error('Data changed during snapshot. Stop application/CLI writers and retry. Incomplete snapshot retained for inspection.');
   }
-  const known = new Set(sources.map(source => source.file));
+  const known = new Set([...sources.map(source => source.file), ...Object.keys(automationTransfer.files)]);
   const unknownJson = before.filter(file => file.path.endsWith('.json') && !known.has(file.path) && !file.path.startsWith('backup/')).map(file => file.path);
   const manifest = { version: 1, createdAt: new Date().toISOString(), files: copied, unknownJson, snapshotHash: sha256(canonical(copied)) };
   await fs.writeFile(path.join(destination, 'manifest.json'), JSON.stringify(manifest, null, 2), { flag: 'wx', mode: 0o600 });
@@ -59,7 +60,13 @@ async function readSnapshot(directory) {
   if (canonical(manifest.files) !== canonical(actual) || manifest.snapshotHash !== sha256(canonical(actual))) throw new Error('Snapshot checksum mismatch.');
   if (manifest.unknownJson.length) throw new Error(`Unmapped JSON files: ${manifest.unknownJson.join(', ')}`);
   const documents = await loadDocuments(path.join(directory, 'data'));
-  return { manifest, model: buildModel(documents), documents };
+  const model = buildModel(documents), automationDocuments = {};
+  for (const file of Object.keys(automationTransfer.files)) {
+    try { automationDocuments[file] = JSON.parse(await fs.readFile(path.join(directory, 'data', file), 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  model.automationDocuments = automationTransfer.validateDocuments(automationDocuments);
+  return { manifest, model, documents };
 }
 
 module.exports = { inventory, loadDocuments, snapshot, readSnapshot };

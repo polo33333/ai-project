@@ -35,7 +35,7 @@ README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dư�
 - Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
 - Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
 - Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
-- Workflow engine: thực thi bước tự động, điều kiện, retry và trace; tab Workflow Automation hiện tạm ẩn trên giao diện.
+- Workflow phase 1: catalog/plugin có phiên bản, template/slot, fixture/publish, run checkpoint/resume/cancel và file tải theo owner. Tab Quy trình tự động đã mở; tính năng mặc định tắt. Xem [hướng dẫn phase 1](docs/WORKFLOW_PHASE1_RUNBOOK.md).
 - Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu PostgreSQL khi dùng backend `postgres`.
 - Memory Core v2 có pending turn, context budget, summary và semantic routing. Cấu hình mẫu bật pending turn, budget và summary; semantic routing vẫn mặc định tắt.
 
@@ -74,7 +74,7 @@ README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dư�
 | Embed Chat | Đã triển khai | Endpoint JSON, domain allowlist, giới hạn theo cấu hình; admin preview bỏ kiểm tra domain |
 | Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
 | Memory Core v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary; semantic routing mặc định tắt |
-| Workflow Automation | Backend có, tab tạm ẩn | Chưa đưa lại vào điều hướng UI |
+| Workflow Automation | Backend và frontend phase 1 | Catalog/plugin, template, checkpoint và tiến trình chat; cần cấu hình pilot dữ liệu thật |
 | PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–003; dữ liệu JSON hiện có đã nhập/đối soát, runtime không tự fallback về JSON |
 | Document outbox | Đã triển khai | PostgreSQL jobs, retry, lease và recovery; tác động file/Qdrant vẫn cần reconciliation |
 | Redis/BullMQ | Chưa triển khai | Outbox hiện chạy trong Node.js, chưa có worker service riêng |

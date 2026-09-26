@@ -119,6 +119,9 @@ class IntelligentCore {
     const inputCheck = securityGuard.validateInput(userMessage);
     if (!inputCheck.safe) return this._buildErrorResponse(userMessage, aiProviderManager.getActiveProvider(), inputCheck.reason);
 
+    const workflowResponse = await require('../automation/orchestrator').handle(userMessage, options);
+    if (workflowResponse) return workflowResponse;
+
     // ── Resolve provider ───────────────────────────────────────────────────
     let provider = aiProviderManager.getActiveProvider();
     if (providerId) {
@@ -587,6 +590,9 @@ ${strictSelectedKnowledge
   }
 
   _buildErrorResponse(question, provider, errMsg) {
+    if (isLocalProvider(provider) && /fetch failed|ECONNREFUSED/i.test(String(errMsg))) {
+      errMsg = 'Không kết nối được dịch vụ Ollama. Hãy mở Ollama hoặc chạy ollama serve, rồi gửi lại câu hỏi.';
+    }
     return {
       success: false,
       completionStatus: 'ERROR',

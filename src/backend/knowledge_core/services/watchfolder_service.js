@@ -45,11 +45,19 @@ class WatchFolderService {
 
   async processFile(folder, filePath, event = 'Phát hiện tệp mới') {
     if (!storage.enabled()) return this._processFile(folder, filePath, event);
-    return storage.lease(`watchfile:${path.resolve(filePath).toLowerCase()}`, () => storage.run(() => {
-      const current = this.folders.find(item => item.id === folder.id);
-      if (!current || current.status !== 'Active') return;
-      return this._processFile(current, filePath, event);
-    }));
+    return storage.lease(`watchfile:${path.resolve(filePath).toLowerCase()}`, async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          return await storage.run(() => {
+            const current = this.folders.find(item => item.id === folder.id);
+            if (!current || current.status !== 'Active') return;
+            return this._processFile(current, filePath, event);
+          }, { independent: true });
+        } catch (error) {
+          if (error.code !== 'DATA_CONFLICT' || attempt === 2) throw error;
+        }
+      }
+    });
   }
 
   async _processFile(folder, filePath, event = 'Phát hiện tệp mới') {
@@ -88,6 +96,7 @@ class WatchFolderService {
       this.addLog(folder, resolved, document.status === 'Lỗi xử lý' ? 'Lỗi xử lý' : event, document.chunksCount || 0, document.error || null);
       this.updateStats(folder);
     } catch (error) {
+      if (error.code === 'DATA_CONFLICT') throw error;
       this.addLog(folder, resolved, 'Lỗi nạp tệp', 0, error.message);
     } finally { this.processing.delete(resolved); }
   }

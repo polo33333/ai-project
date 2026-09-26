@@ -77,6 +77,7 @@ class AuthService {
       displayName: account.displayName || account.username,
       email: account.email || '',
       role: account.role || 'user',
+      ...(account.tenantId ? { tenantId: account.tenantId } : {}),
       createdAt: account.createdAt || null,
       lastLoginAt: account.lastLoginAt || null
     };

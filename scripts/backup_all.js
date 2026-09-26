@@ -10,6 +10,7 @@ const { pipeline } = require('node:stream/promises');
 const { docker } = require('./postgres/backup');
 const { loadEnvironment, connectionConfig } = require('../src/backend/storage/postgres/config');
 const { createPool } = require('../src/backend/storage/postgres/pool');
+const { getExportsDirectory } = require('../src/backend/utils/export_paths');
 
 const root = path.resolve(__dirname, '..');
 const collections = () => [...new Set([process.env.QDRANT_COLLECTION || 'database_schema_v2', process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents_bge_m3_v1'])];
@@ -144,6 +145,7 @@ async function backup({ coordinated = false, allowMissingCollections = false } =
     }
     const dataDir = path.resolve(process.env.KNOWLEDGEHUB_DATA_DIR || path.join(root, 'data'));
     for (const folder of ['library_files', 'library_content']) await copyTree(path.join(dataDir, folder), path.join(base, 'files', folder), base, components);
+    await copyTree(path.join(getExportsDirectory(), 'automation'), path.join(base, 'files', 'automation_exports'), base, components);
     const database = process.env.APP_PG_DATABASE || process.env.POSTGRES_DB || 'knowledgehub_app';
     const manifest = { version: 1, backupId, status: 'complete', createdAt: new Date().toISOString(), storageBackend: 'postgres', consistencyMode: coordinated ? 'http-writers-paused' : 'application-stopped', postgresDatabase: database, qdrantVersion, collections: names, absentCollections, embeddingModel: process.env.EMBEDDING_MODEL || 'bge-m3', encryptionKeyRequired: true, components };
     await fsp.writeFile(path.join(base, 'manifest.json'), JSON.stringify(manifest, null, 2), { flag: 'wx', mode: 0o600 });
@@ -260,10 +262,10 @@ async function restoreCurrent(directory, { dryRun = false } = {}) {
       report.steps.push(`qdrant-restored:${name}`);
     }
     const dataDir = path.resolve(process.env.KNOWLEDGEHUB_DATA_DIR || path.join(root, 'data'));
-    for (const folder of ['library_files', 'library_content']) {
-      const target = path.join(dataDir, folder);
+    for (const folder of ['library_files', 'library_content', 'automation_exports']) {
+      const target = folder === 'automation_exports' ? path.join(getExportsDirectory(), 'automation') : path.join(dataDir, folder);
       const source = path.join(base, 'files', folder);
-      const previous = path.join(dataDir, `.${folder}.pre_restore_${Date.now()}`);
+      const previous = path.join(path.dirname(target), `.${folder}.pre_restore_${Date.now()}`);
       if (fs.existsSync(target)) await fsp.rename(target, previous);
       await fsp.mkdir(target, { recursive: true, mode: 0o700 });
       if (fs.existsSync(source)) await fsp.cp(source, target, { recursive: true, force: false });

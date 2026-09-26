@@ -65,7 +65,11 @@ async function main() {
       const destination = path.resolve(argument);
       // mkdir without recursive intentionally refuses existing destinations.
       await fs.mkdir(destination, { mode: 0o700 });
-      const documents = await transaction(pool, async client => reconstruct(await readModel(client)), { readOnly: true });
+      const documents = await transaction(pool, async client => {
+        const records = reconstruct(await readModel(client));
+        for (const [file, document] of Object.entries(await require('../../src/backend/automation/transfer').read(client))) records.set(file, document);
+        return records;
+      }, { readOnly: true });
       for (const [file, value] of documents) {
         const absolute = path.resolve(destination, file);
         if (!absolute.startsWith(destination + path.sep)) throw new Error('Unsafe export path.');

@@ -1,0 +1,364 @@
+{
+  "manifest": {
+    "id": "employee_lookup",
+    "name": "Tra cứu thông tin nhân viên",
+    "tags": [
+      "nhân viên",
+      "nhân sự",
+      "tra cứu"
+    ],
+    "domain": "Nhân sự",
+    "version": 3,
+    "engineContractVersion": 1
+  },
+  "templates": [
+    {
+      "id": "employee_details",
+      "name": "Tra cứu thông tin nhân viên",
+      "inputs": {
+        "query": {
+          "ask": "Bạn muốn tra cứu nhân viên tên gì hoặc có mã nào?",
+          "label": "Tên hoặc mã nhân viên",
+          "schema": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "required": true
+        }
+      },
+      "output": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "count",
+            "empty",
+            "employees"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer"
+            },
+            "empty": {
+              "type": "boolean"
+            },
+            "employees": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "mapping": {
+          "count": "{{steps.lookup.rowCount}}",
+          "empty": "{{steps.lookup.empty}}",
+          "employees": "{{steps.lookup.rows}}"
+        },
+        "presentation": {
+          "labels": {
+            "count": "Số nhân viên tìm thấy",
+            "empty": "Không tìm thấy nhân viên",
+            "employees": "Hồ sơ nhân viên",
+            "employees.DOB": "Ngày sinh",
+            "employees.DOW": "Ngày vào làm",
+            "employees.IDNo": "Số giấy tờ tùy thân",
+            "employees.Note": "Note",
+            "employees.Email": "Email",
+            "employees.SWard": "SWard",
+            "employees.Avatar": "Ảnh đại diện",
+            "employees.BankID": "ID ngân hàng",
+            "employees.FormID": "FormID",
+            "employees.IDDate": "Ngày cấp giấy tờ",
+            "employees.Mobile": "Mobile",
+            "employees.PRWard": "PRWard",
+            "employees.POBWard": "POBWard",
+            "employees.TaxCode": "TaxCode",
+            "employees.TitleID": "ID chức danh",
+            "employees.UCPhone": "UCPhone",
+            "employees.EthnicID": "ID dân tộc",
+            "employees.GenderID": "Giới tính",
+            "employees.IsActive": "Đang hoạt động",
+            "employees.SAddress": "Địa chỉ liên hệ",
+            "employees.Scountry": "Scountry",
+            "employees.UCPhone2": "UCPhone2",
+            "employees.CompanyID": "CompanyID",
+            "employees.PRAddress": "Địa chỉ thường trú",
+            "employees.PRCountry": "PRCountry",
+            "employees.SDistrict": "SDistrict",
+            "employees.SProvince": "SProvince",
+            "employees.UCAddress": "UCAddress",
+            "employees.BankBranch": "Chi nhánh ngân hàng",
+            "employees.CreateDate": "Ngày tạo",
+            "employees.CreateUser": "Người tạo",
+            "employees.DOSOCFirst": "DOSOCFirst",
+            "employees.EmployeeID": "EmployeeID",
+            "employees.IDIssuedBy": "Nơi cấp giấy tờ",
+            "employees.NativeLand": "Quê quán",
+            "employees.POBAddress": "Địa chỉ nơi sinh",
+            "employees.PRDistrict": "PRDistrict",
+            "employees.PRProvince": "PRProvince",
+            "employees.PassportNo": "Số hộ chiếu",
+            "employees.ReligionID": "ID tôn giáo",
+            "employees.UCAddress2": "UCAddress2",
+            "employees.UCFullName": "UCFullName",
+            "employees.UpdateDate": "Ngày cập nhật",
+            "employees.UpdateUser": "Người cập nhật",
+            "employees.POBDistrict": "POBDistrict",
+            "employees.POBProvince": "POBProvince",
+            "employees.TaxCodeDate": "Ngày cấp mã số thuế",
+            "employees.UCFullName2": "UCFullName2",
+            "employees.DepartmentID": "Phòng ban",
+            "employees.EmployeeCode": "Mã nhân viên",
+            "employees.EmployeeName": "Tên nhân viên",
+            "employees.IDExpiryDate": "Ngày hết hạn giấy tờ",
+            "employees.PassportDate": "Ngày cấp hộ chiếu",
+            "employees.BankAccountNo": "Số tài khoản ngân hàng",
+            "employees.NationalityID": "ID quốc tịch",
+            "employees.EmployeeTypeID": "EmployeeTypeID",
+            "employees.PassportTypeID": "PassportTypeID",
+            "employees.BankAccountName": "Tên tài khoản ngân hàng",
+            "employees.MaritalStatusID": "ID tình trạng hôn nhân",
+            "employees.TaxCodeIssuedBy": "Nơi cấp mã số thuế",
+            "employees.EducationLevelID": "ID trình độ học vấn",
+            "employees.PassportIssuedBy": "PassportIssuedBy",
+            "employees.PassportStatusID": "PassportStatusID",
+            "employees.UCRelationshipID": "UCRelationshipID",
+            "employees.ProfessionalLevel": "Trình độ chuyên môn",
+            "employees.UCRelationshipID2": "UCRelationshipID2",
+            "employees.PassportExpiryDate": "Ngày hết hạn hộ chiếu"
+          },
+          "emptyText": "Không tìm thấy nhân viên phù hợp. Hãy kiểm tra lại tên hoặc mã."
+        }
+      },
+      "enabled": true,
+      "bindings": {
+        "employee": {
+          "sql": "SELECT TOP 50 e.[EmployeeID] AS [EmployeeID], e.[EmployeeCode] AS [EmployeeCode], e.[EmployeeName] AS [EmployeeName], r3.[Name] AS [DepartmentID], r4.[ConstantName] AS [GenderID], e.[DOB] AS [DOB], e.[CompanyID] AS [CompanyID], e.[EmployeeTypeID] AS [EmployeeTypeID], e.[Mobile] AS [Mobile], e.[Email] AS [Email], e.[TaxCode] AS [TaxCode], e.[Note] AS [Note], e.[IsActive] AS [IsActive] FROM [dbo].[M_Employee] e LEFT JOIN [dbo].[M_Master] r3 ON e.[DepartmentID] = r3.[MasterID] LEFT JOIN [dbo].[M_Constant] r4 ON e.[GenderID] = r4.[ConstantID] WHERE e.[EmployeeCode] = @query OR e.[EmployeeName] LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(@query, '[', '[[]'), '%', '[%]'), '_', '[_]'), '%') ORDER BY e.[EmployeeCode], e.[EmployeeID]",
+          "tables": [
+            "dbo.M_Employee",
+            "dbo.M_Master",
+            "dbo.M_Constant"
+          ],
+          "dbSourceId": "db-src-1785684548077",
+          "parameters": {
+            "query": {
+              "slot": "query",
+              "type": "string"
+            }
+          },
+          "resultMapping": [
+            {
+              "key": "EmployeeID",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "EmployeeID",
+              "relationId": null,
+              "label": "EmployeeID"
+            },
+            {
+              "key": "EmployeeCode",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "EmployeeCode",
+              "relationId": null,
+              "label": "Mã nhân viên"
+            },
+            {
+              "key": "EmployeeName",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "EmployeeName",
+              "relationId": null,
+              "label": "Tên nhân viên"
+            },
+            {
+              "key": "DepartmentID",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "DepartmentID",
+              "relationId": "0507a20c-7642-4203-b903-10c585974723",
+              "label": "Phòng ban"
+            },
+            {
+              "key": "GenderID",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "GenderID",
+              "relationId": "4c25f60c-2540-4f39-9ff9-e9f8cdde4411",
+              "label": "Giới tính"
+            },
+            {
+              "key": "DOB",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "DOB",
+              "relationId": null,
+              "label": "Ngày sinh"
+            },
+            {
+              "key": "CompanyID",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "CompanyID",
+              "relationId": null,
+              "label": "CompanyID"
+            },
+            {
+              "key": "EmployeeTypeID",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "EmployeeTypeID",
+              "relationId": null,
+              "label": "EmployeeTypeID"
+            },
+            {
+              "key": "Mobile",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "Mobile",
+              "relationId": null,
+              "label": "Mobile"
+            },
+            {
+              "key": "Email",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "Email",
+              "relationId": null,
+              "label": "Email"
+            },
+            {
+              "key": "TaxCode",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "TaxCode",
+              "relationId": null,
+              "label": "TaxCode"
+            },
+            {
+              "key": "Note",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "Note",
+              "relationId": null,
+              "label": "Note"
+            },
+            {
+              "key": "IsActive",
+              "tableId": "db-src-1785684548077::ipms::dbo::m_employee",
+              "columnName": "IsActive",
+              "relationId": null,
+              "label": "Đang hoạt động"
+            }
+          ]
+        }
+      },
+      "examples": [
+        "Tra cứu thông tin nhân viên",
+        "Thông tin nhân viên tên Duy",
+        "Tra cứu nhân viên mã NV004",
+        "Tìm nhân viên theo tên",
+        "Xem đầy đủ thông tin nhân viên"
+      ],
+      "fixtures": [
+        {
+          "name": "Tìm theo mã",
+          "input": {
+            "query": "TEST_NV001"
+          },
+          "expected": {
+            "count": 1,
+            "empty": false,
+            "employees": [
+              {
+                "DepartmentID": 1,
+                "EmployeeCode": "TEST_NV001",
+                "EmployeeName": "Nhân viên thử nghiệm"
+              }
+            ]
+          },
+          "stepResults": {
+            "lookup": {
+              "rows": [
+                {
+                  "DepartmentID": 1,
+                  "EmployeeCode": "TEST_NV001",
+                  "EmployeeName": "Nhân viên thử nghiệm"
+                }
+              ],
+              "empty": false,
+              "rowCount": 1
+            }
+          }
+        },
+        {
+          "name": "Trùng tên trả nhiều nhân viên",
+          "input": {
+            "query": "Nhân viên thử nghiệm"
+          },
+          "expected": {
+            "count": 2,
+            "empty": false,
+            "employees": [
+              {
+                "DepartmentID": 1,
+                "EmployeeCode": "TEST_NV001",
+                "EmployeeName": "Nhân viên thử nghiệm"
+              },
+              {
+                "DepartmentID": 1,
+                "EmployeeCode": "TEST_NV002",
+                "EmployeeName": "Nhân viên thử nghiệm"
+              }
+            ]
+          },
+          "stepResults": {
+            "lookup": {
+              "rows": [
+                {
+                  "DepartmentID": 1,
+                  "EmployeeCode": "TEST_NV001",
+                  "EmployeeName": "Nhân viên thử nghiệm"
+                },
+                {
+                  "DepartmentID": 1,
+                  "EmployeeCode": "TEST_NV002",
+                  "EmployeeName": "Nhân viên thử nghiệm"
+                }
+              ],
+              "empty": false,
+              "rowCount": 2
+            }
+          }
+        },
+        {
+          "name": "Không tìm thấy",
+          "input": {
+            "query": "TEST_NOT_FOUND"
+          },
+          "expected": {
+            "count": 0,
+            "empty": true,
+            "employees": []
+          },
+          "stepResults": {
+            "lookup": {
+              "rows": [],
+              "empty": true,
+              "rowCount": 0
+            }
+          }
+        }
+      ],
+      "workflow": {
+        "steps": [
+          {
+            "id": "lookup",
+            "name": "Tìm hồ sơ theo tên hoặc mã nhân viên",
+            "type": "sql",
+            "config": {
+              "bindingRef": "employee"
+            }
+          }
+        ]
+      },
+      "description": "Tra cứu theo tên hoặc mã nhân viên, trả toàn bộ các cột của hồ sơ trong M_Employee. Tối đa 50 kết quả; nhiều người trùng tên thì dùng mã để tra cứu chính xác.",
+      "instructions": "Chọn mẫu khi người dùng muốn tra cứu hồ sơ nhân viên theo tên hoặc mã. Lấy đúng tên/mã được nêu trong câu hỏi vào query; không đưa các từ tra cứu, nhân viên, tên, mã vào giá trị. Nếu chưa có tên/mã, hỏi bổ sung. Trả toàn bộ thông tin thực tế trong employees, giữ cả trường trống; không suy diễn tên phòng ban/chức danh từ ID. Nhiều kết quả thì hiển thị các nhân viên phù hợp, không tự chọn một người. Không có kết quả thì thông báo không tìm thấy. Nếu đủ 50 kết quả, yêu cầu tên đầy đủ hoặc mã để thu hẹp.",
+      "allowedCapabilities": [
+        "sql.read"
+      ]
+    }
+  ]
+}

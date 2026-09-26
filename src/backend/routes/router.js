@@ -165,6 +165,7 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
     status: coreResult.success ? 'success' : 'error', completionStatus: coreResult.trace?.completionStatus || (coreResult.success ? 'PARTIAL' : 'ERROR'), reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
     executionTime: `${execMs}ms`, executionMode: coreResult.executionMode, auditId, tokenUsage: coreResult.tokenUsage || null,
     providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null,
+    execution: coreResult.execution || null,
     citations: coreResult.citations || [], supportingEvidence: coreResult.supportingEvidence || [],
     citationValidation: coreResult.citationValidation || null, provider: coreResult.usedProvider,
     message: coreResult.error || null
@@ -251,7 +252,7 @@ async function handleRequest(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Vary', 'Origin');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS, DELETE');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-User-Id, X-Room-Id, X-Session-Id, X-Workflow-Secret, X-Request-Id'
@@ -346,6 +347,8 @@ async function handleRequest(req, res) {
     res.end(JSON.stringify({ status: 'error', message: 'FORBIDDEN', requestId }));
     return;
   }
+
+  if (await require('../automation/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
 
   if (pathname === '/api/backups' || pathname.startsWith('/api/backups/')) {
     res.setHeader('Cache-Control', 'no-store');
@@ -928,7 +931,8 @@ async function handleRequest(req, res) {
   if (pathname === '/api/embed/chat' && req.method === 'POST') {
     const startTime = Date.now();
     try {
-      const { question, message, history, embedId, sessionId, preview } = await readJsonBody(req);
+      const body = await readJsonBody(req);
+      const { question, message, history, embedId, sessionId, preview } = body;
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
       const isAdminPreview = preview === true && currentAccount?.role === 'admin';
       const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview });
@@ -942,7 +946,7 @@ async function handleRequest(req, res) {
       res.setHeader('Vary', 'Origin');
       res.setHeader('Cache-Control', 'no-store');
       const queryText = String(question || message || '').trim();
-      if (!queryText) {
+      if (!queryText && !body.workflowAction) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: 'Câu hỏi không được để trống.' }));
         return;
@@ -951,6 +955,21 @@ async function handleRequest(req, res) {
         res.writeHead(413, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: `Câu hỏi vượt quá ${authorization.config.maxQuestionLength} ký tự.` }));
         return;
+      }
+      const workflowIdentity = sessionId ? embedChatService.workflowSession(authorization.config, String(sessionId), body.workflowToken) : null;
+      if (body.workflowAction) {
+        if (!body.workflowToken || !workflowIdentity) throw Object.assign(new Error('Cần phiên nghiệp vụ đã xác thực.'),{statusCode:403});
+        const automation=require('../automation'); await automation.settings();
+        const context={accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,permissions:permissionsForAccount(null,true)};
+        let execution;
+        if(body.workflowAction==='get') execution=automation.runtime.view(await automation.runtime.owned(body.runId,context));
+        else if(body.workflowAction==='inputs') execution=await automation.runtime.inputs(body.runId,body.inputs||{},context,body.revision);
+        else if(body.workflowAction==='cancel') execution=await automation.runtime.cancel(body.runId,context,body.revision);
+        else if(body.workflowAction==='create') execution=await automation.runtime.create(body.templateId,{},context,{conversationId:conversationMemoryService.normalizeSessionId(`${authorization.config.id}-${sessionId}`),requestId:body.requestId});
+        else throw Object.assign(new Error('Thao tác không hợp lệ.'),{statusCode:400});
+        execution.artifacts=[];
+        for(const value of Object.values(execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows);
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});res.end(JSON.stringify({status:'success',execution,workflowToken:workflowIdentity.token}));return;
       }
       const safeHistory = Array.isArray(history) ? history
         .filter(item => item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string')
@@ -966,13 +985,15 @@ async function handleRequest(req, res) {
         history: safeHistory,
         useTools: true,
         permissions: permissionsForAccount(null, true),
-        session: memorySessionId ? { id: memorySessionId, source: 'embed' } : undefined
+        session: memorySessionId ? { id: memorySessionId, accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,source:'embed' } : undefined
       });
       const execMs = Date.now() - startTime;
       const activeProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
       if (!coreResult.success) throw new Error(coreResult.error || 'AI provider không phản hồi.');
 
       const payload = buildChatClientPayload(coreResult, execMs);
+      payload.workflowToken=workflowIdentity?.token;
+      if(payload.execution) { payload.execution.artifacts=[]; for(const value of Object.values(payload.execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows); }
       if (payload.toolResult?.rows) payload.toolResult.rows = payload.toolResult.rows.slice(0, authorization.config.maxRows);
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
@@ -1017,12 +1038,13 @@ async function handleRequest(req, res) {
         citations: payload.citations || [],
         supportingEvidence: payload.supportingEvidence || [],
         citationValidation: payload.citationValidation || null,
-        sessionId: safeSessionId
+        sessionId: safeSessionId,
+        execution:payload.execution, workflowToken:payload.workflowToken, tokenUsage:payload.tokenUsage
       }));
     } catch (err) {
       const execMs = Date.now() - startTime;
       loggerService.addLog('ERROR', 'Embed Chat', err.message);
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.writeHead(err.statusCode || 500, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message, executionTime: `${execMs}ms` }));
     }
     return;
@@ -1068,7 +1090,7 @@ async function handleRequest(req, res) {
         dbSourceId: dbSourceId || null,
         webSearch: webSearch === true,
         permissions: permissionsForAccount(currentAccount),
-        session: { id: normalizedSessionId, accountId: currentAccount?.id || null },
+        session: { id: normalizedSessionId, accountId: currentAccount?.id || null, tenantId: currentAccount?.tenantId },
         signal: requestAbortController.signal,
         onProgress: event => sendEvent('progress', event)
       });
@@ -1160,7 +1182,7 @@ async function handleRequest(req, res) {
         dbSourceId: dbSourceId || null,
         webSearch: webSearch === true,
         permissions: permissionsForAccount(currentAccount),
-        session: { id: conversationMemoryService.normalizeSessionId(sessionId), accountId: currentAccount?.id || null }
+        session: { id: conversationMemoryService.normalizeSessionId(sessionId), accountId: currentAccount?.id || null, tenantId: currentAccount?.tenantId }
       });
 
       const execMs = Date.now() - startTime;
@@ -1537,7 +1559,7 @@ async function handleRequest(req, res) {
   if (pathname === '/api/chat' && req.method === 'POST') {
     const startTime = Date.now();
     try {
-      const { message, providerId, history, useTools, dbSourceId } = await readJsonBody(req);
+      const { message, providerId, history, useTools, dbSourceId, sessionId } = await readJsonBody(req);
       if (!message) throw new Error('Thiếu trường "message" trong request body.');
 
       const result = await intelligentCore.chat(message, {
@@ -1546,7 +1568,7 @@ async function handleRequest(req, res) {
         useTools: useTools !== false,
         dbSourceId: dbSourceId || null,
         permissions: permissionsForAccount(currentAccount),
-        session: { accountId: currentAccount?.id || null }
+        session: { id: sessionId ? conversationMemoryService.normalizeSessionId(sessionId) : null, accountId: currentAccount?.id || null, tenantId: currentAccount?.tenantId }
       });
 
       const latencyMs = Date.now() - startTime;
@@ -1646,7 +1668,7 @@ async function handleRequest(req, res) {
         providerId: body.providerId || null,
         dbSourceId: body.dbSourceId || null,
         permissions: permissionsForAccount(currentAccount),
-        session: { accountId: currentAccount?.id || null, source: 'openai-compatible' }
+        session: { id: body.sessionId ? conversationMemoryService.normalizeSessionId(body.sessionId) : null, accountId: currentAccount?.id || null, tenantId: currentAccount?.tenantId, source: 'openai-compatible' }
       });
       const activeProvider = result.usedProvider || aiProviderManager.getActiveProvider();
       if (!result.success) throw new Error(result.error || 'AI provider không phản hồi.');
@@ -1690,6 +1712,7 @@ async function handleRequest(req, res) {
           total_tokens: userPrompt.length + (result.replyText || '').length
         },
         sqlResult: result.executionResult || null,
+        execution: result.execution || null,
         completionStatus: result.trace?.completionStatus || (result.success ? 'PARTIAL' : 'ERROR')
       }));
     } catch (err) {

@@ -13,6 +13,7 @@ const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_M
 let server;
 let knowledgeCore;
 let outbox;
+let automation;
 let shuttingDown = false;
 async function start() {
   const tls = loadTlsConfig(process.env, __dirname);
@@ -21,14 +22,17 @@ async function start() {
   await storage.run(async () => {
     router = require('./src/backend/routes/router');
     knowledgeCore = require('./src/backend/knowledge_core');
+    automation = require('./src/backend/automation');
+    await automation.settings();
   });
   if (process.env.KNOWLEDGEHUB_WORKERS_ENABLED !== 'false') {
     await storage.run(() => knowledgeCore.start());
     if (storage.enabled()) { outbox = require('./src/backend/storage/postgres/outbox'); outbox.start(); }
+    automation.runtime.start();
   }
   backupGate.configure({
-    pause: async () => { if (knowledgeCore) await knowledgeCore.stop(); if (outbox) await outbox.stop(); },
-    resume: async () => { if (process.env.KNOWLEDGEHUB_WORKERS_ENABLED !== 'false') { if (knowledgeCore) await storage.run(() => knowledgeCore.start()); if (outbox) outbox.start(); } }
+    pause: async () => { if (automation) await automation.runtime.stop(); if (knowledgeCore) await knowledgeCore.stop(); if (outbox) await outbox.stop(); },
+    resume: async () => { if (process.env.KNOWLEDGEHUB_WORKERS_ENABLED !== 'false') { if (automation) automation.runtime.start(); if (knowledgeCore) await storage.run(() => knowledgeCore.start()); if (outbox) outbox.start(); } }
   });
   const handleRequest = (req, res) => {
     const pathname = new URL(req.url, 'http://' + HOST).pathname;
@@ -68,6 +72,7 @@ async function shutdown(signal) {
     const closed = server ? new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())) : Promise.resolve();
     if (knowledgeCore) await knowledgeCore.stop();
     if (outbox) await outbox.stop();
+    if (automation) await automation.runtime.stop();
     await closed; await storage.close(); clearTimeout(forceTimer); process.exit(0);
   } catch (error) { console.error('[System] Shutdown failed:', error.code || error.name); process.exit(1); }
 }

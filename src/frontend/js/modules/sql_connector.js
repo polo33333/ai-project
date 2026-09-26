@@ -241,7 +241,3 @@ window.deleteDbSource = deleteDbSource;
 window.setDefaultDbSource = setDefaultDbSource;
 window.editDbSource = editDbSource;
 window.cancelEditDbSource = cancelEditDbSource;
-
-document.addEventListener('DOMContentLoaded', () => {
-  fetchDbSources();
-});

@@ -1,0 +1,448 @@
+{
+  "manifest": {
+    "id": "phase1_examples",
+    "name": "5 template minh họa phase 1",
+    "version": 1,
+    "engineContractVersion": 1,
+    "description": "Fixture minh họa; thay binding bằng nguồn thật trước nghiệm thu nghiệp vụ."
+  },
+  "templates": [
+    {
+      "id": "lookup",
+      "name": "Tra cứu đối tượng",
+      "description": "Minh họa nhận mã đối tượng và trả kết quả có cấu trúc",
+      "examples": [
+        "Tra cứu đối tượng",
+        "Tìm thông tin đối tượng"
+      ],
+      "inputs": {
+        "code": {
+          "label": "Mã đối tượng",
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "required": true,
+          "ask": "Bạn muốn tra cứu mã nào?"
+        }
+      },
+      "allowedCapabilities": [
+        "data.transform"
+      ],
+      "workflow": {
+        "steps": [
+          {
+            "id": "lookup",
+            "name": "Chuẩn hóa yêu cầu",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "code": "{{input.code}}",
+                "source": "fixture"
+              }
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "code": "{{steps.lookup.code}}",
+          "source": "{{steps.lookup.source}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "presentation": {
+          "labels": {
+            "code": "Mã đối tượng",
+            "source": "Nguồn dữ liệu",
+            "period": "Kỳ báo cáo",
+            "from": "Từ ngày",
+            "to": "Đến ngày",
+            "scope": "Phạm vi",
+            "empty": "Không có dữ liệu"
+          }
+        }
+      },
+      "fixtures": [
+        {
+          "input": {
+            "code": "A001"
+          },
+          "expected": {
+            "code": "A001",
+            "source": "fixture"
+          }
+        }
+      ]
+    },
+    {
+      "id": "period",
+      "name": "Báo cáo theo kỳ",
+      "description": "Minh họa thu thập kỳ báo cáo",
+      "examples": [
+        "Báo cáo theo kỳ",
+        "Xem dữ liệu theo kỳ"
+      ],
+      "inputs": {
+        "period": {
+          "label": "Kỳ báo cáo",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required": true,
+          "ask": "Bạn cần xem kỳ nào?"
+        }
+      },
+      "allowedCapabilities": [
+        "data.transform"
+      ],
+      "workflow": {
+        "steps": [
+          {
+            "id": "prepare",
+            "name": "Chuẩn bị kỳ báo cáo",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "period": "{{input.period}}",
+                "source": "fixture"
+              }
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "period": "{{steps.prepare.period}}",
+          "source": "{{steps.prepare.source}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "period": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "period",
+            "source"
+          ]
+        },
+        "presentation": {
+          "labels": {
+            "code": "Mã đối tượng",
+            "source": "Nguồn dữ liệu",
+            "period": "Kỳ báo cáo",
+            "from": "Từ ngày",
+            "to": "Đến ngày",
+            "scope": "Phạm vi",
+            "empty": "Không có dữ liệu"
+          }
+        }
+      },
+      "fixtures": [
+        {
+          "input": {
+            "period": "2026-09"
+          },
+          "expected": {
+            "period": "2026-09",
+            "source": "fixture"
+          }
+        }
+      ]
+    },
+    {
+      "id": "range",
+      "name": "Báo cáo khoảng ngày",
+      "description": "Minh họa validation ngày và điều kiện quy trình",
+      "examples": [
+        "Báo cáo khoảng ngày",
+        "Lập báo cáo từ ngày đến ngày"
+      ],
+      "inputs": {
+        "from": {
+          "label": "Từ ngày",
+          "schema": {
+            "type": "string",
+            "format": "date"
+          },
+          "required": true,
+          "ask": "Ngày bắt đầu là ngày nào?"
+        },
+        "to": {
+          "label": "Đến ngày",
+          "schema": {
+            "type": "string",
+            "format": "date"
+          },
+          "required": true,
+          "ask": "Ngày kết thúc là ngày nào?"
+        }
+      },
+      "allowedCapabilities": [
+        "data.validate",
+        "data.transform"
+      ],
+      "workflow": {
+        "steps": [
+          {
+            "id": "dates",
+            "name": "Kiểm tra khoảng ngày",
+            "type": "assert",
+            "config": {
+              "operator": "greaterThan",
+              "left": "{{input.to}}",
+              "right": "{{input.from}}"
+            }
+          },
+          {
+            "id": "prepare",
+            "name": "Chuẩn hóa phạm vi",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "from": "{{input.from}}",
+                "to": "{{input.to}}"
+              }
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "from": "{{steps.prepare.from}}",
+          "to": "{{steps.prepare.to}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "format": "date"
+            },
+            "to": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ]
+        },
+        "presentation": {
+          "labels": {
+            "code": "Mã đối tượng",
+            "source": "Nguồn dữ liệu",
+            "period": "Kỳ báo cáo",
+            "from": "Từ ngày",
+            "to": "Đến ngày",
+            "scope": "Phạm vi",
+            "empty": "Không có dữ liệu"
+          }
+        }
+      },
+      "fixtures": [
+        {
+          "input": {
+            "from": "2026-09-01",
+            "to": "2026-09-26"
+          },
+          "expected": {
+            "from": "2026-09-01",
+            "to": "2026-09-26"
+          }
+        }
+      ]
+    },
+    {
+      "id": "scope",
+      "name": "Báo cáo theo phạm vi",
+      "description": "Minh họa đầu vào enum và giá trị mặc định",
+      "examples": [
+        "Báo cáo theo phạm vi",
+        "Chọn phạm vi báo cáo"
+      ],
+      "inputs": {
+        "scope": {
+          "label": "Phạm vi",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "Đơn vị",
+              "Toàn bộ"
+            ]
+          },
+          "default": "Đơn vị",
+          "ask": "Bạn muốn xem phạm vi nào?"
+        }
+      },
+      "allowedCapabilities": [
+        "data.transform"
+      ],
+      "workflow": {
+        "steps": [
+          {
+            "id": "prepare",
+            "name": "Áp dụng phạm vi",
+            "type": "transform",
+            "config": {
+              "mapping": {
+                "scope": "{{input.scope}}"
+              }
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "scope": "{{steps.prepare.scope}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "scope"
+          ]
+        },
+        "presentation": {
+          "labels": {
+            "code": "Mã đối tượng",
+            "source": "Nguồn dữ liệu",
+            "period": "Kỳ báo cáo",
+            "from": "Từ ngày",
+            "to": "Đến ngày",
+            "scope": "Phạm vi",
+            "empty": "Không có dữ liệu"
+          }
+        }
+      },
+      "fixtures": [
+        {
+          "input": {},
+          "expected": {
+            "scope": "Đơn vị"
+          }
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "name": "Xuất danh sách",
+      "description": "Minh họa tạo file từ dữ liệu được cung cấp",
+      "examples": [
+        "Xuất danh sách",
+        "Tải danh sách thành file"
+      ],
+      "inputs": {
+        "rows": {
+          "label": "Danh sách dữ liệu",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            }
+          },
+          "required": true,
+          "ask": "Bạn muốn xuất danh sách dữ liệu nào?"
+        },
+        "format": {
+          "label": "Định dạng",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          },
+          "default": "csv",
+          "ask": "Bạn chọn CSV hay Excel?"
+        }
+      },
+      "allowedCapabilities": [
+        "artifact.export"
+      ],
+      "workflow": {
+        "steps": [
+          {
+            "id": "file",
+            "name": "Tạo file tải về",
+            "type": "export",
+            "config": {
+              "data": "{{input.rows}}",
+              "format": "{{input.format}}",
+              "filename": "Danh_sach"
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "empty": "{{steps.file.empty}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "empty": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "empty"
+          ]
+        },
+        "presentation": {
+          "labels": {
+            "code": "Mã đối tượng",
+            "source": "Nguồn dữ liệu",
+            "period": "Kỳ báo cáo",
+            "from": "Từ ngày",
+            "to": "Đến ngày",
+            "scope": "Phạm vi",
+            "empty": "Không có dữ liệu"
+          }
+        }
+      },
+      "fixtures": [
+        {
+          "input": {
+            "rows": [
+              {
+                "name": "Mẫu"
+              }
+            ]
+          },
+          "expected": {
+            "empty": false
+          }
+        }
+      ]
+    }
+  ]
+}

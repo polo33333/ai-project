@@ -1,23 +1,9 @@
 <div id="view-workflows" class="system-tools-page workflow-manager" data-display="grid" style="display:none;">
-  <section class="system-tools-hero">
-    <div class="system-tools-hero-icon workflow-hero-icon"><i class="fa-solid fa-diagram-project"></i></div>
-    <div><span class="system-tools-eyebrow">AUTOMATION ENGINE</span><h2>Workflow Automation</h2><p>Tạo quy trình độc lập với Chat: nhận webhook, gọi API, xử lý điều kiện, truy vấn dữ liệu và xuất file.</p></div>
-    <button class="btn-primary" type="button" onclick="openWorkflowEditor()"><i class="fa-solid fa-plus"></i> Tạo workflow</button>
-  </section>
-  <section class="system-tools-summary">
-    <div class="metric-card metric-card-blue"><span class="metric-main-icon blue"><i class="fa-solid fa-diagram-project"></i></span><div class="metric-content"><span>Tổng workflow</span><strong id="wf-total-count">0</strong></div></div>
-    <div class="metric-card metric-card-green"><span class="metric-main-icon green"><i class="fa-solid fa-circle-play"></i></span><div class="metric-content"><span>Đang hoạt động</span><strong class="available" id="wf-active-count">0</strong></div></div>
-    <div class="metric-card metric-card-purple"><span class="metric-main-icon purple"><i class="fa-solid fa-clock-rotate-left"></i></span><div class="metric-content"><span>Lượt chạy gần đây</span><strong id="wf-run-count">0</strong></div></div>
-  </section>
-  <section class="workflow-manager-layout">
-    <div class="system-tools-card workflow-list-card">
-      <div class="module-section-heading"><div><span class="module-section-kicker">Quy trình</span><h3>Workflow của bạn</h3><p>Tìm kiếm, chỉnh sửa và chạy các quy trình tự động.</p></div></div>
-      <div class="system-tools-toolbar"><div class="system-tools-search"><i class="fa-solid fa-magnifying-glass"></i><input id="wf-search" placeholder="Tìm workflow..." oninput="renderWorkflowManager()"></div><button class="btn-secondary-sm" onclick="refreshWorkflowManager()"><i class="fa-solid fa-rotate"></i> Làm mới</button></div>
-      <div id="workflow-cards" class="workflow-manager-grid"><div class="system-tools-loading"><i class="fa-solid fa-spinner fa-spin"></i>Đang tải workflow...</div></div>
-    </div>
-    <div class="system-tools-card workflow-runs-card">
-      <div class="workflow-section-title"><div><i class="fa-solid fa-clock-rotate-left"></i><span>Lịch sử thực thi</span></div><select id="wf-history-filter" onchange="loadWorkflowRuns()"><option value="">Tất cả workflow</option></select></div>
-      <div id="workflow-run-results-container" class="workflow-run-list"><div class="system-tools-loading"><i class="fa-solid fa-spinner fa-spin"></i>Đang tải lịch sử...</div></div>
-    </div>
+  <section class="system-tools-card" id="workflow-plugin-panel">
+    <div class="module-section-heading"><div><span class="module-section-kicker">KỊCH BẢN HỘI THOẠI</span><h3>Mẫu nghiệp vụ</h3><p>Khi câu hỏi khớp một mẫu đang sử dụng, trợ lý hỏi thêm thông tin cần thiết và thực hiện theo kịch bản đã thiết lập.</p></div></div>
+    <div id="wp-toolbar" class="system-tools-toolbar"></div>
+    <div id="wp-message" role="status" aria-live="polite"><span class="tab-data-spinner" aria-hidden="true"></span><span>Đang tải mẫu nghiệp vụ…</span></div>
+    <section class="wp-library-section" id="wp-drafts-section"><div class="wp-section-heading"><span class="wp-section-icon"><i class="fa-solid fa-pen-ruler" aria-hidden="true"></i></span><div><h3>Thiết kế nghiệp vụ</h3><p>Soạn kịch bản và chạy thử trước khi đưa vào hội thoại.</p></div></div><div id="wp-packages" class="workflow-manager-grid"></div></section>
+    <details class="wp-history"><summary><span class="wp-section-icon history"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i></span><span>Lịch sử thực hiện của bạn<small>Xem tiến trình và kết quả các lần xử lý nghiệp vụ.</small></span><i class="fa-solid fa-chevron-down wp-history-chevron" aria-hidden="true"></i></summary><div id="wp-runs" class="workflow-run-list"></div></details>
   </section>
 </div>

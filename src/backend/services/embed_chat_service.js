@@ -99,6 +99,14 @@ class EmbedChatService {
     this.persist();
     return { ok: true, config, origin: normalizedOrigin };
   }
+  workflowSession(config, sessionId, token) {
+    if (!sessionId || !/^[-a-zA-Z0-9_]{1,100}$/.test(sessionId)) throw Object.assign(new Error('Phiên embed không hợp lệ.'), {statusCode:400});
+    if (!config.workflowSecret) { config.workflowSecret=crypto.randomBytes(32).toString('hex'); this.persist(); }
+    const sign=value=>crypto.createHmac('sha256',config.workflowSecret).update(`${config.id}:${sessionId}:${value}`).digest('hex');
+    if (token) { const parts=String(token).split('.'); if(parts.length!==2 || !/^[a-f0-9]{64}$/.test(parts[1]) || !/^[a-f0-9]{48}$/.test(parts[0]) || !crypto.timingSafeEqual(Buffer.from(parts[1],'hex'),Buffer.from(sign(parts[0]),'hex'))) throw Object.assign(new Error('Phiên nghiệp vụ không hợp lệ.'),{statusCode:403}); }
+    else { const nonce=crypto.randomBytes(24).toString('hex'); token=`${nonce}.${sign(nonce)}`; }
+    return { token, accountId:`embed:${config.id}:${crypto.createHash('sha256').update(token).digest('hex')}`, tenantId:`embed:${config.id}` };
+  }
 }
 
 module.exports = new EmbedChatService();

@@ -552,16 +552,21 @@ const TAB_DATA_CACHE_TTL_MS = 60_000;
 const tabDataLoadState = new Map();
 
 function loadTabData(tabKey, loaders = []) {
+  tabKey = normalizeMainTabKey(tabKey) || tabKey;
   const callable = loaders.filter(loader => typeof loader === 'function');
   if (!callable.length) return Promise.resolve();
-  const current = tabDataLoadState.get(tabKey) || {};
-  if (current.promise) return current.promise;
-  if (current.loadedAt && Date.now() - current.loadedAt < TAB_DATA_CACHE_TTL_MS) return Promise.resolve();
-  const promise = Promise.all(callable.map(loader => Promise.resolve().then(loader)))
-    .then(() => { tabDataLoadState.set(tabKey, { loadedAt: Date.now(), promise: null }); })
-    .catch(error => { tabDataLoadState.delete(tabKey); throw error; });
-  tabDataLoadState.set(tabKey, { ...current, promise });
-  return promise;
+  let states = tabDataLoadState.get(tabKey);
+  if (!states) { states = new Map(); tabDataLoadState.set(tabKey, states); }
+  return Promise.all(callable.map(loader => {
+    const current = states.get(loader) || {};
+    if (current.promise) return current.promise;
+    if (current.loadedAt && Date.now() - current.loadedAt < TAB_DATA_CACHE_TTL_MS) return Promise.resolve();
+    const promise = Promise.resolve().then(loader)
+      .then(() => { states.set(loader, { loadedAt: Date.now(), promise: null }); })
+      .catch(error => { states.delete(loader); throw error; });
+    states.set(loader, { ...current, promise });
+    return promise;
+  }));
 }
 
 window.invalidateMainTabData = function invalidateMainTabData(tabKey) {
@@ -608,9 +613,11 @@ function rememberMainTab(tabKey) {
 }
 
 // Global Tab Switcher (Router)
+let mainTabNavigationVersion = 0;
 window.switchMainTab = async function switchMainTab(tabKey) {
   tabKey = normalizeMainTabKey(tabKey);
   if (!tabKey) return;
+  const navigationVersion = ++mainTabNavigationVersion;
   rememberMainTab(tabKey);
   window.updatePageChatMiniPanel?.();
   const cleanKey = tabKey.replace(/-/g, '_');
@@ -653,7 +660,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     providers: 'Nhà cung cấp AI',
     ai_providers: 'Nhà cung cấp AI & Multi-LLM Router',
     analytics: 'Báo cáo & Thống kê Metrics',
-    workflows: 'Quy trình Tự động',
+    workflows: 'Mẫu nghiệp vụ',
     mcp: 'Nguồn MCP Server',
     mcp_sources: 'Nguồn MCP Server',
     system_tools: 'Công cụ hệ thống',
@@ -676,7 +683,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     providers: { icon: 'fa-microchip', subtitle: 'Cấu hình mô hình và nhà cung cấp trí tuệ nhân tạo' },
     ai_providers: { icon: 'fa-microchip', subtitle: 'Cấu hình mô hình, định tuyến và nhà cung cấp AI' },
     analytics: { icon: 'fa-chart-line', subtitle: 'Theo dõi mức sử dụng, chi phí và hiệu suất hệ thống' },
-    workflows: { icon: 'fa-diagram-project', subtitle: 'Thiết kế và quản lý các quy trình tự động hóa' },
+    workflows: { icon: 'fa-diagram-project', subtitle: 'Thiết lập kịch bản để trợ lý xử lý câu hỏi nghiệp vụ' },
     mcp: { icon: 'fa-server', subtitle: 'Quản lý nguồn công cụ và ngữ cảnh từ MCP Server' },
     mcp_sources: { icon: 'fa-server', subtitle: 'Quản lý nguồn công cụ và ngữ cảnh từ MCP Server' },
     system_tools: { icon: 'fa-screwdriver-wrench', subtitle: 'Kiểm tra và vận hành các công cụ của hệ thống' },
@@ -752,6 +759,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
 
   if (isDashboard) {
     if (!document.getElementById('view-dashboard-logs')) await loadViewComponents('overview');
+    if (navigationVersion !== mainTabNavigationVersion) return;
     const dashLogs = document.getElementById('view-dashboard-logs');
     if (dashLogs) dashLogs.style.display = 'block';
     requestAnimationFrame(() => {
@@ -764,9 +772,13 @@ window.switchMainTab = async function switchMainTab(tabKey) {
   const targetId = viewMap[cleanKey] || `view-${cleanKey.replace(/_/g, '-')}`;
   let targetView = document.getElementById(targetId);
   if (!targetView && typeof loadViewComponents === 'function') {
-    await loadViewComponents(cleanKey);
+    const loading=document.createElement('div'); loading.className='tab-view-loading'; loading.setAttribute('role','status');
+    loading.innerHTML='<span class="tab-data-spinner" aria-hidden="true"></span><span>Đang tải giao diện…</span>';
+    document.getElementById('main-view-container')?.appendChild(loading);
+    try { await loadViewComponents(cleanKey); } finally { loading.remove(); }
     targetView = document.getElementById(targetId);
   }
+  if (navigationVersion !== mainTabNavigationVersion) return;
 
   if (targetView) {
     targetView.style.display = targetView.dataset.display || 'block';
@@ -801,6 +813,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
 
 
 // Load Modular HTML Component Templates into #main-view-container
+const viewLoadPromises = new Map();
 async function loadViewComponents(tabKey) {
   const container = document.getElementById('main-view-container');
   if (!container) return;
@@ -814,8 +827,8 @@ async function loadViewComponents(tabKey) {
   };
   const file = viewFiles[String(tabKey || '').replace(/-/g, '_')];
   if (!file || container.querySelector(`[data-view-file="${file}"]`)) return;
-
-  try {
+  if (viewLoadPromises.has(file)) return viewLoadPromises.get(file);
+  const pending = (async () => { try {
     const response = await fetch(`/views/${file}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const template = document.createElement('template');
@@ -825,7 +838,10 @@ async function loadViewComponents(tabKey) {
     container.appendChild(template.content);
   } catch (err) {
     console.error(`Lỗi khi tải view ${file}:`, err);
-  }
+  } finally { viewLoadPromises.delete(file); }
+  })();
+  viewLoadPromises.set(file, pending);
+  return pending;
 }
 
 // Fetch Qdrant Status
@@ -1595,11 +1611,12 @@ window.sendChatMessage = async function sendChatMessage() {
       progressEvents.push(event);
       addCopilotThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running');
     }, requestController.signal);
-    const reply = data.reply || data.replyText || data.message || 'Không tìm thấy thông tin tương ứng.';
+    const reply = data.execution?.status === 'WAITING_INPUT' ? 'Bổ sung thông tin bên dưới để tiếp tục.' : data.reply || data.replyText || data.message || 'Không tìm thấy thông tin tương ứng.';
     const sqlQuery = data.generatedSql || data.sql || null;
     const renderedReply = renderVerifiedCitationMarkers(renderCopilotText(stripInlineDownloadLink(reply, data.downloadUrl)), data.citations);
     const richHtml = [
       renderedReply,
+      typeof window.renderWorkflowExecution === 'function' ? window.renderWorkflowExecution(data.execution) : '',
       renderCopilotDownloadAction(data.downloadUrl, renderedReply),
       renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence),
       renderCopilotChart(data.chartSpec),

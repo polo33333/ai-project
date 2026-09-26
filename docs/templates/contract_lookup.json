@@ -1,0 +1,318 @@
+{
+  "manifest": {
+    "id": "contract_lookup",
+    "name": "Tra cứu thông tin hợp đồng",
+    "version": 1,
+    "engineContractVersion": 1,
+    "domain": "Hợp đồng",
+    "tags": [
+      "hợp đồng",
+      "tra cứu",
+      "khách hàng"
+    ]
+  },
+  "templates": [
+    {
+      "id": "contract_details",
+      "name": "Tra cứu thông tin hợp đồng",
+      "enabled": true,
+      "description": "Tra cứu hồ sơ hợp đồng theo số hợp đồng hoặc tên khách hàng. Trả tối đa 50 kết quả với các cột hiển thị và quan hệ đã xác minh.",
+      "examples": [
+        "Tra cứu thông tin hợp đồng",
+        "Xem chi tiết hợp đồng số TEST_HD001",
+        "Tra cứu hợp đồng của khách hàng"
+      ],
+      "instructions": "Chọn mẫu cho yêu cầu tra cứu hợp đồng. Tách số hợp đồng hoặc tên khách hàng được nêu rõ vào query, không lấy toàn bộ câu yêu cầu làm giá trị. Nếu chưa có điều kiện, hỏi bổ sung. Không suy đoán dữ liệu, không chuyển yêu cầu nhân viên sang mẫu này. Nếu nhiều kết quả, hiển thị tất cả và đề nghị số hợp đồng cụ thể để thu hẹp.",
+      "inputs": {
+        "query": {
+          "label": "Số hợp đồng hoặc tên khách hàng",
+          "ask": "Bạn muốn tra cứu số hợp đồng nào hoặc hợp đồng của khách hàng nào?",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "allowedCapabilities": [
+        "sql.read"
+      ],
+      "bindings": {
+        "contract": {
+          "dbSourceId": "db-src-1785684548077",
+          "tables": [
+            "dbo.T_Contract",
+            "dbo.M_Employee",
+            "dbo.M_Customer",
+            "dbo.M_Constant"
+          ],
+          "resultMapping": [
+            {
+              "key": "ContractID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "ContractID",
+              "relationId": null,
+              "label": "ContractID"
+            },
+            {
+              "key": "TypeID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "TypeID",
+              "relationId": null,
+              "label": "TypeID"
+            },
+            {
+              "key": "ContractNo",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "ContractNo",
+              "relationId": null,
+              "label": "Số HĐ"
+            },
+            {
+              "key": "ContractDate",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "ContractDate",
+              "relationId": null,
+              "label": "Ngày hợp đồng"
+            },
+            {
+              "key": "ContractTypeID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "ContractTypeID",
+              "relationId": null,
+              "label": "ContractTypeID"
+            },
+            {
+              "key": "EmployeeID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "EmployeeID",
+              "relationId": "b4850fdc-1bfd-423c-b7dd-b0c743fc52c1",
+              "label": "Nhân viên"
+            },
+            {
+              "key": "CustomerID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "CustomerID",
+              "relationId": "f93763e6-7162-48f9-8c76-85c01c91a938",
+              "label": "Khách hàng"
+            },
+            {
+              "key": "TotalArea",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "TotalArea",
+              "relationId": null,
+              "label": "Tổng diện tích"
+            },
+            {
+              "key": "Qty",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "Qty",
+              "relationId": null,
+              "label": "Số lượng"
+            },
+            {
+              "key": "StartDate",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "StartDate",
+              "relationId": null,
+              "label": "Ngày bắt đầu"
+            },
+            {
+              "key": "EndDate",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "EndDate",
+              "relationId": null,
+              "label": "Ngày kết thúc"
+            },
+            {
+              "key": "StatusID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "StatusID",
+              "relationId": "00718638-d706-4e23-9e66-6674c762f143",
+              "label": "Trạng thái"
+            },
+            {
+              "key": "IsVAT",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "IsVAT",
+              "relationId": null,
+              "label": "IsVAT"
+            },
+            {
+              "key": "Note",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "Note",
+              "relationId": null,
+              "label": "Note"
+            },
+            {
+              "key": "CompanyID",
+              "tableId": "db-src-1785684548077::ipms::dbo::t_contract",
+              "columnName": "CompanyID",
+              "relationId": null,
+              "label": "CompanyID"
+            }
+          ],
+          "sql": "SELECT TOP 50 e.[ContractID] AS [ContractID], e.[TypeID] AS [TypeID], e.[ContractNo] AS [ContractNo], e.[ContractDate] AS [ContractDate], e.[ContractTypeID] AS [ContractTypeID], r5.[EmployeeName] AS [EmployeeID], r6.[CustomerName] AS [CustomerID], e.[TotalArea] AS [TotalArea], e.[Qty] AS [Qty], e.[StartDate] AS [StartDate], e.[EndDate] AS [EndDate], r11.[ConstantName] AS [StatusID], e.[IsVAT] AS [IsVAT], e.[Note] AS [Note], e.[CompanyID] AS [CompanyID] FROM [dbo].[T_Contract] e LEFT JOIN [dbo].[M_Employee] r5 ON e.[EmployeeID] = r5.[EmployeeID] LEFT JOIN [dbo].[M_Customer] r6 ON e.[CustomerID] = r6.[CustomerID] LEFT JOIN [dbo].[M_Constant] r11 ON e.[StatusID] = r11.[ConstantID] WHERE e.[ContractNo] LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(@query, '[', '[[]'), '%', '[%]'), '_', '[_]'), '%') OR r6.[CustomerName] LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(@query, '[', '[[]'), '%', '[%]'), '_', '[_]'), '%') ORDER BY e.[ContractNo], e.[ContractID]",
+          "parameters": {
+            "query": {
+              "slot": "query",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "workflow": {
+        "steps": [
+          {
+            "id": "lookup",
+            "name": "Tìm hợp đồng theo điều kiện tra cứu",
+            "type": "sql",
+            "config": {
+              "bindingRef": "contract"
+            }
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "contracts": "{{steps.lookup.rows}}",
+          "count": "{{steps.lookup.rowCount}}",
+          "empty": "{{steps.lookup.empty}}"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "contracts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+              }
+            },
+            "count": {
+              "type": "integer"
+            },
+            "empty": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "contracts",
+            "count",
+            "empty"
+          ],
+          "additionalProperties": false
+        },
+        "presentation": {
+          "labels": {
+            "contracts": "Thông tin hợp đồng",
+            "count": "Số hợp đồng tìm thấy",
+            "contracts.ContractID": "ContractID",
+            "contracts.TypeID": "TypeID",
+            "contracts.ContractNo": "Số HĐ",
+            "contracts.ContractDate": "Ngày hợp đồng",
+            "contracts.ContractTypeID": "ContractTypeID",
+            "contracts.EmployeeID": "Nhân viên",
+            "contracts.CustomerID": "Khách hàng",
+            "contracts.TotalArea": "Tổng diện tích",
+            "contracts.Qty": "Số lượng",
+            "contracts.StartDate": "Ngày bắt đầu",
+            "contracts.EndDate": "Ngày kết thúc",
+            "contracts.StatusID": "Trạng thái",
+            "contracts.IsVAT": "IsVAT",
+            "contracts.Note": "Note",
+            "contracts.CompanyID": "CompanyID"
+          },
+          "emptyText": "Không tìm thấy hợp đồng phù hợp. Hãy kiểm tra số hợp đồng hoặc tên khách hàng."
+        }
+      },
+      "fixtures": [
+        {
+          "name": "Tra cứu số hợp đồng",
+          "input": {
+            "query": "TEST_HD001"
+          },
+          "stepResults": {
+            "lookup": {
+              "rows": [
+                {
+                  "ContractNo": "TEST_HD001",
+                  "CustomerID": "Khách hàng thử nghiệm"
+                }
+              ],
+              "rowCount": 1,
+              "empty": false
+            }
+          },
+          "expected": {
+            "contracts": [
+              {
+                "ContractNo": "TEST_HD001",
+                "CustomerID": "Khách hàng thử nghiệm"
+              }
+            ],
+            "count": 1,
+            "empty": false
+          }
+        },
+        {
+          "name": "Nhiều hợp đồng của khách hàng",
+          "input": {
+            "query": "Khách hàng thử nghiệm"
+          },
+          "stepResults": {
+            "lookup": {
+              "rows": [
+                {
+                  "ContractNo": "TEST_HD001",
+                  "CustomerID": "Khách hàng thử nghiệm"
+                },
+                {
+                  "ContractNo": "TEST_HD002",
+                  "CustomerID": "Khách hàng thử nghiệm"
+                }
+              ],
+              "rowCount": 2,
+              "empty": false
+            }
+          },
+          "expected": {
+            "contracts": [
+              {
+                "ContractNo": "TEST_HD001",
+                "CustomerID": "Khách hàng thử nghiệm"
+              },
+              {
+                "ContractNo": "TEST_HD002",
+                "CustomerID": "Khách hàng thử nghiệm"
+              }
+            ],
+            "count": 2,
+            "empty": false
+          }
+        },
+        {
+          "name": "Không tìm thấy",
+          "input": {
+            "query": "TEST_NOT_FOUND"
+          },
+          "stepResults": {
+            "lookup": {
+              "rows": [],
+              "rowCount": 0,
+              "empty": true
+            }
+          },
+          "expected": {
+            "contracts": [],
+            "count": 0,
+            "empty": true
+          }
+        }
+      ]
+    }
+  ]
+}

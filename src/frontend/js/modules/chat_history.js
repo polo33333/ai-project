@@ -191,7 +191,3 @@ function renderChatHistoryTable() {
 
 window.fetchChatHistory = fetchChatHistory;
 window.renderChatHistoryTable = renderChatHistoryTable;
-
-document.addEventListener('DOMContentLoaded', () => {
-  fetchChatHistory();
-});

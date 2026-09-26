@@ -22,6 +22,7 @@ async function readModel(client) {
 }
 
 async function verifyClient(client, expected) {
+  await require('../../src/backend/automation/transfer').verify(client, expected.automationDocuments);
   const stored = await readModel(client);
   const restored = reconstruct(stored);
   const source = reconstruct(expected);
@@ -76,6 +77,7 @@ async function importSnapshot(pool, snapshot) {
         await client.query(`INSERT INTO app.${table} (${keys.join(',')}) VALUES (${keys.map((_,i) => `$${i+1}`).join(',')})`, values);
       }
     }
+    await require('../../src/backend/automation/transfer').insert(client, model.automationDocuments);
     // Verification is inside the SAME transaction: failure rolls back all domains.
     return { ...(await verifyClient(client, model)), alreadyImported: false, warnings: model.warnings };
   });

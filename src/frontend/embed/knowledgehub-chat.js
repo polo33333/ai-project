@@ -14,6 +14,13 @@
   const requestedTheme = ['light', 'dark'].includes(script?.dataset.theme) ? script.dataset.theme : 'auto';
   const history = [];
   let sessionId = createSessionId();
+  let workflowToken = '', workflowRuns = [];
+  const workflowStorageKey = `knowledgehub-workflows:${apiBase}:${embedId}:${location.pathname}${location.search}`;
+  const restoreSession = performance.getEntriesByType('navigation')[0]?.type === 'reload' && !window.KnowledgeHubEmbedInitialized;
+  window.KnowledgeHubEmbedInitialized = true;
+  try { const saved=restoreSession ? JSON.parse(sessionStorage.getItem(workflowStorageKey)||'null') : null; if(saved) {sessionId=saved.sessionId;workflowToken=saved.token;workflowRuns=saved.runs||[];} } catch (_) {}
+  const saveWorkflow = () => { try { sessionStorage.setItem(workflowStorageKey,JSON.stringify({sessionId,token:workflowToken,runs:workflowRuns})); } catch (_) {} };
+  saveWorkflow();
   let activeRequest = null;
   let conversationVersion = 0;
 
@@ -227,6 +234,41 @@
   const sendButton = root.querySelector('.kh-embed-send');
   const toggleButton = root.querySelector('.kh-embed-toggle');
   const append = (content, role, extra = '') => { const node = document.createElement('div'); node.className = `kh-embed-message ${role} ${extra}`; node.innerHTML = content; messages.appendChild(node); messages.scrollTop = messages.scrollHeight; return node; };
+  style.textContent += `
+    .kh-workflow{border:1px solid #dbe3ef;border-radius:10px;padding:12px;margin-top:10px;min-width:0}.kh-workflow h4{margin:12px 0 8px}.kh-workflow label{display:flex;flex-direction:column;gap:6px;margin:12px 0;font-size:12px}.kh-workflow input,.kh-workflow select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155}.kh-workflow-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.kh-workflow button{border:1px solid #cbd5e1;border-radius:8px;padding:7px 10px;background:#f1f5f9;color:#334155;cursor:pointer}.kh-workflow button.primary{background:var(--kh-primary);color:#fff;border-color:var(--kh-primary)}.kh-workflow button:disabled{opacity:.5}.kh-workflow-tokens{font-size:11px;color:#94a3b8;margin-top:10px}.dark .kh-workflow{border-color:#41516b;background:#152033}.dark .kh-workflow input,.dark .kh-workflow select{background:#111b2b;color:#e2e8f0;border-color:#41516b}.dark .kh-workflow button{background:#25324a;color:#e2e8f0;border-color:#41516b}.dark .kh-workflow button.primary{background:var(--kh-primary);color:#fff}
+  `;
+  const workflowApi = async body => {
+    const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,workflowToken,...body})});
+    const data=await response.json();if(!response.ok||data.status!=='success')throw new Error(data.message||`HTTP ${response.status}`);return data;
+  };
+  function workflowInput(parent,schema,label) {
+    const group=document.createElement('label');const title=document.createElement('span');title.textContent=label;group.appendChild(title);parent.appendChild(group);
+    if(schema.type==='object') {const reads=Object.entries(schema.properties||{}).map(([key,s])=>[key,workflowInput(group,s,s.title||key)]);return ()=>Object.fromEntries(reads.map(([key,read])=>[key,read()]));}
+    if(schema.type==='array') {const reads=[];const add=document.createElement('button');add.type='button';add.textContent='Thêm mục';add.onclick=()=>reads.push(workflowInput(group,schema.items,`Mục ${reads.length+1}`));group.appendChild(add);return ()=>reads.map(read=>read());}
+    const choices=schema.enum||(schema.type==='boolean'?[true,false]:null);const control=document.createElement(choices?'select':'input');
+    if(choices) {control.appendChild(new Option('Chọn…',''));choices.forEach((value,index)=>control.appendChild(new Option(formatDisplayValue(value),String(index))));}
+    else {control.type=['number','integer'].includes(schema.type)?'number':schema.format==='date'?'date':'text';if(schema.type==='integer')control.step='1';}
+    group.appendChild(control);return ()=>choices?(control.value===''?undefined:choices[Number(control.value)]):control.value===''?undefined:['number','integer'].includes(schema.type)?Number(control.value):control.value;
+  }
+  function mountWorkflow(node,execution) {
+    if(execution.id&&!workflowRuns.includes(execution.id)){workflowRuns.push(execution.id);workflowRuns=workflowRuns.slice(-20);saveWorkflow();}
+    node.replaceChildren();node.classList.add('kh-workflow');const heading=document.createElement('strong');const states={READY:'Đang chờ chạy',RUNNING:'Đang xử lý',WAITING_INPUT:'Chờ bổ sung',SUCCEEDED:'Hoàn thành',FAILED:'Không thành công',CANCELLED:'Đã hủy',NEEDS_REVIEW:'Cần kiểm tra'};heading.textContent=`${execution.name||'Chọn nghiệp vụ'} · ${states[execution.status]||execution.status}`;node.appendChild(heading);
+    const actions=document.createElement('div');actions.className='kh-workflow-actions';
+    const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{const version=conversationVersion;button.disabled=true;try{const data=await workflowApi(typeof body==='function'?body():body);if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){const next=append('','ai');mountWorkflow(next,data.execution);}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;}};actions.appendChild(button);};
+    if(execution.status==='SELECT_TEMPLATE')for(const candidate of execution.candidates||[])action(candidate.name,{workflowAction:'create',templateId:candidate.id,requestId:createSessionId()});
+    if(execution.status==='WAITING_INPUT'){const reads=(execution.missingInputs||[]).map(slot=>[slot.key,workflowInput(node,slot.schema,slot.ask||slot.label)]);action('Bổ sung và tiếp tục',()=>({workflowAction:'inputs',runId:execution.id,revision:execution.revision,inputs:Object.fromEntries(reads.map(([key,read])=>[key,read()]))}),true);}
+    for(const [key,value] of Object.entries(execution.result||{})){
+      if(key==='empty'&&typeof value==='boolean')continue;
+      const title=document.createElement('h4');title.textContent=execution.presentation?.labels?.[key]||key;node.appendChild(title);
+      if(Array.isArray(value)&&value.every(row=>row&&typeof row==='object')){const keys=execution.presentation?.columns?.[key]||[...new Set(value.flatMap(row=>Object.keys(row)))];const wrapper=document.createElement('div');wrapper.className='kh-embed-table-wrap';wrapper.innerHTML=value.length?`<table><thead><tr>${keys.map(column=>`<th>${escapeHtml(execution.presentation?.labels?.[`${key}.${column}`]||column)}</th>`).join('')}</tr></thead><tbody>${value.map(row=>`<tr>${keys.map(column=>`<td>${escapeHtml(formatDisplayValue(row[column],column))}</td>`).join('')}</tr>`).join('')}</tbody></table>`:escapeHtml(execution.presentation?.emptyText||'Không có dữ liệu.');node.appendChild(wrapper);}
+      else {const text=document.createElement('span');text.textContent=formatDisplayValue(value);node.appendChild(text);}
+    }
+    if(execution.error){const text=document.createElement('p');text.textContent=execution.error;node.appendChild(text);}
+    if(['SUCCEEDED','FAILED','CANCELLED'].includes(execution.status))action('Làm lại',{workflowAction:'create',templateId:execution.templateId,requestId:createSessionId()});
+    else if(execution.id)action('Hủy tác vụ',{workflowAction:'cancel',runId:execution.id,revision:execution.revision});
+    node.appendChild(actions);
+    if(['READY','RUNNING'].includes(execution.status)){const version=conversationVersion;setTimeout(async()=>{if(version!==conversationVersion||!node.isConnected)return;try{const data=await workflowApi({workflowAction:'get',runId:execution.id});mountWorkflow(node,data.execution);}catch(e){node.appendChild(document.createTextNode(e.message));}},4000);}
+  }
   // Keep host-page keyboard shortcuts (Space, arrows, etc.) away from chat input.
   // Do not preventDefault here: the input must retain its native text behavior.
   ['keydown', 'keypress', 'keyup', 'beforeinput', 'input'].forEach(eventName => {
@@ -237,10 +279,12 @@
     conversationVersion++;
     activeRequest?.abort(); activeRequest = null;
     history.splice(0, history.length); sessionId = createSessionId();
+    workflowToken='';workflowRuns=[];saveWorkflow();
     input.value = ''; input.disabled = false; sendButton.disabled = false;
     renderWelcome(); input.focus();
   };
   renderWelcome();
+  if(workflowToken) for(const runId of workflowRuns){const node=append('Đang tải tác vụ đã lưu…','ai');workflowApi({workflowAction:'get',runId}).then(data=>{if(node.isConnected)mountWorkflow(node,data.execution);}).catch(e=>{node.textContent=e.message;});}
   toggleButton.onclick = () => {
     root.classList.toggle('open');
     const isOpen = root.classList.contains('open');
@@ -260,10 +304,12 @@
     const requestVersion = conversationVersion;
     activeRequest = new AbortController();
     try {
-      const response = await fetch(`${apiBase}/api/embed/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: activeRequest.signal, body: JSON.stringify({ embedId, question, sessionId, history: history.slice(-20), preview: isPreview }) });
+      const response = await fetch(`${apiBase}/api/embed/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: activeRequest.signal, body: JSON.stringify({ embedId, question, sessionId,workflowToken, history: history.slice(-20), preview: isPreview }) });
       const data = await response.json();
       if (!response.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${response.status}`);
       if (requestVersion !== conversationVersion) return;
+      if(data.workflowToken){workflowToken=data.workflowToken;saveWorkflow();}
+      if(data.execution){thinking.remove();const node=append('','ai');mountWorkflow(node,data.execution);return;}
       const replyWithoutDownloadLink = stripInlineDownloadLink(data.reply || '', data.downloadUrl);
       const hasMarkdownTable = replyWithoutDownloadLink.includes('|') && /\|?\s*:?-+:?\s*\|/.test(replyWithoutDownloadLink);
       let result = hasMarkdownTable ? renderRichText(replyWithoutDownloadLink) : renderText(replyWithoutDownloadLink);

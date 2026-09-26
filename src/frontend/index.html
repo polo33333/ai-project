@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 
 <head>
@@ -93,6 +93,11 @@
                 <span class="nav-icon"><i class="fa-solid fa-comments"></i></span> <span class="nav-label">Trò chuyện AI</span>
               </a>
             </li>
+            <li class="nav-item" id="nav-workflows">
+              <a href="#" onclick="switchMainTab('workflows'); return false;" title="Mẫu nghiệp vụ">
+                <span class="nav-icon"><i class="fa-solid fa-diagram-project"></i></span> <span class="nav-label">Mẫu nghiệp vụ</span>
+              </a>
+            </li>
             <li class="nav-item" id="nav-library">
               <a href="#" onclick="switchMainTab('library'); return false;" title="Thư viện tri thức">
                 <span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span> <span class="nav-label">Thư viện tri thức</span>
@@ -175,11 +180,6 @@
         <div class="nav-section">
           <div class="nav-section-title">TÍCH HỢP & PHÁT TRIỂN</div>
           <ul class="nav-list">
-            <li class="nav-item" id="nav-workflows" hidden aria-hidden="true" style="display:none;">
-              <a href="#" onclick="switchMainTab('workflows'); return false;" title="Quy trình tự động">
-                <span class="nav-icon"><i class="fa-solid fa-diagram-project"></i></span> <span class="nav-label">Quy trình tự động</span>
-              </a>
-            </li>
             <li class="nav-item" id="nav-mcp-sources">
               <a href="#" onclick="switchMainTab('mcp-sources'); return false;" title="Nguồn MCP Server">
                 <span class="nav-icon"><i class="fa-solid fa-cube"></i></span> <span class="nav-label">Nguồn MCP Server</span>
@@ -676,10 +676,10 @@
   <script src="js/modules/dictionary.js?v=20260920-pending-relationship-preview"></script>
   <script src="js/modules/dictionary-graph.js?v=20260921-verified-relationships-only"></script>
   <script src="js/modules/glossary.js?v=20260919-fast-save"></script>
-  <script src="js/modules/page_chat.js?v=20260921-chat-chart-legibility"></script>
-  <script src="js/modules/sql_connector.js"></script>
+  <script src="js/modules/page_chat.js?v=20260926-workflow-tokens"></script>
+  <script src="js/modules/sql_connector.js?v=20260926-lazy-load"></script>
   <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
-  <script src="js/modules/chat_history.js?v=20260912-chat-source"></script>
+  <script src="js/modules/chat_history.js?v=20260926-lazy-load"></script>
   <script src="js/modules/chat_feedback.js"></script>
   <script src="js/modules/training_core.js?v=20260923-training-review-layout"></script>
   <script src="js/modules/mcp_api.js?v=20260912-embed-title"></script>
@@ -688,10 +688,16 @@
   <script src="js/modules/watchfolder.js"></script>
   <script src="js/modules/system_tools.js"></script>
   <script src="js/modules/settings.js?v=20260923-restore-current"></script>
-  <script src="js/modules/workflows.js"></script>
+  <script src="js/modules/workflows.js?v=20260926-phase1"></script>
+  <script src="js/modules/workflow_plugins.js?v=20260926-scope-layout"></script>
+  <link rel="stylesheet" href="css/workflow_plugins.css?v=20260926-scope-layout">
   <!-- Main App Router Script -->
   <script src="js/sidebar.js?v=20260906-null-safe-footer"></script>
   <script src="js/notifications.js?v=1.0.1"></script>
-  <script src="js/app.js?v=20260920-date-display"></script>
+  <link rel="stylesheet" href="css/tab_loading.css?v=20260926-first-load">
+  <script src="js/tab_loading.js?v=20260926"></script>
+  <script src="js/app.js?v=20260926-first-load"></script>
 </body>
 </html>
+
+

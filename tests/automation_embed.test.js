@@ -1,0 +1,24 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');
+test('embed workflow credentials isolate sessions and support inputs, result, restart and cancel',async t=>{
+ process.env.WORKFLOW_PLUGINS_ENABLED='true';process.env.BOOTSTRAP_ADMIN_PASSWORD='isolated-embed-test';
+ const automation=require('../src/backend/automation'),embed=require('../src/backend/services/embed_chat_service');
+ const providers=require('../src/backend/services/ai_provider_manager');t.mock.method(providers,'getProviderForExecution',()=>({status:'unconfigured'}));
+ const admin={accountId:'admin',permissions:['admin']};const bundle=require('../src/backend/automation/pilot.json');
+ let record=await automation.registry.import(bundle,admin);await automation.registry.test(record.id,admin);record=await automation.repository.get('catalog',record.id);await automation.registry.publish(record.id,admin,record.revision);await automation.configure({enabled:true,revision:null},admin);
+ const config=embed.createConfig({name:'test widget',allowedOrigins:['http://widget.test'],rateLimit:100});
+ const core=require('../src/backend/intelligent_core/core');
+ t.mock.method(core,'chat',async(question,options)=>await require('../src/backend/automation/orchestrator').handle(question,options)||({success:true,replyText:'Chat bình thường',toolCalls:[],trace:{completionStatus:'PARTIAL'}}));
+ const {handleRequest}=require('../src/backend/routes/router');const server=http.createServer((req,res)=>handleRequest(req,res).catch(e=>{res.writeHead(500);res.end(e.message);}));await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{server.closeAllConnections();return new Promise(resolve=>server.close(resolve));});
+ const request=async body=>{const response=await fetch(`http://127.0.0.1:${server.address().port}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://widget.test'},body:JSON.stringify({embedId:config.id,sessionId:'session-one',...body})});return {status:response.status,body:await response.json()};};
+ let response=await request({question:'Tra cứu đối tượng'});assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.execution.status,'WAITING_INPUT');
+ const token=response.body.workflowToken,id=response.body.execution.id,revision=response.body.execution.revision;assert.ok(token);
+ response=await request({workflowAction:'inputs',workflowToken:token,runId:id,revision,inputs:{code:'EMBED001'}});assert.equal(response.status,200);await automation.runtime.process(id);
+ response=await request({workflowAction:'get',workflowToken:token,runId:id});assert.equal(response.body.execution.status,'SUCCEEDED');assert.equal(response.body.execution.result.code,'EMBED001');
+ assert.equal((await request({workflowAction:'get',workflowToken:token,sessionId:'other-session',runId:id})).status,403);
+ assert.equal((await request({workflowAction:'get',workflowToken:token+'bad',runId:id})).status,403);
+ const other=await request({question:'hello',sessionId:'session-two'});assert.ok(other.body.workflowToken);
+ assert.equal((await request({workflowAction:'get',workflowToken:other.body.workflowToken,sessionId:'session-two',runId:id})).status,404);
+ response=await request({workflowAction:'create',workflowToken:token,templateId:'phase1_examples/lookup',requestId:'restart-one'});assert.equal(response.body.execution.status,'WAITING_INPUT');assert.notEqual(response.body.execution.id,id);
+ const next=response.body.execution;response=await request({workflowAction:'cancel',workflowToken:token,runId:next.id,revision:next.revision});assert.equal(response.body.execution.status,'CANCELLED');
+});

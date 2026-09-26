@@ -930,6 +930,19 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
   addChatMessageTime(node, record.role, record.createdAt);
 
   container.appendChild(node);
+  node.addEventListener('workflow-execution-updated', event => {
+    const execution = event.detail.execution;
+    if (execution.tokenUsage?.available) { const feedback = node.querySelector('.chat-feedback'); if (feedback) { feedback.querySelector('.chat-token-usage')?.remove(); feedback.insertAdjacentHTML('beforeend', renderChatTokenUsage(execution.tokenUsage)); } }
+    const answer = node.querySelector('.chat-ai-answer');
+    if (answer && execution.status === 'SUCCEEDED') answer.textContent = `${execution.name} đã hoàn thành.`;
+    if (answer && execution.status === 'CANCELLED') answer.textContent = `Đã hủy ${execution.name}.`;
+    const html = node.outerHTML;
+    if (record.html === html) return;
+    record.html = html;
+    const session = window.chatSessions?.find(item => item.messages.includes(record));
+    if (session) { session.updatedAt = Date.now(); saveChatSessions(); }
+  });
+  window.restoreWorkflowExecutions?.(node);
   if (shouldScroll) container.scrollTop = container.scrollHeight;
 
   if (record.chartSpec && record.chartId) {
@@ -1342,8 +1355,9 @@ async function sendPageChatMessage() {
           <span>${aiName}</span>
           <span style="font-size:10.5px;font-weight:500;color:#94a3b8;">${aiRole}</span>
         </div>
-        <div class="chat-ai-answer">${renderedAnswerHtml}</div>
+        <div class="chat-ai-answer">${data.execution?.status === 'WAITING_INPUT' ? 'Bổ sung thông tin bên dưới để tiếp tục.' : renderedAnswerHtml}</div>
         ${downloadActionHtml}
+        ${typeof window.renderWorkflowExecution === 'function' ? window.renderWorkflowExecution(data.execution) : ''}
         ${renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence)}
         ${chartHtml}
         ${technicalHtml}
@@ -1356,8 +1370,8 @@ async function sendPageChatMessage() {
       chartSpec: chartSpec && typeof chartSpec === 'object' ? chartSpec : null,
       chartId: chartSpec && typeof chartSpec === 'object' ? chartId : null
     });
-    window.updatePageChatMiniPanel({ status: data.completionStatus === 'PARTIAL' ? 'error' : 'complete',
-      label: data.completionStatus === 'PARTIAL' ? 'Một phần yêu cầu chưa hoàn tất' : 'Đã hoàn thành câu trả lời' });
+    window.updatePageChatMiniPanel({ status: data.execution ? 'complete' : data.completionStatus === 'PARTIAL' ? 'error' : 'complete',
+      label: data.execution ? 'Theo dõi tác vụ trong hội thoại' : data.completionStatus === 'PARTIAL' ? 'Một phần yêu cầu chưa hoàn tất' : 'Đã hoàn thành câu trả lời' });
     if (typeof fetchChatHistory === 'function') fetchChatHistory();
 
     // Render chart after DOM insert (Chart.js needs canvas in DOM)

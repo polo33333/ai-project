@@ -24,11 +24,13 @@ if (typeof AbortSignal !== 'undefined' && !AbortSignal.any) {
 
 let Connection = null;
 let Request = null;
+let Types = null;
 
 try {
   const tedious = require('tedious');
   Connection = tedious.Connection;
   Request = tedious.Request;
+  Types = tedious.TYPES;
 } catch (e) {
   console.warn("Mô-đun 'tedious' chưa được tải. Kết nối SQL Server sẽ dùng DDL Parser.");
 }
@@ -423,7 +425,7 @@ class SqlConnector {
   /**
    * Execute real SELECT SQL query on connected live database
    */
-  executeSqlQuery(sqlString, dbSourceId = null, signal = null) {
+  executeSqlQuery(sqlString, dbSourceId = null, signal = null, parameters = []) {
     return new Promise((resolve, reject) => {
       const liveSource = dbSourceId
         ? this.dbSources.find(s => s.id === dbSourceId && (s.mode === 'live' || s.type === 'Direct Live Connection'))
@@ -497,6 +499,15 @@ class SqlConnector {
           finish(null, rows);
         });
 
+        try {
+          for (const parameter of parameters) {
+            if (!/^[a-zA-Z][a-zA-Z0-9_]{0,99}$/.test(parameter.name)) throw new Error('Invalid SQL parameter name.');
+            const types = { string: Types.NVarChar, integer: Types.Int, number: Types.Float, boolean: Types.Bit, date: Types.Date };
+            if (!Object.hasOwn(types, parameter.type)) throw new Error('Invalid SQL parameter type.');
+            const value = parameter.type === 'date' && parameter.value !== null ? new Date(parameter.value) : parameter.value;
+            request.addParameter(parameter.name, types[parameter.type], value);
+          }
+        } catch (error) { return finish(error); }
         request.on('row', (columns) => {
           const rowData = {};
           columns.forEach(col => {
