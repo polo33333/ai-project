@@ -88,8 +88,17 @@ function buildEnrichmentProjection(schemaColumns = [], joinPlan = null, rootAlia
 }
 
 function buildEnrichedListSql(plan = {}, joinPlan = null) {
-  if (!['list', 'record_lookup'].includes(plan.intent) || joinPlan?.outcome !== 'ready' || !joinPlan.edges?.length) return '';
+  if (!['list', 'record_lookup'].includes(plan.intent)) return '';
   const limit = Math.max(1, Math.min(1000, Number(plan.rowLimit) || 100));
+  if (!joinPlan || (joinPlan.outcome === 'ready' && !joinPlan.edges?.length)) {
+    if (!plan.directListQuery || plan.intent !== 'list' || !plan.table || !isSimpleEntityListRequest(plan.question || '')
+      || !plan.schemaColumns?.length) return '';
+    const projection = plan.schemaColumns.filter(column => column && !/password|pwd|secret|token|credential|api.?key/i.test(column))
+      .map(column => `t1.${quote(column)}${plan.columnDisplayNames?.[column] ? ` AS ${quote(plan.columnDisplayNames[column])}` : ''}`).join(', ');
+    if (!projection) return '';
+    return `SELECT TOP ${limit} ${projection} FROM ${quote(plan.schemaName || 'dbo')}.${quote(plan.table)} t1`;
+  }
+  if (joinPlan.outcome !== 'ready' || !joinPlan.edges?.length) return '';
   const root = joinPlan.tableRefs.find(ref => ref.tableName === plan.table) || joinPlan.tableRefs[0];
   const refs = new Map(joinPlan.tableRefs.map(ref => [ref.tableRefId || ref.tableId, ref]));
   const joins = joinPlan.edges.map(edge => {

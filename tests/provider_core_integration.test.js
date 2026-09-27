@@ -8,6 +8,103 @@ const connector = require('../src/backend/services/sql_connector');
 const { trainingService } = require('../src/backend/training_core');
 const fixture = require('./fixtures/provider_raw_contract_chat.json');
 
+for (const databaseAvailable of [true, false]) {
+test(`ds kh avoids embedding and model retries (database available: ${databaseAvailable})`, async t => {
+  const dictionary = require('../src/backend/services/dictionary_service');
+  const automation = require('../src/backend/automation');
+  const table = require('../src/backend/services/schema_identity').withIdentity({ dbSourceId: 'test-db', dbName: 'Fixture', schemaName: 'sales', tableName: 'M_Customer', domain: 'customer', isActive: true,
+    columns: [{ columnName: 'CustomerID', dataType: 'INT', isPrimaryKey: true }, { columnName: 'CustomerName', dataType: 'NVARCHAR' }, { columnName: 'Password', dataType: 'NVARCHAR' }] });
+  t.mock.method(dictionary, 'getGroupedTables', () => [table]);
+  t.mock.method(dictionary, 'getTableRelationships', () => []);
+  t.mock.method(dictionary, 'getGlossary', () => [{ term: 'KH', fullMeaning: 'Khách hàng', isActive: true }]);
+  t.mock.method(require('../src/backend/intelligent_core/domain_alias_service'), 'getDomainAliases', () => ({ customer: ['khach hang'] }));
+  t.mock.method(automation, 'settings', async () => ({ enabled: true }));
+  t.mock.method(automation.runtime, 'pending', async () => null);
+  const catalog = t.mock.method(automation.registry, 'list', async () => { throw new Error('No catalog classification needed'); });
+  const selected = { id: 'list-cloud', name: 'Chosen cloud', model: 'chosen-model', apiFormat: 'openai', executionClass: 'remote', supportsToolCalling: true, baseUrl: 'https://chosen.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(connector, 'getDefaultDbSource', () => ({ id: 'test-db', dbName: 'Fixture' }));
+  const sql = t.mock.method(connector, 'executeSqlQuery', async () => {
+    if (!databaseAvailable) throw new Error('Database unavailable');
+    return [{ CustomerID: 1, CustomerName: 'Customer fixture' }];
+  });
+  const embedding = t.mock.method(require('../src/backend/services/qdrant_service'), 'embedTexts', async () => { throw new Error('No embedding needed'); });
+  const model = t.mock.method(global, 'fetch', async () => { throw new Error('No model call needed'); });
+  const result = await core.chat('ds kh', { providerId: selected.id, knowledgeSearchEnabled: false, permissions: ['sql:read'], session: { id: `fixture-list-chat-${databaseAvailable}`, accountId: 'fixture-account' } });
+  assert.equal(result.completionStatus, databaseAvailable ? 'SUCCESS' : 'PARTIAL');
+  assert.match(result.replyText, databaseAvailable ? /Customer fixture/ : /Không thể lấy danh sách/);
+  assert.equal(sql.mock.callCount(), 1);
+  assert.match(sql.mock.calls[0].arguments[0], /\[sales\]\.\[M_Customer\]/);
+  assert.doesNotMatch(sql.mock.calls[0].arguments[0], /Password|SELECT.*\*/i);
+  assert.equal(embedding.mock.callCount(), 0);
+  assert.equal(catalog.mock.callCount(), 0);
+  assert.equal(model.mock.callCount(), 0);
+});
+}
+
+test('ordinary chat uses only the selected model without schema or document embedding', async t => {
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => null);
+  const selected = { id: 'chosen', name: 'Chosen cloud', model: 'chosen-model', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', id => id === selected.id ? selected : null);
+  t.mock.method(providers, 'getActiveProvider', () => ({ ...selected, id: 'other', model: 'other-model' }));
+  const embeddings = t.mock.method(require('../src/backend/services/qdrant_service'), 'embedTexts', async () => { throw new Error('Embedding must not be called'); });
+  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
+  const calls = [];
+  t.mock.method(global, 'fetch', async (url, options) => {
+    const request = JSON.parse(options.body);
+    calls.push({ url, model: request.model });
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'A spreadsheet organizes information into rows and columns.' }, finish_reason: 'stop' }] }) };
+  });
+  const result = await core.chat('Hướng dẫn sử dụng Excel và giải thích chi tiết cách xuất file PDF', { providerId: selected.id, useTools: false });
+  assert.equal(result.success, true);
+  assert.equal(embeddings.mock.callCount(), 0);
+  assert.ok(calls.length > 0);
+  assert.ok(calls.every(call => call.model === selected.model && call.url.startsWith(selected.baseUrl)));
+});
+
+for (const flags of [
+  { AGENT_CORE_ENABLED: 'true', AI_PROVIDER_GUARDS_ENABLED: 'true' },
+  { AGENT_CORE_ENABLED: 'true', AI_PROVIDER_GUARDS_ENABLED: 'false' },
+  { AGENT_CORE_ENABLED: 'false', AI_PROVIDER_GUARDS_ENABLED: 'false' }
+]) {
+  test(`explicit model selection never falls back to another provider (${JSON.stringify(flags)})`, async t => {
+    const previous = Object.fromEntries(Object.keys(flags).map(key => [key, process.env[key]]));
+    Object.assign(process.env, flags);
+    t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+    t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => null);
+    const selected = { id: 'chosen', name: 'Chosen cloud', model: 'chosen-model', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
+    t.mock.method(providers, 'getProviderForExecution', id => id === selected.id ? selected : null);
+    t.mock.method(providers, 'getActiveProvider', () => selected);
+    t.mock.method(providers, 'getProvidersForExecution', () => [selected, { ...selected, id: 'local', model: 'local-model', baseUrl: 'http://127.0.0.1:11434' }]);
+    t.mock.method(schema, 'buildSchemaContext', async () => ({ mode: 'general', selectedTables: [], schemaContext: '', useTools: false }));
+    const calls = [];
+    t.mock.method(global, 'fetch', async url => { calls.push(url); throw new Error('connect ECONNREFUSED'); });
+    const result = await core.chat('Hello there', { providerId: selected.id, knowledgeSearchEnabled: false, useTools: false });
+    assert.notEqual(result.completionStatus, 'SUCCESS');
+    assert.ok(calls.length > 0);
+    assert.ok(calls.every(url => url.startsWith(selected.baseUrl)), JSON.stringify(calls));
+  });
+}
+
+test('web chat bypasses database schema retrieval before calling the cloud provider', async t => {
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => null);
+  const provider = { id: 'web-cloud', name: 'Fixture cloud', model: 'fixture', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://test.invalid' };
+  t.mock.method(providers, 'getActiveProvider', () => provider);
+  t.mock.method(providers, 'getProvidersForExecution', () => [provider]);
+  const retrieval = t.mock.method(schema, 'buildSchemaContext', async () => { throw new Error('Schema embedding must not be called'); });
+  const web = require('../src/backend/services/web_search_service');
+  t.mock.method(web, 'search', async () => [{ title: 'Cloud models', url: 'https://example.com/models', snippet: 'Cloud models answer questions remotely.' }]);
+  t.mock.method(global, 'fetch', async () => ({ ok: true, json: async () => ({
+    choices: [{ message: { content: 'Cloud models answer questions remotely.' }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
+  }) }));
+  const result = await core.chat('Search the web for information about cloud models', { webSearch: true, knowledgeSearchEnabled: false, useTools: false });
+  assert.equal(result.success, true);
+  assert.equal(retrieval.mock.callCount(), 0);
+  assert.match(result.replyText, /Cloud models/);
+});
+
 test('core preserves workflow routing usage alongside verified provider data and progress', async t => {
   t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async (_, options) => {
     options.onWorkflowUsage({ inputTokens: 100, outputTokens: 20, totalTokens: 120, calls: 2 });

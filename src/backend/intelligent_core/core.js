@@ -26,6 +26,7 @@ const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 const { resolvePlan } = require('../agent_core/harness/completion_policy');
 const { createProviderBudget } = require('../agent_core/harness/guarded_agent_harness');
 const { buildCalculationReply } = require('../agent_core/harness/calculation_reply');
+const { isSimpleEntityListRequest } = require('../services/sql_enrichment_builder');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
 const REQUEST_TIMEOUT_MS  = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
@@ -130,19 +131,21 @@ class IntelligentCore {
       tokenUsage.calls += Math.max(1, Number(usage.calls) || 0);
       tokenUsage.available = true;
     };
+    const explicitlySelectedProvider = providerId ? aiProviderManager.getProviderForExecution(providerId) : null;
+    if (providerId && !explicitlySelectedProvider) {
+      return this._buildErrorResponse(userMessage, null, 'Model đã chọn không khả dụng. Hãy chọn lại model.');
+    }
     const workflowResponse = await require('../automation/orchestrator').handle(userMessage, {
       ...options,
+      preferDirectDataList: !webSearch && !knowledgeSourceIds.length && isSimpleEntityListRequest(userMessage),
       onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); }
     });
     if (workflowResponse) return workflowResponse;
 
     // ── Resolve provider ───────────────────────────────────────────────────
     let provider = aiProviderManager.getActiveProvider();
-    if (providerId) {
-      const found = aiProviderManager.getProviderForExecution(providerId);
-      if (found) provider = found;
-    }
-    const providerCandidates = getProviderCandidates(provider);
+    if (explicitlySelectedProvider) provider = explicitlySelectedProvider;
+    const providerCandidates = explicitlySelectedProvider ? [provider] : getProviderCandidates(provider);
     const executionBudget = isLocalProvider(provider) ? new RequestExecutionBudget({
       maxModelCalls: Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 9),
       maxSqlAttempts: Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3)
@@ -166,13 +169,9 @@ class IntelligentCore {
       ? webSearchService.buildContextualQuery(userMessage, history, true)
       : userMessage;
     emitProgress(options.onProgress, { type: 'context_started', label: 'Đang chọn ngữ cảnh và cấu trúc dữ liệu', status: 'running', icon: 'book-open' });
-    let contextSelection = await schemaContextService.buildSchemaContext(contextualRequest, { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
-    if (webSearch) {
-      contextSelection.mode = 'general';
-      contextSelection.selectedTables = [];
-      contextSelection.schemaContext = '';
-      contextSelection.useTools = false;
-    }
+    let contextSelection = webSearch
+      ? { mode: 'general', selectedTables: [], schemaContext: '', useTools: false }
+      : await schemaContextService.buildSchemaContext(contextualRequest, { dbName: selectedDb?.dbName || null, dbSourceId: selectedDb?.id || null });
     contextSelection.dbSourceId = selectedDb?.id || null;
     contextSelection.dbName = selectedDb?.dbName || null;
     emitProgress(options.onProgress, {
@@ -297,6 +296,7 @@ ${strictSelectedKnowledge
     const effectiveUseTools = contextSelection.mode !== 'knowledge' && useTools && (contextSelection.useTools || enabledToolNames?.length > 0);
     const requestPlan = resolvePlan(contextualRequest, { ...trainingService.plan({ question: contextualRequest, selectedTables: contextSelection.selectedTables || [] }), dbSourceId: selectedDb?.id || null },
       { mode: contextSelection.mode, webSearch });
+    requestPlan.directListQuery = contextSelection.retrieval?.semanticSearch?.reason === 'explicit_list_entity';
     const memoryDecision = memoryService.route({
       sessionId: options.session?.id,
       accountId: options.session?.accountId || null,
@@ -363,6 +363,7 @@ ${strictSelectedKnowledge
           provider,
           enabledToolNames: effectiveUseTools && !requestPlan.codeOnly ? enabledToolNames : [],
           context: {
+            lockProvider: Boolean(explicitlySelectedProvider),
             permissions: options.permissions || [], session: options.session, dbSourceId: selectedDb?.id || null,
             selectedTables: contextSelection.selectedTables || [],
             joinPlan: contextSelection.joinPlan || null,

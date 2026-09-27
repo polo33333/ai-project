@@ -14,8 +14,15 @@ test('ordinary questions and calculations do not trigger knowledge retrieval', (
 });
 
 test('explicit enterprise knowledge questions trigger retrieval', () => {
-  assert.equal(needsKnowledgeSearch('Quy trình phê duyệt hồ sơ thế nào?', { documents }).needed, true);
+  assert.equal(needsKnowledgeSearch('Quy trình nội bộ phê duyệt hồ sơ thế nào?', { documents }).needed, true);
   assert.equal(needsKnowledgeSearch('Tìm trong tài liệu hướng dẫn sử dụng', { documents }).needed, true);
+});
+
+test('general tutorials and plans do not access the stored knowledge base', () => {
+  for (const question of ['Hướng dẫn sử dụng Excel cho người mới', 'Lập kế hoạch học tiếng Anh',
+    'Giải thích chi tiết chính sách tiền tệ', 'Quy trình hình thành một cơn bão là gì?']) {
+    assert.equal(needsKnowledgeSearch(question, { documents }).needed, false, question);
+  }
 });
 
 test('document title terms and selected sources trigger retrieval', () => {

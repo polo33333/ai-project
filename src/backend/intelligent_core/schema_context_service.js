@@ -5,6 +5,7 @@ const qdrantService = require('../services/qdrant_service');
 const domainAliasService = require('./domain_alias_service');
 const { tableIdentity } = require('../services/schema_identity');
 const joinPlannerService = require('../services/join_planner_service');
+const { isSimpleEntityListRequest } = require('../services/sql_enrichment_builder');
 
 const MAX_TABLES = Math.max(1, parseInt(process.env.AI_SCHEMA_MAX_TABLES || '6', 10));
 const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COLUMNS_PER_TABLE || '40', 10));
@@ -77,12 +78,22 @@ function isStandaloneCalculation(query, options = {}) {
 }
 
 function isGeneralConversation(query, queryTokens, tables, hasGlossaryExpansion = false) {
-  const normalized = normalize(query);
-  const hasSchemaMatch = tables.some(table => lexicalScore(queryTokens, tableText(table)) > 0);
-  const dataIntent = /\b(sql|database|db|du lieu|bang|cot|truy van|bao cao|thong ke|bieu do|do thi|xuat file|excel|csv|pdf|ds|danh sach|chi tiet|hop dong)\b/.test(normalized);
+  // "bằng Gemini" is ordinary conversation, not a request about a "bảng".
+  const normalized = normalize(String(query || '').replace(/\bbằng\b/giu, ' '));
+  // SQL types and generic output formats are not evidence of a database request.
+  const hasSchemaMatch = tables.some(table => lexicalScore(queryTokens, [
+    table.tableName, table.domain, domainText(table.domain), table.tableDescription,
+    ...(table.columns || []).filter(column => column.isVisible !== false)
+      .flatMap(column => [column.columnName, column.displayName, column.description])
+  ].filter(Boolean).join(' ')) >= 4);
+  const dataIntent = /\b(truy van|du lieu (?:trong|tu) (?:database|db|bang)|(?:database|db|bang|cot) (?:hien tai|da ket noi)|(?:bao cao|thong ke|danh sach|ds|chi tiet|bieu do|do thi)\b.*\b(?:doanh thu|hop dong|nhan vien|khach hang|hoa don)|hop dong)\b/.test(normalized);
+  const generalExplanation = /\b(giai thich|huong dan|la gi|khai niem|explain|what is|how to|tutorial)\b/.test(normalized);
+  const explicitStoredData = /\b(kho du lieu|noi bo|da ket noi|trong bang|tu bang|theo du lieu)\b/.test(normalized)
+    || tables.some(table => ` ${normalized} `.includes(` ${normalize(table.tableName)} `));
   const greeting = /^(hi|hello|hey|chao|xin chao|cam on|thank you|thanks)(\s+ban)?[.!?\s]*$/.test(normalized);
   const standaloneCalculation = isStandaloneCalculation(query, { hasSchemaMatch });
-  return greeting || standaloneCalculation || (!hasGlossaryExpansion && !dataIntent && !hasSchemaMatch && queryTokens.length <= 4);
+  return greeting || standaloneCalculation || (generalExplanation && !explicitStoredData && !hasGlossaryExpansion)
+    || (!hasGlossaryExpansion && !dataIntent && !hasSchemaMatch);
 }
 
 function expandWithGlossary(query) {
@@ -132,12 +143,23 @@ async function buildSchemaContext(query, options = {}) {
   }
 
   const expandedTokens = tokens(expandedQuery);
+  const paddedQuery = ` ${normalize(expandedQuery)} `;
+  const configuredAliases = domainAliasService.getDomainAliases();
+  const directListTables = isSimpleEntityListRequest(query) ? activeTables.filter(table =>
+    [table.tableName, table.domain, ...(configuredAliases[table.domain] || [])]
+      .some(phrase => normalize(phrase) && paddedQuery.includes(` ${normalize(phrase)} `))) : [];
+  const directListTable = directListTables.length === 1 ? directListTables[0] : null;
   const lexicalScores = new Map(activeTables.map(table => [tableIdentity(table), lexicalScore(expandedTokens, tableText(table))]));
+  if (directListTable) {
+    for (const table of activeTables) lexicalScores.set(tableIdentity(table), table === directListTable ? 1000 : 0);
+  }
   const scores = new Map(lexicalScores);
   const vectorColumnNames = new Set();
   let vectorResults = [];
   let semanticSearch = { status: 'ok', errorCode: null };
-  try {
+  if (directListTable) {
+    semanticSearch = { status: 'skipped', errorCode: null, reason: 'explicit_list_entity' };
+  } else try {
     const result = await qdrantService.searchSchema(expandedQuery, Math.max(12, MAX_TABLES * 3), { detailed: true });
     vectorResults = Array.isArray(result) ? result : result.results;
     if (!Array.isArray(vectorResults)) throw new Error('Invalid schema search result');

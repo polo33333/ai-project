@@ -74,6 +74,7 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     intent: months ? 'aggregate_timeseries' : listIntent ? 'list' : 'record_lookup',
     question,
     table: table?.tableName || null,
+    schemaName: table?.schemaName || 'dbo',
     schemaColumns: availableColumns.map(column => column.columnName),
     identityColumns: [...new Set([...primaryIdentityColumns, ...secondaryIdentityColumns])].slice(0, 6),
     columnDisplayNames: Object.fromEntries((table?.columns || []).filter(column => column.displayName)

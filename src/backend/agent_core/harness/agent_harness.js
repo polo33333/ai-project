@@ -141,7 +141,7 @@ class AgentHarness {
     };
 
     let activeProvider = provider || aiProviderManager.getActiveProvider();
-    const providerCandidates = getProviderCandidates(activeProvider);
+    const providerCandidates = context.lockProvider ? [activeProvider] : getProviderCandidates(activeProvider);
     const providerFallbacks = [];
 
     const toolContext = { ...context, allowedToolNames: enabledToolNames };

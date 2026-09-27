@@ -222,8 +222,11 @@ async function handle(question, options = {}) {
   if (!config.enabled || !options.session?.accountId || !options.session?.id) return null;
   const context = { accountId: options.session.accountId, tenantId: options.session.tenantId, permissions: options.permissions || [] };
   const conversationId = options.session.id;
-  const definitions = await automation.registry.list(context);
   const current = await automation.runtime.pending(context, conversationId);
+  // Plain entity lists use reviewed database metadata instead of sending the
+  // entire workflow catalog through multiple classification calls.
+  if (options.preferDirectDataList && !current) return null;
+  const definitions = await automation.registry.list(context);
   const socialReply = interpreted => ({ success: true, replyText: interpreted.replyText, usedProvider: interpreted.usedProvider, executionMode: 'chat', tokenUsage, toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'SUCCESS', workflowRouting: { reason: 'social_reply' } } });
   if (current) {
     let values = {};

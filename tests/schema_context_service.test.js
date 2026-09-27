@@ -9,6 +9,42 @@ const { withIdentity } = require('../src/backend/services/schema_identity');
 const { getDomainAliases, normalizeDomainAliases, normalizeDomainKey } = require('../src/backend/intelligent_core/domain_alias_service');
 const { validateSqlAgainstJoinPlan } = require('../src/backend/services/sql_join_validator');
 
+test('long general conversation bypasses embedding even with active database tables', async t => {
+  const table = withIdentity({ dbSourceId: 'source', dbName: 'ERP', schemaName: 'dbo', tableName: 'T_Invoice', isActive: true,
+    tableDescription: 'Invoices', columns: [{ columnName: 'InvoiceID', dataType: 'INT' }] });
+  t.mock.method(dictionaryService, 'getGroupedTables', () => [table]);
+  t.mock.method(dictionaryService, 'getGlossary', () => []);
+  const search = t.mock.method(qdrantService, 'searchSchema', async () => { throw new Error('Embedding must not be called'); });
+  for (const query of [
+    'Explain how rainbows form and why their colors appear in this particular order',
+    'Hãy giúp tôi viết một bài thơ thật dài về mùa thu và những cơn mưa',
+    'Tại sao tôi đang chat bằng Gemini mà lại cần một model local để trả lời',
+    'Hướng dẫn sử dụng Excel và xuất file PDF cho người mới',
+    'Giải thích chi tiết cách tạo biểu đồ và báo cáo',
+    'Explain what an InvoiceID column means in a SQL database',
+    'Hợp đồng là gì? Giải thích giúp tôi bằng ví dụ đơn giản'
+  ]) {
+    const context = await buildSchemaContext(query, { dbSourceId: 'source' });
+    assert.equal(context.mode, 'general');
+    assert.deepEqual(context.selectedTables, []);
+    assert.equal(context.useTools, false);
+  }
+  assert.equal(search.mock.callCount(), 0);
+});
+
+test('long database requests still retrieve schema', async t => {
+  const table = withIdentity({ dbSourceId: 'source', dbName: 'ERP', schemaName: 'dbo', tableName: 'T_Invoice', isActive: true,
+    tableDescription: 'Invoices', columns: [{ columnName: 'InvoiceID', dataType: 'INT' }] });
+  t.mock.method(dictionaryService, 'getGroupedTables', () => [table]);
+  t.mock.method(dictionaryService, 'getGlossary', () => []);
+  t.mock.method(dictionaryService, 'getTableRelationships', () => []);
+  const search = t.mock.method(qdrantService, 'searchSchema', async () => ({ results: [], status: 'ok', errorCode: null }));
+  const context = await buildSchemaContext('Please list all invoices issued during the previous month sorted by InvoiceID', { dbSourceId: 'source' });
+  assert.equal(context.mode, 'data');
+  assert.equal(search.mock.callCount(), 1);
+  assert.ok(context.selectedTables.includes('T_Invoice'));
+});
+
 test('standalone statistics with an explicit number list bypass SQL schema retrieval', () => {
   assert.equal(
     isStandaloneCalculation('Tính min, max, trung bình của dãy số: 120, 450, 230, 890, 340, 670'),

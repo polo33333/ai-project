@@ -99,8 +99,8 @@ main.main-content.settings-workspace { overflow-y:auto; overscroll-behavior-y:co
 .settings-value.disabled { color:#8b5a16; border-color:#ead7b8; background:#fff7e8; }
 .settings-property-result > small { display:block; margin-top:6px; color:var(--text-muted); font-size:11px; }
 .settings-input { width:min(100%,340px); min-height:42px; margin:0 0 0 auto; font:600 13px ui-monospace,SFMono-Regular,Consolas,monospace; }
-.settings-switch { display:inline-flex; align-items:center; justify-content:flex-end; gap:10px; width:min(100%,340px); margin-left:auto; cursor:pointer; user-select:none; }
-.settings-switch input { position:absolute; width:1px; height:1px; min-height:0; margin:0; opacity:0; pointer-events:none; }
+.settings-switch { position:relative; display:inline-flex; align-items:center; justify-content:flex-end; gap:10px; width:min(100%,340px); margin-left:auto; cursor:pointer; user-select:none; }
+.settings-switch input { position:absolute; top:0; left:0; width:1px; height:1px; min-height:0; margin:0; opacity:0; pointer-events:none; }
 .settings-switch-track { position:relative; width:38px; height:22px; border-radius:999px; background:#cbd5e1; transition:background .18s; }
 .settings-switch-track i { position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.28); transition:transform .18s; }
 .settings-switch-status::after { content:'Tắt'; color:#8b5a16; font-size:12px; font-weight:800; }

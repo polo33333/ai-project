@@ -73,7 +73,7 @@ class GuardedAgentHarness {
     if (context.signal?.aborted) throw aborted();
     const budget = context.executionBudget || createProviderBudget();
     let activeProvider = provider || providers.getActiveProvider();
-    const candidates = [activeProvider, ...providers.getProvidersForExecution()
+    const candidates = context.lockProvider ? [activeProvider] : [activeProvider, ...providers.getProvidersForExecution()
       .filter(item => item.id !== activeProvider?.id && item.baseUrl && item.model && item.status !== 'unconfigured')
       .filter(item => !isLocalProvider(activeProvider) || process.env.LOCAL_MODEL_ALLOW_CLOUD_FALLBACK === 'true' || isLocalProvider(item))
       .sort((a, b) => (Number(a.priority) || 999) - (Number(b.priority) || 999))].filter(Boolean);
@@ -178,8 +178,16 @@ class GuardedAgentHarness {
           trace.toolCalls.push({ toolName: 'execute_sql_query', success: execution.success, durationMs: execution.durationMs, source: 'DETERMINISTIC_LIST_QUERY' });
           trace.steps.push({ type: 'DETERMINISTIC_LIST_QUERY', success: execution.success, toolName: 'execute_sql_query' });
           if (execution.success) reply = buildSqlRowsFallbackReply({ toolName: 'execute_sql_query', args: { sql: deterministicSql }, success: true, result: execution.result }, plan.columnDisplayNames);
+          else if (plan.directListQuery) {
+            stopReason = 'DIRECT_LIST_QUERY_FAILED';
+            reply = 'Không thể lấy danh sách từ cơ sở dữ liệu. Hãy kiểm tra kết nối và cấu hình bảng rồi thử lại.';
+          }
         } catch (error) {
           trace.steps.push({ type: error.code || 'DETERMINISTIC_LIST_QUERY_FAILED', error: error.message });
+          if (plan.directListQuery) {
+            stopReason = error.code || 'DIRECT_LIST_QUERY_FAILED';
+            reply = 'Không thể lấy danh sách từ cơ sở dữ liệu. Hãy kiểm tra kết nối và cấu hình bảng rồi thử lại.';
+          }
         }
       }
     }
@@ -269,7 +277,7 @@ class GuardedAgentHarness {
       trace.steps.push({ type: stopReason, iteration: trace.iterations });
     }
 
-    if (!qualifiedSql(toolCalls, plan).length) {
+    if (!qualifiedSql(toolCalls, plan).length && !(plan.directListQuery && stopReason)) {
       const recoveryQuestion = contextualLookupQuestion(question, messages);
       const recoverySql = buildEnrichedListSql({ ...plan, question: recoveryQuestion,
         datasetReference: context.memoryDecision?.reference }, context.joinPlan);

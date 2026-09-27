@@ -1,7 +1,8 @@
 const STOP_WORDS = new Set([
   'cua', 'cho', 'voi', 'theo', 'trong', 'tren', 'duoi', 'nay', 'kia', 'mot',
   'cac', 'nhung', 'nhu', 'the', 'nao', 'khong', 'duoc', 'file', 'document',
-  'master', 'plan', 'app', 'version'
+  'master', 'plan', 'app', 'version', 'huong', 'huongdan', 'su', 'dung',
+  'quy', 'trinh', 'chinh', 'sach', 'nghiep', 'kich', 'ban', 'hoach'
 ]);
 
 function normalize(value) {
@@ -36,7 +37,9 @@ function needsKnowledgeSearch(question, { sourceIds = [], documents = [] } = {})
   const normalized = normalize(question);
   if (!normalized) return { needed: false, reason: 'empty_query' };
 
-  const explicitKnowledgeIntent = /\b(tai lieu|tri thuc|thu vien|knowledge ?hub|quy trinh|quy dinh|chinh sach|huong dan|huong dan su dung|nghiep vu|kich ban|ke hoach|tra cuu|tim kiem|noi dung file|trong file|theo file|theo tai lieu)\b/.test(normalized);
+  // General advice about plans, policies or tutorials does not imply a search
+  // of the application's stored documents.
+  const explicitKnowledgeIntent = /\b(kho (tai lieu|tri thuc|du lieu)|thu vien|knowledge ?hub|theo tai lieu|trong tai lieu|tu tai lieu|noi dung file|trong file|theo file|tai lieu (noi bo|da tai|da chon)|(?:quy trinh|quy dinh|chinh sach|huong dan) noi bo|tim (?:trong )?tai lieu|tra cuu tai lieu)\b/.test(normalized);
   if (explicitKnowledgeIntent) {
     return { needed: true, reason: 'explicit_knowledge_intent' };
   }
