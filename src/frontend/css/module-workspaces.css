@@ -207,7 +207,10 @@
 .system-tool-schema > div { border-radius: 9px; padding: 12px; }
 
 /* API: align product sections and make examples readable without overwhelming the page. */
-.api-page-card .api-hero { background: linear-gradient(135deg,#fff 0%,#f7f8ff 56%,#f3e8ff 100%); border-color: #dce3ee; box-shadow: 0 6px 22px rgba(79,70,229,.07); padding: 24px; }
+.api-page-card .api-hero { background: linear-gradient(135deg,#fff 0%,#f7f8ff 56%,#f3e8ff 100%); border-color: #dce3ee; box-shadow: 0 6px 22px rgba(79,70,229,.07); padding: 14px 24px; }
+.api-page-card .api-hero h2 { font-size: 22px; margin: 2px 0 4px; }
+.api-page-card .api-hero-badges { margin-top: 6px; gap: 6px; }
+.api-page-card .api-hero-badges span { padding: 2px 8px; }
 .api-hero::after { display: block; right: -72px; top: 50%; width: 310px; height: 210px; background: radial-gradient(circle,rgba(168,85,247,.2) 0%,rgba(139,92,246,.1) 38%,transparent 72%); filter: blur(18px); transform: translateY(-50%); }
 .api-hero-icon { width: 48px; height: 48px; box-shadow: none; background: #efebfb; color: #6d53b4; border-radius: 13px; font-size: 20px; }
 .api-eyebrow { font-weight: 600; }

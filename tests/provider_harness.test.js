@@ -42,6 +42,14 @@ test('recorded SQL-only contract response is repaired before it can reach the us
   assert.equal(result.trace.executionBudget.repairAttempts, 1);
   assert.ok(s.requests[1].messages.some(m => m.content?.includes('MISSING_SQL')));
 });
+test('record lookup renders actual rows even when the provider only announces the result count', async () => {
+  for (const rows of [[{ ContractID: 1, ContractNo: 'HD-ROW-001' }], [{ ContractID: 1, ContractNo: 'HD-ROW-001' }, { ContractID: 2, ContractNo: 'HD-ROW-002' }]]) {
+    const s = setup([{ tool_calls: [call('execute_sql_query', { sql })] }, { content: `Found ${rows.length} records. Details are available.` }], { rows });
+    const result = await s.run({ context: { mode: 'data', requestPlan: { ...fixture.plan, intent: 'record_lookup' } } });
+    for (const row of rows) assert.ok(result.replyText.includes(row.ContractNo));
+    assert.ok(result.trace.steps.some(step => step.type === 'GROUNDED_RESULT_RENDER'));
+  }
+});
 
 test('persistent SQL-only answers stop within repair budget and never enter successful memory', async () => {
   const s = setup(Array(6).fill(fixture.response));

@@ -934,7 +934,7 @@ class LocalModelHarness {
     }
     // List tables are rendered from executed rows, not retyped by the model.
     // A fluent answer can still end halfway through a Markdown row.
-    if (usefulSql?.result?.rows?.length > 1 && !requestPolicy.chartRequired && (requestPlan.intent === 'list' || isListRequest(effectiveUserMessage))) {
+    if (usefulSql?.result?.rows?.length > 1 && !requestPolicy.chartRequired && (['list', 'record_lookup'].includes(requestPlan.intent) || isListRequest(effectiveUserMessage))) {
       finalText = buildSqlRowsFallbackReply(usefulSql, requestPlan.columnDisplayNames);
       trace.steps.push({ type: 'GROUNDED_LIST_RENDER', rowCount: usefulSql.result.rows.length });
     }

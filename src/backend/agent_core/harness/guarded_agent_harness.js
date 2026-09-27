@@ -304,7 +304,7 @@ class GuardedAgentHarness {
     }
     const sql = qualifiedSql(toolCalls, plan).at(-1);
     // Render lists from executed rows so a fluent but truncated model answer cannot omit records.
-    if (sql && (!reply || plan.intent === 'list' || sql.result.rows.length === 0)) {
+    if (sql && (!reply || ['list', 'record_lookup'].includes(plan.intent) || sql.result.rows.length === 0)) {
       reply = buildSqlRowsFallbackReply({ ...sql, result: { ...sql.result, rows: security.sanitizeTabularRows(sql.result.rows) } }, plan.columnDisplayNames);
       finishReason = undefined;
       trace.steps.push({ type: 'GROUNDED_RESULT_RENDER' });

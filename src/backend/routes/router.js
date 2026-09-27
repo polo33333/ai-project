@@ -935,7 +935,7 @@ async function handleRequest(req, res) {
       const { question, message, history, embedId, sessionId, preview } = body;
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
       const isAdminPreview = preview === true && currentAccount?.role === 'admin';
-      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview });
+      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview, recordUsage: !['get','artifact'].includes(body.workflowAction) });
       if (!authorization.ok) {
         res.writeHead(authorization.status, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: authorization.message }));
@@ -961,13 +961,19 @@ async function handleRequest(req, res) {
         if (!body.workflowToken || !workflowIdentity) throw Object.assign(new Error('Cần phiên nghiệp vụ đã xác thực.'),{statusCode:403});
         const automation=require('../automation'); await automation.settings();
         const context={accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,permissions:permissionsForAccount(null,true)};
+        if(body.workflowAction==='artifact') {
+          const artifact=await automation.runtime.artifact(body.runId,body.artifactId,context);
+          const buffer=await fs.promises.readFile(artifact.path);
+          res.writeHead(200,{'Content-Type':artifact.contentType||(artifact.filename.endsWith('.csv')?'text/csv; charset=UTF-8':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(artifact.filename)}`,'Content-Length':buffer.length,'Cache-Control':'private, no-store'});
+          res.end(buffer);return;
+        }
         let execution;
         if(body.workflowAction==='get') execution=automation.runtime.view(await automation.runtime.owned(body.runId,context));
         else if(body.workflowAction==='inputs') execution=await automation.runtime.inputs(body.runId,body.inputs||{},context,body.revision);
         else if(body.workflowAction==='cancel') execution=await automation.runtime.cancel(body.runId,context,body.revision);
-        else if(body.workflowAction==='create') execution=await automation.runtime.create(body.templateId,{},context,{conversationId:conversationMemoryService.normalizeSessionId(`${authorization.config.id}-${sessionId}`),requestId:body.requestId});
+        else if(body.workflowAction==='create') execution=await automation.runtime.create(body.templateId,{},context,{conversationId:conversationMemoryService.normalizeSessionId(`${authorization.config.id}-${sessionId}`),requestId:body.requestId,parentRunId:body.parentRunId});
         else throw Object.assign(new Error('Thao tác không hợp lệ.'),{statusCode:400});
-        execution.artifacts=[];
+        execution.artifacts=(execution.artifacts||[]).map(({id,filename,expiresAt})=>({id,filename,expiresAt}));
         for(const value of Object.values(execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows);
         res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});res.end(JSON.stringify({status:'success',execution,workflowToken:workflowIdentity.token}));return;
       }
@@ -993,7 +999,7 @@ async function handleRequest(req, res) {
 
       const payload = buildChatClientPayload(coreResult, execMs);
       payload.workflowToken=workflowIdentity?.token;
-      if(payload.execution) { payload.execution.artifacts=[]; for(const value of Object.values(payload.execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows); }
+      if(payload.execution) { payload.execution.artifacts=(payload.execution.artifacts||[]).map(({id,filename,expiresAt})=>({id,filename,expiresAt})); for(const value of Object.values(payload.execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows); }
       if (payload.toolResult?.rows) payload.toolResult.rows = payload.toolResult.rows.slice(0, authorization.config.maxRows);
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({

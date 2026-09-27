@@ -78,7 +78,7 @@ async function handle(req, res, pathname, account, readBody) {
     }
     if (pathname === '/api/automation-runs') {
       if (req.method === 'GET') { const params=new URL(req.url,'http://localhost').searchParams; send({ runs: params.get('summary')==='1' ? await automation.repository.runSummaries(context.accountId,params.get('conversationId')||undefined) : await automation.runtime.list(context,params.get('conversationId')||undefined) }); }
-      else if (req.method === 'POST') { const body = await readBody(req); send({ execution: await automation.runtime.create(body.templateId, body.inputs || {}, context, { conversationId: body.conversationId, requestId: req.headers['x-request-id'] || body.requestId }) }, 202); }
+      else if (req.method === 'POST') { const body = await readBody(req); send({ execution: await automation.runtime.create(body.templateId, body.inputs || {}, context, { conversationId: body.conversationId, requestId: req.headers['x-request-id'] || body.requestId, parentRunId: body.parentRunId }) }, 202); }
       else throw error('Phương thức không được hỗ trợ.', 405);
       return true;
     }

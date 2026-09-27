@@ -1,5 +1,6 @@
 // Human-readable help for every setting exposed by the settings API.
 module.exports = {
+  WORKFLOW_PLUGINS_ENABLED: ['Bật mẫu nghiệp vụ', 'Cho phép nhận diện và chạy mẫu nghiệp vụ trong hội thoại và embed chat. Tắt để ngừng tạo và chạy tác vụ. Áp dụng sau khi khởi động lại máy chủ; cấu hình tạm tắt tại trang Mẫu nghiệp vụ vẫn được giữ.'],
   HOST: ['Địa chỉ máy chủ', 'Địa chỉ backend lắng nghe. 127.0.0.1 chỉ cho phép truy cập từ máy hiện tại.'],
   SHUTDOWN_TIMEOUT_MS: ['Thời gian chờ tắt máy chủ', 'Thời gian tối đa chờ request và worker kết thúc trước khi tắt, tính bằng mili giây.'],
   CORS_ALLOWED_ORIGINS: ['Website được phép kết nối', 'Danh sách origin được phép gọi API, phân cách bằng dấu phẩy. Ví dụ http://localhost:3000.'],

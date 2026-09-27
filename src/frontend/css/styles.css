@@ -3862,6 +3862,21 @@ body.dictionary-modal-open {
 }
 
 /* Compact scrollbars for the full chat page and model popup. */
+:root { --chat-scroll-thumb: #a8b0bd; }
+:root[data-theme="dark"] { --chat-scroll-thumb: #66758e; }
+:root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--chat-scroll-thumb) transparent;
+}
+@supports selector(::-webkit-scrollbar) {
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child) { scrollbar-width: auto; }
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child)::-webkit-scrollbar { width: 6px; height: 6px; }
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child)::-webkit-scrollbar-thumb { background: var(--chat-scroll-thumb); background-clip: padding-box; border-radius: 999px; border: 0; }
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child)::-webkit-scrollbar-thumb:horizontal { border-inline: 18px solid transparent; }
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child)::-webkit-scrollbar-thumb:vertical { border-block: 12px solid transparent; }
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child)::-webkit-scrollbar-track { background: transparent; }
+  :root :is(#page-chat-messages-container, .chat-tool-result-scroll, .chat-markdown-table-wrap, .workflow-result-table, .copilot-chat-messages, .chat-bubble table, .copilot-json-block, .copilot-result-table > div:last-child)::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+}
 #page-chat-messages-container,
 .chat-tool-result-scroll,
 .copilot-chat-messages,

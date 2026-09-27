@@ -107,6 +107,25 @@ test('version pinning, disabled discovery, overlay restrictions and rollback', a
   assert.equal((await runtime.owned(run.id, user)).status, 'SUCCEEDED');
   await registry.rollback(record.id, 1, admin, record.revision);
 });
+
+test('a separately routed task preserves a waiting task without allowing duplicate or running-task bypass', async t => {
+  const { registry, runtime } = setup(t); await publish(registry);
+  const old = await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'separate-topic' });
+  const next = await runtime.create('phase1_examples/range', {}, user, { conversationId: 'separate-topic', preservePending: true });
+  assert.notEqual(old.id, next.id);
+  assert.equal((await runtime.owned(old.id, user)).status, 'WAITING_INPUT');
+  assert.equal((await runtime.owned(next.id, user)).status, 'WAITING_INPUT');
+  assert.equal((await runtime.create('phase1_examples/range', {}, user, { conversationId: 'separate-topic', preservePending: true })).id, next.id);
+  assert.equal((await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'separate-topic', preservePending: true })).id, old.id);
+  const fresh = await runtime.create('phase1_examples/lookup', { code: 'A001' }, user, { conversationId: 'separate-topic', preservePending: true, separateRequest: true });
+  assert.notEqual(fresh.id, old.id);
+  assert.equal(fresh.status, 'READY');
+  await runtime.process(fresh.id);
+  assert.equal((await runtime.owned(fresh.id, user)).status, 'SUCCEEDED');
+  assert.equal((await runtime.owned(old.id, user)).status, 'WAITING_INPUT');
+  await runtime.create('phase1_examples/lookup', { code: 'A001' }, user, { conversationId: 'ready-topic' });
+  await assert.rejects(runtime.create('phase1_examples/range', {}, user, { conversationId: 'ready-topic', preservePending: true }), { statusCode: 409 });
+});
 test('cancel prevents later steps; expired worker resumes reads but exports require review', async t => {
   const { registry, runtime, repository } = setup(t); await publish(registry);
   const waiting = await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'cancel' });
@@ -118,6 +137,32 @@ test('cancel prevents later steps; expired worker resumes reads but exports requ
   const exported = await runtime.create('phase1_examples/export', { rows: [{ id: 1 }] }, user, { conversationId: 'export-recovery' });
   raw = await runtime.owned(exported.id, user); raw.status = 'RUNNING'; raw.lease = { token: 'dead', expiresAt: 0 }; await repository.put('runs', raw, raw.revision);
   await runtime.process(exported.id); assert.equal((await runtime.owned(exported.id, user)).status, 'NEEDS_REVIEW');
+});
+
+test('retry creates an independent child, blocks repeated clicks while waiting, and preserves other forms', async t => {
+  const { registry, runtime, repository } = setup(t); await publish(registry);
+  const parent = await runtime.create('phase1_examples/lookup', { code: 'A001' }, user, { conversationId: 'retry' });
+  await runtime.process(parent.id);
+  assert.equal((await runtime.owned(parent.id, user)).status, 'SUCCEEDED');
+  const unrelated = await runtime.create('phase1_examples/range', {}, user, { conversationId: 'retry' });
+  const child = await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'retry', parentRunId: parent.id, requestId: 'retry-1' });
+  assert.notEqual(child.id, parent.id);
+  assert.equal(child.parentRunId, parent.id);
+  assert.equal((await runtime.owned(unrelated.id, user)).status, 'WAITING_INPUT');
+  assert.equal(runtime.view(await runtime.owned(parent.id, user)).retryWaitingInput, true);
+  const before = (await repository.list('runs')).length;
+  assert.equal((await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'retry', parentRunId: parent.id, requestId: 'retry-2' })).id, child.id);
+  assert.equal((await repository.list('runs')).length, before);
+  await runtime.inputs(child.id, { code: 'A002' }, user, child.revision);
+  assert.equal(runtime.view(await runtime.owned(parent.id, user)).retryWaitingInput, false);
+  const next = await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'retry', parentRunId: parent.id, requestId: 'retry-3' });
+  assert.equal(next.id, child.id);
+  await runtime.process(child.id);
+  const newest = await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'retry', parentRunId: child.id, requestId: 'retry-4' });
+  assert.notEqual(newest.id, child.id);
+  assert.equal(newest.parentRunId, child.id);
+  await assert.rejects(runtime.create('phase1_examples/lookup', {}, admin, { conversationId: 'retry', parentRunId: parent.id }), { statusCode: 404 });
+  await assert.rejects(runtime.create('phase1_examples/range', {}, user, { conversationId: 'retry', parentRunId: parent.id }), { statusCode: 409 });
 });
 test('strict schema rejects impossible dates and prototype pollution before storage', () => {
   assert.ok(validateValue('2026-02-31', { type: 'string', format: 'date' }).length);

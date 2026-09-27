@@ -8,7 +8,11 @@ const connector = require('../src/backend/services/sql_connector');
 const { trainingService } = require('../src/backend/training_core');
 const fixture = require('./fixtures/provider_raw_contract_chat.json');
 
-test('core integration returns only verified final data and safe progress after raw provider SQL', async t => {
+test('core preserves workflow routing usage alongside verified provider data and progress', async t => {
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async (_, options) => {
+    options.onWorkflowUsage({ inputTokens: 100, outputTokens: 20, totalTokens: 120, calls: 2 });
+    return null;
+  });
   const provider = { id: 'integration', name: 'Fixture cloud', model: 'fixture', apiFormat: 'openai', executionClass: 'remote', supportsToolCalling: true, baseUrl: 'https://test.invalid' };
   t.mock.method(providers, 'getActiveProvider', () => provider);
   t.mock.method(providers, 'getProvidersForExecution', () => [provider]);
@@ -35,7 +39,10 @@ test('core integration returns only verified final data and safe progress after 
   assert.deepEqual(result.executionResult, fixture.rows);
   assert.match(result.replyText, /HD-TEST-001/);
   assert.doesNotMatch(result.replyText, /SELECT|```sql/);
-  assert.equal(result.tokenUsage.calls, 3);
+  assert.equal(result.tokenUsage.calls, 5);
+  assert.equal(result.tokenUsage.inputTokens, 130);
+  assert.equal(result.tokenUsage.outputTokens, 35);
+  assert.equal(result.tokenUsage.totalTokens, 165);
   assert.ok(progress.some(event => event.type === 'policy_repair'));
   assert.ok(progress.every(event => !JSON.stringify(event).includes('SELECT')));
   assert.equal(progress.at(-1).status, 'done');

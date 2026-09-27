@@ -45,7 +45,8 @@ const descriptions = {
 const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT']);
 const schema = Object.entries(defaults).map(([key, value]) => ({
   key, defaultValue: value, label: help[key]?.[0] || key.replace(/_/g, ' '),
-  group: /^(LOCAL_MODEL|LOCAL_AI|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
+  group: key === 'WORKFLOW_PLUGINS_ENABLED' ? 'Mẫu nghiệp vụ'
+    : /^(LOCAL_MODEL|LOCAL_AI|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
     : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'
       : /^(AI_MEMORY|MEMORY_|MAX_CHAT_HISTORY)/.test(key) ? 'Bộ nhớ hội thoại'
       : /^(WEB_SEARCH)/.test(key) ? 'Tìm kiếm web'

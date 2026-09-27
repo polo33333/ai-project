@@ -64,9 +64,13 @@ test('shared workflow interpretation rejects invented IDs/slots and keeps semant
   let record = await automation.registry.import(require('../src/backend/automation/pilot.json'), admin);
   await automation.registry.test(record.id, admin); record = await automation.repository.get('catalog', record.id); await automation.registry.publish(record.id, admin, record.revision);
   await automation.configure({ enabled: true, revision: null }, admin);
+  // This fixture exercises detailed interpretation; shortlist coverage lives in
+  // automation_intent_narrowing.test.js and must not depend on seeded templates.
+  const listDefinitions = automation.registry.list.bind(automation.registry);
+  t.mock.method(automation.registry, 'list', async (...args) => (await listDefinitions(...args)).filter(item => item.id === 'phase1_examples/lookup'));
   t.mock.method(providers, 'getProviderForExecution', () => ({ baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   let answer;
-  t.mock.method(adapters, 'dispatchToProvider', async (_, messages) => ({ usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, calls: 1 }, content: JSON.stringify(messages[0].content.startsWith('Verify business scope') ? { matches: answer.scopeMatches !== false, evidence: JSON.parse(messages[1].content).question } : { intent: 'workflow', ...answer }) }));
+  t.mock.method(adapters, 'dispatchToProvider', async (_, messages) => ({ usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, calls: 1 }, content: JSON.stringify(messages[0].content.startsWith('Verify pending workflow') ? { requestKind: 'slot_answer', confirmedSlots: Object.keys(JSON.parse(messages[1].content).proposedInputs) } : messages[0].content.startsWith('Independently verify') ? { social: true } : messages[0].content.startsWith('Verify business scope') ? { matches: answer.scopeMatches !== false, evidence: JSON.parse(messages[1].content).question } : { intent: 'workflow', ...answer }) }));
   const options = id => ({ session: { accountId: 'actor', id }, permissions: ['admin'] });
   answer = { templateId: 'phase1_examples/lookup', inputs: { code: 'A001', permissions: ['admin'] }, evidence: { code: 'A001', permissions: 'A001' } };
   let response = await orchestrator.handle('Tìm mã A001', options('valid'));
@@ -107,10 +111,32 @@ test('shared workflow interpretation rejects invented IDs/slots and keeps semant
     assert.equal(social.replyText, answer.replyText);
     assert.equal(social.executionMode, 'chat');
     assert.equal(social.execution, undefined);
-    assert.equal(social.tokenUsage.calls, 1);
-    assert.equal(adapters.dispatchToProvider.mock.callCount() - before, 1);
+    assert.equal(social.tokenUsage.calls, 2);
+    assert.equal(adapters.dispatchToProvider.mock.callCount() - before, 2);
   }
   assert.equal((await automation.runtime.pending(admin, 'evidence')).status, 'WAITING_INPUT');
+  const selection = t.mock.method(providers, 'getProviderForExecution', id => ({ id, name: `Provider ${id}`, model: `model-${id}`, type: 'google', baseUrl: 'http://fixture.invalid', apiKey: 'private-key' }));
+  for (const providerId of ['gemini-first', 'gemini-second']) {
+    const social = await orchestrator.handle('hi', { ...options(`model-${providerId}`), providerId });
+    const dispatched = adapters.dispatchToProvider.mock.calls.at(-1).arguments[0];
+    assert.equal(dispatched.id, providerId);
+    assert.equal(dispatched.model, `model-${providerId}`);
+    assert.deepEqual(social.usedProvider, { id: providerId, name: `Provider ${providerId}`, model: `model-${providerId}`, type: 'google' });
+    assert.equal(social.usedProvider.apiKey, undefined);
+    answer = { intent: 'workflow', templateId: 'phase1_examples/lookup', inputs: {}, evidence: {} };
+    const workflowOptions = { ...options(`workflow-${providerId}`), providerId };
+    const workflow = await orchestrator.handle('Tra cứu đối tượng', workflowOptions);
+    assert.equal(workflow.execution.status, 'WAITING_INPUT');
+    assert.equal(workflow.usedProvider.id, providerId);
+    assert.equal(workflow.usedProvider.model, `model-${providerId}`);
+    answer = { intent: 'slot_answer', templateId: 'phase1_examples/lookup', inputs: { code: 'A005' }, evidence: { code: 'A005' } };
+    const continued = await orchestrator.handle('A005', workflowOptions);
+    assert.equal(continued.execution.status, 'READY');
+    assert.equal(continued.usedProvider.id, providerId);
+    assert.equal(continued.usedProvider.model, `model-${providerId}`);
+    answer = { intent: 'chat', chatKind: 'social', replyText: 'Hello', templateId: null, inputs: {}, evidence: {} };
+  }
+  selection.mock.restore();
   answer = { intent: 'chat', templateId: null, inputs: {}, evidence: {} };
   assert.equal(await orchestrator.handle('Giải thích thuyết tương đối', options('unrelated')), null);
   answer = { templateId: null, inputs: {}, evidence: {} };
@@ -119,6 +145,9 @@ test('shared workflow interpretation rejects invented IDs/slots and keeps semant
   response = await orchestrator.handle('A002', options('evidence'));
   assert.equal(response.execution.status, 'READY'); assert.equal(response.execution.inputs.code, 'A002');
   answer = { intent: 'cancel', templateId: null, inputs: {}, evidence: {} };
+  adapters.dispatchToProvider = async (...args) => args[1][0].content.startsWith('Verify explicit cancellation')
+    ? { content: JSON.stringify({ confirmed: true, evidence: JSON.parse(args[1][1].content).question }) }
+    : dispatchMock(...args);
   response = await orchestrator.handle('Hủy tác vụ', options('evidence'));
   assert.equal(response.execution.status, 'CANCELLED');
   t.mock.method(adapters, 'dispatchToProvider', async () => { throw new Error('Unavailable model'); });

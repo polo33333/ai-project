@@ -13,3 +13,12 @@ test('SQL mapping uses active verified relationships and refuses ambiguous joins
  relation.status='verified'; target.columns[1].isVisible=false; assert.doesNotMatch(buildSelect(source,dictionary).select,/JOIN/);
  target.columns[1].isVisible=true; dictionary.tableRelationships.push({...relation,id:'another'}); assert.doesNotMatch(buildSelect(source,dictionary).select,/JOIN/);
 });
+
+test('result tables omit configured columns absent from SQL rows while keeping null values', () => {
+ const {AutomationRuntime}=require('../src/backend/automation/runtime');
+ const run={id:'result',templateId:'lookup',status:'SUCCEEDED',input:{},missing:[],invalid:[],attempts:{},artifacts:[],definition:{name:'Lookup',inputs:{},workflow:{steps:[]},output:{mapping:{},presentation:{columns:{records:['RemovedID','RemovedType','Number','Optional']},labels:{'records.Number':'Number'}}}},result:{records:[{Number:'A001',Optional:null}]}};
+ const view=AutomationRuntime.prototype.view(run);
+ assert.deepEqual(view.presentation.columns.records,['Number','Optional']);
+ assert.deepEqual(view.result.records,[{Number:'A001',Optional:null}]);
+ assert.deepEqual(run.definition.output.presentation.columns.records,['RemovedID','RemovedType','Number','Optional']);
+});

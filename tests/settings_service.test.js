@@ -10,6 +10,17 @@ function fixture(t, text) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return { service: createSettingsService(file), file };
 }
+test('settings expose and persist the workflow feature switch', t => {
+  const { service, file } = fixture(t, 'WORKFLOW_PLUGINS_ENABLED=false\n');
+  const before = service.get();
+  const field = before.fields.find(field => field.key === 'WORKFLOW_PLUGINS_ENABLED');
+  assert.equal(field.type, 'boolean');
+  assert.equal(field.group, 'Mẫu nghiệp vụ');
+  assert.equal(field.value, 'false');
+  assert.throws(() => service.save({ revision: before.revision, values: { WORKFLOW_PLUGINS_ENABLED: 'yes' } }));
+  service.save({ revision: before.revision, values: { WORKFLOW_PLUGINS_ENABLED: 'true' } });
+  assert.equal(fs.readFileSync(file, 'utf8'), 'WORKFLOW_PLUGINS_ENABLED=true\n');
+});
 test('settings preserve unknown secrets and comments while updating duplicate keys', t => {
   const { service, file } = fixture(t, '# Config\r\nPORT=3000\r\nPRIVATE_TOKEN=secret-value\r\nPORT=3001\r\n');
   const before = service.get();

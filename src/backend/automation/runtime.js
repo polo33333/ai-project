@@ -47,6 +47,14 @@ class AutomationRuntime {
   async owned(id, context) {
     const run = await this.repository.get('runs', id);
     if (!run || run.ownerId !== this.owner(context)) throw error('Không tìm thấy tác vụ.', 404);
+    if (run.retryRunId) {
+      const child = await this.repository.get('runs', run.retryRunId);
+      run.retryWaitingInput = Boolean(child && child.ownerId === run.ownerId && child.status === 'WAITING_INPUT');
+    }
+    if (run.parentRunId) {
+      const parent = await this.repository.get('runs', run.parentRunId);
+      run.retrySuperseded = Boolean(parent && parent.ownerId === run.ownerId && parent.retryRunId && parent.retryRunId !== run.id);
+    }
     return run;
   }
   view(run) {
@@ -75,11 +83,18 @@ class AutomationRuntime {
       for (const column of columns) presentation.labels[`${field}.${column.columnName}`] = column.displayName?.trim() || presentation.labels[`${field}.${column.columnName}`] || column.columnName;
       if (Array.isArray(result?.[field])) result[field] = result[field].map(row => Object.fromEntries(columns.filter(column => Object.hasOwn(row, column.columnName)).map(column => [column.columnName, row[column.columnName]])));
     }
+    // Mapping describes labels and allowed fields, not columns that the query
+    // actually returned. Keep null-valued fields, but omit absent properties.
+    for (const [field, rows] of Object.entries(result || {})) {
+      if (!Array.isArray(rows) || !rows.length || !Array.isArray(presentation.columns?.[field])) continue;
+      presentation.columns[field] = presentation.columns[field].filter(key => rows.some(row => row && typeof row === 'object' && Object.hasOwn(row, key)));
+    }
     return {
       id: run.id, runId: run.id, revision: run.revision, status: run.status,
       templateId: run.templateId, name: run.definition.name, conversationId: run.conversationId,
       packageVersion: run.definition.packageVersion, overlayVersion: run.definition.overlayVersion,
       inputs: run.input, tokenUsage: run.tokenUsage || null,
+      parentRunId: run.parentRunId || null, retryRunId: run.retryRunId || null, retryWaitingInput: Boolean(run.retryWaitingInput), retrySuperseded: Boolean(run.retrySuperseded),
       inputLabels: Object.fromEntries(Object.entries(run.definition.inputs).map(([key, slot]) => [key, slot.label || key])),
       provenance: run.provenance, missingInputs: [...run.missing, ...run.invalid],
       actions: terminal.has(run.status) ? [] : ['cancel', ...(run.status !== 'RUNNING' ? ['resume'] : [])],
@@ -96,26 +111,48 @@ class AutomationRuntime {
     };
   }
   async list(context, conversationId) { return (await this.repository.list('runs', { ownerId: this.owner(context), conversationId })).slice(0, 100).map(run => this.view(run)); }
-  async pending(context, conversationId) { return (await this.repository.list('runs', { ownerId: this.owner(context), conversationId, statuses: active }))[0] || null; }
-  async create(templateId, input, context, { conversationId, requestId, tokenUsage } = {}) {
+  async pending(context, conversationId, templateId = null) {
+    const runs = await this.repository.list('runs', { ownerId: this.owner(context), conversationId, statuses: active });
+    return (templateId ? runs.find(run => run.templateId === templateId) : runs[0]) || null;
+  }
+  async create(templateId, input, context, { conversationId, requestId, tokenUsage, preservePending = false, separateRequest = false, parentRunId = null } = {}) {
     this.assertEnabled(); const ownerId = this.owner(context);
     ensure(typeof conversationId === 'string' && conversationId.length > 0 && conversationId.length <= 150, 'Cần conversationId hợp lệ.');
     const key = `automation-conversation:${ownerId}:${conversationId}`;
     return locked(key, async () => {
       const operation = async () => {
-        const digest = hash({ templateId, input, conversationId });
+        const digest = hash({ templateId, input, conversationId, ...(parentRunId ? { parentRunId } : {}) });
         const id = requestId ? `auto_${hash({ ownerId, conversationId, requestId }).slice(0, 40)}` : `auto_${crypto.randomUUID()}`;
         const previous = await this.repository.get('runs', id);
         if (previous) { ensure(previous.requestHash === digest, 'Request ID đã dùng với nội dung khác.'); return this.view(previous); }
-        if (await this.pending(context, conversationId)) throw error('Hội thoại đang có tác vụ chờ. Hãy tiếp tục hoặc hủy tác vụ đó.', 409);
+        let parent;
+        if (parentRunId) {
+          parent = await this.owned(parentRunId, context);
+          if (!terminal.has(parent.status) || parent.retrySuperseded || parent.conversationId !== conversationId || parent.templateId !== templateId) throw error('Tác vụ không thể làm lại.', 409);
+          if (parent.retryRunId) return this.view(await this.owned(parent.retryRunId, context));
+        }
+        if (!parent && preservePending && !separateRequest) {
+          const sameTask = await this.pending(context, conversationId, templateId);
+          if (sameTask) return this.view(sameTask);
+        }
+        const waiting = await this.pending(context, conversationId);
+        if (waiting && !parent && !(preservePending && waiting.status === 'WAITING_INPUT' && (waiting.templateId !== templateId || separateRequest))) throw error('Hội thoại đang có tác vụ chờ. Hãy tiếp tục hoặc hủy tác vụ đó.', 409);
         const definition = await this.registry.getTemplate(templateId, context);
         const provenance = Object.fromEntries(Object.keys(input || {}).map(key => [key, { source: 'user', at: new Date().toISOString() }]));
         const checked = validateInputs(definition, input, provenance);
         const run = { id, ownerId, conversationId, templateId, requestHash: digest, definition, input: checked.values, provenance: checked.provenance, missing: checked.missing, invalid: checked.invalid, status: checked.valid ? 'READY' : 'WAITING_INPUT', nextIndex: 0, outputs: {}, attempts: {}, artifacts: [], events: [], createdAt: new Date().toISOString() };
+        if (parent) run.parentRunId = parent.id;
         if (definition.review?.mode === 'required') { run.status = 'NEEDS_REVIEW'; run.error = 'Template yêu cầu kiểm tra AI. Provider phase 2 chưa được tích hợp; tác vụ chưa được thực thi.'; }
         if (tokenUsage) run.tokenUsage = structuredClone(tokenUsage);
         event(run, 'created', { status: run.status });
-        return this.view(await this.repository.put('runs', run));
+        const saved = await this.repository.put('runs', run);
+        if (parent) {
+          parent.retryRunId = saved.id;
+          delete parent.retryWaitingInput;
+          event(parent, 'retry_created', { runId: saved.id });
+          await this.repository.put('runs', parent, parent.revision);
+        }
+        return this.view(saved);
       };
       const result = storage.enabled() ? await storage.lease(key, operation) : await operation();
       if (result?.skipped) throw error('Hội thoại đang được cập nhật. Hãy thử lại.', 409);

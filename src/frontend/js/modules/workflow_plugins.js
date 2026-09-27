@@ -2,6 +2,31 @@
 (() => {
   const state = { packages: [], templates: [], runs: [], settings: {}, admin: false, search: '', domain: '' };
   const views = new Map();
+  const chatScrollStates = new WeakMap();
+  const observedChatPanels = new WeakSet();
+  function followChatPanel(node) {
+    const container = node.closest('#page-chat-messages-container');
+    if (!container) return null;
+    let state = chatScrollStates.get(container);
+    if (!state) {
+      state = { pinned: container.scrollHeight - container.scrollTop - container.clientHeight < 60, scheduled: false };
+      container.addEventListener('scroll', () => { if (!state.scheduled) state.pinned = container.scrollHeight - container.scrollTop - container.clientHeight < 60; }, { passive: true });
+      chatScrollStates.set(container, state);
+    }
+    if (container.scrollHeight - container.scrollTop - container.clientHeight < 60) state.pinned = true;
+    const settle = () => {
+      if (!state.pinned || state.scheduled) return;
+      state.scheduled = true;
+      requestAnimationFrame(() => {
+        if (container.isConnected) container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
+        state.scheduled = false;
+      });
+    };
+    if (!observedChatPanels.has(node)) {
+      const observer = new ResizeObserver(() => { if (!node.isConnected) observer.disconnect(); else settle(); }); observer.observe(node); observedChatPanels.add(node);
+    }
+    return settle;
+  }
   const h = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const statuses = { CREATED: 'Đã tạo', READY: 'Đang chờ chạy', RUNNING: 'Đang thực hiện', WAITING_INPUT: 'Chờ bổ sung', SUCCEEDED: 'Hoàn thành', FAILED: 'Thất bại', CANCELLED: 'Đã hủy', NEEDS_REVIEW: 'Cần kiểm tra', SELECT_TEMPLATE: 'Chọn quy trình' };
   const done = value => ['SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(value);
@@ -65,7 +90,7 @@
     const toolbar=document.createElement('div');toolbar.className='wp-code-toolbar';toolbar.append(typeBadge(language.toUpperCase()));
     if(language==='json'){const format=button('Định dạng',()=>{try{input.value=JSON.stringify(JSON.parse(input.value),null,2);input.dispatchEvent(new Event('input',{bubbles:true}));}catch(_){notify('JSON chưa hợp lệ, hãy kiểm tra nội dung trước khi định dạng.',true);}});format.setAttribute('aria-label','Định dạng JSON');toolbar.appendChild(format);}
     const surface=document.createElement('div');surface.className='wp-code-surface';const preview=document.createElement('pre');preview.setAttribute('aria-hidden','true');preview.className='wp-code-highlight';
-    shell.append(toolbar,surface);surface.append(preview,input);input.classList.add('wp-code-input');input.spellcheck=false;input.setAttribute('autocapitalize','off');
+    shell.append(toolbar,surface);surface.append(preview,input);input.classList.add('wp-code-input');input.spellcheck=false;input.setAttribute('autocapitalize','off');input.wrap='off';
     function highlight(line) {
       const tokens=language==='sql'?/--.*$|'(?:''|[^'])*'|\[[^\]]*\]|\b(?:SELECT|TOP|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|IS|IN|LIKE|ORDER|BY|GROUP|HAVING|ASC|DESC|DISTINCT|CASE|WHEN|THEN|ELSE|END|WITH|UNION|ALL|OFFSET|FETCH|EXISTS|COUNT|SUM|AVG|MIN|MAX|CONCAT|REPLACE|CAST|CONVERT)\b|@[\w]+|\b\d+(?:\.\d+)?\b/gi: /"(?:\\.|[^"\\])*"(?:\s*(?=:))?|\b(?:true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g;
       let html='',cursor=0;for(const match of line.matchAll(tokens)){html+=h(line.slice(cursor,match.index));const token=match[0];const kind=language==='sql'?(token.startsWith('--')?'comment':token.startsWith("'")?'string':token.startsWith('[')?'identifier':token.startsWith('@')?'parameter':/^\d/.test(token)?'number':'keyword'):(token.startsWith('"')?line.slice(match.index+token.length).trimStart().startsWith(':')?'key':'string':/^[-\d]/.test(token)?'number':'keyword');html+=`<span class="wp-code-${kind}">${h(token)}</span>`;cursor=match.index+token.length;}return html+h(line.slice(cursor));
@@ -79,7 +104,7 @@
     const wrapper = document.createElement('label'); wrapper.textContent = label;
     const input = document.createElement(multiline ? 'textarea' : 'input'); if (multiline) { input.className = 'wp-textarea'; input.rows = 3; } else input.type = type;
     input.setAttribute('aria-label', label);
-    input.value = value ?? ''; wrapper.appendChild(input); container.appendChild(wrapper); if(code)codeField(input,code);return input;
+    input.value = value ?? ''; if (type === 'checkbox') wrapper.prepend(input); else wrapper.appendChild(input); container.appendChild(wrapper); if(code)codeField(input,code);return input;
   }
   const captions = { mapping: 'Trường kết quả', schema: 'Kiểu dữ liệu và giới hạn', properties: 'Các trường dữ liệu', required: 'Trường bắt buộc', presentation: 'Cách hiển thị', labels: 'Nhãn hiển thị', input: 'Đầu vào thử nghiệm', expected: 'Kết quả mong đợi', stepResults: 'Dữ liệu giả lập từng bước', type: 'Kiểu dữ liệu', format: 'Định dạng', enum: 'Giá trị được phép', items: 'Cấu trúc mỗi phần tử', minimum: 'Giá trị nhỏ nhất', maximum: 'Giá trị lớn nhất', minLength: 'Độ dài tối thiểu', maxLength: 'Độ dài tối đa', additionalProperties: 'Cho phép trường khác', emptyText: 'Thông báo khi trống', sourceId: 'Nguồn dữ liệu', sql: 'Câu truy vấn', parameters: 'Tham số', tables: 'Bảng được phép', binding: 'Nguồn truy vấn', filename: 'Tên file', rows: 'Dữ liệu xuất', milliseconds: 'Thời gian chờ (ms)' };
   function resultMappingEditor(container, mappings) {
@@ -355,7 +380,7 @@
   async function refresh() {
     const panel=document.getElementById('workflow-plugin-panel'), message=document.getElementById('wp-message');
     panel?.setAttribute('aria-busy','true');
-    if(message) { message.style.color=''; message.innerHTML='<span class="tab-data-spinner" aria-hidden="true"></span><span>Đang tải mẫu nghiệp vụ…</span>'; }
+    if(message) { message.style.color=''; message.innerHTML='<span class="wp-library-loader" aria-hidden="true"><i></i><i></i><i></i></span><span>Đang tải mẫu nghiệp vụ…</span>'; }
     try {
     const accountRequest = api('/api/auth/me');
     const packagesRequest = accountRequest.then(account => account.account?.role === 'admin' ? api('/api/workflow-plugins') : { packages: [] });
@@ -643,7 +668,7 @@
       const templateId = field(about, 'Mã mẫu nghiệp vụ', template.id); templateId.readOnly = Boolean(record.id && record.draft.templates.some(item => item.id === template.id));
       const name = field(about, 'Tên template', template.name), description = field(about, 'Mô tả', template.description);
       name.oninput = () => { select.options[Number(select.value)].textContent = name.value || 'Mẫu chưa đặt tên'; };
-      const enabledLabel = document.createElement('label'); enabledLabel.textContent = 'Cho phép dùng template'; const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = template.enabled !== false; enabledLabel.appendChild(enabled); recognition.appendChild(enabledLabel);
+      const enabledLabel = document.createElement('label'); enabledLabel.textContent = 'Cho phép dùng template'; const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = template.enabled !== false; enabledLabel.prepend(enabled); recognition.appendChild(enabledLabel);
       const matching = document.createElement('div'); matching.className = 'wp-recognition-about'; matching.innerHTML = '<h4>Khi nào cần chạy kịch bản?</h4><p class="wp-section-help">Thêm các cách hỏi thường gặp và hướng dẫn trợ lý xử lý nghiệp vụ.</p>'; recognition.appendChild(matching);
       const examples = field(matching, 'Cách hỏi mẫu — mỗi dòng một câu', template.examples.join('\n'), { multiline: true }); examples.placeholder = 'Ví dụ: Tra cứu thông tin khách hàng\nTìm khách hàng theo mã';
       const instructions = field(matching, 'Hướng dẫn xử lý nghiệp vụ', template.instructions || '', { multiline: true });
@@ -735,7 +760,27 @@
     (record.versions || []).forEach(bundle => { const option = document.createElement('option'); option.value = bundle.manifest.version; option.textContent = `Version ${bundle.manifest.version}`; select.appendChild(option); }); dialog.body.appendChild(select);
     dialog.footer.appendChild(button('Khôi phục', async () => { await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/rollback`, 'POST', { version: Number(select.value), revision: record.revision }); dialog.backdrop.remove(); await refresh(); }));
   }
-  function showRun(execution) { const dialog = modal(execution.name); const node = document.createElement('div'); dialog.body.appendChild(node); mount(node, execution); }
+  async function showRun(execution) {
+    const dialog = modal(execution.name);
+    const node = document.createElement('div'); node.setAttribute('role', 'status'); node.textContent = 'Đang tải chi tiết lượt chạy…'; dialog.body.appendChild(node);
+    try {
+      const full = execution.id ? (await api(`/api/automation-runs/${encodeURIComponent(execution.id)}`)).execution : execution;
+      if (!dialog.backdrop.isConnected) return;
+      node.removeAttribute('role');
+      const metadata = document.createElement('p');
+      metadata.textContent = [full.createdAt && `Bắt đầu: ${new Date(full.createdAt).toLocaleString('vi-VN')}`, full.updatedAt && `Cập nhật: ${new Date(full.updatedAt).toLocaleString('vi-VN')}`].filter(Boolean).join(' · ');
+      dialog.body.insertBefore(metadata, node);
+      if (Object.keys(full.inputs || {}).length) {
+        const inputs = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Dữ liệu đầu vào';
+        inputs.append(summary, renderResult(full.inputs, { labels: full.inputLabels || {} })); dialog.body.insertBefore(inputs, node);
+      }
+      mount(node, full);
+      node.querySelectorAll('.wp-execution-details').forEach(details => { details.open = true; });
+    } catch (failure) {
+      node.setAttribute('role', 'alert'); node.textContent = `Không tải được chi tiết lượt chạy: ${failure.message}`;
+      node.appendChild(button('Thử lại', () => { dialog.backdrop.remove(); return showRun(execution); }));
+    }
+  }
   function schemaInput(container, schema, label, required = true) {
     if (schema.enum || schema.type === 'boolean') {
       const wrapper = document.createElement('label'); wrapper.textContent = label;
@@ -847,7 +892,42 @@
     }
     const text = document.createElement('span'); text.textContent = Array.isArray(value) ? value.map(resultText).join(', ') : resultText(value); return text;
   }
-  function mount(node, execution) { node.dataset.automationRun = execution.id || ''; views.set(node, execution); renderExecution(node, execution); node.dispatchEvent(new CustomEvent('workflow-execution-updated', { bubbles: true, detail: { execution } })); }
+  function archivePanel(node, execution, latest) {
+    views.delete(node);
+    node.dataset.executionArchived = 'true';
+    node.replaceChildren();
+    const message = document.createElement('span');
+    message.textContent = 'Tác vụ này được tiếp tục ở tin nhắn mới hơn. ';
+    node.append(message, button('Đến form hiện tại', () => focusCurrentPanel(execution.id)));
+    node.dispatchEvent(new CustomEvent('workflow-execution-updated', { bubbles: true, detail: { execution } }));
+  }
+  function focusCurrentPanel(id) {
+    const target = [...document.querySelectorAll('[data-automation-run]')].reverse().find(item => item.dataset.automationRun === id && !item.dataset.executionArchived);
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function mount(node, execution) {
+    const settleScroll = followChatPanel(node);
+    node.dataset.automationRun = execution.id || '';
+    if (execution.id) {
+      for (const [other, previous] of views) {
+        if (other === node || !other.isConnected || previous.id !== execution.id) continue;
+        if (other.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) archivePanel(other, previous, node);
+        else { archivePanel(node, execution, other); return; }
+      }
+    }
+    delete node.dataset.executionArchived;
+    views.set(node, execution); renderExecution(node, execution);
+    node.dispatchEvent(new CustomEvent('workflow-execution-updated', { bubbles: true, detail: { execution } }));
+    settleScroll?.();
+    if (execution.parentRunId) {
+      for (const [parentNode, parent] of views) {
+        if (parent.id !== execution.parentRunId || parent.retryRunId !== execution.id || !parentNode.isConnected) continue;
+        const updated = { ...parent, retryWaitingInput: execution.status === 'WAITING_INPUT' };
+        views.set(parentNode, updated); renderExecution(parentNode, updated);
+        parentNode.dispatchEvent(new CustomEvent('workflow-execution-updated', { bubbles: true, detail: { execution: updated } }));
+      }
+    }
+  }
   function renderExecution(node, execution) {
     node.replaceChildren(); node.classList.add('workflow-execution-panel');
     const processing = ['READY', 'RUNNING', 'QUEUED'].includes(execution.status);
@@ -874,11 +954,17 @@
     if (execution.result !== null && execution.result !== undefined) node.appendChild(renderResult(execution.result, execution.presentation));
     for (const artifact of execution.artifacts || []) { const link = document.createElement('a'); link.href = artifact.downloadUrl; link.textContent = `Tải ${artifact.filename}`; link.className = 'btn-secondary-sm'; node.appendChild(link); }
     if (!['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(execution.status)) actions.appendChild(button('Hủy tác vụ', async () => { const data = await api(`/api/automation-runs/${encodeURIComponent(execution.id)}/cancel`, 'POST', { revision: execution.revision }); mount(node, data.execution); }));
-    if (['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(execution.status) && execution.templateId && execution.conversationId) actions.appendChild(button('Làm lại', async () => {
-      const data = await api('/api/automation-runs', 'POST', { templateId: execution.templateId, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID() });
+    if (['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(execution.status) && execution.templateId && execution.conversationId && !execution.retryRunId && !execution.retrySuperseded) {
+      const retry = button('Làm lại', async () => {
+      const data = await api('/api/automation-runs', 'POST', { templateId: execution.templateId, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID(), parentRunId: execution.id });
+      mount(node, { ...execution, retryRunId: data.execution.id, retryWaitingInput: data.execution.status === 'WAITING_INPUT' });
       const next = document.createElement('div'); node.after(next); mount(next, data.execution); next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       next.querySelector('input, select, textarea')?.focus({ preventScroll: true });
-    }));
+      });
+      retry.disabled = Boolean(execution.retryWaitingInput);
+      if (retry.disabled) retry.title = 'Hoàn thiện form làm lại để tiếp tục.';
+      actions.appendChild(retry);
+    }
     if (!actions.parentNode && actions.childElementCount) node.appendChild(actions);
   }
   window.renderWorkflowExecution = execution => {
@@ -889,7 +975,12 @@
   window.initWorkflowsView = async () => { try { await refresh(); } catch (failure) { notify(failure.message, true); } };
   window.restoreWorkflowExecutions = async root => {
     for (const node of root.querySelectorAll('[data-automation-run]')) {
-      if (!node.dataset.automationRun || views.has(node) || node.dataset.restoring) continue;
+      if (node.dataset.executionArchived) {
+        const link = node.querySelector('button');
+        if (link) link.onclick = () => focusCurrentPanel(node.dataset.automationRun);
+        continue;
+      }
+      if (!node.dataset.automationRun || node.dataset.executionArchived || views.has(node) || node.dataset.restoring) continue;
       node.dataset.restoring = 'true';
       if (!node.querySelector('strong')) node.textContent = 'Đang tải tác vụ đã lưu…';
       try { const { execution } = await api(`/api/automation-runs/${encodeURIComponent(node.dataset.automationRun)}`); delete node.dataset.restoring; if (node.isConnected) mount(node, execution); }
@@ -906,8 +997,8 @@
     const cached = new Map();
     for (const [node, execution] of views) {
       if (!node.isConnected) { views.delete(node); continue; }
-      if (!execution.id || done(execution.status)) continue;
-      try { let data = cached.get(execution.id); if (!data) { data = await api(`/api/automation-runs/${encodeURIComponent(execution.id)}`); cached.set(execution.id, data); } if (data.execution.revision !== execution.revision) mount(node, data.execution); } catch (_) { /* Retry while mounted. */ }
+      if (!execution.id || (done(execution.status) && !execution.retryWaitingInput)) continue;
+      try { let data = cached.get(execution.id); if (!data) { data = await api(`/api/automation-runs/${encodeURIComponent(execution.id)}`); cached.set(execution.id, data); } if (data.execution.revision !== execution.revision || data.execution.retryWaitingInput !== execution.retryWaitingInput) mount(node, data.execution); } catch (_) { /* Retry while mounted. */ }
     }
     } finally { pollInFlight = false; }
   }, 1500);

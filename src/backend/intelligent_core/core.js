@@ -119,7 +119,21 @@ class IntelligentCore {
     const inputCheck = securityGuard.validateInput(userMessage);
     if (!inputCheck.safe) return this._buildErrorResponse(userMessage, aiProviderManager.getActiveProvider(), inputCheck.reason);
 
-    const workflowResponse = await require('../automation/orchestrator').handle(userMessage, options);
+    const tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false };
+    const collectUsage = usage => {
+      if (!usage) return;
+      const input = Number(usage.inputTokens) || 0;
+      const output = Number(usage.outputTokens) || 0;
+      tokenUsage.inputTokens += input;
+      tokenUsage.outputTokens += output;
+      tokenUsage.totalTokens += Number(usage.totalTokens) || (input + output);
+      tokenUsage.calls += Math.max(1, Number(usage.calls) || 0);
+      tokenUsage.available = true;
+    };
+    const workflowResponse = await require('../automation/orchestrator').handle(userMessage, {
+      ...options,
+      onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); }
+    });
     if (workflowResponse) return workflowResponse;
 
     // ── Resolve provider ───────────────────────────────────────────────────
@@ -135,22 +149,11 @@ class IntelligentCore {
     }) : (process.env.AI_PROVIDER_GUARDS_ENABLED !== 'false' ? createProviderBudget() : null);
     emitProgress(options.onProgress, { type: 'request_started', label: 'Đang phân tích yêu cầu', status: 'running', icon: 'brain', providerName: provider?.name });
     const providerFallbacks = [];
-    const tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false };
-    const collectUsage = usage => {
-      if (!usage) return;
-      const input = Number(usage.inputTokens) || 0;
-      const output = Number(usage.outputTokens) || 0;
-      tokenUsage.inputTokens += input;
-      tokenUsage.outputTokens += output;
-      tokenUsage.totalTokens += Number(usage.totalTokens) || (input + output);
-      tokenUsage.calls += Math.max(1, Number(usage.calls) || 0);
-      tokenUsage.available = true;
-    };
 
     const scope = securityGuard.checkScope(userMessage);
     if (!scope.allowed) {
       return this._buildSuccessResponse(
-        userMessage, scope.reply, [], provider, null, [],
+        userMessage, scope.reply, [], provider, tokenUsage, [],
         { mode: 'restricted', selectedTables: [], retrieval: { reason: 'out_of_scope' } }
       );
     }

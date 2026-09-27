@@ -15,6 +15,8 @@
   const history = [];
   let sessionId = createSessionId();
   let workflowToken = '', workflowRuns = [];
+  const workflowPanels = new Map();
+  const workflowExecutions = new Map();
   const workflowStorageKey = `knowledgehub-workflows:${apiBase}:${embedId}:${location.pathname}${location.search}`;
   const restoreSession = performance.getEntriesByType('navigation')[0]?.type === 'reload' && !window.KnowledgeHubEmbedInitialized;
   window.KnowledgeHubEmbedInitialized = true;
@@ -227,6 +229,7 @@
   systemTheme.addEventListener?.('change', applyTheme);
   host.destroyEmbed = () => {
     activeRequest?.abort();
+    messageResizeObserver.disconnect();
     themeObserver.disconnect();
     systemTheme.removeEventListener?.('change', applyTheme);
     host.remove();
@@ -240,9 +243,35 @@
   const input = root.querySelector('.kh-embed-input');
   const sendButton = root.querySelector('.kh-embed-send');
   const toggleButton = root.querySelector('.kh-embed-toggle');
-  const append = (content, role, extra = '') => { const node = document.createElement('div'); node.className = `kh-embed-message ${role} ${extra}`; node.innerHTML = content; messages.appendChild(node); messages.scrollTop = messages.scrollHeight; return node; };
+  const append = (content, role, extra = '') => { const node = document.createElement('div'); node.className = `kh-embed-message ${role} ${extra}`; node.innerHTML = content; messages.appendChild(node); followMessages=true; messages.scrollTo({top:messages.scrollHeight,behavior:'instant'}); return node; };
+  let followMessages = true, scrollScheduled = false;
+  messages.addEventListener('scroll',()=>{if(!scrollScheduled)followMessages=messages.scrollHeight-messages.scrollTop-messages.clientHeight<60;},{passive:true});
+  const settleMessageScroll=()=>{if(!followMessages||scrollScheduled)return;scrollScheduled=true;requestAnimationFrame(()=>{if(messages.isConnected)messages.scrollTo({top:messages.scrollHeight,behavior:'instant'});scrollScheduled=false;});};
+  const messageResizeObserver=new ResizeObserver(settleMessageScroll);
   style.textContent += `
     .kh-workflow{border:1px solid #dbe3ef;border-radius:10px;padding:12px;margin-top:10px;min-width:0}.kh-workflow h4{margin:12px 0 8px}.kh-workflow label{display:flex;flex-direction:column;gap:6px;margin:12px 0;font-size:12px}.kh-workflow input,.kh-workflow select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155}.kh-workflow-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.kh-workflow button{border:1px solid #cbd5e1;border-radius:8px;padding:7px 10px;background:#f1f5f9;color:#334155;cursor:pointer}.kh-workflow button.primary{background:var(--kh-primary);color:#fff;border-color:var(--kh-primary)}.kh-workflow button:disabled{opacity:.5}.kh-workflow-tokens{font-size:11px;color:#94a3b8;margin-top:10px}.dark .kh-workflow{border-color:#41516b;background:#152033}.dark .kh-workflow input,.dark .kh-workflow select{background:#111b2b;color:#e2e8f0;border-color:#41516b}.dark .kh-workflow button{background:#25324a;color:#e2e8f0;border-color:#41516b}.dark .kh-workflow button.primary{background:var(--kh-primary);color:#fff}
+  `;
+  style.textContent += `
+    .kh-workflow-processing{padding:14px 16px;background:#fafaff;border-color:#e5e3f3;border-radius:12px}
+    .kh-workflow-file{display:flex;align-items:center;gap:12px;min-width:0;margin-top:4px}
+    .kh-workflow-file-name{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.5}
+    .kh-workflow .kh-workflow-download{display:inline-grid;place-items:center;width:30px;height:30px;padding:5px;margin:0;box-sizing:border-box;flex-shrink:0}
+    .kh-workflow-download svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .kh-workflow-title{display:block;font-size:13px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+    .kh-workflow-progress{display:flex;align-items:center;gap:10px;margin-top:10px;color:#7b7395;font-size:12px;line-height:1.5}
+    .kh-workflow-dots{display:inline-flex;gap:3px;align-items:center;height:14px;flex-shrink:0}
+    .kh-workflow-dots i{width:4px;height:4px;border-radius:50%;background:#9485cf;animation:kh-workflow-pulse 1.2s ease-in-out infinite}
+    .kh-workflow-dots i:nth-child(2){animation-delay:.15s}.kh-workflow-dots i:nth-child(3){animation-delay:.3s}
+    @keyframes kh-workflow-pulse{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+    .kh-workflow-processing .kh-workflow-actions{justify-content:flex-end;margin-top:10px}
+    .kh-workflow-processing button{padding:3px 6px;border-color:transparent;background:transparent;color:#7b7395;font-size:11px;line-height:1.5}
+    .kh-workflow-processing button:hover{background:#eeecf8;color:#665294}
+    .dark .kh-workflow-processing{background:#1b2234;border-color:#35364e}.dark .kh-workflow-progress,.dark .kh-workflow-processing button{color:#b3abc9}.dark .kh-workflow-processing button{background:transparent}.dark .kh-workflow-processing button:hover{background:#30304a}
+    @media(prefers-reduced-motion:reduce){.kh-workflow-dots i{animation:none}}
+    @supports selector(::-webkit-scrollbar){
+      .kh-embed-root :is(.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data){scrollbar-width:auto}
+      .kh-embed-root :is(.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data)::-webkit-scrollbar{width:6px;height:6px}
+    }
   `;
   const workflowApi = async body => {
     const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,workflowToken,...body})});
@@ -258,10 +287,33 @@
     group.appendChild(control);return ()=>choices?(control.value===''?undefined:choices[Number(control.value)]):control.value===''?undefined:['number','integer'].includes(schema.type)?Number(control.value):control.value;
   }
   function mountWorkflow(node,execution) {
+    messageResizeObserver.observe(node);
+    if(execution.id) {
+      const previous=workflowPanels.get(execution.id);
+      if(previous&&previous!==node&&previous.isConnected) {
+        if(previous.compareDocumentPosition(node)&Node.DOCUMENT_POSITION_FOLLOWING) {
+          previous.replaceChildren();previous.dataset.workflowArchived='true';
+          previous.classList.remove('kh-workflow-processing');previous.setAttribute('aria-busy','false');
+          const notice=document.createElement('span');notice.textContent='Tác vụ này được tiếp tục ở tin nhắn mới hơn. ';
+          const link=document.createElement('button');link.type='button';link.textContent='Đến form hiện tại';link.onclick=()=>workflowPanels.get(execution.id)?.scrollIntoView({block:'center',behavior:'smooth'});
+          previous.append(notice,link);
+        } else return;
+      }
+      workflowPanels.set(execution.id,node);delete node.dataset.workflowArchived;
+      workflowExecutions.set(execution.id,execution);
+    }
     if(execution.id&&!workflowRuns.includes(execution.id)){workflowRuns.push(execution.id);workflowRuns=workflowRuns.slice(-20);saveWorkflow();}
     node.replaceChildren();node.classList.add('kh-workflow');const heading=document.createElement('strong');const states={READY:'Đang chờ chạy',RUNNING:'Đang xử lý',WAITING_INPUT:'Chờ bổ sung',SUCCEEDED:'Hoàn thành',FAILED:'Không thành công',CANCELLED:'Đã hủy',NEEDS_REVIEW:'Cần kiểm tra'};heading.textContent=`${execution.name||'Chọn nghiệp vụ'} · ${states[execution.status]||execution.status}`;node.appendChild(heading);
+    const processing=['READY','RUNNING','QUEUED'].includes(execution.status);
+    node.classList.toggle('kh-workflow-processing',processing);node.setAttribute('aria-busy',String(processing));
+    if(processing){
+      heading.textContent=execution.name||'Xử lý nghiệp vụ';heading.className='kh-workflow-title';
+      const progress=document.createElement('div');progress.className='kh-workflow-progress';progress.setAttribute('role','status');
+      const dots=document.createElement('span');dots.className='kh-workflow-dots';dots.setAttribute('aria-hidden','true');for(let i=0;i<3;i++)dots.appendChild(document.createElement('i'));
+      const text=document.createElement('span');text.textContent=execution.status==='RUNNING'?'Đang xử lý dữ liệu…':'Đang chuẩn bị xử lý…';progress.append(dots,text);node.appendChild(progress);
+    }
     const actions=document.createElement('div');actions.className='kh-workflow-actions';
-    const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{const version=conversationVersion;button.disabled=true;try{const data=await workflowApi(typeof body==='function'?body():body);if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){const next=append('','ai');mountWorkflow(next,data.execution);}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;}};actions.appendChild(button);};
+    const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{const version=conversationVersion;button.disabled=true;try{const data=await workflowApi(typeof body==='function'?body():body);if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){if(body.parentRunId)mountWorkflow(node,{...execution,retryRunId:data.execution.id,retryWaitingInput:data.execution.status==='WAITING_INPUT'});const next=append('','ai');mountWorkflow(next,data.execution);}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;}};actions.appendChild(button);return button;};
     if(execution.status==='SELECT_TEMPLATE')for(const candidate of execution.candidates||[])action(candidate.name,{workflowAction:'create',templateId:candidate.id,requestId:createSessionId()});
     if(execution.status==='WAITING_INPUT'){const reads=(execution.missingInputs||[]).map(slot=>[slot.key,workflowInput(node,slot.schema,slot.ask||slot.label)]);action('Bổ sung và tiếp tục',()=>({workflowAction:'inputs',runId:execution.id,revision:execution.revision,inputs:Object.fromEntries(reads.map(([key,read])=>[key,read()]))}),true);}
     for(const [key,value] of Object.entries(execution.result||{})){
@@ -272,10 +324,29 @@
       else {const text=document.createElement('span');text.textContent=formatDisplayValue(value);node.appendChild(text);}
     }
     if(execution.error){const text=document.createElement('p');text.textContent=execution.error;node.appendChild(text);}
-    if(['SUCCEEDED','FAILED','CANCELLED'].includes(execution.status))action('Làm lại',{workflowAction:'create',templateId:execution.templateId,requestId:createSessionId()});
-    else if(execution.id)action('Hủy tác vụ',{workflowAction:'cancel',runId:execution.id,revision:execution.revision});
+    for(const artifact of execution.artifacts||[]) {
+      const download=document.createElement('button');download.type='button';download.className='kh-workflow-download';download.title=`Tải ${artifact.filename}`;download.setAttribute('aria-label',download.title);
+      download.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>';
+      download.onclick=async()=>{
+        download.disabled=true;
+        try {
+          const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,workflowToken,workflowAction:'artifact',runId:execution.id,artifactId:artifact.id})});
+          if(!response.ok){const error=await response.json();throw new Error(error.message||'Không tải được file.');}
+          const url=URL.createObjectURL(await response.blob());const link=document.createElement('a');link.href=url;link.download=artifact.filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+        }catch(error){append(escapeHtml(error.message),'ai','kh-embed-error');}finally{download.disabled=false;}
+      };
+      const filename=[...node.children].find(child=>child.tagName==='SPAN'&&child.textContent===artifact.filename);
+      const row=document.createElement('div');row.className='kh-workflow-file';
+      if(filename){filename.before(row);filename.className='kh-workflow-file-name';row.appendChild(filename);}
+      else{const name=document.createElement('span');name.className='kh-workflow-file-name';name.textContent=artifact.filename;row.appendChild(name);node.appendChild(row);}
+      row.appendChild(download);
+    }
+    if(['SUCCEEDED','FAILED','CANCELLED'].includes(execution.status)&&!execution.retryRunId&&!execution.retrySuperseded){const retry=action('Làm lại',{workflowAction:'create',templateId:execution.templateId,requestId:createSessionId(),parentRunId:execution.id});retry.disabled=Boolean(execution.retryWaitingInput);if(retry.disabled)retry.title='Hoàn thiện form làm lại để tiếp tục.';}
+    else if(execution.id&&!['SUCCEEDED','FAILED','CANCELLED'].includes(execution.status))action('Hủy tác vụ',{workflowAction:'cancel',runId:execution.id,revision:execution.revision});
     node.appendChild(actions);
-    if(['READY','RUNNING'].includes(execution.status)){const version=conversationVersion;setTimeout(async()=>{if(version!==conversationVersion||!node.isConnected)return;try{const data=await workflowApi({workflowAction:'get',runId:execution.id});mountWorkflow(node,data.execution);}catch(e){node.appendChild(document.createTextNode(e.message));}},4000);}
+    settleMessageScroll();
+    if(execution.parentRunId){const parent=workflowExecutions.get(execution.parentRunId),parentNode=workflowPanels.get(execution.parentRunId);if(parent&&parentNode?.isConnected&&parent.retryRunId===execution.id&&parent.retryWaitingInput!==(execution.status==='WAITING_INPUT'))mountWorkflow(parentNode,{...parent,retryWaitingInput:execution.status==='WAITING_INPUT'});}
+    if(processing||execution.retryWaitingInput){const version=conversationVersion;setTimeout(async()=>{if(version!==conversationVersion||!node.isConnected||workflowPanels.get(execution.id)!==node)return;try{const data=await workflowApi({workflowAction:'get',runId:execution.id});if(version===conversationVersion&&workflowPanels.get(execution.id)===node)mountWorkflow(node,data.execution);}catch(e){if(workflowPanels.get(execution.id)===node)node.appendChild(document.createTextNode(e.message));}},4000);}
   }
   // Keep host-page keyboard shortcuts (Space, arrows, etc.) away from chat input.
   // Do not preventDefault here: the input must retain its native text behavior.
@@ -287,12 +358,22 @@
     conversationVersion++;
     activeRequest?.abort(); activeRequest = null;
     history.splice(0, history.length); sessionId = createSessionId();
-    workflowToken='';workflowRuns=[];saveWorkflow();
+    workflowToken='';workflowRuns=[];workflowPanels.clear();workflowExecutions.clear();messageResizeObserver.disconnect();followMessages=true;saveWorkflow();
     input.value = ''; input.disabled = false; sendButton.disabled = false;
     renderWelcome(); input.focus();
   };
   renderWelcome();
-  if(workflowToken) for(const runId of workflowRuns){const node=append('Đang tải tác vụ đã lưu…','ai');workflowApi({workflowAction:'get',runId}).then(data=>{if(node.isConnected)mountWorkflow(node,data.execution);}).catch(e=>{node.textContent=e.message;});}
+  if(workflowToken) {
+    const version=conversationVersion;
+    const savedRuns=[...new Set(workflowRuns)].map(runId=>({runId,node:append('Đang tải tác vụ đã lưu…','ai')}));
+    (async()=>{
+      for(const {runId,node} of savedRuns){
+        if(version!==conversationVersion||!node.isConnected)return;
+        try{const data=await workflowApi({workflowAction:'get',runId});if(version!==conversationVersion||!node.isConnected)return;mountWorkflow(node,data.execution);}
+        catch(error){if(version!==conversationVersion||!node.isConnected)return;node.textContent=error.message==='DATA_CONFLICT'?'Chưa tải được tác vụ do dữ liệu đang cập nhật. Vui lòng thử lại.':error.message;}
+      }
+    })();
+  }
   toggleButton.onclick = () => {
     root.classList.toggle('open');
     const isOpen = root.classList.contains('open');

@@ -95,8 +95,10 @@ class EmbedChatService {
       for (const key of this.rateBuckets.keys()) if (!key.endsWith(`:${minute}`)) this.rateBuckets.delete(key);
     }
     if (used > config.rateLimit) return { ok: false, status: 429, message: 'Đã vượt giới hạn yêu cầu. Vui lòng thử lại sau.' };
-    config.lastUsedAt = new Date().toISOString();
-    this.persist();
+    if (options.recordUsage !== false) {
+      config.lastUsedAt = new Date().toISOString();
+      this.persist();
+    }
     return { ok: true, config, origin: normalizedOrigin };
   }
   workflowSession(config, sessionId, token) {
