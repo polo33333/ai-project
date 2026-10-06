@@ -1,0 +1,61 @@
+<div id="business-suggestions-upgraded" class="viz-carousel viz-dotted-background" aria-label="Gợi ý nghiệp vụ" data-previous-label="Trước" data-next-label="Sau">
+  <style>
+    #business-suggestions-upgraded { --suggest-bg:light-dark(#fff,#182437); --suggest-text:light-dark(#243147,#e2e8f0); --suggest-muted:light-dark(#7387a9,#a8b6cb); --suggest-border:light-dark(#e1e7f0,#334155); --suggest-accent:light-dark(#7563d3,#c4afff); --suggest-tint:light-dark(#eeecff,#302744); font-family:Inter,system-ui,sans-serif; }
+    #business-suggestions-upgraded .stage { box-sizing:border-box; padding:24px 12px; min-height:430px; }
+    #business-suggestions-upgraded .product { padding:22px; border:1px solid var(--suggest-border); border-radius:18px; background:var(--suggest-bg); color:var(--suggest-text); }
+    #business-suggestions-upgraded .heading { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    #business-suggestions-upgraded .mark { display:grid; place-items:center; flex-shrink:0; width:40px; height:40px; border-radius:12px; color:var(--suggest-accent); background:var(--suggest-tint); }
+    #business-suggestions-upgraded strong { font-weight:500; }
+    #business-suggestions-upgraded .heading strong { font-size:15px; }
+    #business-suggestions-upgraded .heading p { font-size:12px; line-height:1.6; color:var(--suggest-muted); margin:4px 0 0; }
+    #business-suggestions-upgraded .choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    #business-suggestions-upgraded .choice { display:grid; grid-template-columns:40px minmax(0,1fr); gap:12px; align-items:start; padding:18px; border:1px solid var(--suggest-border); border-radius:16px; color:var(--suggest-text); background:var(--suggest-bg); font:400 13px/1.5 Inter,system-ui,sans-serif; text-align:left; cursor:pointer; transition:box-shadow .15s,border-color .15s; }
+    #business-suggestions-upgraded .choice:hover { border-color:var(--suggest-accent); box-shadow:0 4px 14px light-dark(#7057d915,#00000030); }
+    #business-suggestions-upgraded .copy { display:flex; flex-direction:column; gap:8px; min-width:0; }
+    #business-suggestions-upgraded .domain { align-self:flex-start; font-size:11px; padding:2px 7px; border-radius:6px; background:light-dark(#f0f3fa,#243147); color:var(--suggest-muted); }
+    #business-suggestions-upgraded .description { font-size:12px; line-height:1.65; color:var(--suggest-muted); }
+    #business-suggestions-upgraded .action { grid-column:2; display:flex; align-items:center; gap:8px; margin-top:5px; color:var(--suggest-accent); font-size:12px; }
+    #business-suggestions-upgraded .feedback { margin:18px 0 0; color:var(--suggest-muted); font-size:12px; line-height:1.6; }
+    #business-suggestions-upgraded .compact .choices { grid-template-columns:1fr; }
+    #business-suggestions-upgraded .compact .choice { grid-template-columns:40px minmax(0,1fr) auto; padding:14px; }
+    #business-suggestions-upgraded .compact .action { grid-column:3; grid-row:1; align-self:center; }
+    #business-suggestions-upgraded .compact .domain { background:transparent; padding:0; }
+    @media(max-width:540px) { #business-suggestions-upgraded .choices { grid-template-columns:1fr; } #business-suggestions-upgraded .stage { min-height:620px; padding:20px 4px; } #business-suggestions-upgraded .product { padding:16px; } #business-suggestions-upgraded .compact .choice { grid-template-columns:40px minmax(0,1fr); } #business-suggestions-upgraded .compact .action { grid-column:2; grid-row:2; } }
+  </style>
+  <section class="stage" data-variant="Thẻ chi tiết" aria-label="Thẻ gợi ý có mô tả">
+    <div class="product">
+      <div class="heading"><span class="mark"><i data-lucide="sparkles" aria-hidden="true"></i></span><div><strong>Bạn muốn xử lý nghiệp vụ nào?</strong><p>Chọn mẫu phù hợp. Trợ lý sẽ hỏi thêm thông tin cần thiết trước khi xử lý.</p></div></div>
+      <div class="choices"></div>
+      <p class="feedback" aria-live="polite">Nội dung minh họa · Bấm một nghiệp vụ để thử chọn.</p>
+    </div>
+  </section>
+  <section class="stage compact" data-variant="Danh sách gọn" aria-label="Gợi ý dạng danh sách" hidden>
+    <div class="product">
+      <div class="heading"><span class="mark"><i data-lucide="sparkles" aria-hidden="true"></i></span><div><strong>Chọn nghiệp vụ phù hợp</strong><p>Xem mô tả để chọn đúng yêu cầu của bạn.</p></div></div>
+      <div class="choices"></div>
+      <p class="feedback" aria-live="polite">Nội dung minh họa · Bấm một nghiệp vụ để thử chọn.</p>
+    </div>
+  </section>
+  <script>
+    (() => {
+      const root = document.getElementById('business-suggestions-upgraded');
+      const examples = [
+        {domain:'Hợp đồng',icon:'file-text',name:'Tra cứu hợp đồng khách hàng',description:'Tìm chi tiết hợp đồng theo tên khách hàng hoặc mã hợp đồng.'},
+        {domain:'Nhân sự',icon:'users',name:'Tra cứu thông tin nhân viên',description:'Tìm hồ sơ nhân viên theo tên hoặc mã nhân viên.'},
+        {domain:'Điện',icon:'chart-column',name:'Báo cáo sản lượng điện',description:'Tổng hợp sản lượng theo tháng, vẽ biểu đồ hoặc xuất Excel khi cần.'}
+      ];
+      root.querySelectorAll('.choices').forEach(list => examples.forEach(item => {
+        const button = document.createElement('button'); button.type='button'; button.className='choice';
+        button.innerHTML=`<span class="mark"><i data-lucide="${item.icon}" aria-hidden="true"></i></span><span class="copy"><span class="domain">${item.domain}</span><strong>${item.name}</strong><span class="description">${item.description}</span></span><span class="action">Chọn nghiệp vụ<i data-lucide="arrow-right" aria-hidden="true"></i></span>`;
+        button.addEventListener('click', () => {
+          list.closest('.product').querySelector('.feedback').textContent=`Đã chọn: ${item.name} · Bản preview chưa chạy nghiệp vụ.`;
+          window.openai?.setWidgetState?.({modelContent:{business:item.name,design:list.closest('[data-variant]').dataset.variant}})?.catch(() => {});
+        }); list.appendChild(button);
+      }));
+      const restore = state => { const name=state?.modelContent?.business; if(name) root.querySelectorAll('.feedback').forEach(node=>node.textContent=`Đã chọn: ${name} · Bản preview chưa chạy nghiệp vụ.`); };
+      restore(window.openai?.widgetState);
+      window.addEventListener('openai:set_globals', event => { if(event.detail?.globals?.widgetState) restore(event.detail.globals.widgetState); });
+      if(globalThis.lucide) lucide.createIcons({attrs:{width:16,height:16}});
+    })();
+  </script>
+</div>

@@ -435,8 +435,8 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(.chat-markdown-table tbody tr:hover,.dictionary-table-row:hover,#quick-prompts-bar button:hover) { background: var(--bg-hover) !important; }
 :root[data-theme="dark"] .chat-session-group-title.is-pinned { border-top-color: #2a374b; }
 :root[data-theme="dark"] #quick-prompts-bar {
-  border-top-color: #26344a;
-  background: #111b2b !important;
+  border: 0;
+  background: transparent !important;
 }
 :root[data-theme="dark"] #quick-prompts-bar button {
   border-color: #2a3950 !important;

@@ -1,0 +1,53 @@
+<div id="business-suggestions-preview" class="viz-dotted-background">
+  <style>
+    #business-suggestions-preview { padding:24px 12px; color:light-dark(#334155,#e2e8f0); font-family:Inter,system-ui,sans-serif; }
+    #business-suggestions-preview .preview-product { padding:22px; border:1px solid light-dark(#e1e7f0,#334155); border-radius:14px; background:light-dark(#fff,#182437); }
+    #business-suggestions-preview .preview-label { margin:0 0 14px; font-size:13px; font-weight:500; color:light-dark(#64748b,#a8b6cb); }
+    #business-suggestions-preview .preview-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:10px; }
+    #business-suggestions-preview button { font:400 13px/1.6 Inter,system-ui,sans-serif; cursor:pointer; color:inherit; }
+    #business-suggestions-preview .preview-choice { display:flex; align-items:center; gap:10px; padding:14px; border:1px solid light-dark(#e1e7f0,#334155); border-radius:10px; background:light-dark(#fff,#182437); text-align:left; }
+    #business-suggestions-preview .preview-choice > i:first-child { color:light-dark(#7c63d9,#bba8f5); }
+    #business-suggestions-preview .preview-choice > i:last-child { margin-left:auto; color:light-dark(#94a3b8,#a8b6cb); flex-shrink:0; }
+    #business-suggestions-preview .preview-choice:hover { border-color:light-dark(#a894e7,#a894e7); box-shadow:0 3px 10px light-dark(#7057d914,#7057d930); }
+    #business-suggestions-preview .preview-status { margin-top:14px; font-size:12px; color:light-dark(#64748b,#a8b6cb); }
+    #business-suggestions-preview .preview-bottom { margin-top:24px; }
+    #business-suggestions-preview .preview-prompts { display:flex; flex-wrap:wrap; gap:8px; padding:10px 0; }
+    #business-suggestions-preview .preview-prompt { display:flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid light-dark(#e2e5fb,#334155); border-radius:20px; background:light-dark(#fff,#182438); color:light-dark(#5362c8,#bba8f5); font-size:12px; box-shadow:0 3px 9px light-dark(#46559614,#00000020); }
+    #business-suggestions-preview textarea { display:block; box-sizing:border-box; width:100%; min-height:70px; padding:14px; border:1px solid light-dark(#dbe4f0,#41516b); border-radius:14px; background:light-dark(#fff,#182437); color:inherit; font:400 14px/1.6 Inter,system-ui,sans-serif; resize:vertical; }
+    @media(pointer:coarse) { #business-suggestions-preview button { min-height:44px; } #business-suggestions-preview textarea { font-size:16px; } }
+  </style>
+  <div class="preview-product">
+    <p class="preview-label">Chọn nghiệp vụ · Nội dung minh họa</p>
+    <div class="preview-choices">
+      <button type="button" class="preview-choice" data-business="Tra cứu hợp đồng"><i data-lucide="layers" aria-hidden="true"></i><span>Tra cứu chi tiết hợp đồng theo tên khách hàng hoặc mã</span><i data-lucide="arrow-right" aria-hidden="true"></i></button>
+      <button type="button" class="preview-choice" data-business="Tra cứu nhân viên"><i data-lucide="layers" aria-hidden="true"></i><span>Tra cứu chi tiết nhân viên theo tên hoặc mã</span><i data-lucide="arrow-right" aria-hidden="true"></i></button>
+      <button type="button" class="preview-choice" data-business="Báo cáo sản lượng điện"><i data-lucide="layers" aria-hidden="true"></i><span>Chi tiết sản lượng điện bán ra</span><i data-lucide="arrow-right" aria-hidden="true"></i></button>
+    </div>
+    <div class="preview-status" aria-live="polite">Bấm một thẻ để xem trạng thái chọn.</div>
+  </div>
+  <div class="preview-bottom">
+    <p class="preview-label">Gợi ý nhanh phía trên ô nhập</p>
+    <div class="preview-prompts">
+      <button type="button" class="preview-prompt" data-prompt="Đếm tổng số bảng và cột SQL"><i data-lucide="lightbulb" aria-hidden="true"></i>Đếm tổng số Bảng &amp; Cột SQL</button>
+      <button type="button" class="preview-prompt" data-prompt="Vẽ biểu đồ doanh thu"><i data-lucide="chart-column" aria-hidden="true"></i>Vẽ biểu đồ doanh thu</button>
+      <button type="button" class="preview-prompt" data-prompt="Tính Min/Max/Avg"><i data-lucide="calculator" aria-hidden="true"></i>Tính Min/Max/Avg</button>
+      <button type="button" class="preview-prompt" data-prompt="Liệt kê 5 bảng mới nhất"><i data-lucide="database" aria-hidden="true"></i>Liệt kê 5 Bảng mới nhất</button>
+    </div>
+    <textarea aria-label="Câu hỏi minh họa" placeholder="Nhập câu hỏi, yêu cầu SQL…" rows="2"></textarea>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('business-suggestions-preview');
+      const input = root.querySelector('textarea');
+      const status = root.querySelector('.preview-status');
+      const restore = state => { input.value = state?.privateContent?.prompt || ''; const choice = state?.modelContent?.business; status.textContent = choice ? `Đã chọn: ${choice} (minh họa, chưa chạy nghiệp vụ).` : 'Bấm một thẻ để xem trạng thái chọn.'; };
+      restore(window.openai?.widgetState);
+      let business = window.openai?.widgetState?.modelContent?.business || null;
+      const save = () => window.openai?.setWidgetState?.({modelContent:{business},privateContent:{prompt:input.value}})?.catch(() => {});
+      root.querySelectorAll('[data-business]').forEach(button => button.addEventListener('click', () => { business = button.dataset.business; status.textContent = `Đã chọn: ${business} (minh họa, chưa chạy nghiệp vụ).`; save(); }));
+      root.querySelectorAll('[data-prompt]').forEach(button => button.addEventListener('click', () => { input.value = button.dataset.prompt; input.focus(); save(); }));
+      input.addEventListener('change', save);
+      window.addEventListener('openai:set_globals', event => { if(event.detail?.globals?.widgetState) { business=event.detail.globals.widgetState.modelContent?.business || null; restore(event.detail.globals.widgetState); } });
+    })();
+  </script>
+</div>

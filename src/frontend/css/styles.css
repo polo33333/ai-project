@@ -6120,22 +6120,27 @@ body.dictionary-modal-open {
 }
 
 #quick-prompts-bar {
-  padding: 9px 18px !important;
-  border-top: 1px solid #eef2f7;
-  background: #fbfcff !important;
+  padding: 10px 18px !important;
+  border: 0;
+  background: transparent !important;
 }
 
 #quick-prompts-bar button {
   border-color: #e2e5fb !important;
   color: #5362c8 !important;
-  background: #f8f8ff !important;
-  box-shadow: none !important;
+  background: #ffffff !important;
+  box-shadow: 0 3px 9px rgba(70, 85, 150, .08) !important;
 }
+
+#quick-prompts-bar button:hover { transform:translateY(-1px); box-shadow:0 5px 12px rgba(70,85,150,.13) !important; }
+@media(prefers-reduced-motion:reduce) { #quick-prompts-bar button:hover { transform:none; } }
 
 .page-chat-composer-area {
   padding: 8px 16px 14px !important;
-  background: #fbfcff !important;
+  background: transparent !important;
 }
+
+.chat-workspace .chat-main { background:transparent !important; }
 
 .chat-workspace .page-chat-composer {
   min-height: 62px;

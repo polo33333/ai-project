@@ -1,6 +1,6 @@
 /* Phase 1 definitions, version management and owner-scoped run controls. */
 (() => {
-  const state = { packages: [], templates: [], runs: [], settings: {}, admin: false, search: '', domain: '' };
+  const state = { packages: [], templates: [], runs: [], settings: {}, admin: false, search: '', domain: '', layout: 'grid' };
   const views = new Map();
   const chatScrollStates = new WeakMap();
   const observedChatPanels = new WeakSet();
@@ -88,6 +88,14 @@
     input.id ||= `wp-code-input-${++codeFieldId}`;input.parentElement.setAttribute('for',input.id);
     const shell=document.createElement('div');shell.className='wp-code-editor';shell.dataset.language=language;input.parentElement.insertBefore(shell,input);
     const toolbar=document.createElement('div');toolbar.className='wp-code-toolbar';toolbar.append(typeBadge(language.toUpperCase()));
+    const copy = button('Sao chép', async () => {
+      const start = input.selectionStart, end = input.selectionEnd;
+      await navigator.clipboard.writeText(start !== end ? input.value.slice(start, end) : input.value);
+      input.focus(); input.setSelectionRange(start, end);
+    });
+    copy.title = 'Sao chép phần đang chọn; nếu chưa chọn thì sao chép toàn bộ';
+    copy.setAttribute('aria-label', copy.title);
+    copy.addEventListener('pointerdown', event => event.preventDefault()); toolbar.appendChild(copy);
     if(language==='json'){const format=button('Định dạng',()=>{try{input.value=JSON.stringify(JSON.parse(input.value),null,2);input.dispatchEvent(new Event('input',{bubbles:true}));}catch(_){notify('JSON chưa hợp lệ, hãy kiểm tra nội dung trước khi định dạng.',true);}});format.setAttribute('aria-label','Định dạng JSON');toolbar.appendChild(format);}
     const surface=document.createElement('div');surface.className='wp-code-surface';const preview=document.createElement('pre');preview.setAttribute('aria-hidden','true');preview.className='wp-code-highlight';
     shell.append(toolbar,surface);surface.append(preview,input);input.classList.add('wp-code-input');input.spellcheck=false;input.setAttribute('autocapitalize','off');input.wrap='off';
@@ -95,8 +103,16 @@
       const tokens=language==='sql'?/--.*$|'(?:''|[^'])*'|\[[^\]]*\]|\b(?:SELECT|TOP|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|IS|IN|LIKE|ORDER|BY|GROUP|HAVING|ASC|DESC|DISTINCT|CASE|WHEN|THEN|ELSE|END|WITH|UNION|ALL|OFFSET|FETCH|EXISTS|COUNT|SUM|AVG|MIN|MAX|CONCAT|REPLACE|CAST|CONVERT)\b|@[\w]+|\b\d+(?:\.\d+)?\b/gi: /"(?:\\.|[^"\\])*"(?:\s*(?=:))?|\b(?:true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g;
       let html='',cursor=0;for(const match of line.matchAll(tokens)){html+=h(line.slice(cursor,match.index));const token=match[0];const kind=language==='sql'?(token.startsWith('--')?'comment':token.startsWith("'")?'string':token.startsWith('[')?'identifier':token.startsWith('@')?'parameter':/^\d/.test(token)?'number':'keyword'):(token.startsWith('"')?line.slice(match.index+token.length).trimStart().startsWith(':')?'key':'string':/^[-\d]/.test(token)?'number':'keyword');html+=`<span class="wp-code-${kind}">${h(token)}</span>`;cursor=match.index+token.length;}return html+h(line.slice(cursor));
     }
-    const render=()=>{preview.innerHTML=input.value.split('\n').map((line,index)=>`<span class="wp-code-line" data-line="${index+1}">${highlight(line)||' '}</span>`).join('');preview.scrollTop=input.scrollTop;preview.scrollLeft=input.scrollLeft;};
-    input.addEventListener('input',render);input.addEventListener('scroll',()=>{preview.scrollTop=input.scrollTop;preview.scrollLeft=input.scrollLeft;});
+    const sync = () => {
+      // Match the textarea's viewport, excluding its native scrollbars.
+      preview.style.width = `${input.clientWidth}px`; preview.style.height = `${input.clientHeight}px`;
+      preview.scrollTop = input.scrollTop; preview.scrollLeft = input.scrollLeft;
+    };
+    const render=()=>{preview.innerHTML=input.value.split('\n').map((line,index)=>`<span class="wp-code-line" data-line="${index+1}">${highlight(line)||' '}</span>`).join('');sync();};
+    input.addEventListener('input',render);input.addEventListener('scroll',sync);
+    const sizeObserver = new ResizeObserver(sync); sizeObserver.observe(input);
+    const removalObserver = new MutationObserver(() => { if (!shell.isConnected) { sizeObserver.disconnect(); removalObserver.disconnect(); } });
+    removalObserver.observe(document.body, { childList:true, subtree:true });
     input.addEventListener('keydown',event=>{if(event.key==='Tab' && !event.shiftKey){event.preventDefault();input.setRangeText('  ',input.selectionStart,input.selectionEnd,'end');input.dispatchEvent(new Event('input',{bubbles:true}));}});
     input._renderCode=render;render();
   }
@@ -201,6 +217,8 @@
     if(value.type === 'api') {
       const selectField=(host,label,options,current)=>{const wrapper=document.createElement('label');wrapper.textContent=label;const select=document.createElement('select');select.setAttribute('aria-label',label);options.forEach(([key,name])=>select.appendChild(new Option(name,key)));select.value=current;wrapper.appendChild(select);host.appendChild(wrapper);return select;};
       const method=selectField(card,'Phương thức',['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(name=>[name,name]),value.method || 'GET');readers.method=()=>method.value;
+      method.dataset.method = method.value;
+      [...method.options].forEach(option => { option.dataset.method = option.value; });
       const url=field(card,'Địa chỉ API HTTP/HTTPS',value.url); url.placeholder='https://…/resource/{{steps.lookup.rows.0.ID}}'; readers.url=()=>url.value;
       const authType=selectField(card,'Xác thực',[['none','Không xác thực'],['bearer','Bearer token'],['basic','Basic Auth'],['apiKey','API key']],value.auth?.type || 'none');
       const requestRow=document.createElement('div');requestRow.className='wp-api-request-row';card.insertBefore(requestRow,method.parentElement);
@@ -231,7 +249,7 @@
         readBody=()=>full.value || read();
       }
       renderBody();bodyFormat.onchange=()=>{try{bodyCache[activeBody]=readBody();activeBody=bodyFormat.value;renderBody();}catch(failure){bodyFormat.value=activeBody;notify(failure.message,true);}};
-      method.onchange=()=>{if(['GET','HEAD'].includes(method.value)){bodyFormat.value='none';bodyFormat.onchange();}};
+      method.onchange=()=>{method.dataset.method=method.value;if(['GET','HEAD'].includes(method.value)){bodyFormat.value='none';bodyFormat.onchange();}};
       readers.bodyFormat=()=>bodyFormat.value;readers.body=()=>readBody();
       const response=selectField(card,'Kiểu phản hồi',[['json','JSON'],['text','Văn bản'],['binary','File tải xuống'],['auto','Tự nhận diện']],value.responseFormat || 'json');readers.responseFormat=()=>response.value;
       const advanced=document.createElement('details');advanced.className='wp-advanced';advanced.innerHTML='<summary>Thời gian chờ và redirect</summary>';card.appendChild(advanced);
@@ -296,7 +314,8 @@
         const remove = button('', () => { rows.splice(rows.indexOf(item), 1); row.remove(); if(propertyKey==='bindings' && context.template?.bindings)delete context.template.bindings[keyInput.value]; }); remove.className = 'wp-field-remove'; remove.appendChild(icon('fa-trash-can')); remove.title = array ? 'Xóa mục' : 'Xóa trường'; remove.setAttribute('aria-label', array ? 'Xóa mục' : `Xóa trường ${key}`); row.appendChild(remove); (technical && key !== 'sql' ? technical : list).appendChild(row);
         if(propertyKey==='bindings' && keyInput) {
           row.classList.add('wp-source-card');
-          keyInput.parentElement.querySelector('.wp-field-heading').appendChild(remove);
+          // Keep the delete button outside the label: label activation would
+          // otherwise forward clicks on its heading to the delete button.
         }
         if (technical && key === 'sql') remove.hidden = true;
       }
@@ -380,7 +399,15 @@
   async function refresh() {
     const panel=document.getElementById('workflow-plugin-panel'), message=document.getElementById('wp-message');
     panel?.setAttribute('aria-busy','true');
-    if(message) { message.style.color=''; message.innerHTML='<span class="wp-library-loader" aria-hidden="true"><i></i><i></i><i></i></span><span>Đang tải mẫu nghiệp vụ…</span>'; }
+    if(message) { message.style.color=''; message.innerHTML='<span class="wp-library-loader" aria-hidden="true"></span><span>Đang tải mẫu nghiệp vụ<span class="wp-loading-detail">Chuẩn bị kịch bản của bạn…</span></span>'; }
+    const packagesContainer = document.getElementById('wp-packages');
+    if (packagesContainer && !packagesContainer.children.length) {
+      for (let index = 0; index < 3; index++) {
+        const skeleton = document.createElement('div'); skeleton.className = 'wp-skeleton-card'; skeleton.setAttribute('aria-hidden', 'true');
+        skeleton.innerHTML = '<div class="wp-skeleton-heading"><span class="wp-skeleton-icon"></span><div><span class="wp-skeleton-line short"></span><span class="wp-skeleton-line title"></span></div></div><div class="wp-skeleton-copy"><span class="wp-skeleton-line"></span><span class="wp-skeleton-line"></span><span class="wp-skeleton-line medium"></span></div><div class="wp-skeleton-chips"><span></span><span></span></div><div class="wp-skeleton-footer"><span></span><span></span><span></span></div>';
+        packagesContainer.appendChild(skeleton);
+      }
+    }
     try {
     const accountRequest = api('/api/auth/me');
     const packagesRequest = accountRequest.then(account => account.account?.role === 'admin' ? api('/api/workflow-plugins') : { packages: [] });
@@ -390,25 +417,40 @@
     render();
     if(message) message.replaceChildren();
     } catch(failure) { notify(failure.message,true); throw failure; }
-    finally { panel?.removeAttribute('aria-busy'); }
+    finally { panel?.removeAttribute('aria-busy'); packagesContainer?.querySelectorAll('.wp-skeleton-card').forEach(node => node.remove()); }
   }
   function render() {
     const toolbar = document.getElementById('wp-toolbar'); if (!toolbar) return;
     toolbar.replaceChildren(); const heading = document.querySelector('#workflow-plugin-panel > .module-section-heading'); heading.querySelector('.wp-status')?.remove(); const status = document.createElement('span'); status.className = 'wp-status' + (state.settings.enabled ? ' enabled' : ''); status.textContent = state.settings.enabled ? 'Đang hoạt động' : 'Chưa bật'; heading.appendChild(status);
-    const refreshButton = button('Làm mới', refresh); refreshButton.classList.add('wp-refresh'); refreshButton.prepend(icon('fa-rotate')); toolbar.appendChild(refreshButton);
+    const toolbarActions = document.createElement('div'); toolbarActions.className = 'wp-toolbar-actions';
+    const refreshButton = button('Làm mới', refresh); refreshButton.classList.add('wp-refresh'); refreshButton.prepend(icon('fa-rotate')); toolbarActions.appendChild(refreshButton);
     const search = document.createElement('input'); search.type = 'search'; search.placeholder = 'Tìm mẫu nghiệp vụ…'; search.value = state.search; search.setAttribute('aria-label', 'Tìm template và gói nghiệp vụ'); search.className = 'wp-search'; const searchBox = document.createElement('label'); searchBox.className = 'wp-search-box'; searchBox.append(icon('fa-magnifying-glass'), search); toolbar.appendChild(searchBox);
     const domains = document.createElement('select'); domains.setAttribute('aria-label', 'Lọc lĩnh vực');
     const draftDomains = state.admin ? state.packages.flatMap(record => record.draft.templates.map(template => template.domain || record.draft.manifest.domain || '')) : [];
-    for (const domain of ['', ...new Set([...state.templates.map(template => template.domain), ...draftDomains].filter(Boolean))]) { const option = document.createElement('option'); option.value = domain; option.textContent = domain || 'Tất cả lĩnh vực'; domains.appendChild(option); }
-    domains.value = state.domain; const domainBox = document.createElement('div'); domainBox.className = 'wp-domain-filter'; domainBox.append(icon('fa-layer-group'), domains); toolbar.appendChild(domainBox);
+    for (const domain of ['', ...new Set([...state.templates.map(template => template.domain), ...draftDomains].filter(Boolean))]) { const option = document.createElement('option'); option.value = domain; option.textContent = domain || 'Tất cả'; domains.appendChild(option); }
+    domains.value = state.domain; const domainBox = document.createElement('div'); domainBox.className = 'wp-domain-filter'; domainBox.append(icon('fa-filter'), domains); toolbar.appendChild(domainBox);
+    const layoutSwitch = document.createElement('div'); layoutSwitch.className = 'wp-layout-switch'; layoutSwitch.setAttribute('role', 'group'); layoutSwitch.setAttribute('aria-label', 'Kiểu hiển thị nghiệp vụ');
+    const nextLayout = state.layout === 'grid' ? 'list' : 'grid';
+    const layoutControl = button('', () => { state.layout = nextLayout; render(); document.querySelector('#wp-toolbar .wp-layout-switch button')?.focus(); });
+    const layoutLabel = nextLayout === 'list' ? 'Chuyển sang dạng danh sách' : 'Chuyển sang dạng lưới';
+    layoutControl.appendChild(icon(nextLayout === 'list' ? 'fa-list' : 'fa-table-cells-large')); layoutControl.title = layoutLabel; layoutControl.setAttribute('aria-label', layoutLabel); layoutSwitch.appendChild(layoutControl);
+    toolbar.appendChild(layoutSwitch);
     const matches = definition => (!state.domain || definition.domain === state.domain) && `${definition.name} ${definition.description || ''} ${(definition.tags || []).join(' ')}`.toLocaleLowerCase().includes(state.search.toLocaleLowerCase());
     search.oninput = () => { state.search = search.value; render(); const input = document.querySelector('#wp-toolbar input'); input.focus(); input.setSelectionRange(state.search.length, state.search.length); }; domains.onchange = () => { state.domain = domains.value; render(); };
     if (state.admin) {
-      if (!state.settings.enabled && !state.settings.disabledByEnvironment) toolbar.appendChild(button('Bật workflow/plugin', async () => { await api('/api/workflow-plugins/settings', 'PUT', { enabled: true, revision: state.settings.revision }); await refresh(); }));
-      const importButton = button('Import gói', () => importDialog()); importButton.prepend(icon('fa-arrow-up-from-bracket')); toolbar.appendChild(importButton);
-      const createButton = button('Tạo mẫu', () => editDialog({ draft: blankBundle(), revision: null })); createButton.className = 'btn-primary wp-create-template'; createButton.prepend(icon('fa-plus')); toolbar.appendChild(createButton);
+      if (!state.settings.enabled && !state.settings.disabledByEnvironment) toolbarActions.appendChild(button('Bật workflow/plugin', async () => { await api('/api/workflow-plugins/settings', 'PUT', { enabled: true, revision: state.settings.revision }); await refresh(); }));
+      const importButton = button('Import gói', () => importDialog()); importButton.prepend(icon('fa-arrow-up-from-bracket')); toolbarActions.appendChild(importButton);
+      const createButton = button('Tạo mẫu', () => editDialog({ draft: blankBundle(), revision: null })); createButton.className = 'btn-primary wp-create-template'; createButton.prepend(icon('fa-plus')); toolbarActions.appendChild(createButton);
     }
-    const packages = document.getElementById('wp-packages'); packages.replaceChildren();
+    for (const control of toolbarActions.children) {
+      if (control.classList.contains('wp-create-template')) continue;
+      const label = control.textContent;
+      const symbol = control.querySelector('i') || icon('fa-power-off');
+      control.replaceChildren(symbol); control.title = label; control.setAttribute('aria-label', label); control.classList.add('wp-toolbar-icon');
+    }
+    const toolbarFilters = document.createElement('div'); toolbarFilters.className = 'wp-toolbar-filters'; toolbarFilters.append(searchBox, domainBox, layoutSwitch); toolbar.append(toolbarFilters, toolbarActions);
+    const packages = document.getElementById('wp-packages'); packages.replaceChildren(); packages.classList.toggle('wp-list-layout', state.layout === 'list');
+    document.querySelector('#wp-drafts-section .wp-section-heading').appendChild(toolbar);
     document.getElementById('wp-drafts-section').hidden = false;
     document.querySelector('#wp-drafts-section h3').textContent = state.admin ? 'Thiết kế nghiệp vụ' : 'Mẫu nghiệp vụ';
     document.querySelector('#wp-drafts-section .wp-section-heading p').textContent = state.admin ? 'Soạn kịch bản và chạy thử trước khi đưa vào hội thoại.' : 'Chọn mẫu hoặc hỏi trợ lý về nghiệp vụ để bắt đầu.';
@@ -417,8 +459,16 @@
       if (!matches({ ...record.draft.manifest, ...definition, domain })) continue;
       const card = document.createElement('article'); card.className = 'workflow-manager-card';
       card.dataset.templateId = definition.id;
-      card.innerHTML = `<h3>${h(definition.name)}</h3><p>${h(definition.description)}</p><small>${h(record.draft.manifest.name)} · Draft v${record.draft.manifest.version} · ${record.published ? `Published v${record.published.manifest.version}` : 'Chưa publish'}</small><p>${definition.workflow.steps.length} bước · ${Object.keys(definition.inputs).length} ô nhập · ${record.lastTest ? (record.lastTest.passed ? 'Kiểm thử đạt' : 'Kiểm thử chưa đạt') : 'Chưa chạy kiểm thử'}</p>`;
+      const published = record.published && JSON.stringify(record.published.templates.find(item => item.id === definition.id)) === JSON.stringify(definition);
+      card.classList.toggle('wp-draft-card', !published);
+      card.innerHTML = `<h3>${h(definition.name)}</h3><p class="wp-template-description">${h(definition.description)}</p><div class="wp-template-stats"><span><i class="fa-regular fa-clock" aria-hidden="true"></i> ${definition.workflow.steps.length} bước</span><span>${Object.keys(definition.inputs).length} ô nhập</span><span class="${record.lastTest?.passed ? 'wp-test-passed' : ''}"><i class="fa-solid ${record.lastTest?.passed ? 'fa-circle-check' : 'fa-circle-minus'}" aria-hidden="true"></i> ${record.lastTest ? (record.lastTest.passed ? 'Kiểm thử đạt' : 'Kiểm thử chưa đạt') : 'Chưa chạy kiểm thử'}</span></div>`;
       decorateCard(card, definition);
+      const cardHead = card.querySelector('.wp-template-head');
+      const cardCopy = document.createElement('div'); cardCopy.className = 'wp-template-heading-copy';
+      const publication = document.createElement('span'); publication.className = 'wp-publication-badge' + (published ? ' published' : ''); publication.textContent = published ? 'Đã publish' : 'Draft'; publication.title = `${record.draft.manifest.name} · Draft v${record.draft.manifest.version}${record.published ? ` · Published v${record.published.manifest.version}` : ''}`;
+      cardCopy.append(publication, cardHead.querySelector('h3')); cardHead.appendChild(cardCopy);
+      const enabled = button('', async () => { await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/enabled`, 'POST', { enabled: !record.enabled, revision: record.revision }); await refresh(); });
+      enabled.className = 'wp-card-enabled'; enabled.setAttribute('role', 'switch'); enabled.setAttribute('aria-checked', String(Boolean(record.enabled))); enabled.setAttribute('aria-label', `Kích hoạt gói ${record.draft.manifest.name}`); enabled.title = 'Áp dụng cho toàn bộ mẫu trong gói'; enabled.append(icon(record.enabled ? 'fa-toggle-on' : 'fa-toggle-off')); cardHead.appendChild(enabled);
       const available = state.templates.find(template => template.id === `${record.id}/${definition.id}`);
       cardMetadata(card,domain,[...(record.draft.manifest.tags||[]),...(definition.tags||[])],Boolean(available));
       const actions = document.createElement('div'); actions.className = 'workflow-card-actions';
@@ -439,6 +489,7 @@
       const icons = { 'Sửa template': 'fa-pen', 'Chạy fixture': 'fa-flask', Publish: 'fa-cloud-arrow-up', Validate: 'fa-check-double', Export: 'fa-download', 'Vô hiệu hóa': 'fa-pause', 'Kích hoạt': 'fa-play', 'Xóa mẫu': 'fa-trash-can', 'Tùy chỉnh scope': 'fa-sliders', Rollback: 'fa-clock-rotate-left' };
       for (const action of [...actions.children]) {
         const label = action.textContent; action.prepend(icon(icons[label] || 'fa-gear'));
+        if (label === 'Sửa template') action.classList.add('wp-edit-primary');
         if (!['Sửa template', 'Chạy fixture', 'Publish', 'Dùng trong chat'].includes(label)) menu.appendChild(action);
       }
       menu.addEventListener('click', event => { if (event.target.closest('button')) more.open = false; });
@@ -615,7 +666,7 @@
   let configTabsId = 0;
   function configTabs(container, activeIndex, onSelect) {
     const sections = [...container.children].filter(child => child.tagName === 'DETAILS');
-    const labels = ['Nhận diện & đầu vào', 'Nguồn dữ liệu', 'Kịch bản các bước', 'Kết quả', 'Chạy thử'];
+    const labels = ['1. Thông tin & đầu vào', '2. Nguồn dữ liệu', '3. Các bước xử lý', '4. Kết quả trả về', '5. Dữ liệu chạy thử'];
     const tabList = document.createElement('div'); tabList.className = 'wp-config-tabs'; tabList.setAttribute('role', 'tablist'); tabList.setAttribute('aria-label', 'Cấu hình chung của mẫu');
     container.insertBefore(tabList, sections[0]);
     const prefix = `wp-config-${++configTabsId}`;
@@ -639,10 +690,65 @@
       tabs.forEach((tab, position) => { tab.setAttribute('aria-selected', String(position === index)); tab.tabIndex = position === index ? 0 : -1; panels[position].hidden = position !== index; });
       onSelect(index);
     }
+    const navigation = document.createElement('div'); navigation.className = 'wp-editor-navigation';
+    let selectedIndex = activeIndex;
+    const previous = button('Quay lại', () => activate(selectedIndex - 1));
+    const progress = document.createElement('span'); progress.setAttribute('aria-live', 'polite');
+    const next = button('Tiếp theo', () => activate(selectedIndex + 1));
+    navigation.append(previous, progress, next); container.appendChild(navigation);
+    const originalSelect = onSelect;
+    onSelect = index => { selectedIndex = index; previous.hidden = index === 0; next.hidden = index === sections.length - 1; progress.textContent = `Phần ${index + 1} / ${sections.length}`; originalSelect(index); };
     activate(activeIndex);
+  }
+  function pipelineConnectors(pipeline) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.classList.add('wp-pipeline-connectors'); svg.setAttribute('aria-hidden', 'true'); pipeline.prepend(svg);
+    let frame;
+    function draw() {
+      svg.replaceChildren();
+      const bounds = pipeline.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
+      const nodes = [...pipeline.querySelectorAll('.wp-node-shell')].map(node => {
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left - bounds.left, right: rect.right - bounds.left, top: rect.top - bounds.top, bottom: rect.bottom - bounds.top, height: rect.height };
+      });
+      nodes.slice(0, -1).forEach((from, index) => {
+        const to = nodes[index + 1];
+        const wrapped = to.top > from.top + from.height / 2;
+        const x = wrapped ? (to.left + to.right) / 2 : to.left;
+        const y = wrapped ? to.top : to.top + to.height / 2;
+        const startX = wrapped ? (from.left + from.right) / 2 : from.right;
+        const startY = wrapped ? from.bottom : from.top + from.height / 2;
+        const middle = (from.bottom + to.top) / 2;
+        const direction = Math.sign(x - startX);
+        const radius = Math.min(16, (to.top - from.bottom) / 2, Math.abs(x - startX) / 2);
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', wrapped
+          ? direction === 0 ? `M ${startX} ${startY} V ${y}`
+            : `M ${startX} ${startY} V ${middle - radius} Q ${startX} ${middle} ${startX + direction * radius} ${middle} H ${x - direction * radius} Q ${x} ${middle} ${x} ${middle + radius} V ${y}`
+          : `M ${startX + 8} ${startY} C ${(startX + x) / 2} ${startY} ${(startX + x) / 2} ${y} ${x - 8} ${y}`);
+        const arrow = document.createElementNS(ns, 'path');
+        arrow.setAttribute('d', wrapped ? `M ${x - 4} ${y - 6} L ${x} ${y} L ${x + 4} ${y - 6}` : `M ${x - 14} ${y - 5} L ${x - 8} ${y} L ${x - 14} ${y + 5}`);
+        svg.append(path, arrow);
+      });
+    }
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(draw); };
+    const observer = new ResizeObserver(schedule); observer.observe(pipeline);
+    pipeline.querySelectorAll('.wp-node-shell').forEach(node => observer.observe(node));
+    schedule();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }
+  function moveWorkflowStep(steps, from, to) {
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= steps.length || to >= steps.length || from === to) return false;
+    [steps[from], steps[to]] = [steps[to], steps[from]];
+    return true;
   }
   function editDialog(record, initialIndex = 0) {
     const dialog = modal('Thiết lập mẫu nghiệp vụ'); dialog.backdrop.classList.add('wp-business-editor'); const bundle = structuredClone(record.draft);
+    const guide = document.createElement('div'); guide.className = 'wp-editor-guide';
+    guide.innerHTML = '<strong>Thiết lập từ yêu cầu đến kết quả</strong><p>Đi lần lượt qua 5 phần bên dưới. Lưu bản nháp khi hoàn tất, sau đó chạy kiểm thử và phát hành tại danh sách nghiệp vụ để dùng trong chat.</p>'; dialog.body.appendChild(guide);
     const packageSection = document.createElement('details'); packageSection.className = 'wp-editor-section'; packageSection.open = !record.id; packageSection.innerHTML = '<summary>Thông tin lưu trữ và phân loại mẫu</summary>'; dialog.body.appendChild(packageSection);
     const packageFields = document.createElement('div'); packageFields.className = 'wp-form-grid wp-package-fields'; packageSection.appendChild(packageFields);
     const packageId = field(packageFields, 'ID gói', bundle.manifest.id); packageId.readOnly = Boolean(record.id);
@@ -654,42 +760,108 @@
     const select = document.createElement('select');
     function updateOptions(index) { select.replaceChildren(); bundle.templates.forEach((template, position) => select.appendChild(new Option(template.name, String(position)))); select.value = String(index); }
     updateOptions(initialIndex); selectLabel.appendChild(select);
-    const selectorBar = document.createElement('div'); selectorBar.className = 'wp-selector-bar'; selectorBar.appendChild(selectLabel); packageSection.insertBefore(selectorBar, packageFields);
-    selectorBar.appendChild(button('Định nghĩa mẫu mới', () => { saveCurrent(); bundle.templates.push(blankTemplate()); previous = String(bundle.templates.length - 1); updateOptions(previous); renderTemplate(); }));
-    const fields = document.createElement('div'); dialog.body.appendChild(fields); let saveCurrent, activeConfigTab = 0;
+    const selectorBar = document.createElement('div'); selectorBar.className = 'wp-selector-bar'; selectorBar.appendChild(selectLabel); dialog.body.insertBefore(selectorBar, packageSection);
+    selectorBar.appendChild(button('Thêm mẫu vào gói', () => { saveCurrent(); bundle.templates.push(blankTemplate()); previous = String(bundle.templates.length - 1); activeConfigTab = 0; updateOptions(previous); renderTemplate(); }));
+    const fields = document.createElement('div'); dialog.body.appendChild(fields); let saveCurrent, activeConfigTab = 0, clearConnectors;
+    const removalObserver = new MutationObserver(() => { if (!dialog.backdrop.isConnected) { clearConnectors?.(); removalObserver.disconnect(); } });
+    removalObserver.observe(document.body, { childList: true });
     function renderTemplate() {
+      clearConnectors?.();
       fields.replaceChildren(); fields.className = 'wp-builder-grid'; const template = bundle.templates[Number(select.value)];
       const main = document.createElement('div'); main.className = 'wp-builder-main'; fields.appendChild(main);
       const shared = document.createElement('section'); shared.className = 'wp-shared-config';
-      shared.innerHTML = '<div class="wp-scope-heading"><i class="fa-solid fa-sliders" aria-hidden="true"></i><div><h4>Cấu hình chung của mẫu</h4><p>Áp dụng cho toàn bộ nghiệp vụ, không phụ thuộc node đang chọn.</p></div><span>Toàn bộ mẫu</span></div>';
+      shared.innerHTML = '<div class="wp-scope-heading"><i class="fa-solid fa-sliders" aria-hidden="true"></i><div><h4>Thiết lập nội dung mẫu</h4><p>Chọn từng phần để cấu hình. Trong Các bước xử lý, chọn một thẻ để chỉnh riêng bước đó.</p></div></div>';
       const recognition = document.createElement('details'); recognition.className = 'wp-editor-section wp-recognition-section'; recognition.open = !template.id;
       const recognitionTitle = document.createElement('summary'); recognitionTitle.append(icon('fa-bullseye'), document.createTextNode(' Nhận diện nghiệp vụ và thông tin cần hỏi')); recognition.appendChild(recognitionTitle); main.appendChild(recognition);
       const about = document.createElement('div'); about.className = 'wp-recognition-about'; about.innerHTML = '<h4>Nghiệp vụ này xử lý việc gì?</h4><p class="wp-section-help">Tên và mô tả giúp trợ lý chọn đúng kịch bản từ câu hỏi của người dùng.</p>'; recognition.appendChild(about);
       const templateId = field(about, 'Mã mẫu nghiệp vụ', template.id); templateId.readOnly = Boolean(record.id && record.draft.templates.some(item => item.id === template.id));
-      const name = field(about, 'Tên template', template.name), description = field(about, 'Mô tả', template.description);
+      const name = field(about, 'Tên nghiệp vụ', template.name), description = field(about, 'Mục đích và phạm vi xử lý', template.description, { multiline: true });
+      name.placeholder = 'Ví dụ: Tra cứu hợp đồng khách hàng'; description.placeholder = 'Mẫu xử lý yêu cầu nào, trả về thông tin gì và không xử lý trường hợp nào?';
+      templateId.placeholder = 'Ví dụ: lookup_contract (không dấu, không khoảng trắng)';
       name.oninput = () => { select.options[Number(select.value)].textContent = name.value || 'Mẫu chưa đặt tên'; };
-      const enabledLabel = document.createElement('label'); enabledLabel.textContent = 'Cho phép dùng template'; const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = template.enabled !== false; enabledLabel.prepend(enabled); recognition.appendChild(enabledLabel);
+      const enabledLabel = document.createElement('label'); enabledLabel.textContent = 'Cho phép sử dụng mẫu sau khi phát hành'; const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = template.enabled !== false; enabledLabel.prepend(enabled); recognition.appendChild(enabledLabel);
       const matching = document.createElement('div'); matching.className = 'wp-recognition-about'; matching.innerHTML = '<h4>Khi nào cần chạy kịch bản?</h4><p class="wp-section-help">Thêm các cách hỏi thường gặp và hướng dẫn trợ lý xử lý nghiệp vụ.</p>'; recognition.appendChild(matching);
       const examples = field(matching, 'Cách hỏi mẫu — mỗi dòng một câu', template.examples.join('\n'), { multiline: true }); examples.placeholder = 'Ví dụ: Tra cứu thông tin khách hàng\nTìm khách hàng theo mã';
       const instructions = field(matching, 'Hướng dẫn xử lý nghiệp vụ', template.instructions || '', { multiline: true });
       const slots = slotsEditor(recognition, template.inputs);
       const scriptHeader = document.createElement('div'); scriptHeader.className = 'wp-script-header'; main.appendChild(scriptHeader);
       const heading = document.createElement('h4'); heading.textContent = 'Kịch bản các bước'; scriptHeader.appendChild(heading);
-      const hint = document.createElement('p'); hint.textContent = 'Chọn bước để chỉnh sửa bên dưới. Các bước chạy theo thứ tự từ trái sang phải.'; main.appendChild(hint);
+      const hint = document.createElement('p'); hint.textContent = 'Chọn bước để chỉnh sửa. Kéo tay cầm và thả lên node khác để hoán đổi hai bước; các bước chạy từ trái sang phải, từ trên xuống dưới.'; main.appendChild(hint);
       const workspace = document.createElement('div'); workspace.className = 'wp-script-workspace'; main.appendChild(workspace);
       const pipeline = document.createElement('div'); pipeline.className = 'wp-script-pipeline'; pipeline.setAttribute('aria-label', 'Các bước trong kịch bản'); workspace.appendChild(pipeline);
       shared.append(recognition);
-      const steps = document.createElement('aside'); steps.className = 'wp-step-inspector'; steps.innerHTML = '<div class="wp-inspector-heading"><strong>Cấu hình node đang chọn</strong><p>Chỉ áp dụng cho bước được chọn trên sơ đồ.</p></div>'; fields.appendChild(steps); const stepEditors = [], stepPanels = [], stepButtons = [];
+      const steps = document.createElement('aside'); steps.className = 'wp-step-inspector'; steps.innerHTML = '<div class="wp-inspector-heading"><strong>Thiết lập bước đang chọn</strong><p>Chọn thẻ phía trên, rồi cấu hình thao tác và dữ liệu của bước đó tại đây.</p></div>'; fields.appendChild(steps); const stepEditors = [], stepPanels = [], stepButtons = [];
       for (const [index, step] of template.workflow.steps.entries()) {
         const wrapper = document.createElement('fieldset'); wrapper.hidden = index !== 0; stepPanels.push(wrapper); const legend = document.createElement('legend'); legend.textContent = `Bước ${index + 1}`; wrapper.appendChild(legend);
         const stepButton = button(`${index + 1}. ${step.name || step.id}`, () => { stepPanels.forEach((panel, selected) => { panel.hidden = selected !== index; }); stepButtons.forEach((item, selected) => { item.classList.toggle('selected', selected === index); item.setAttribute('aria-pressed', String(selected === index)); }); });
-        const shell = document.createElement('div'); shell.className = 'wp-node-shell'; pipeline.appendChild(shell);
+        const shell = document.createElement('div'); shell.className = 'wp-node-shell'; shell.dataset.index = index; pipeline.appendChild(shell);
+        const moveTo = target => {
+          if (target === index) return;
+          try {
+            saveCurrent();
+            if (!moveWorkflowStep(template.workflow.steps, index, target)) return;
+            renderTemplate();
+            fields.querySelectorAll('.wp-node-select')[target]?.click();
+            fields.querySelectorAll('.wp-node-drag')[target]?.focus();
+          } catch (failure) { notify(failure.message, true); }
+        };
+        const drag = button('', () => {}); drag.className = 'wp-node-drag';
+        drag.title = 'Kéo lên node khác để hoán đổi vị trí. Dùng phím mũi tên để đổi với bước kế bên.';
+        drag.setAttribute('aria-label', `Di chuyển bước ${index + 1}`); drag.appendChild(icon('fa-grip-vertical')); shell.appendChild(drag);
+        let dragTarget = index;
+        const clearDrag = () => { shell.classList.remove('wp-node-dragging'); pipeline.querySelectorAll('.wp-drop-target').forEach(node => node.classList.remove('wp-drop-target')); };
+        drag.onpointerdown = event => {
+          if (event.button !== 0) return;
+          event.preventDefault(); dragTarget = index; drag.setPointerCapture(event.pointerId); shell.classList.add('wp-node-dragging');
+        };
+        drag.onpointermove = event => {
+          if (!drag.hasPointerCapture(event.pointerId)) return;
+          const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.wp-node-shell');
+          if (!target || !pipeline.contains(target)) { clearDrag(); shell.classList.add('wp-node-dragging'); dragTarget = index; return; }
+          clearDrag(); shell.classList.add('wp-node-dragging'); dragTarget = Number(target.dataset.index);
+          if (dragTarget !== index) target.classList.add('wp-drop-target');
+        };
+        drag.onpointerup = event => {
+          if (!drag.hasPointerCapture(event.pointerId)) return;
+          const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.wp-node-shell');
+          const dropIndex = target && pipeline.contains(target) ? Number(target.dataset.index) : index;
+          drag.releasePointerCapture(event.pointerId); clearDrag(); moveTo(dropIndex);
+        };
+        drag.onpointercancel = clearDrag; drag.onlostpointercapture = clearDrag;
+        drag.onkeydown = event => {
+          const offset = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+          if (!offset) return;
+          event.preventDefault(); moveTo(Math.max(0, Math.min(template.workflow.steps.length - 1, index + offset)));
+        };
         stepButton.className = 'wp-phase-card wp-node-select' + (index === 0 ? ' selected' : ''); stepButton.setAttribute('aria-pressed', String(index === 0)); shell.appendChild(stepButton); stepButtons.push(stepButton);
-        const title = document.createElement('span'); title.className = 'wp-node-title'; title.textContent = stepButton.textContent; stepButton.replaceChildren(icon(nodeIcons[step.type]), title);
+        const title = document.createElement('span'); title.className = 'wp-node-title'; title.textContent = step.name || step.id;
+        const number = document.createElement('span'); number.className = 'wp-node-number'; number.textContent = index + 1;
+        const nodeIcon = document.createElement('span'); nodeIcon.className = 'wp-node-icon'; nodeIcon.appendChild(icon(nodeIcons[step.type]));
+        const descriptions = { collect: 'Đọc yêu cầu và thu thập thông tin cần thiết.', transform: 'Chuẩn hóa và tổng hợp dữ liệu cho bước tiếp theo.', sql: 'Truy vấn và tổng hợp dữ liệu từ nguồn SQL.', condition: 'Kiểm tra dữ liệu theo điều kiện đã cấu hình.', assert: 'Xác thực tính hợp lệ của dữ liệu.', chart: 'Tạo biểu đồ trực quan từ dữ liệu kết quả.', export: 'Xuất dữ liệu thành file theo định dạng yêu cầu.', source: 'Đọc dữ liệu từ nguồn đã chọn.', delay: 'Chờ trước khi thực hiện bước tiếp theo.' };
+        const nodeDescription = document.createElement('span'); nodeDescription.className = 'wp-node-description'; nodeDescription.textContent = step.description || descriptions[step.type] || '';
+        stepButton.dataset.type = step.type; stepButton.setAttribute('aria-label', `Bước ${index + 1}: ${step.name || step.id}`);
+        stepButton.replaceChildren(number, nodeIcon, title, nodeDescription);
         const remove = button('', async () => { if (!await confirmDelete(`Xóa bước “${stepName.value || step.id}” khỏi kịch bản?`)) return; saveCurrent(); template.workflow.steps.splice(index, 1); renderTemplate(); });
         remove.className = 'wp-node-remove'; remove.title = 'Xóa bước'; remove.setAttribute('aria-label', `Xóa bước ${step.name || step.id}`); remove.appendChild(icon('fa-xmark')); shell.appendChild(remove);
         const badge = document.createElement('small'); badge.textContent = step.type; stepButton.appendChild(badge);
         const stepName = field(wrapper, 'Tên bước', step.name || step.id), stepId = field(wrapper, 'ID bước', step.id);
+        const descriptionInput = field(wrapper, 'Mô tả bước', step.description || '', { multiline: true });
+        descriptionInput.rows = 1;
+        descriptionInput.oninput = () => { nodeDescription.textContent = descriptionInput.value || descriptions[type.value] || ''; };
+        let backgroundColor = /^#[\da-f]{6}$/i.test(step.ui?.backgroundColor || '') ? step.ui.backgroundColor : undefined;
+        const color = field(wrapper, 'Màu nền node', backgroundColor || '#eef2ff', { type: 'color' });
+        const applyColor = () => {
+          stepButton.style.backgroundColor = backgroundColor || '';
+          if (backgroundColor) {
+            const rgb = backgroundColor.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+            stepButton.style.color = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722 > 0.179 ? '#172033' : '#ffffff';
+          } else stepButton.style.color = '';
+          stepButton.classList.toggle('wp-custom-color', Boolean(backgroundColor));
+        };
+        color.oninput = () => { backgroundColor = color.value; applyColor(); };
+        const resetColor = button('Màu mặc định', () => { backgroundColor = undefined; color.value = '#eef2ff'; applyColor(); });
+        const colorControls = document.createElement('div'); colorControls.className = 'wp-node-color-controls';
+        color.parentElement.appendChild(colorControls); colorControls.append(color, resetColor); applyColor();
         const typeLabel = document.createElement('label'); typeLabel.textContent = 'Thao tác của bước';
         const type = document.createElement('select'); type.setAttribute('aria-label', 'Thao tác của bước'); Object.entries({ chart: 'Biểu đồ sản lượng', transform: 'Chuẩn hóa dữ liệu', condition: 'Kiểm tra điều kiện', assert: 'Xác thực dữ liệu', collect: 'Thu thập thông tin', delay: 'Chờ', sql: 'Truy vấn SQL', source: 'Đọc nguồn SQL / API / file / bước trước', export: 'Xuất file' }).forEach(([value, text]) => type.appendChild(new Option(text, value))); type.value = step.type; typeLabel.appendChild(type); wrapper.appendChild(typeLabel);
         const configHost = document.createElement('div'); wrapper.appendChild(configHost);
@@ -713,11 +885,13 @@
           } catch(failure) { notify(failure.message,true); }
         },true);
         let config = nodeForm(configHost, activeType, savedConfigs[activeType], template, sourceSelected, addSource);
-        type.onchange = () => { try { savedConfigs[activeType] = config(); activeType = type.value; configHost.replaceChildren(); config = nodeForm(configHost, activeType, savedConfigs[activeType] || {}, template, sourceSelected, addSource); badge.textContent = activeType; } catch (failure) { type.value = activeType; notify(failure.message, true); } };
-        stepName.oninput = () => { title.textContent = `${index + 1}. ${stepName.value}`; remove.setAttribute('aria-label', `Xóa bước ${stepName.value || step.id}`); };
+        type.onchange = () => { try { savedConfigs[activeType] = config(); activeType = type.value; configHost.replaceChildren(); config = nodeForm(configHost, activeType, savedConfigs[activeType] || {}, template, sourceSelected, addSource); badge.textContent = activeType; stepButton.dataset.type = activeType; nodeIcon.replaceChildren(icon(nodeIcons[activeType])); nodeDescription.textContent = descriptionInput.value || descriptions[activeType] || ''; } catch (failure) { type.value = activeType; notify(failure.message, true); } };
+        stepName.oninput = () => { title.textContent = stepName.value; stepButton.setAttribute('aria-label', `Bước ${index + 1}: ${stepName.value}`); remove.setAttribute('aria-label', `Xóa bước ${stepName.value || step.id}`); };
         const conditionEnabled = field(wrapper, 'Chỉ chạy khi thỏa điều kiện', '', { type: 'checkbox' }); conditionEnabled.checked = Boolean(step.when);
-        const when = structuredField(wrapper, 'Điều kiện chạy', step.when || { left: '', operator: 'equals', right: '' });
-        steps.appendChild(wrapper); stepEditors.push(() => ({ ...step, id: stepId.value.trim(), name: stepName.value, type: type.value, config: config(), when: conditionEnabled.checked ? when() : undefined }));
+        const whenHost = document.createElement('div'); wrapper.appendChild(whenHost); whenHost.hidden = !conditionEnabled.checked;
+        const when = structuredField(whenHost, 'Điều kiện chạy', step.when || { left: '', operator: 'equals', right: '' });
+        conditionEnabled.onchange = () => { whenHost.hidden = !conditionEnabled.checked; };
+        steps.appendChild(wrapper); stepEditors.push(() => ({ ...step, description: descriptionInput.value, ui: { ...step.ui, backgroundColor }, id: stepId.value.trim(), name: stepName.value, type: type.value, config: config(), when: conditionEnabled.checked ? when() : undefined }));
       }
       if (!template.workflow.steps.length) { const empty = document.createElement('p'); empty.className = 'wp-empty-script'; empty.textContent = 'Chưa có bước. Thêm ít nhất một bước để lưu kịch bản.'; pipeline.appendChild(empty); }
       const addStep = button('Thêm bước', () => { saveCurrent(); let number = template.workflow.steps.length + 1; while (template.workflow.steps.some(step => step.id === `step_${number}`)) number++; template.workflow.steps.push({ id: `step_${number}`, name: 'Bước mới', type: 'transform', config: { mapping: {} } }); renderTemplate(); [...fields.querySelectorAll('.wp-node-select')].at(-1).click(); }); addStep.prepend(icon('fa-plus')); scriptHeader.appendChild(addStep);
@@ -728,12 +902,12 @@
       const output = outputForm(shared, template.output);
       const fixtures = fixturesForm(shared, template.fixtures, slots, output);
       const sectionDesign = [
-        ['fa-folder-open', 'Thông tin lưu trữ và phân loại mẫu', 'Tên gói, lĩnh vực và từ khóa giúp quản lý, tìm kiếm mẫu.'],
+        ['fa-folder-open', 'Thông tin gói và phân loại', 'Một gói có thể chứa nhiều mẫu. Lĩnh vực và từ khóa ở đây áp dụng cho các mẫu trong gói.'],
         ['fa-bullseye', 'Nhận diện nghiệp vụ và thông tin cần hỏi', 'Định nghĩa khi nào chạy mẫu và thông tin cần người dùng cung cấp.'],
-        ['fa-database', 'Nguồn dữ liệu và truy vấn', 'Thiết lập nguồn kết nối, bảng được phép và tham số truy vấn.'],
+        ['fa-database', 'Nguồn dữ liệu và truy vấn', 'Thêm nguồn SQL, API hoặc file để sử dụng trong các bước xử lý. Nếu chỉ xử lý thông tin người dùng nhập, có thể bỏ qua phần này.'],
         ['fa-diagram-project', 'Kịch bản các bước', 'Sắp xếp thứ tự thực hiện và cấu hình từng bước sử dụng nguồn dữ liệu.'],
         ['fa-table-list', 'Kết quả trả về trong chat', 'Chọn dữ liệu trả về, kiểu dữ liệu và nhãn hiển thị.'],
-        ['fa-flask', 'Các trường hợp chạy thử', 'Kiểm tra kịch bản bằng dữ liệu đầu vào và kết quả mong đợi.']
+        ['fa-flask', 'Chuẩn bị dữ liệu chạy thử', 'Nhập đầu vào và kết quả mong đợi. Sau khi lưu bản nháp, chọn Chạy fixture tại danh sách nghiệp vụ để thực hiện kiểm thử.']
       ];
       [packageSection, ...[...shared.children].filter(child => child.tagName === 'DETAILS')].forEach((section, index) => {
         const [symbol, title, hint] = sectionDesign[index]; section.classList.add('wp-config-section');
@@ -744,11 +918,13 @@
         if (index === 2) section.classList.add('wp-bindings-section');
       });
       configTabs(shared, activeConfigTab, index => { activeConfigTab = index; });
+      clearConnectors = pipelineConnectors(pipeline);
       saveCurrent = () => { Object.assign(template, { id: templateId.value.trim(), name: name.value, description: description.value, enabled: enabled.checked, examples: examples.value.split('\n').map(value => value.trim()).filter(Boolean), instructions: instructions.value, inputs: slots(), bindings: bindings(), output: output(), fixtures: fixtures(), workflow: { steps: stepEditors.map(read => read()) } }); template.allowedCapabilities = [...new Set(template.workflow.steps.map(step => ({ chart: 'data.chart', transform: 'data.transform', condition: 'data.condition', assert: 'data.validate', collect: 'input.collect', delay: 'runtime.delay', sql: 'sql.read', source: 'data.read', export: 'artifact.export' }[step.type])))]; };
     }
     let previous = String(initialIndex); select.onchange = () => { const next = select.value; select.value = previous; try { saveCurrent(); previous = next; updateOptions(next); renderTemplate(); } catch (failure) { notify(failure.message, true); } }; renderTemplate();
     const errors = document.createElement('p'); errors.setAttribute('role', 'alert'); dialog.body.appendChild(errors);
-    dialog.footer.appendChild(button('Lưu draft mới', async () => { try { saveCurrent(); bundle.manifest.id = packageId.value.trim(); bundle.manifest.name = packageName.value; bundle.manifest.domain = domain.value; bundle.manifest.tags = tags.value.split(',').map(value => value.trim()).filter(Boolean); if (record.published) bundle.manifest.version = Math.max(bundle.manifest.version, ...(record.versions || []).map(version => version.manifest.version + 1)); await api('/api/workflow-plugins', 'POST', { bundle, revision: record.revision }); dialog.backdrop.remove(); await refresh(); } catch (failure) { errors.textContent = failure.message; } }));
+    const saveNote = document.createElement('span'); saveNote.className = 'wp-editor-save-note'; saveNote.textContent = 'Lưu bản nháp → Chạy fixture → Publish để dùng trong chat'; dialog.footer.appendChild(saveNote);
+    dialog.footer.appendChild(button('Lưu bản nháp', async () => { try { saveCurrent(); bundle.manifest.id = packageId.value.trim(); bundle.manifest.name = packageName.value; bundle.manifest.domain = domain.value; bundle.manifest.tags = tags.value.split(',').map(value => value.trim()).filter(Boolean); if (record.published) bundle.manifest.version = Math.max(bundle.manifest.version, ...(record.versions || []).map(version => version.manifest.version + 1)); await api('/api/workflow-plugins', 'POST', { bundle, revision: record.revision }); dialog.backdrop.remove(); await refresh(); } catch (failure) { errors.textContent = failure.message; } }));
   }
   function overlayDialog(record) {
     const dialog = modal('Tùy chỉnh theo scope'); dialog.backdrop.classList.add('wp-scope-editor'); const scope = field(dialog.body, 'Scope tài khoản (account:<ID>) hoặc tenant đã xác thực', '');
@@ -942,11 +1118,28 @@
   }
   function renderExecution(node, execution) {
     node.replaceChildren(); node.classList.add('workflow-execution-panel');
+    node.classList.toggle('wp-suggestion-panel', execution.status === 'SELECT_TEMPLATE');
     const processing = ['READY', 'RUNNING', 'QUEUED'].includes(execution.status);
     node.setAttribute('aria-busy', String(processing));
     if (execution.status === 'SELECT_TEMPLATE') {
+      const heading = document.createElement('div'); heading.className = 'wp-suggestion-heading';
+      const headingIcon = document.createElement('span'); headingIcon.className = 'wp-suggestion-mark'; headingIcon.appendChild(icon('fa-wand-magic-sparkles'));
+      const copy = document.createElement('div'); const title = document.createElement('strong'); title.textContent = 'Bạn muốn xử lý nghiệp vụ nào?';
+      const help = document.createElement('p'); help.textContent = 'Chọn mẫu phù hợp. Trợ lý sẽ hỏi thêm thông tin cần thiết trước khi xử lý.'; copy.append(title, help); heading.append(headingIcon, copy); node.appendChild(heading);
       const choices = document.createElement('div'); choices.className = 'wp-workflow-choices';
-      for (const candidate of execution.candidates || []) { const choice = button(candidate.name, async () => { const data = await api('/api/automation-runs', 'POST', { templateId: candidate.id, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID() }); mount(node, data.execution); }); choice.classList.add('wp-workflow-choice'); choice.prepend(icon('fa-layer-group')); choice.appendChild(icon('fa-arrow-right')); choices.appendChild(choice); } node.appendChild(choices); return;
+      for (const candidate of execution.candidates || []) {
+        const template = state.templates.find(item => item.id === candidate.id);
+        const choice = button('', async () => { const data = await api('/api/automation-runs', 'POST', { templateId: candidate.id, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID() }); mount(node, data.execution); }); choice.classList.add('wp-workflow-choice');
+        const visual = document.createElement('span'); visual.className = 'wp-choice-icon'; visual.appendChild(icon(template?.workflow?.steps.some(step => step.type === 'sql') ? 'fa-database' : 'fa-diagram-project'));
+        const content = document.createElement('span'); content.className = 'wp-choice-copy';
+        const titleRow = document.createElement('span'); titleRow.className = 'wp-choice-title-row';
+        const title = document.createElement('strong'); title.textContent = candidate.name; titleRow.appendChild(title);
+        if (template?.domain || candidate.domain) { const domain = document.createElement('span'); domain.className = 'wp-choice-domain'; domain.textContent = template?.domain || candidate.domain; titleRow.appendChild(domain); }
+        content.appendChild(titleRow);
+        if (candidate.description) { const description = document.createElement('span'); description.className = 'wp-choice-description'; description.textContent = candidate.description; content.appendChild(description); }
+        const action = document.createElement('span'); action.className = 'wp-choice-action'; action.setAttribute('aria-hidden', 'true'); action.appendChild(icon('fa-arrow-right'));
+        choice.append(visual, content, action); choices.appendChild(choice);
+      } node.appendChild(choices); return;
     }
     node.dataset.status = execution.status;
     const header = document.createElement('div'); header.className = 'wp-execution-header';

@@ -36,7 +36,7 @@
 
     <!-- RIGHT PANEL: MAIN CHAT PLAYGROUND -->
     <div class="chat-main"
-      style="flex: 1; min-width: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+      style="flex: 1; min-width: 0; background: transparent; border: 1px solid var(--border-color); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
 
       <!-- Chat Top Bar -->
       <div class="chat-main-toolbar"
@@ -105,12 +105,12 @@
 
       <!-- Quick Suggestion Prompts Bar -->
       <div id="quick-prompts-bar"
-        style="padding: 8px 22px 0 22px; background: #ffffff; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;">
+        style="display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;">
         <!-- Dynamically populated via JS -->
       </div>
 
       <!-- Bottom Input Box -->
-      <div class="page-chat-composer-area" style="padding: 12px 22px 18px 22px; background: #ffffff;">
+      <div class="page-chat-composer-area" style="padding: 12px 22px 18px 22px;">
         <div class="chat-input-wrapper page-chat-composer">
           <textarea id="page-chat-user-input" rows="1"
             placeholder="Nhập câu hỏi, yêu cầu SQL... (Enter để gửi · Shift+Enter xuống dòng)"
