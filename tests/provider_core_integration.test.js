@@ -8,6 +8,44 @@ const connector = require('../src/backend/services/sql_connector');
 const { trainingService } = require('../src/backend/training_core');
 const fixture = require('./fixtures/provider_raw_contract_chat.json');
 
+test('a contract attribute follow-up uses verified workflow data and bypasses automatic document/schema retrieval', async t => {
+  const memory = require('../src/backend/memory_core').memoryService;
+  const previous = { runId: 'contract-run', templateId: 'contracts/detail', name: 'Contract details',
+    table: null, dbSourceId: 'test-db', inputs: { query: 'HD001' },
+    datasets: [{ field: 'contracts', rowCount: 1, columns: ['ContractNo', 'TotalArea'],
+      preview: [{ ContractNo: 'HD001', TotalArea: 32451.95 }] }], result: {} };
+  t.mock.method(memory, 'getSession', () => ({ lastWorkflowRun: previous, lastPlan: { table: 'T_Contract' }, messages: [] }));
+  t.mock.method(memory, 'getLegacyContext', () => []);
+  t.mock.method(memory, 'route', () => ({ mode: 'recent', currentScope: 'contract', maxMessages: 2 }));
+  t.mock.method(memory, 'getContext', () => { throw new Error('Unverified old replies must not replace the completed result'); });
+  t.mock.method(require('../src/backend/automation/conversation_memory'), 'readRun', async () => ({}));
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async (_, options) => {
+    options.routingContext.decision = { route: 'chat', memoryFollowup: true };
+    return null;
+  });
+  const selected = { id: 'contract-chat', name: 'Contract chat', model: 'chosen-model', apiFormat: 'openai',
+    executionClass: 'remote', baseUrl: 'https://chosen.invalid', supportsToolCalling: true };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(connector, 'getDefaultDbSource', () => ({ id: 'test-db', dbName: 'Fixture' }));
+  const schemaCalls = t.mock.method(schema, 'buildSchemaContext', async () => { throw new Error('No schema retrieval'); });
+  const documents = require('../src/backend/knowledge_core/services/retrieval_service');
+  const documentCalls = t.mock.method(documents, 'search', async () => { throw new Error('No automatic document retrieval'); });
+  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => [{ title: 'Tổng diện tích IPMS.docx' }]);
+  t.mock.method(global, 'fetch', async (_, options) => {
+    const request = JSON.parse(options.body);
+    assert.match(JSON.stringify(request.messages), /32451\.95/);
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'Hợp đồng HD001 có tổng diện tích 32451.95.' }, finish_reason: 'stop' }] }) };
+  });
+  const result = await core.chat('hợp đồng trên có tổng diện tích bao nhiêu', { providerId: selected.id,
+    session: { id: 'contract-session', accountId: 'owner' }, permissions: ['admin'] });
+  assert.equal(result.success, true);
+  assert.match(result.replyText, /32451\.95/);
+  assert.equal(schemaCalls.mock.callCount(), 0);
+  assert.equal(documentCalls.mock.callCount(), 0);
+  assert.equal(result.contextSelection.knowledgeMode, 'skipped_verified_workflow');
+});
+
 for (const databaseAvailable of [true, false]) {
 test(`ds kh avoids embedding and model retries (database available: ${databaseAvailable})`, async t => {
   const dictionary = require('../src/backend/services/dictionary_service');

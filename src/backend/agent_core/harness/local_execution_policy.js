@@ -5,12 +5,13 @@ const DATA_INTENTS = new Set(['list', 'record_lookup', 'aggregate', 'aggregate_t
 function getRequestPolicy(plan = {}, context = {}) {
   const outputs = plan.outputs || {};
   const informational = plan.codeOnly === true || context.webSearch === true || context.knowledgeGrounding?.required === true
-    || ['general', 'knowledge'].includes(context.mode);
+    || (!plan.workflowReference && ['general', 'knowledge'].includes(context.mode));
   const chartRequired = !informational && outputs.chart === true;
   const exportRequired = !informational && outputs.export === true;
-  const dataRequired = !informational && (outputs.data === true
+  const dataRequired = !plan.workflowReference && !informational && (outputs.data === true
     || (Boolean(plan.table) && DATA_INTENTS.has(plan.intent)) || chartRequired || exportRequired);
   return {
+    workflowReference: Boolean(plan.workflowReference),
     chartRequired,
     exportRequired,
     dataRequired,

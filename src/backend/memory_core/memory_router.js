@@ -26,6 +26,10 @@ function routeMemory({ currentPlan, session, question, fallbackHistory = [], now
       };
     }
     const base = detectTopic({ currentPlan, lastPlan: session?.lastPlan, questionText: question, references: session?.references, now });
+    if (base.mode === 'reference' && session?.references?.lastDataset?.workflow
+        && policy.isExportOrChartIntent(question) && !session.references.lastExport) {
+      base.referenceType = 'lastDataset';
+    }
     const decision = {
       ...base,
       previousScope: session?.activeScope || policy.getDomain(session?.lastPlan?.table),

@@ -130,6 +130,18 @@ function automaticEnrichmentRelations(rootTable, activeTables) {
     .slice(0, limit);
 }
 
+function explicitListTable(query, options = {}) {
+  if (!isSimpleEntityListRequest(query)) return null;
+  const aliases = domainAliasService.getDomainAliases();
+  const padded = ` ${normalize(expandWithGlossary(query))} `;
+  const matches = dictionaryService.getGroupedTables().filter(table => table.isActive
+    && (!options.dbName || table.dbName === options.dbName)
+    && (!options.dbSourceId || !table.dbSourceId || table.dbSourceId === options.dbSourceId)
+    && [table.tableName, table.domain, ...(aliases[table.domain] || [])]
+      .some(term => normalize(term) && padded.includes(` ${normalize(term)} `)));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 async function buildSchemaContext(query, options = {}) {
   const dbName = options.dbName || null;
   const dbSourceId = options.dbSourceId || null;
@@ -385,4 +397,4 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   };
 }
 
-module.exports = { buildSchemaContext, refineSchemaContext, isStandaloneCalculation };
+module.exports = { buildSchemaContext, refineSchemaContext, isStandaloneCalculation, explicitListTable };

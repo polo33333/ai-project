@@ -19,7 +19,7 @@ function resolvePlan(question, plan = {}, context = {}) {
     || ['general', 'knowledge'].includes(context.mode);
   return {
     ...plan, codeOnly,
-    outputs: codeOnly || informational
+    outputs: plan.workflowReference && !codeOnly ? { ...plan.outputs, data: false } : codeOnly || informational
       ? { data: false, chart: false, export: false }
       : { ...plan.outputs }
   };

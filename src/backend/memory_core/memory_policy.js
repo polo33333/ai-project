@@ -8,7 +8,7 @@ const REFERENCE_PRONOUN_PATTERN = /(?:^|[\s,.!?])(?:đó|này|nay|trên|tren|v�
 
 const REFERENCE_KEYWORDS = Object.freeze({
   lastExport: ['xuat file', 'tai ve', 'download', 'file nay', 'bao cao nay'],
-  lastDataset: ['bieu do', 'du lieu tren', 'so lieu do', 've', 'so sanh voi', 'thang truoc'],
+  lastDataset: ['bieu do', 'du lieu tren', 'so lieu do', 've', 'so sanh voi', 'thang truoc', 'xuat ket qua', 'xuat du lieu'],
   lastEntity: ['nguoi do', 'nhan vien do', 'khach hang do', 'anh ay', 'co ay']
 });
 

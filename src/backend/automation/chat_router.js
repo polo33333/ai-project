@@ -79,11 +79,13 @@ For an explicit entity listing when the catalog only has detail lookups or aggre
 Select slot_answer only if the message intentionally answers a field the pending run is waiting for, with that run's workflowId and pendingRunId. A schema-valid string alone is insufficient. A self-contained operation, including a new operation for the same workflow, is new_request: preserve the previous run. Use the full catalog to select this new request in the SAME decision. Uncertain pending input must be unclear, never attached to a run. Extract only declared inputs explicitly supported by current-message quotes; do not infer defaults. Defaults are applied by runtime.
 Set cancelPending=true ONLY for an explicit request to cancel the pending task; route=workflow, inputDisposition=none, workflowId and pendingRunId must identify that task, with exact cancellation evidence. Never cancel merely because the user changes topic.
 When no inputs are explicitly supplied, return inputs={} AND inputEvidence={}. Do not include placeholders, empty values or evidence for absent inputs. A workflow request with no supplied input MUST use inputDisposition=new_request and pendingRunId=null, even if the same workflow is already waiting. NEVER use slot_answer with empty inputs. For example "chi tiết hđ" requests contract lookup, not an answer giving a contract name/code.
+If completedWorkflow is present, a question about an attribute of the already returned entity (for example its gender, status, date or department), or a request to explain/chart/export that result, belongs to chat. Resolve references such as "above", "that employee", "nhân viên trên" using completedWorkflow; do not start a fresh lookup or ask its identifying input again. A clear request to refresh/rerun, change entity, or perform a new operation still belongs to workflow. Preserve pending tasks during memory questions.
 For workflow decisions, include evidence and requested/supported scopes. For chat or unclear, workflowId=null and inputs={}, inputEvidence={}. All outputs are proposals; backend validates authorization, scope, evidence, schema and run state. Do not generate SQL, tools, workflow steps or chat answers.`;
 
-function buildMessages(question, definitions, current, history = []) {
+function buildMessages(question, definitions, current, history = [], workflowMemory = null) {
   return [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify({
     question,
+    completedWorkflow: workflowMemory,
     history: history.slice(-6).filter(item => ['user', 'assistant'].includes(item.role)).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 2000) })),
     catalog: definitions.map(item => ({ id: item.id, name: item.name, description: item.description,
       examples: item.examples, inputs: item.inputs, guidance: item.instructions })),
@@ -197,7 +199,8 @@ async function callRouter(context, provider, source, messages, question, definit
   try {
     if (options.signal?.aborted) throw abortError();
     const prepared = source === 'local_tev1' ? options.greetingProbe ? tev1.buildGreetingTask(question)
-      : tev1.buildTask(question, definitions, current, options.history) : null;
+      : options.memoryProbe ? tev1.buildMemoryTask(question, options.workflowMemory, current)
+        : tev1.buildTask(question, definitions, current, options.history) : null;
     if (prepared && require('../agent_core/harness/context_budget').estimateTokens(prepared.task) + 200 > Number(provider.contextWindow || 2050)) {
       throw routingError('ROUTING_CONTEXT_EXCEEDED', 'Ngữ cảnh vượt giới hạn model quyết định TEV1.');
     }
@@ -260,13 +263,27 @@ async function callRouter(context, provider, source, messages, question, definit
 async function decide(question, definitions, current, options = {}) {
   const context = options.routingContext || createRoutingContext(options);
   if (context.decision) return context.decision;
-  const messages = buildMessages(question, definitions, current, options.history);
+  const messages = buildMessages(question, definitions, current, options.history, options.workflowMemory);
   const { mode } = context.config;
   let decision;
   try {
+    const policy = require('../memory_core/memory_policy');
+    if (mode !== 'chat_model' && options.workflowMemory
+        && policy.hasReferencePronoun(question)) {
+      const probe = await callRouter(context, context.routingProviderSnapshot, 'local_tev1', messages, question, definitions, current, { ...options, memoryProbe: true });
+      if (probe.memoryFollowup === true) {
+        context.trace.memoryRunId = options.workflowMemory.runId;
+        context.trace.reason = 'completed_workflow_followup';
+        decision = probe;
+      } else if (probe.memoryUncertain && mode === 'auto') {
+        context.trace.escalated = true;
+        context.trace.escalationReason = 'ambiguous_memory_followup';
+        decision = await callRouter(context, context.chatProviderSnapshot, 'chat_model', messages, question, definitions, current, options);
+      }
+    }
     // A short turn needs only one small TEV1 evaluation to recognize a greeting.
     // Non-greetings continue through full routing with the same request budget.
-    if (context.config.quickGreetingEnabled && mode !== 'chat_model' && question.length <= 160) {
+    if (!decision && context.config.quickGreetingEnabled && mode !== 'chat_model' && question.length <= 160) {
       const probe = await callRouter(context, context.routingProviderSnapshot, 'local_tev1', messages, question, definitions, current, { ...options, greetingProbe: true });
       if (probe.quickGreeting === true) decision = probe;
     }
@@ -277,7 +294,8 @@ async function decide(question, definitions, current, options = {}) {
   }
   if (mode === 'auto' && (!decision || decision.route === 'unclear' || decision.abstain || decision.needsClarification)) {
     context.trace.escalated = true;
-    context.trace.escalationReason ||= decision.abstain ? 'abstain' : 'ambiguous_intent';
+    context.trace.escalationReason ||= decision.inputExtractionUncertain ? 'uncertain_input_extraction'
+      : decision.abstain ? 'abstain' : 'ambiguous_intent';
     options.onProgress?.({ type: 'workflow_routing', label: 'Đang chuyển sang model chat để suy luận…', status: 'running', icon: 'brain' });
     decision = await callRouter(context, context.chatProviderSnapshot, 'chat_model', messages, question, definitions, current, options);
   }

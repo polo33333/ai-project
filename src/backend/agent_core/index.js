@@ -16,6 +16,7 @@ const workflowService = require('./workflows/workflow_service');
 const {
   GetDateTimeTool,
   ExportDataTool,
+  GetWorkflowDatasetTool,
   PlanDataQueryTool,
   ExecuteSqlTool,
   RenderChartTool,
@@ -31,6 +32,7 @@ const defaultToolManager = new ToolManager();
 defaultToolManager.registerTools([
   new GetDateTimeTool(),
   new ExportDataTool(),
+  new GetWorkflowDatasetTool(),
   new PlanDataQueryTool(),
   new ExecuteSqlTool(),
   new RenderChartTool(),
@@ -57,6 +59,7 @@ module.exports = {
 
   // 9 Built-in Tools
   builtins: {
+    GetWorkflowDatasetTool,
     GetDateTimeTool,
     ExportDataTool,
     PlanDataQueryTool,

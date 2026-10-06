@@ -150,6 +150,40 @@ class MemoryService {
     return sanitizeMessages(Array.isArray(source) ? source.slice(-limit) : []);
   }
 
+  persistWorkflowExchange({ sessionId, accountId, workflow, artifacts = [] }) {
+    if (!policy.isEnabled()) return { persisted: false, reason: 'memory_disabled' };
+    const previous = this.getSession(sessionId, false, accountId);
+    if (previous?.lastWorkflowRun?.runId === workflow.runId) return { persisted: false, reason: 'already_recorded' };
+    const result = this.persistSuccessfulExchange({ sessionId, accountId,
+      question: `Nghiệp vụ: ${workflow.name}. Input: ${JSON.stringify(workflow.inputs)}`,
+      reply: `Nghiệp vụ đã hoàn tất. ${JSON.stringify(workflow)}`,
+      currentPlan: { table: workflow.table || `workflow:${workflow.templateId}`, dbSourceId: workflow.dbSourceId,
+        intent: 'workflow', workflowRunId: workflow.runId },
+      completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] } });
+    if (!result.persisted) return result;
+    const session = result.session;
+    session.lastWorkflowRun = workflow;
+    session.messages.slice(-2).forEach(message => { message.workflowRunId = workflow.runId; });
+    // Replace references so a new result cannot accidentally select an older entity/file.
+    session.references = emptyReferences();
+    if (!workflow.datasets.length && Object.keys(workflow.result || {}).length) session.references.lastEntity = {
+      runId: workflow.runId, table: session.lastPlan.table, filters: workflow.result, updatedAt: workflow.updatedAt };
+    if (workflow.datasets.length > 1) session.references.lastDataset = {
+      runId: workflow.runId, datasets: workflow.datasets, table: session.lastPlan.table,
+      dbSourceId: workflow.dbSourceId, updatedAt: workflow.updatedAt, workflow: true };
+    if (workflow.datasets.length === 1) {
+      const dataset = workflow.datasets[0];
+      session.references.lastDataset = { ...dataset, runId: workflow.runId, table: session.lastPlan.table,
+        dbSourceId: workflow.dbSourceId, updatedAt: workflow.updatedAt, workflow: true };
+      if (dataset.rowCount === 1) session.references.lastEntity = {
+        runId: workflow.runId, table: session.lastPlan.table, filters: dataset.preview[0], updatedAt: workflow.updatedAt };
+    }
+    if (artifacts.length === 1) session.references.lastExport = sanitizeObject({
+      runId: workflow.runId, ...artifacts[0], updatedAt: workflow.updatedAt });
+    this.persist();
+    return result;
+  }
+
   persistSuccessfulExchange({ sessionId, accountId = null, embedId = null, question, reply, currentPlan, toolCalls = [], completionStatus, responseEvaluation } = {}) {
     if (policy.isEnabled() && !policy.canPersist({ completionStatus, responseEvaluation })) return { persisted: false, reason: 'quality_gate_rejected' };
     const userMessage = sanitizeMessage({ role: 'user', content: question }, 20000);
@@ -169,6 +203,10 @@ class MemoryService {
     assistantMessage.scope = messageScope;
     session.messages.push(userMessage, assistantMessage);
     if (session.messages.length > this.maxStored) session.messages = session.messages.slice(-this.maxStored);
+    if (toolCalls.some(call => call.toolName === 'execute_sql_query' && call.success && Array.isArray(call.result?.rows))) {
+      session.references = emptyReferences();
+      session.lastWorkflowRun = null;
+    }
     session.lastPlan = sanitizeObject(currentPlan || null);
     session.activeScope = messageScope;
     session.references = { ...emptyReferences(), ...session.references, ...deriveReferences({ currentPlan, toolCalls, now }) };

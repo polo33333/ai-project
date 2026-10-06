@@ -1012,6 +1012,7 @@ async function handleRequest(req, res) {
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
         sessionId: memorySessionId,
+        accountId: workflowIdentity?.accountId || null,
         embedId: authorization.config.id,
         question: queryText,
         reply: coreResult.replyText,
@@ -1023,6 +1024,7 @@ async function handleRequest(req, res) {
       const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
         : conversationMemoryService.recordPendingTurn({
           sessionId: memorySessionId,
+          accountId: workflowIdentity?.accountId || null,
           embedId: authorization.config.id,
           question: queryText,
           currentPlan: coreResult.trace?.training?.plan,

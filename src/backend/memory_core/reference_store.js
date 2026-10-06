@@ -36,6 +36,13 @@ function resolveReference(questionText, references = {}, now = Date.now(), prefe
   if (!valid.length) {
     return { type: null, data: null, reason: existing.length ? 'reference_expired' : 'missing_reference' };
   }
+  // A one-row workflow dataset and its entity pointer identify the same
+  // object, not two competing antecedents for "the employee above".
+  if (valid.length === 2 && valid.includes('lastEntity') && valid.includes('lastDataset')
+      && references.lastDataset.rowCount === 1 && references.lastEntity.runId
+      && references.lastEntity.runId === references.lastDataset.runId) {
+    return { type: 'lastEntity', data: sanitizeObject(references.lastEntity) };
+  }
   if (valid.length > 1 && policy.strictReferenceResolution()) {
     return { type: null, data: null, reason: 'ambiguous_reference' };
   }

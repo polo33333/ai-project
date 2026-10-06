@@ -254,6 +254,104 @@ function handleFixture(t, mode = 'local_tev1', current = null, extraEnv = {}) {
   return { context, creates, updates, cancels, options: { routingContext: context, session: { id: 'conversation', accountId: 'actor' }, permissions: ['admin'] } };
 }
 
+test('an explicit reviewed entity list bypasses workflow selection and preserves pending runs', async t => {
+  const f = handleFixture(t);
+  t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'explicitListTable', () => ({ tableName: 'T_Contract' }));
+  const model = t.mock.method(adapters, 'dispatchToProvider', async () => { throw new Error('No model routing for an explicit list'); });
+  assert.equal(await orchestrator.handle('ds hđ', f.options), null);
+  assert.equal(f.context.trace.reason, 'explicit_entity_list');
+  assert.equal(model.mock.callCount(), 0);
+  assert.equal(f.creates.mock.callCount(), 0);
+  assert.equal(f.updates.mock.callCount(), 0);
+});
+
+for (const question of ['nhân viên trên có giới tính là gì', 'giới tính nv trên là gì']) {
+  test(`completed workflow memory prevents a new lookup for: ${question}`, async t => {
+    const pending = { id: 'pending', templateId: other.id, status: 'WAITING_INPUT', definition: other,
+      input: {}, missing: [{ key: 'code', ask: 'Mã nhân viên?' }], invalid: [] };
+    const f = handleFixture(t, 'local_tev1', pending, { CHAT_QUICK_GREETING_ENABLED: 'true' });
+    f.options.workflowMemory = { runId: 'completed', name: 'Tra cứu nhân viên', inputs: { code: 'NV007' },
+      datasets: [{ field: 'employees', columns: ['EmployeeCode', 'GenderID'], rowCount: 1 }] };
+    const model = t.mock.method(adapters, 'dispatchToProvider', async provider => {
+      const task = provider.decisionTask;
+      assert.equal(task.state.completedWorkflow.runId, 'completed');
+      assert.deepEqual(Object.keys(task.questions), ['route']);
+      return { content: JSON.stringify({ answers: { route: { type: 'choice', choice: 'memory_question',
+        probabilities: { memory_question: 0.9, new_request: 0.1 } } } }), usage: { calls: 1 } };
+    });
+    assert.equal(await orchestrator.handle(question, f.options), null);
+    assert.equal(f.context.trace.reason, 'completed_workflow_followup');
+    assert.equal(f.context.trace.memoryRunId, 'completed');
+    assert.equal(model.mock.callCount(), 1);
+    assert.equal(f.creates.mock.callCount(), 0);
+    assert.equal(f.updates.mock.callCount(), 0);
+    assert.equal(f.cancels.mock.callCount(), 0);
+  });
+}
+
+test('uncertain memory classification escalates with completed context before starting a workflow', async t => {
+  const f = handleFixture(t, 'auto');
+  f.options.workflowMemory = { runId: 'completed', name: 'Employee lookup', inputs: { code: 'NV007' },
+    datasets: [{ field: 'employees', columns: ['GenderID'], rowCount: 1 }] };
+  const calls = [];
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages) => {
+    calls.push(provider.model);
+    if (provider.decisionTask) return { content: JSON.stringify({ answers: { route: {
+      type: 'choice', choice: 'memory_question', probabilities: { memory_question: 0.55, new_request: 0.45 }
+    } } }), usage: { calls: 1 } };
+    assert.equal(JSON.parse(messages[1].content).completedWorkflow.runId, 'completed');
+    return response(decision(), provider);
+  });
+  assert.equal(await orchestrator.handle('giới tính nv trên là gì', f.options), null);
+  assert.deepEqual(calls, ['tev1:4b', 'chosen-chat']);
+  assert.equal(f.context.trace.escalationReason, 'ambiguous_memory_followup');
+  assert.equal(f.creates.mock.callCount(), 0);
+});
+
+for (const question of ['thông tin chi tiết hợp đồng', 'thông tin chi tiết hđ', 'chi tiết hđ', 'thông tin chi tiết hđ 02/HĐTQSDĐ.LG.2010']) {
+  test(`a standalone contract lookup is not intercepted by old workflow memory: ${question}`, async t => {
+    const f = handleFixture(t, 'local_tev1');
+    f.options.workflowMemory = { runId: 'old-employee', name: 'Employee lookup', inputs: { code: 'NV007' },
+      datasets: [{ field: 'employees', columns: ['GenderID'], rowCount: 1 }] };
+    t.mock.method(adapters, 'dispatchToProvider', async provider => {
+      assert.equal(provider.decisionTask.state.completedWorkflow, undefined);
+      const code = question.includes('02/HĐTQSDĐ.LG.2010') ? '02/HĐTQSDĐ.LG.2010' : null;
+      return response(workflow(question, code ? { inputs: { code }, inputEvidence: { code } } : {}), provider);
+    });
+    const result = await orchestrator.handle(question, f.options);
+    assert.equal(result.execution.templateId, definition.id);
+    assert.equal(f.creates.mock.callCount(), 1);
+    assert.equal(f.context.trace.reason, undefined);
+  });
+}
+
+test('uncertain extraction of a supplied compound code is verified before workflow creation', async t => {
+  const f = handleFixture(t, 'auto');
+  const question = 'chi tiết hđ 02/HĐTQSDĐ.LG.2010';
+  const code = '02/HĐTQSDĐ.LG.2010';
+  const chosen = workflow(question, { inputs: { code }, inputEvidence: { code } });
+  const calls = [];
+  t.mock.method(adapters, 'dispatchToProvider', async provider => {
+    calls.push(provider.model);
+    const result = response(chosen, provider);
+    if (provider.decisionTask) {
+      const payload = JSON.parse(result.content);
+      const input = payload.answers.input_0;
+      const options = Object.keys(input.probabilities);
+      input.probabilities = Object.fromEntries(options.map(key => [key, key === input.choice ? 0.57 : 0.43 / (options.length - 1)]));
+      payload.answers.provided_0 = { type: 'choice', choice: 'no', probabilities: { no: 0.73, yes: 0.27 } };
+      result.content = JSON.stringify(payload);
+    }
+    return result;
+  });
+  const result = await orchestrator.handle(question, f.options);
+  assert.equal(result.execution.status, 'READY');
+  assert.equal(f.context.trace.escalationReason, 'uncertain_input_extraction');
+  assert.deepEqual(calls, ['tev1:4b', 'chosen-chat']);
+  assert.deepEqual(f.creates.mock.calls[0].arguments[1], { code });
+  assert.equal(f.creates.mock.callCount(), 1);
+});
+
 test('quick greeting uses one TEV1 evaluation and fixed reply without chat or pending mutations', async t => {
   const f = handleFixture(t, 'auto', pending, { CHAT_QUICK_GREETING_ENABLED: 'true' });
   const calls = t.mock.method(adapters, 'dispatchToProvider', async provider => {

@@ -104,16 +104,23 @@ class ExportDataTool extends BaseTool {
         type: 'object',
         properties: {
           data: { type: 'array', items: { type: 'object' }, description: 'Mảng các đối tượng dữ liệu cần xuất file (VD: kết quả rows từ execute_sql_query)' },
+          workflowRunId: { type: 'string', description: 'Export all rows from a verified workflow result in this conversation.' },
+          workflowField: { type: 'string', description: 'Dataset field in the workflow result.' },
           format: { type: 'string', enum: ['xlsx', 'csv', 'pdf'], description: 'Định dạng file cần xuất: xlsx (Excel), csv hoặc pdf' },
           filename: { type: 'string', description: 'Tên file không kèm đuôi mở rộng (VD: "Bao_cao_Doanh_thu_Q1")' }
         },
-        required: ['data', 'format']
+        required: ['format']
       },
       timeoutMs: 30000
     });
   }
 
-  async run(args) {
+  async run(args, context = {}) {
+    const runId = args.workflowRunId || context.workflowRunId || context.memoryDecision?.reference?.data?.runId;
+    if (runId) {
+      const dataset = await require('../../../automation/conversation_memory').readDataset({ runId, field: args.workflowField || context.memoryDecision?.reference?.data?.field }, context);
+      args = { ...args, data: dataset.rows };
+    }
     const { data, format = 'csv', filename } = args;
     if (!data || !Array.isArray(data) || data.length === 0) {
       throw new Error('Không có dữ liệu để xuất file.');
@@ -303,7 +310,8 @@ class RenderChartTool extends BaseTool {
     });
   }
 
-  async run(args) {
+  async run(args, context = {}) {
+    await require('../../../automation/conversation_memory').verifyChart(args, context);
     const { type, title, labels, datasets } = args;
     if (!type || !labels || !datasets) {
       throw new Error('Thiếu type, labels hoặc datasets.');
@@ -588,7 +596,20 @@ class SearchKnowledgeTool extends BaseTool {
   }
 }
 
+class GetWorkflowDatasetTool extends BaseTool {
+  constructor() {
+    const definition = require('../../../intelligent_core/tool_registry').listTools().find(tool => tool.name === 'get_workflow_dataset');
+    super(definition);
+  }
+  async run(args, context) {
+    const execution = await require('../../../intelligent_core/tool_registry').executeTool(this.name, args, context);
+    if (!execution.success) throw new Error(execution.error);
+    return execution.result;
+  }
+}
+
 module.exports = {
+  GetWorkflowDatasetTool,
   GetDateTimeTool,
   ExportDataTool,
   PlanDataQueryTool,

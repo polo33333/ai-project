@@ -215,7 +215,9 @@ class AutomationRuntime {
           const failures = validateValue(result, run.definition.output.schema);
           ensure(!failures.length, 'Kết quả không đạt output contract.');
           run.result = result; run.status = 'SUCCEEDED'; run.lease = null; event(run, 'completed');
-          await this.repository.put('runs', run, run.revision); return;
+          const completed = await this.repository.put('runs', run, run.revision);
+          require('./conversation_memory').persist(completed, this.view(completed));
+          return;
         }
         if (!condition(step.when, state)) {
           run.attempts[step.id] = { status: 'SKIPPED', count: 0 }; run.nextIndex++; event(run, 'step_skipped', { stepId: step.id });

@@ -21,6 +21,14 @@ const mcpService = require('../services/mcp_service');
 
 const TOOL_DEFINITIONS = [
   {
+    name: 'get_workflow_dataset',
+    description: 'Read a verified dataset from a completed workflow in the current conversation. Results are paginated; use total rowCount and hasMore to avoid treating a preview as the full dataset.',
+    parameters: { type: 'object', properties: {
+      runId: { type: 'string' }, field: { type: 'string' },
+      offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 100 }
+    }, required: ['runId'] }
+  },
+  {
     name: 'get_current_datetime',
     description: 'Lấy ngày giờ hiện tại của hệ thống theo múi giờ Việt Nam. Dùng khi người dùng hỏi "hôm nay" (kể cả viết tắt "h nay", "hnay"), "bây giờ", "hôm nay thứ mấy", "ngày hiện tại", "tháng này", "năm nay" hoặc cần mốc thời gian hiện tại.',
     parameters: {
@@ -37,10 +45,12 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         data: { type: 'array', items: { type: 'object' }, description: 'Mảng các đối tượng dữ liệu cần xuất file (VD: kết quả rows từ execute_sql_query)' },
+        workflowRunId: { type: 'string', description: 'Export the complete verified workflow dataset instead of supplying preview rows.' },
+        workflowField: { type: 'string', description: 'Dataset field in the workflow result.' },
         format: { type: 'string', enum: ['xlsx', 'csv', 'pdf'], description: 'Định dạng file cần xuất: xlsx (Excel), csv hoặc pdf' },
         filename: { type: 'string', description: 'Tên file không kèm đuôi mở rộng (VD: "Bao_cao_Doanh_thu_Q1")' }
       },
-      required: ['data', 'format']
+      required: ['format']
     }
   },
   // {
@@ -209,12 +219,29 @@ class ToolRegistry {
       }
       switch (toolName) {
         case 'get_current_datetime': return this._getCurrentDateTime(args);
-        case 'export_data': return await this._exportData(args);
+        case 'get_workflow_dataset': {
+          const dataset = await require('../automation/conversation_memory').readDataset(args, context);
+          const offset = Number.isInteger(args.offset) && args.offset >= 0 ? args.offset : 0;
+          const limit = Math.max(1, Math.min(100, Number(args.limit) || 100));
+          return { success: true, result: { field: dataset.field, rows: dataset.rows.slice(offset, offset + limit),
+            rowCount: dataset.rows.length, offset, hasMore: offset + limit < dataset.rows.length } };
+        }
+        case 'export_data': {
+          const runId = args.workflowRunId || context.workflowRunId || context.memoryDecision?.reference?.data?.runId;
+          if (runId) {
+            const dataset = await require('../automation/conversation_memory').readDataset({ runId, field: args.workflowField || context.memoryDecision?.reference?.data?.field }, context);
+            const exported = await this._exportData({ ...args, data: dataset.rows });
+            return exported.success ? { success: true, result: exported } : exported;
+          }
+          return await this._exportData(args);
+        }
         // case 'resolve_date_range':     return await this._resolveDateRange(args);
         case 'validate_sql': return this._validateSql(args);
         case 'repair_sql': return this._repairSql(args);
         case 'execute_sql_query': return await this._executeSqlQuery(args, context);
-        case 'render_chart': return this._renderChart(args);
+        case 'render_chart':
+          await require('../automation/conversation_memory').verifyChart(args, context);
+          return this._renderChart(args);
         case 'calculate_stats': return this._calculateStats(args);
         case 'calculate_expression': return this._calculateExpression(args);
         case 'search_schema': return this._searchSchema(args);

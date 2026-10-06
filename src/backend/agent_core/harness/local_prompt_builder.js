@@ -18,7 +18,7 @@ If native function calling is unavailable, output exactly one JSON object and no
 Available tools:
 ${toolSummary(definitions)}
 Never invent a tool or argument. After receiving a tool result, either call the next necessary tool or answer the user. Do not reveal private reasoning.
-${requestPolicy.chartRequired ? 'This request requires a real chart. You must call execute_sql_query and then render_chart. Never create image URLs or chart placeholders. Do not finish before render_chart succeeds.' : ''}
+${requestPolicy.chartRequired ? `This request requires a real chart. You must call ${requestPolicy.workflowReference ? 'get_workflow_dataset' : 'execute_sql_query'} and then render_chart. Never create image URLs or chart placeholders. Do not finish before render_chart succeeds.` : ''}
 ${requestPolicy.exportRequired ? 'This request requires a real downloadable file. After obtaining rows, call export_data with those rows. Do not finish before export_data succeeds.' : ''}
 ${requestPolicy.dataRequired ? 'For a data request, execute the query with execute_sql_query. Do not merely print SQL or ask for confirmation.' : ''}
 ${guidance.intentPlannerEnabled ? 'For every data request, your FIRST tool call must be plan_data_query. Use entityLookup only when the user explicitly identifies a name/code/value. Put date/time windows such as "latest 7 months" in temporalFilter, never in entityLookup. Put business attributes such as gender, department, status, nationality, or contract type in relationshipFilters using the Relationships metadata. After the plan is accepted, call execute_sql_query with SQL that exactly applies it. If intent is ambiguous, submit clarification and ask the returned clarification question without SQL.' : ''}

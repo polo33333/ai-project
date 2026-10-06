@@ -357,6 +357,14 @@ async function handleRouted(question, options) {
 }
 
 async function handle(question, options = {}) {
+  const connector = require('../services/sql_connector');
+  const source = options.dbSourceId ? connector.getDbSources().find(item => item.id === options.dbSourceId) : connector.getDefaultDbSource();
+  if (!options.webSearch && !options.knowledgeSourceIds?.length
+      && require('../intelligent_core/schema_context_service').explicitListTable(question, { dbSourceId: source?.id, dbName: source?.dbName })) {
+    if (options.routingContext) Object.assign(options.routingContext.trace, {
+      route: 'chat', workflowId: null, inputDisposition: 'none', reason: 'explicit_entity_list', decisionSource: 'reviewed_schema' });
+    return null;
+  }
   return handleRouted(question, options);
 }
 module.exports = { handle, handleRouted, handleLegacy, interpretLegacy: interpret, reply, result };
