@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [Trạng thái triển khai](#trạng-thái-triển-khai).
 
-README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
+README đối chiếu với mã nguồn ngày **06/10/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -39,6 +39,21 @@ README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dư�
 - Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu PostgreSQL khi dùng backend `postgres`.
 - Memory Core v2 có pending turn, context budget, summary và semantic routing. Cấu hình mẫu bật pending turn, budget và summary; semantic routing vẫn mặc định tắt.
 
+### Quy trình tự động và định tuyến chat
+
+- Tab **Quy trình tự động** quản lý catalog/plugin có phiên bản, mẫu câu hỏi và slot đầu vào; hỗ trợ sửa draft, validate, chạy fixture, publish, bật/tắt và rollback. Mẫu tham khảo tra cứu hợp đồng, nhân viên và báo cáo điện ở `docs/templates/` cần cấu hình nguồn thực tế.
+- Workflow đọc SQL có parameter, gọi API, đọc file Thư viện hoặc kế thừa kết quả bước trước; hỗ trợ mapping cột, transform/condition/assert/collect/delay, biểu đồ và export CSV/XLSX. API có thể ghi dữ liệu; tác vụ ghi bị gián đoạn chuyển `NEEDS_REVIEW`, không tự retry.
+- Run có owner, revision, checkpoint, thu thập input, resume/cancel và artifact có hạn tải. Chat chính và embed hỗ trợ form nghiệp vụ, bảng/biểu đồ và kết quả; embed không hiển thị Thinking/timeline xử lý.
+- `WORKFLOW_PLUGINS_ENABLED=false` trong cấu hình máy chủ chặn bật workflow từ UI. Để dùng, áp dụng migration 004, đổi flag thành `true`, khởi động lại, cấu hình nguồn rồi validate/test/publish mẫu. Xem [runbook](docs/WORKFLOW_PHASE1_RUNBOOK.md).
+
+| `CHAT_ROUTING_MODE` | Hành vi |
+|---|---|
+| `auto` (cấu hình mẫu) | TEV1 quyết định trước; chuyển một lần sang model chat khi thiếu chắc chắn, lỗi hoặc vượt giới hạn |
+| `local_tev1` | Chỉ TEV1 quyết định routing; mơ hồ thì hỏi lại, lỗi thì báo lỗi, không tự đổi model |
+| `chat_model` | Model chat đã chọn quyết định; không gọi TEV1 |
+
+Model trả lời được ghim đầu request. TEV1 dùng API quyết định `/v1/systemone`, chỉ phân loại route/scope/input. Backend kiểm tra quyền, ID, evidence và input trước khi chạy; hỏi bổ sung khi thiếu slot, giữ run đang chờ khi người dùng chuyển chủ đề. Các stage dùng chung ngân sách call/deadline. Khi workflow tắt, thiếu session hoặc catalog rỗng, bỏ qua router nghiệp vụ. `CHAT_QUICK_GREETING_ENABLED=true` cho phép TEV1 trả lời nhanh lời chào ở `auto`/`local_tev1`. Xem [đặc tả routing](docs/CHAT_WORKFLOW_ROUTING_UX.md).
+
 ### API và quản trị
 
 - Giao diện dashboard bằng HTML/CSS/JavaScript thuần, không có build step frontend.
@@ -62,7 +77,7 @@ README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dư�
 | SQL Server Connector | Khả dụng | Hỗ trợ DDL và live connection |
 | Data Dictionary/Glossary | Khả dụng | Có lưu trữ và đồng bộ Qdrant |
 | Text-to-SQL | Khả dụng có giới hạn | Cần dùng SQL account read-only ở môi trường thật |
-| AI Provider adapters | Khả dụng | Có fallback tuần tự theo priority giữa các provider đã cấu hình |
+| AI Provider adapters | Khả dụng | Luồng chat ghim provider/model đầu request; không tự chuyển provider khi lỗi |
 | Intelligent Core/tools | Khả dụng | Single-agent tool-calling loop |
 | Qdrant schema search | Khả dụng khi có Qdrant/BGE-M3 | Collection schema v2 dùng embedding thật 1024 chiều; fallback deterministic mặc định tắt |
 | Dictionary identity | Đã triển khai | Phân biệt nguồn kết nối, database, schema, table và column; backup migration nằm trong `data/backup/` |
@@ -74,8 +89,11 @@ README đối chiếu với mã nguồn ngày **20/09/2026**. Trạng thái dư�
 | Embed Chat | Đã triển khai | Endpoint JSON, domain allowlist, giới hạn theo cấu hình; admin preview bỏ kiểm tra domain |
 | Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
 | Memory Core v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary; semantic routing mặc định tắt |
-| Workflow Automation | Backend và frontend phase 1 | Catalog/plugin, template, checkpoint và tiến trình chat; cần cấu hình pilot dữ liệu thật |
-| PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–003; dữ liệu JSON hiện có đã nhập/đối soát, runtime không tự fallback về JSON |
+| Workflow Automation | Đã triển khai, mặc định tắt | Editor mẫu, SQL/API/file/bước trước, mapping, biểu đồ/export và checkpoint; cần cấu hình nguồn và publish |
+| Chat/workflow routing | Đã triển khai | Ba mode auto/local_tev1/chat_model; kiểm tra scope/evidence/input trước khi chạy |
+| Web search | Đã triển khai | Endpoint cấu hình qua `WEB_SEARCH_ENDPOINT`; phụ thuộc mạng và chất lượng nguồn |
+| HTTPS/PWA | Đã triển khai | Certificate PEM, manifest và service worker frontend |
+| PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–004; hỗ trợ nhập/đối soát JSON khi cutover, runtime không tự fallback về JSON |
 | Document outbox | Đã triển khai | PostgreSQL jobs, retry, lease và recovery; tác động file/Qdrant vẫn cần reconciliation |
 | Redis/BullMQ | Chưa triển khai | Outbox hiện chạy trong Node.js, chưa có worker service riêng |
 | Page chat history | Đã triển khai | Bảng `app.ui_chat_sessions`, owner account, mã hóa và kiểm tra version |
@@ -163,7 +181,7 @@ LOCAL_MODEL_HARNESS_ENABLED=true
 LOCAL_MODEL_SKILL_CORE_ENABLED=true
 LOCAL_MODEL_FEW_SHOT_ENABLED=true
 LOCAL_MODEL_MAX_ITERATIONS=7
-LOCAL_MODEL_MAX_MODEL_CALLS=9
+LOCAL_MODEL_MAX_MODEL_CALLS=12
 LOCAL_MODEL_MAX_SQL_CALLS=3
 AI_PROVIDER_GUARDS_ENABLED=true
 AI_PROVIDER_MAX_REPAIRS=2
@@ -180,6 +198,21 @@ MEMORY_PENDING_TURN_ENABLED=true
 MEMORY_CONTEXT_BUDGET_ENABLED=true
 MEMORY_SUMMARY_ENABLED=true
 MEMORY_SEMANTIC_ROUTING_ENABLED=false
+
+# Chat/workflow routing
+CHAT_ROUTING_MODE=auto
+CHAT_QUICK_GREETING_ENABLED=true
+CHAT_ROUTING_LOCAL_MODEL=tev1:4b
+CHAT_ROUTING_LOCAL_BASE_URL=http://127.0.0.1:11434
+CHAT_ROUTING_TIMEOUT_MS=60000
+WORKFLOW_PLUGINS_ENABLED=false
+WORKFLOW_API_ALLOWED_ORIGINS=
+
+# App storage (credentials và khóa riêng tạo bởi db:pg:init)
+APP_STORAGE_BACKEND=postgres
+APP_PG_HOST=127.0.0.1
+APP_PG_PORT=5432
+APP_PG_DATABASE=knowledgehub_app
 
 # MCP
 MCP_CONNECT_TIMEOUT_MS=15000
@@ -303,7 +336,7 @@ Tại **API tích hợp & Embed Chat**, tạo cấu hình rồi sao chép mã nh
 
 Nút **Mở thử** bật preview theo ID đã chọn; nhấn lại ẩn cả khung và nút nổi. Preview của admin đăng nhập bỏ qua domain allowlist, vẫn kiểm tra ID/trạng thái và giới hạn yêu cầu. Widget công khai vẫn kiểm tra domain. Embed dùng `/api/embed/chat`, trả kết quả một lần; Page Chat dùng stream tiến trình. Hai luồng cùng gọi Intelligent Core nhưng khác quyền và giới hạn lịch sử/kết quả.
 
-Tại **Nguồn MCP Server**, thêm endpoint HTTP/SSE hoặc command stdio. Hệ thống thử kết nối, lấy tools/resources và đăng ký tools vào luồng agent; dùng nút **Kết nối** để thử lại khi lỗi. Cấu hình lưu trong `data/mcp_servers.json`. Đây là MCP client kết nối dịch vụ ngoài, không phải endpoint MCP server do KnowledgeHub tự cung cấp. Khả năng gọi tool còn phụ thuộc model, quyền và trạng thái server.
+Tại **Nguồn MCP Server**, thêm endpoint HTTP/SSE hoặc command stdio. Hệ thống thử kết nối, lấy tools/resources và đăng ký tools vào luồng agent; dùng nút **Kết nối** để thử lại khi lỗi. Cấu hình lưu PostgreSQL khi dùng backend `postgres`; `data/mcp_servers.json` thuộc backend JSON/legacy. Đây là MCP client kết nối dịch vụ ngoài, không phải endpoint MCP server do KnowledgeHub tự cung cấp. Khả năng gọi tool còn phụ thuộc model, quyền và trạng thái server.
 
 ```text
 Browser
@@ -330,7 +363,7 @@ Node.js HTTP Server
   `-- Async Storage -------------> PostgreSQL app schema + document outbox
 ```
 
-Backend dùng `node:http`, chưa dùng Fastify. Dữ liệu ứng dụng lưu PostgreSQL qua `storage.run/flush` bất đồng bộ; service thao tác view riêng từng operation. Commit hợp nhất thay đổi theo record trong transaction ngắn. HTTP success/cookie và SSE final chỉ gửi sau commit; progress SSE vẫn truyền khi xử lý. File tài liệu/export ở filesystem, dữ liệu nghiệp vụ ở SQL Server, vector ở Qdrant. Redis/BullMQ và parser/embedding Python service vẫn là định hướng.
+Backend dùng `node:http` hoặc `node:https` khi cấu hình TLS, chưa dùng Fastify. Dữ liệu ứng dụng lưu PostgreSQL qua `storage.run/flush` bất đồng bộ; service thao tác view riêng từng operation. Commit hợp nhất thay đổi theo record trong transaction ngắn. HTTP success/cookie và SSE final chỉ gửi sau commit; progress SSE vẫn truyền khi xử lý. File tài liệu/export ở filesystem, dữ liệu nghiệp vụ ở SQL Server, vector ở Qdrant. Redis/BullMQ và parser/embedding Python service vẫn là định hướng.
 
 ## Cấu trúc thư mục
 
@@ -349,6 +382,7 @@ Backend dùng `node:http`, chưa dùng Fastify. Dữ liệu ứng dụng lưu Po
 |       |-- routes/router.js          # REST và static-file router
 |       |-- intelligent_core/         # Agent loop, tools, adapters, guardrails
 |       |-- agent_core/               # Local Harness, tools và workflow engine
+|       |-- automation/               # Catalog, template, routing TEV1, runtime và nguồn dữ liệu
 |       |-- skill_core/               # Skill registry, selector và few-shot theo schema
 |       |-- memory_core/              # Memory router, references và quality gate
 |       |-- training_core/            # Case collection, evaluation và đề xuất
@@ -370,7 +404,7 @@ Backend dùng `node:http`, chưa dùng Fastify. Dữ liệu ứng dụng lưu Po
 
 ## API chính
 
-API bổ sung: `POST /api/auth/change-password`, `GET/POST /api/page-chat/sessions`, `GET /health/live` và `GET /health/ready`. Readiness yêu cầu schema 3, database live và account; PostgreSQL lỗi không tự ghi về JSON.
+API bổ sung: `POST /api/auth/change-password`, `GET/POST /api/page-chat/sessions`, `GET /health/live` và `GET /health/ready`. Readiness hiện kiểm tra migration 003, database live và account; workflow cần thêm migration 004 (`npm run db:migrate`). PostgreSQL lỗi không tự ghi về JSON.
 
 Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 
@@ -410,12 +444,18 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 | `GET` | `/api/embed/configs` | Danh sách cấu hình Embed |
 | `POST` | `/api/embed/chat` | Chat qua Embed ID; public có kiểm tra domain |
 | `GET` | `/health/live`, `/health/ready` | Endpoint health cơ bản, không xác nhận mọi dịch vụ phụ trợ |
+| `GET/PUT` | `/api/workflow-plugins/settings` | Xem/cấu hình bật workflow |
+| `GET/POST` | `/api/workflow-plugins` | Catalog và import gói (admin) |
+| `GET/POST` | `/api/question-templates` | Liệt kê/tạo mẫu nghiệp vụ |
+| `GET/POST` | `/api/automation-runs` | Liệt kê/tạo run theo owner |
+| `POST` | `/api/automation-runs/:id/inputs`, `.../resume`, `.../cancel` | Bổ sung input, tiếp tục hoặc hủy run |
+| `GET` | `/api/automation-runs/:id/artifacts/:artifactId` | Tải file theo owner và hạn tải |
 
 Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embed chat. Endpoint `/api/v1/chat/completions` hiện chỉ tương thích một phần với OpenAI API; chưa hỗ trợ đầy đủ streaming và toàn bộ tham số chuẩn.
 
 ## Kiểm tra mã nguồn
 
-Kiểm tra gần nhất ngày **20/09/2026**: **260 test ứng dụng đạt, 2 test bỏ qua**, hai nhóm PostgreSQL chạy riêng; lần kiểm tra PostgreSQL được ghi nhận gần nhất có **33 test đạt** trong database tạm. Bao phủ import/rollback/encryption, concurrency, auth/đổi mật khẩu, page history, scope API từng tab, HTTP/SSE commit gate, outbox, citation, quan hệ SQL và quyền runtime. Test chat/ingest dùng core/Qdrant giả lập; không thay thế kiểm thử provider tính phí, SQL nghiệp vụ và retrieval thật.
+Kết quả được ghi nhận trong [tài liệu routing](docs/CHAT_WORKFLOW_ROUTING_UX.md) ngày **04/10/2026**: **436 test đạt, 11 test bỏ qua, không có lỗi**; bộ thử routing với catalog PostgreSQL, TEV1 và Gemini đạt **8/8**. Đây là kết quả đã ghi nhận, chưa chạy lại trong lần cập nhật README này. Unit test sử dụng fixture/mock, không thay thế nghiệm thu SQL nghiệp vụ, retrieval hoặc provider thật. Test PostgreSQL cần credentials bootstrap và database test riêng.
 
 ```powershell
 npm run test:storage
@@ -434,6 +474,8 @@ Các script bổ sung:
 
 ```powershell
 npm run eval:local                    # smoke eval protocol/format
+npm run eval:workflows                # regression workflow/template/runtime
+npm run eval:routing                  # TEV1 thật, không thực thi SQL/workflow
 npm run eval:local:semantic           # validate corpus semantic offline
 npm run eval:local:semantic:live      # chạy model + SQL source eval riêng
 npm run eval:retrieval                # Recall@K/MRR retrieval
@@ -553,12 +595,16 @@ Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ 
 ### Phase 3-4
 
 - Phase 3: RBAC chi tiết, persistent Knowledge Graph, LLM entity/relation extraction, community summary, Wiki và mở rộng SDK/API. MCP client kết nối server ngoài đã triển khai.
-- Phase 4: OCR, Cloud Sync, Multi-user, AI Agents, plugin sandbox và enterprise operations.
+- Phase 4: OCR, Cloud Sync, mở rộng cộng tác nhiều người dùng, AI Agents, plugin sandbox và enterprise operations. Session/account và catalog workflow hiện đã có; sandbox chạy code tùy ý chưa triển khai.
 
 Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ chi tiết để giao tự động cho coding agents. Phase 5 chưa được định nghĩa trong master plan hiện hành.
 
 ## Tài liệu
 
+- [Workflow phase 1: cấu hình, nguồn dữ liệu và vận hành](docs/WORKFLOW_PHASE1_RUNBOOK.md)
+- [Định tuyến chat/workflow và TEV1](docs/CHAT_WORKFLOW_ROUTING_UX.md)
+- [Đánh giá catalog định tuyến](docs/WORKFLOW_ROUTING_CATALOG_REVIEW.md)
+- [Backup/import PostgreSQL + Qdrant](docs/POSTGRES_QDRANT_BACKUP_IMPORT_PLAN_230926.md)
 - [Nâng cấp kiến trúc RAG và citation](docs/RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md)
 - [Kế hoạch bước tiếp theo](docs/NEXT_STEPS_PLAN_180926.md)
 - [Kế hoạch hiểu hình ảnh trong chat](docs/CHAT_IMAGE_UNDERSTANDING_PLAN_180926.md)
