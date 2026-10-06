@@ -1107,6 +1107,9 @@ async function sendPageChatMessage() {
   container.scrollTop = container.scrollHeight;
   const requestController = new AbortController();
   window.pageChatRequestController = requestController;
+  const persona = window.aiPersona || {};
+  const aiName = persona.name || 'KAI';
+  const aiRole = persona.role || 'Intelligent Copilot';
   setPageChatResponding(true);
   window.updatePageChatMiniPanel({
     status: 'running',
@@ -1147,9 +1150,6 @@ async function sendPageChatMessage() {
       ? data.sqlExecutions
       : (sqlQuery ? [{ index: 1, sql: sqlQuery, columns: toolResult?.columns || [], rows: toolResult?.rows || [], rowCount: toolResult?.rows?.length || 0 }] : []);
     const chartSpec = data.chartSpec || null;
-    const persona = window.aiPersona || {};
-    const aiName = persona.name || 'KAI';
-    const aiRole = persona.role || 'Intelligent Copilot';
 
     // Save to history for next turn
     if (data.completionStatus === 'SUCCESS') {
@@ -1187,71 +1187,7 @@ async function sendPageChatMessage() {
       }).join('');
     }
 
-    // Tool Calling Steps - Beautiful Timeline
-    let toolStepsHtml = '';
-    if (data.toolCalls && data.toolCalls.length > 0) {
-      const toolMeta = {
-        execute_sql_query: { icon: 'database', color: '#6366f1', bg: '#eef2ff', label: 'SQL Query' },
-        render_chart: { icon: 'chart-column', color: '#f59e0b', bg: '#fffbeb', label: 'Vẽ biểu đồ' },
-        export_data: { icon: 'file-arrow-down', color: '#10b981', bg: '#f0fdf4', label: 'Xuất file' },
-        validate_sql: { icon: 'shield-check', color: '#3b82f6', bg: '#eff6ff', label: 'Kiểm tra SQL' },
-        repair_sql: { icon: 'wrench', color: '#ef4444', bg: '#fef2f2', label: 'Sửa SQL' },
-        search_schema: { icon: 'magnifying-glass', color: '#8b5cf6', bg: '#f5f3ff', label: 'Tìm schema' },
-        calculate_stats: { icon: 'calculator', color: '#06b6d4', bg: '#ecfeff', label: 'Thống kê' },
-        get_current_datetime: { icon: 'clock', color: '#0ea5e9', bg: '#eff6ff', label: 'Thời gian hệ thống' },
-        default: { icon: 'gears', color: '#64748b', bg: '#f8fafc', label: 'Tool' }
-      };
-
-      const steps = data.toolCalls.map((tc, idx) => {
-        const meta = toolMeta[tc.name] || toolMeta.default;
-        const isOk = tc.success !== false;
-        const statusIcon = isOk ? 'circle-check' : 'circle-xmark';
-        const statusColor = isOk ? '#22c55e' : '#ef4444';
-        const rowBadge = tc.rowCount != null
-          ? `<span style="background:#e0e7ff;color:#4338ca;padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:700;">${tc.rowCount} dòng</span>`
-          : '';
-        const errBadge = tc.error
-          ? `<span style="background:#fee2e2;color:#b91c1c;padding:1px 8px;border-radius:20px;font-size:10.5px;">${tc.error.slice(0, 40)}</span>`
-          : '';
-        const durationBadge = tc.durationMs != null
-          ? `<time class="chat-tool-duration"><i class="fa-regular fa-clock"></i>${formatThinkingDuration(tc.durationMs)}</time>`
-          : '';
-        const isLast = idx === data.toolCalls.length - 1;
-        return `
-          <div style="display:flex;gap:10px;align-items:flex-start;padding-bottom:${isLast ? '0' : '12px'};position:relative;">
-            ${!isLast ? `<div style="position:absolute;left:14px;top:28px;bottom:0;width:2px;background:linear-gradient(180deg,${meta.color}44,transparent);"></div>` : ''}
-            <div style="width:28px;height:28px;border-radius:50%;background:${meta.bg};border:2px solid ${meta.color}33;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="fa-solid fa-${meta.icon}" style="font-size:11px;color:${meta.color};"></i>
-            </div>
-            <div style="flex:1;min-width:0;padding-top:4px;">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                <span style="font-size:12px;font-weight:700;color:#1e293b;">${meta.label}</span>
-                <code style="font-size:10.5px;color:#64748b;background:#f1f5f9;padding:1px 6px;border-radius:4px;font-family:monospace;">${tc.name}</code>
-                ${rowBadge}${errBadge}
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
-                <i class="fa-solid fa-${statusIcon}" style="font-size:10px;color:${statusColor};"></i>
-                <span style="font-size:11px;color:${statusColor};font-weight:600;">${isOk ? 'Thành công' : 'Lỗi'}</span>
-              </div>
-            </div>
-            ${durationBadge}
-          </div>`;
-      }).join('');
-
-      toolStepsHtml = `
-        <details class="chat-tool-pipeline" open style="margin:0 0 12px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.04);">
-          <summary style="padding:10px 14px;font-size:12px;font-weight:700;color:#334155;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);">
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#a855f7);">
-              <i class="fa-solid fa-bolt" style="font-size:10px;color:#fff;"></i>
-            </span>
-            Công cụ đã sử dụng
-            <span style="background:#6366f1;color:#fff;padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:700;margin-left:4px;">${data.toolCalls.length} bước</span>
-            <i class="fa-solid fa-chevron-down chat-tool-chevron" style="margin-left:auto;font-size:10px;color:#94a3b8;"></i>
-          </summary>
-          <div style="padding:14px 14px 10px;">${steps}</div>
-        </details>
-      `;
-    }
+    const toolStepsHtml = window.ChatToolUI?.render(data.toolCalls || []) || '';
 
     // Tool Result Table
     let toolResultHtml = '';

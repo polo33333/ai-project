@@ -3,7 +3,34 @@
   let saving = false;
   let currentRevision = '';
   let pendingRestart = false;
+  let activeGroup = '';
   const el = id => document.getElementById(id);
+  function panelToggle(panel, heading, targets) {
+    if (!panel || !heading || heading.querySelector('.settings-panel-toggle')) return;
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'settings-panel-toggle';
+    const update = collapsed => {
+      button.setAttribute('aria-expanded', String(!collapsed));
+      button.setAttribute('aria-label', collapsed ? 'Mở rộng panel' : 'Thu gọn panel');
+      button.innerHTML = `<i class="fa-solid fa-chevron-${collapsed ? 'down' : 'up'}" aria-hidden="true"></i>`;
+      panel.classList.toggle('is-collapsed', collapsed);
+      targets.forEach(target => { target.hidden = collapsed; });
+    };
+    button.onclick = () => update(button.getAttribute('aria-expanded') === 'true');
+    heading.append(button); update(false);
+  }
+  function initializePanels() {
+    const root = el('view-settings'); if (!root) return;
+    const backup = root.querySelector('.settings-backup-card');
+    if (backup) panelToggle(backup, backup.querySelector('.settings-backup-heading'), [...backup.children].filter(node => !node.matches('header')));
+    const panel = root.querySelector('.settings-panel');
+    if (panel) panelToggle(panel, panel.querySelector('.settings-toolbar'), [...panel.children].filter(node => !node.matches('.settings-toolbar')));
+    const qdrant = root.querySelector('.settings-qdrant-card');
+    if (qdrant) panelToggle(qdrant, qdrant.querySelector('.settings-qdrant-main'), [...qdrant.children].filter(node => !node.matches('.settings-qdrant-main,.settings-qdrant-icon')));
+    const search = el('settings-search')?.closest('.settings-search-wrap');
+    const content = root.querySelector('.settings-content');
+    if (search && content && search.parentElement !== content) content.prepend(search);
+  }
   const normalize = text => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   const showMessage = (text, tone = '') => { const node = el('settings-message'); if (node) { node.textContent = text; node.dataset.tone = tone; } };
 
@@ -26,12 +53,12 @@
     control.className = 'form-control settings-input'; control.dataset.key = field.key; control.dataset.initial = field.value;
     control.setAttribute('aria-label', field.label);
     if (control.tagName === 'SELECT') {
-      const labels = {ollama:'Ollama · chạy nội bộ',openai:'API tương thích OpenAI',error:'Dừng và báo lỗi',deterministic:'Vector dự phòng',production:'Production',development:'Development',test:'Test',postgres:'PostgreSQL',json:'JSON file'};
+      const labels = {auto:'Tự động · TEV1 trước, model chat dự phòng',local_tev1:'TEV1 local · không dự phòng routing',chat_model:'Model chat · quyết định trực tiếp',ollama:'Ollama · chạy nội bộ',openai:'API tương thích OpenAI',error:'Dừng và báo lỗi',deterministic:'Vector dự phòng',production:'Production · vận hành',development:'Development · phát triển',test:'Test · kiểm thử',postgres:'PostgreSQL',json:'JSON file'};
       const options = (field.options || []).map(option => [option, labels[option] || option]);
       options.forEach(([optionValue, label]) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = label; control.append(option); });
     } else {
       control.type = field.type === 'number' ? 'number' : field.type === 'url' ? 'url' : 'text';
-      if (field.type === 'number') control.step = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN'].includes(field.key) ? 'any' : '1';
+      if (field.type === 'number') control.step = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN', 'CHAT_ROUTING_MIN_PROBABILITY', 'CHAT_ROUTING_MIN_MARGIN'].includes(field.key) ? 'any' : '1';
     }
     control.value = field.value; control.addEventListener('input', updateDirtyState); control.addEventListener('change', updateDirtyState);
     return control;
@@ -53,11 +80,26 @@
     });
     const button = el('settings-save'); if (button) button.disabled = saving || Object.keys(changedValues()).length === 0;
     const restartButton = el('settings-save-restart'); if (restartButton) restartButton.disabled = saving;
+    const count = Object.keys(changedValues()).length;
+    if (el('settings-dirty-count')) { el('settings-dirty-count').textContent = count ? `${count} thay đổi chưa lưu` : 'Đã đồng bộ'; el('settings-dirty-count').classList.toggle('is-dirty', count > 0); }
   }
 
   function renderSettings(data) {
+    initializePanels();
     currentRevision = data.revision;
     const groups = [...new Set(data.fields.map(field => field.group))];
+    if (!groups.includes(activeGroup)) activeGroup = groups[0] || '';
+    const nav = el('settings-nav');
+    if (nav) {
+      nav.replaceChildren();
+      const label = document.createElement('small'); label.textContent = 'DANH MỤC CẤU HÌNH'; nav.appendChild(label);
+      for (const group of ['', ...groups]) {
+        const button = document.createElement('button'); button.type = 'button'; button.dataset.group = group;
+        const title = document.createElement('span'); title.textContent = group || 'Tất cả thuộc tính';
+        const count = document.createElement('span'); count.className = 'settings-nav-count'; count.textContent = group ? data.fields.filter(field => field.group === group).length : data.fields.length;
+        button.append(title, count); button.onclick = () => { activeGroup = group; el('settings-search').value = ''; window.filterSettings(''); el('settings-fields').scrollTop = 0; }; nav.appendChild(button);
+      }
+    }
     el('settings-total').textContent = `${data.fields.length} thuộc tính`;
     const root = el('settings-fields');
     root.replaceChildren();
@@ -68,6 +110,7 @@
       const summary = document.createElement('span'); summary.textContent = `${groupFields.length} thuộc tính cấu hình`;
       header.append(heading, summary); section.append(header);
       const list = document.createElement('div'); list.className = 'settings-list'; section.append(list);
+      panelToggle(section, header, [list]);
       groupFields.forEach(field => {
         const item = document.createElement('article'); item.className = 'settings-property';
         item.dataset.search = normalize(`${group} ${field.key} ${field.label} ${field.description}`);
@@ -108,8 +151,10 @@
     const query = normalize(value.trim());
     document.querySelectorAll('.settings-section').forEach(section => {
       section.querySelectorAll('.settings-property').forEach(item => { item.hidden = Boolean(query) && !item.dataset.search.includes(query); });
-      section.hidden = !section.querySelector('.settings-property:not([hidden])');
+      section.hidden = (!query && Boolean(activeGroup) && section.dataset.group !== activeGroup) || !section.querySelector('.settings-property:not([hidden])');
+      if (query && !section.hidden && section.classList.contains('is-collapsed')) section.querySelector('.settings-panel-toggle')?.click();
     });
+    el('settings-nav')?.querySelectorAll('button').forEach(button => { const active = query ? button.dataset.group === '' : button.dataset.group === activeGroup; button.classList.toggle('is-active', active); button.setAttribute('aria-current', active ? 'true' : 'false'); });
     el('settings-empty').hidden = Boolean(document.querySelector('.settings-section:not([hidden])'));
   };
   window.reloadSettings = () => window.fetchSettings(true);

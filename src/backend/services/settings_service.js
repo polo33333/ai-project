@@ -27,6 +27,7 @@ Object.assign(defaults, {
   LOCAL_MODEL_FEW_SHOT_ENABLED: envValuesAtStartup.LOCAL_MODEL_FEW_SHOT_ENABLED ?? exampleValues.LOCAL_MODEL_FEW_SHOT_ENABLED ?? 'false'
 });
 const choices = {
+  CHAT_ROUTING_MODE: ['local_tev1', 'chat_model', 'auto'],
   NODE_ENV: ['production', 'development', 'test'],
   APP_STORAGE_BACKEND: ['postgres', 'json'],
   EMBEDDING_PROVIDER: ['ollama', 'openai'],
@@ -42,10 +43,10 @@ const descriptions = {
   QDRANT_DOCUMENT_VECTOR_SIZE: 'Phải khớp số chiều model embedding tài liệu.',
   EMBEDDING_FALLBACK_MODE: 'error: dừng khi embedding lỗi; deterministic: vector dự phòng, không đảm bảo chất lượng tìm kiếm.',
 };
-const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT']);
+const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT', 'CHAT_ROUTING_LOCAL_BASE_URL']);
 const schema = Object.entries(defaults).map(([key, value]) => ({
   key, defaultValue: value, label: help[key]?.[0] || key.replace(/_/g, ' '),
-  group: key === 'WORKFLOW_PLUGINS_ENABLED' ? 'Mẫu nghiệp vụ'
+  group: /^(WORKFLOW_PLUGINS_ENABLED|CHAT_ROUTING_|CHAT_QUICK_GREETING_)/.test(key) ? 'Mẫu nghiệp vụ'
     : /^(LOCAL_MODEL|LOCAL_AI|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
     : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'
       : /^(AI_MEMORY|MEMORY_|MAX_CHAT_HISTORY)/.test(key) ? 'Bộ nhớ hội thoại'
@@ -69,9 +70,9 @@ function validate(field, value) {
   if (field.options && !field.options.includes(value)) fail(`Lựa chọn không hợp lệ: ${field.key}`);
   if (field.type === 'number') {
     const n = Number(value);
-    const fractional = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN'].includes(field.key);
+    const fractional = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN', 'CHAT_ROUTING_MIN_PROBABILITY', 'CHAT_ROUTING_MIN_MARGIN'].includes(field.key);
     const allowZero = fractional || ['LOCAL_MODEL_MAX_REPAIRS', 'AI_PROVIDER_MAX_REPAIRS'].includes(field.key);
-    const max = field.key === 'PORT' ? 65535 : field.key === 'AI_DOCUMENT_MIN_SCORE' ? 1 : field.key === 'LOCAL_MODEL_TEMPERATURE' ? 2 : 1000000000;
+    const max = field.key === 'PORT' ? 65535 : ['AI_DOCUMENT_MIN_SCORE', 'CHAT_ROUTING_MIN_PROBABILITY', 'CHAT_ROUTING_MIN_MARGIN'].includes(field.key) ? 1 : field.key === 'LOCAL_MODEL_TEMPERATURE' ? 2 : 1000000000;
     if (!Number.isFinite(n) || n < (allowZero ? 0 : 1) || n > max || (!fractional && !Number.isInteger(n))) fail(`Số ngoài phạm vi: ${field.key}`);
   }
   if (field.type === 'url') {

@@ -18,7 +18,9 @@ test(`ds kh avoids embedding and model retries (database available: ${databaseAv
   t.mock.method(dictionary, 'getTableRelationships', () => []);
   t.mock.method(dictionary, 'getGlossary', () => [{ term: 'KH', fullMeaning: 'Khách hàng', isActive: true }]);
   t.mock.method(require('../src/backend/intelligent_core/domain_alias_service'), 'getDomainAliases', () => ({ customer: ['khach hang'] }));
-  t.mock.method(automation, 'settings', async () => ({ enabled: true }));
+  // With workflows disabled, reviewed database lists still require no model
+  // or embedding. Enabled workflow routing is covered by chat_router.test.js.
+  t.mock.method(automation, 'settings', async () => ({ enabled: false }));
   t.mock.method(automation.runtime, 'pending', async () => null);
   const catalog = t.mock.method(automation.registry, 'list', async () => { throw new Error('No catalog classification needed'); });
   const selected = { id: 'list-cloud', name: 'Chosen cloud', model: 'chosen-model', apiFormat: 'openai', executionClass: 'remote', supportsToolCalling: true, baseUrl: 'https://chosen.invalid' };
@@ -61,6 +63,39 @@ test('ordinary chat uses only the selected model without schema or document embe
   assert.equal(embeddings.mock.callCount(), 0);
   assert.ok(calls.length > 0);
   assert.ok(calls.every(call => call.model === selected.model && call.url.startsWith(selected.baseUrl)));
+});
+
+test('selected local chat model never falls back to another installed local model', async t => {
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => null);
+  const selected = { id: 'chosen-local', name: 'Chosen local', model: 'chosen-local-model', type: 'local', apiFormat: 'ollama',
+    executionClass: 'local', baseUrl: 'http://127.0.0.1:11434' };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(providers, 'getProvidersForExecution', () => [selected, { ...selected, id: 'other-local', model: 'other-local-model', baseUrl: 'http://127.0.0.1:11500' }]);
+  t.mock.method(schema, 'buildSchemaContext', async () => ({ mode: 'general', selectedTables: [], schemaContext: '', useTools: false }));
+  const calls = [];
+  t.mock.method(global, 'fetch', async (url, options) => { calls.push({ url, model: JSON.parse(options.body).model }); throw new Error('connect ECONNREFUSED'); });
+  const result = await core.chat('Explain spreadsheets', { providerId: selected.id, knowledgeSearchEnabled: false, useTools: false });
+  assert.ok(calls.length);
+  assert.ok(calls.every(call => call.model === selected.model && call.url.startsWith(selected.baseUrl)));
+  assert.equal(result.usedProvider.id, selected.id);
+});
+
+test('default chat model is resolved before routing and stays pinned when the active provider changes', async t => {
+  const selected = { id: 'default-before', name: 'Default before', model: 'before-model', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://before.invalid' };
+  let active = selected;
+  t.mock.method(providers, 'getActiveProvider', () => active);
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => { active = { ...selected, id: 'default-after', model: 'after-model', baseUrl: 'https://after.invalid' }; return null; });
+  t.mock.method(schema, 'buildSchemaContext', async () => ({ mode: 'general', selectedTables: [], schemaContext: '', useTools: false }));
+  const calls = [];
+  t.mock.method(global, 'fetch', async (url, options) => {
+    calls.push({ url, model: JSON.parse(options.body).model });
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'A spreadsheet stores information in cells.' }, finish_reason: 'stop' }] }) };
+  });
+  const result = await core.chat('Explain spreadsheets', { knowledgeSearchEnabled: false, useTools: false });
+  assert.ok(calls.length);
+  assert.ok(calls.every(call => call.model === selected.model && call.url.startsWith(selected.baseUrl)));
+  assert.equal(result.usedProvider.id, selected.id);
 });
 
 for (const flags of [

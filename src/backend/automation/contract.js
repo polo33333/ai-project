@@ -114,6 +114,7 @@ function validatePackage(bundle) {
   for (const template of bundle.templates) {
     classification(template);
     if (template.review) ensure(['off', 'advisory', 'required'].includes(template.review.mode), 'Chế độ review không hợp lệ.');
+    if (template.routingScope !== undefined) ensure(['collection', 'targeted', 'aggregate'].includes(template.routingScope), 'routingScope phải là collection, targeted hoặc aggregate.');
     id(template.id); ensure(!identifiers.has(template.id), 'Template ID trùng.'); identifiers.add(template.id);
     ensure(typeof template.name === 'string' && template.name.trim() && typeof template.description === 'string', 'Template cần name/description.');
     ensure(Array.isArray(template.examples) && template.examples.length && template.examples.every(value => typeof value === 'string' && value.trim()), 'Template cần examples để discovery.');

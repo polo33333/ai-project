@@ -1,3 +1,4 @@
+// Compatibility coverage for the pre-flag API; current routing is covered by chat_router.test.js.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -5,7 +6,7 @@ const assert = require('node:assert/strict');
 test('selected provider narrows all authorized templates before detailed routing', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { interpret } = require('../src/backend/automation/orchestrator');
+  const { interpretLegacy: interpret } = require('../src/backend/automation/orchestrator');
   const provider = { id: 'third-party', baseUrl: 'http://fixture.invalid', model: 'fixture' };
   t.mock.method(providers, 'getProviderForExecution', id => { assert.equal(id, provider.id); return provider; });
   const definitions = Array.from({ length: 60 }, (_, i) => ({ id: `operation-${i}`, name: `Operation ${i}`, description: `Business operation ${i}`, inputs: {} }));
@@ -36,7 +37,7 @@ test('selected provider narrows all authorized templates before detailed routing
 test('large catalogs are batched and shortlisted candidates are reduced to five', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { interpret } = require('../src/backend/automation/orchestrator');
+  const { interpretLegacy: interpret } = require('../src/backend/automation/orchestrator');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'local', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definitions = Array.from({ length: 24 }, (_, i) => ({ id: `task-${i}`, name: `Task ${i}`, description: 'Business description '.repeat(40), inputs: {} }));
   let shortlistCalls = 0;
@@ -59,7 +60,7 @@ test('large catalogs are batched and shortlisted candidates are reduced to five'
 test('collection intent cannot be reinterpreted as targeted or pass incomplete scope verification', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { interpret } = require('../src/backend/automation/orchestrator');
+  const { interpretLegacy: interpret } = require('../src/backend/automation/orchestrator');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'remote', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definitions = ['lookup', 'other'].map(id => ({ id, name: id, inputs: {} }));
   for (const verification of [
@@ -83,7 +84,7 @@ test('collection intent cannot be reinterpreted as targeted or pass incomplete s
 test('invalid or empty shortlists do not proceed to detailed routing', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { interpret } = require('../src/backend/automation/orchestrator');
+  const { interpretLegacy: interpret } = require('../src/backend/automation/orchestrator');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'selected', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definitions = ['first', 'second'].map(id => ({ id, name: id, inputs: {} }));
   for (const candidateIds of [[], ['invented']]) {

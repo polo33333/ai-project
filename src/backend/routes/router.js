@@ -168,6 +168,7 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
     execution: coreResult.execution || null,
     citations: coreResult.citations || [], supportingEvidence: coreResult.supportingEvidence || [],
     citationValidation: coreResult.citationValidation || null, provider: coreResult.usedProvider,
+    routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null,
     message: coreResult.error || null
   };
 }
@@ -930,6 +931,9 @@ async function handleRequest(req, res) {
   // Public embeddable chat endpoint. Provider selection always follows the active backend priority.
   if (pathname === '/api/embed/chat' && req.method === 'POST') {
     const startTime = Date.now();
+    const embedAbortController = new AbortController();
+    req.once('aborted', () => embedAbortController.abort());
+    res.once('close', () => { if (!res.writableEnded) embedAbortController.abort(); });
     try {
       const body = await readJsonBody(req);
       const { question, message, history, embedId, sessionId, preview } = body;
@@ -990,12 +994,16 @@ async function handleRequest(req, res) {
       const coreResult = await intelligentCore.chat(queryText, {
         history: safeHistory,
         useTools: true,
+        signal: embedAbortController.signal,
         permissions: permissionsForAccount(null, true),
         session: memorySessionId ? { id: memorySessionId, accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,source:'embed' } : undefined
       });
       const execMs = Date.now() - startTime;
       const activeProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
-      if (!coreResult.success) throw new Error(coreResult.error || 'AI provider không phản hồi.');
+      if (embedAbortController.signal.aborted) return;
+      if (!coreResult.success) throw Object.assign(new Error(coreResult.error || 'AI provider không phản hồi.'), {
+        code: coreResult.errorCode, routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null
+      });
 
       const payload = buildChatClientPayload(coreResult, execMs);
       payload.workflowToken=workflowIdentity?.token;
@@ -1037,6 +1045,7 @@ async function handleRequest(req, res) {
         reply: payload.reply,
         chartSpec: payload.chartSpec,
         toolResult: payload.toolResult,
+        toolCalls: (payload.toolCalls || []).map(({ name, success, rowCount, error, durationMs }) => ({ name, success, rowCount, error, durationMs })),
         downloadUrl: payload.downloadUrl,
         executionTime: payload.executionTime,
         auditId: audit.id,
@@ -1045,13 +1054,14 @@ async function handleRequest(req, res) {
         supportingEvidence: payload.supportingEvidence || [],
         citationValidation: payload.citationValidation || null,
         sessionId: safeSessionId,
-        execution:payload.execution, workflowToken:payload.workflowToken, tokenUsage:payload.tokenUsage
+        execution:payload.execution, workflowToken:payload.workflowToken, tokenUsage:payload.tokenUsage, routing:payload.routing
       }));
     } catch (err) {
       const execMs = Date.now() - startTime;
       loggerService.addLog('ERROR', 'Embed Chat', err.message);
+      if (embedAbortController.signal.aborted || res.destroyed) return;
       res.writeHead(err.statusCode || 500, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({ status: 'error', message: err.message, executionTime: `${execMs}ms` }));
+      res.end(JSON.stringify({ status: 'error', message: err.message, errorCode: err.code, routing: err.routing || null, executionTime: `${execMs}ms` }));
     }
     return;
   }
@@ -1102,7 +1112,9 @@ async function handleRequest(req, res) {
       });
       const execMs = Date.now() - startTime;
       const auditProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
-      if (!coreResult.success) throw new Error(coreResult.error || 'Mô hình AI không phản hồi.');
+      if (!coreResult.success) throw Object.assign(new Error(coreResult.error || 'Mô hình AI không phản hồi.'), {
+        code: coreResult.errorCode, routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null
+      });
       const payload = buildChatClientPayload(coreResult, execMs);
       payload.memoryDecision = coreResult.trace?.memoryDecision || null;
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
@@ -1151,7 +1163,7 @@ async function handleRequest(req, res) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: error.message }));
       } else {
-        sendEvent('error', { status: 'error', message: error.message });
+        sendEvent('error', { status: 'error', message: error.message, errorCode: error.code, routing: error.routing || null });
         if (!res.writableEnded) res.end();
       }
     }
@@ -1210,6 +1222,15 @@ async function handleRequest(req, res) {
         memoryDecision: coreResult?.trace?.memoryDecision || null
       };
 
+      if (!coreResult.success && coreResult.errorCode) {
+        loggerService.addChatAudit(queryText, null, null, auditProvider, execMs, 'ERROR', coreResult.error,
+          { ...auditPayloadBase, diagnostics: buildChatDiagnostics(coreResult.trace) });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+        res.end(JSON.stringify({ status: 'error', message: coreResult.error, errorCode: coreResult.errorCode,
+          routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null, tokenUsage: coreResult.tokenUsage || null,
+          provider: coreResult.usedProvider, executionTime: `${execMs}ms` }));
+        return;
+      }
       if (!coreResult.success) {
         // LLM không khả dụng — trả về fallback thân thiện
         const fallbackReply = 'Mô hình AI hiện tại không phản hồi.';
@@ -1337,7 +1358,8 @@ async function handleRequest(req, res) {
         supportingEvidence: coreResult.supportingEvidence || [],
         citationValidation: coreResult.citationValidation || null,
         memoryDecision: coreResult.trace?.memoryDecision || null,
-        provider: coreResult.usedProvider
+        provider: coreResult.usedProvider,
+        routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null
       }));
 
     } catch (err) {

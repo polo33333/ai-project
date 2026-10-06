@@ -10,6 +10,18 @@ function fixture(t, text) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return { service: createSettingsService(file), file };
 }
+test('routing settings persist valid mode and reject invalid selection and endpoint', t => {
+  const { service, file } = fixture(t, 'CHAT_ROUTING_MODE=local_tev1\n');
+  const field = service.get().fields.find(item => item.key === 'CHAT_ROUTING_MODE');
+  assert.equal(field.type, 'select');
+  assert.deepEqual(field.options, ['local_tev1', 'chat_model', 'auto']);
+  for (const values of [{ CHAT_ROUTING_MODE: 'guess' }, { CHAT_ROUTING_TIMEOUT_MS: '0' },
+    { CHAT_ROUTING_LOCAL_BASE_URL: 'http://user:secret@localhost' }]) {
+    assert.throws(() => service.save({ revision: service.get().revision, values }));
+  }
+  service.save({ revision: service.get().revision, values: { CHAT_ROUTING_MODE: 'chat_model', CHAT_ROUTING_LOCAL_MODEL: 'tev1:4b' } });
+  assert.match(fs.readFileSync(file, 'utf8'), /CHAT_ROUTING_MODE=chat_model/);
+});
 test('settings expose and persist the workflow feature switch', t => {
   const { service, file } = fixture(t, 'WORKFLOW_PLUGINS_ENABLED=false\n');
   const before = service.get();

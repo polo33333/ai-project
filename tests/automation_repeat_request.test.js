@@ -1,3 +1,4 @@
+// Compatibility coverage for the pre-flag API; current routing is covered by chat_router.test.js.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -6,7 +7,7 @@ test('an empty slot classification reviews the request and reuses the matching p
   const automation = require('../src/backend/automation');
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { handle } = require('../src/backend/automation/orchestrator');
+  const { handleLegacy: handle } = require('../src/backend/automation/orchestrator');
   const definition = { id: 'report/sales', name: 'Report', inputs: {} };
   const run = { id: 'existing', templateId: definition.id, definition, status: 'WAITING_INPUT', input: {}, missing: [], revision: 1 };
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));
@@ -34,7 +35,7 @@ test('a standalone parameterized request never updates the older waiting form', 
   const automation = require('../src/backend/automation');
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { handle } = require('../src/backend/automation/orchestrator');
+  const { handleLegacy: handle } = require('../src/backend/automation/orchestrator');
   const definition = { id: 'report/sales', name: 'Report', inputs: { months: { required: true, schema: { type: 'integer' } } } };
   const old = { id: 'old-run', templateId: definition.id, definition, status: 'WAITING_INPUT', input: {}, missing: [{ key: 'months' }], revision: 1 };
   const question = 'Generate a report for 7 months';

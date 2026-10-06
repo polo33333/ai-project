@@ -4,6 +4,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { callOllama } = require('../src/backend/intelligent_core/adapters/ollama');
 
+test('Ollama routing requests use JSON mode without changing ordinary chat requests', async t => {
+  const bodies = [];
+  t.mock.method(global, 'fetch', async (_, options) => {
+    bodies.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({ message: { content: '{}' } }) };
+  });
+  await callOllama({ baseUrl: 'http://localhost:11434', model: 'tev1:4b', responseFormat: 'json', think: false }, [], [], null);
+  await callOllama({ baseUrl: 'http://localhost:11434', model: 'qwen3.5:9b' }, [], [], null);
+  assert.equal(bodies[0].format, 'json');
+  assert.equal(bodies[0].model, 'tev1:4b');
+  assert.equal(bodies[0].think, false);
+  assert.equal(bodies[1].format, undefined);
+});
+
 test('Ollama adapter disables thinking by default', async t => {
   const originalFetch = global.fetch;
   t.after(() => { global.fetch = originalFetch; });

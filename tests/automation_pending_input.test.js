@@ -1,3 +1,4 @@
+// Compatibility coverage for the pre-flag API; current routing is covered by chat_router.test.js.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -6,7 +7,7 @@ test('unrelated messages never update a waiting workflow even when classificatio
   const automation = require('../src/backend/automation');
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { handle } = require('../src/backend/automation/orchestrator');
+  const { handleLegacy: handle } = require('../src/backend/automation/orchestrator');
   const slot = { label: 'Employee identifier', ask: 'Which employee?', required: true, schema: { type: 'string' } };
   const definition = { id: 'employee/lookup', name: 'Employee details', description: 'Find an employee', inputs: { query: slot } };
   const pending = { id: 'waiting', templateId: definition.id, definition, status: 'WAITING_INPUT', input: {}, missing: [{ key: 'query', ...slot }], revision: 1 };
@@ -36,7 +37,7 @@ test('routing usage reaches the core collector even when no workflow is chosen',
   const automation = require('../src/backend/automation');
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { handle } = require('../src/backend/automation/orchestrator');
+  const { handleLegacy: handle } = require('../src/backend/automation/orchestrator');
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));
   t.mock.method(automation.runtime, 'pending', async () => null);
   t.mock.method(automation.registry, 'list', async () => [{ id: 'one', name: 'One', inputs: {} }, { id: 'two', name: 'Two', inputs: {} }]);
@@ -53,7 +54,7 @@ test('a new business topic searches the catalog while preserving the waiting tas
   const automation = require('../src/backend/automation');
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { handle } = require('../src/backend/automation/orchestrator');
+  const { handleLegacy: handle } = require('../src/backend/automation/orchestrator');
   const old = { id: 'old/lookup', name: 'Old lookup', inputs: {} };
   const report = { id: 'new/report', name: 'New report', inputs: {} };
   const pending = { id: 'waiting', templateId: old.id, definition: old, status: 'WAITING_INPUT', input: {}, missing: [], revision: 1 };
@@ -96,7 +97,7 @@ test('misclassified topic changes cannot cancel a pending task; explicit cancell
   const automation = require('../src/backend/automation');
   const providers = require('../src/backend/services/ai_provider_manager');
   const adapters = require('../src/backend/intelligent_core/adapters');
-  const { handle } = require('../src/backend/automation/orchestrator');
+  const { handleLegacy: handle } = require('../src/backend/automation/orchestrator');
   const definition = { id: 'report/sales', name: 'Sales report', inputs: {} };
   const pending = { id: 'waiting', templateId: definition.id, definition, status: 'WAITING_INPUT', input: {}, missing: [], revision: 1 };
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));

@@ -268,6 +268,27 @@
     .kh-workflow-processing button:hover{background:#eeecf8;color:#665294}
     .dark .kh-workflow-processing{background:#1b2234;border-color:#35364e}.dark .kh-workflow-progress,.dark .kh-workflow-processing button{color:#b3abc9}.dark .kh-workflow-processing button{background:transparent}.dark .kh-workflow-processing button:hover{background:#30304a}
     @media(prefers-reduced-motion:reduce){.kh-workflow-dots i{animation:none}}
+    .kh-workflow{padding:16px;border-radius:14px;background:#fff;box-shadow:0 3px 12px rgb(15 23 42 / 3%)}
+    .kh-workflow-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-bottom:12px;border-bottom:1px solid #e8edf4}
+    .kh-workflow-header>strong{flex:1;min-width:120px;font-size:13px;line-height:1.6}
+    .kh-workflow-status{padding:4px 8px;border-radius:6px;background:#f1f5f9;color:#64748b;font-size:10px;font-weight:600}
+    .kh-workflow[data-status="WAITING_INPUT"] .kh-workflow-status{background:#fff7e6;color:#946200}
+    .kh-workflow[data-status="SUCCEEDED"] .kh-workflow-status{background:#eaf8f0;color:#187349}
+    .kh-workflow-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:14px;margin-top:14px}
+    .kh-workflow-form>label{margin:0;font-weight:500;line-height:1.6}
+    .kh-workflow input,.kh-workflow select{min-height:40px;font:inherit;font-weight:400;padding:9px 10px}
+    .kh-workflow input:focus,.kh-workflow select:focus{outline:2px solid color-mix(in srgb,var(--kh-primary) 30%,transparent);outline-offset:2px;border-color:var(--kh-primary)}
+    .kh-workflow-hint{font-size:10px;color:#7c899c;font-weight:400}
+    .kh-workflow-actions{padding-top:12px;border-top:1px solid #e8edf4}
+    .kh-workflow-actions>button{min-height:36px;font:500 11px Inter,system-ui,sans-serif;line-height:1.5;padding:8px 12px}
+    .kh-workflow .kh-embed-table-wrap{border:1px solid #e1e7f0;border-radius:9px;max-height:360px;overflow:auto;margin:8px 0}
+    .kh-workflow .kh-embed-table-wrap th{position:sticky;top:0;background:#f5f7fb;z-index:1;font-size:11px;padding:10px 12px;white-space:nowrap}
+    .kh-workflow .kh-embed-table-wrap td{padding:10px 12px;font-size:12px;line-height:1.6;vertical-align:top;max-width:240px;overflow-wrap:anywhere}
+    .kh-workflow .kh-embed-table-wrap tbody tr:nth-child(even){background:rgb(148 163 184 / 4%)}
+    .kh-workflow .kh-embed-table-wrap tbody tr:hover{background:rgb(112 87 217 / 5%)}
+    .kh-workflow .kh-cell-number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .kh-workflow-count{font-size:11px;color:#64748b;margin:6px 0}
+    .dark .kh-workflow-header,.dark .kh-workflow-actions{border-color:#354158}.dark .kh-workflow .kh-embed-table-wrap{border-color:#354158}.dark .kh-workflow .kh-embed-table-wrap th{background:#253149;color:#cbd5e1}.dark .kh-workflow-status{background:#25324a;color:#cbd5e1}.dark .kh-workflow[data-status="WAITING_INPUT"] .kh-workflow-status{background:#3c3220;color:#f3ca7e}.dark .kh-workflow[data-status="SUCCEEDED"] .kh-workflow-status{background:#17392f;color:#83dcb1}.dark .kh-workflow-hint,.dark .kh-workflow-count{color:#94a3b8}
     @supports selector(::-webkit-scrollbar){
       .kh-embed-root :is(.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data){scrollbar-width:auto}
       .kh-embed-root :is(.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data)::-webkit-scrollbar{width:6px;height:6px}
@@ -277,14 +298,21 @@
     const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,workflowToken,...body})});
     const data=await response.json();if(!response.ok||data.status!=='success')throw new Error(data.message||`HTTP ${response.status}`);return data;
   };
-  function workflowInput(parent,schema,label) {
+  function decorateWorkflowTable(wrapper,rows,keys) {
+    const count=document.createElement('p');count.className='kh-workflow-count';count.textContent=`${rows.length} kết quả`;wrapper.before(count);
+    wrapper.querySelectorAll('th').forEach(cell=>cell.scope='col');
+    const numeric=keys.map(key=>rows.some(row=>typeof row[key]==='number')&&rows.every(row=>row[key]==null||typeof row[key]==='number'));
+    wrapper.querySelectorAll('tbody tr').forEach((line,index)=>line.querySelectorAll('td').forEach((cell,column)=>{if(numeric[column]){cell.className='kh-cell-number';const value=rows[index][keys[column]];if(typeof value==='number')cell.textContent=new Intl.NumberFormat('vi-VN',{maximumFractionDigits:20}).format(value);}}));
+  }
+  function workflowInput(parent,schema,label,required=true) {
     const group=document.createElement('label');const title=document.createElement('span');title.textContent=label;group.appendChild(title);parent.appendChild(group);
     if(schema.type==='object') {const reads=Object.entries(schema.properties||{}).map(([key,s])=>[key,workflowInput(group,s,s.title||key)]);return ()=>Object.fromEntries(reads.map(([key,read])=>[key,read()]));}
     if(schema.type==='array') {const reads=[];const add=document.createElement('button');add.type='button';add.textContent='Thêm mục';add.onclick=()=>reads.push(workflowInput(group,schema.items,`Mục ${reads.length+1}`));group.appendChild(add);return ()=>reads.map(read=>read());}
     const choices=schema.enum||(schema.type==='boolean'?[true,false]:null);const control=document.createElement(choices?'select':'input');
     if(choices) {control.appendChild(new Option('Chọn…',''));choices.forEach((value,index)=>control.appendChild(new Option(formatDisplayValue(value),String(index))));}
     else {control.type=['number','integer'].includes(schema.type)?'number':schema.format==='date'?'date':'text';if(schema.type==='integer')control.step='1';}
-    group.appendChild(control);return ()=>choices?(control.value===''?undefined:choices[Number(control.value)]):control.value===''?undefined:['number','integer'].includes(schema.type)?Number(control.value):control.value;
+    control.required=required;for(const [key,attr]of [['minimum','min'],['maximum','max'],['minLength','minLength'],['maxLength','maxLength']])if(schema[key]!==undefined)control[attr]=schema[key];if(schema.type==='number')control.step='any';
+    group.appendChild(control);const hint=document.createElement('span');hint.className='kh-workflow-hint';hint.textContent=schema.minimum!==undefined&&schema.maximum!==undefined?`Từ ${schema.minimum} đến ${schema.maximum}`:required?'Bắt buộc':'';if(hint.textContent)group.appendChild(hint);return ()=>choices?(control.value===''?undefined:choices[Number(control.value)]):control.value===''?undefined:['number','integer'].includes(schema.type)?Number(control.value):control.value;
   }
   function mountWorkflow(node,execution) {
     messageResizeObserver.observe(node);
@@ -303,7 +331,7 @@
       workflowExecutions.set(execution.id,execution);
     }
     if(execution.id&&!workflowRuns.includes(execution.id)){workflowRuns.push(execution.id);workflowRuns=workflowRuns.slice(-20);saveWorkflow();}
-    node.replaceChildren();node.classList.add('kh-workflow');const heading=document.createElement('strong');const states={READY:'Đang chờ chạy',RUNNING:'Đang xử lý',WAITING_INPUT:'Chờ bổ sung',SUCCEEDED:'Hoàn thành',FAILED:'Không thành công',CANCELLED:'Đã hủy',NEEDS_REVIEW:'Cần kiểm tra'};heading.textContent=`${execution.name||'Chọn nghiệp vụ'} · ${states[execution.status]||execution.status}`;node.appendChild(heading);
+    node.replaceChildren();node.classList.add('kh-workflow');node.dataset.status=execution.status;const heading=document.createElement('strong');const states={READY:'Đang chờ chạy',RUNNING:'Đang xử lý',WAITING_INPUT:'Chờ bổ sung',SUCCEEDED:'Hoàn thành',FAILED:'Không thành công',CANCELLED:'Đã hủy',NEEDS_REVIEW:'Cần kiểm tra'};heading.textContent=execution.name||'Chọn nghiệp vụ';const header=document.createElement('div');header.className='kh-workflow-header';const badge=document.createElement('span');badge.className='kh-workflow-status';badge.textContent=states[execution.status]||execution.status;header.append(heading,badge);node.appendChild(header);
     const processing=['READY','RUNNING','QUEUED'].includes(execution.status);
     node.classList.toggle('kh-workflow-processing',processing);node.setAttribute('aria-busy',String(processing));
     if(processing){
@@ -315,12 +343,12 @@
     const actions=document.createElement('div');actions.className='kh-workflow-actions';
     const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{const version=conversationVersion;button.disabled=true;try{const data=await workflowApi(typeof body==='function'?body():body);if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){if(body.parentRunId)mountWorkflow(node,{...execution,retryRunId:data.execution.id,retryWaitingInput:data.execution.status==='WAITING_INPUT'});const next=append('','ai');mountWorkflow(next,data.execution);}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;}};actions.appendChild(button);return button;};
     if(execution.status==='SELECT_TEMPLATE')for(const candidate of execution.candidates||[])action(candidate.name,{workflowAction:'create',templateId:candidate.id,requestId:createSessionId()});
-    if(execution.status==='WAITING_INPUT'){const reads=(execution.missingInputs||[]).map(slot=>[slot.key,workflowInput(node,slot.schema,slot.ask||slot.label)]);action('Bổ sung và tiếp tục',()=>({workflowAction:'inputs',runId:execution.id,revision:execution.revision,inputs:Object.fromEntries(reads.map(([key,read])=>[key,read()]))}),true);}
+    if(execution.status==='WAITING_INPUT'){const form=document.createElement('form');form.className='kh-workflow-form';node.appendChild(form);const reads=(execution.missingInputs||[]).map(slot=>[slot.key,workflowInput(form,slot.schema,slot.ask||slot.label,slot.required!==false)]);const submit=action('Bổ sung và tiếp tục',()=>{if(!form.reportValidity())throw new Error('Vui lòng hoàn thiện thông tin bắt buộc.');return {workflowAction:'inputs',runId:execution.id,revision:execution.revision,inputs:Object.fromEntries(reads.map(([key,read])=>[key,read()]))};},true);form.onsubmit=event=>{event.preventDefault();submit.click();};}
     for(const [key,value] of Object.entries(execution.result||{})){
       if(key==='empty'&&typeof value==='boolean')continue;
       const title=document.createElement('h4');title.textContent=execution.presentation?.labels?.[key]||key;node.appendChild(title);
       if(value?.kind==='bar-chart'&&Array.isArray(value.points)){const wrapper=document.createElement('div');wrapper.innerHTML=renderEmbedChart(value);node.appendChild(wrapper);continue;}
-      if(Array.isArray(value)&&value.every(row=>row&&typeof row==='object')){const keys=execution.presentation?.columns?.[key]||[...new Set(value.flatMap(row=>Object.keys(row)))];const wrapper=document.createElement('div');wrapper.className='kh-embed-table-wrap';wrapper.innerHTML=value.length?`<table><thead><tr>${keys.map(column=>`<th>${escapeHtml(execution.presentation?.labels?.[`${key}.${column}`]||column)}</th>`).join('')}</tr></thead><tbody>${value.map(row=>`<tr>${keys.map(column=>`<td>${escapeHtml(formatDisplayValue(row[column],column))}</td>`).join('')}</tr>`).join('')}</tbody></table>`:escapeHtml(execution.presentation?.emptyText||'Không có dữ liệu.');node.appendChild(wrapper);}
+      if(Array.isArray(value)&&value.every(row=>row&&typeof row==='object')){const keys=execution.presentation?.columns?.[key]||[...new Set(value.flatMap(row=>Object.keys(row)))];const wrapper=document.createElement('div');wrapper.className='kh-embed-table-wrap';wrapper.innerHTML=value.length?`<table><thead><tr>${keys.map(column=>`<th>${escapeHtml(execution.presentation?.labels?.[`${key}.${column}`]||column)}</th>`).join('')}</tr></thead><tbody>${value.map(row=>`<tr>${keys.map(column=>`<td>${escapeHtml(formatDisplayValue(row[column],column))}</td>`).join('')}</tr>`).join('')}</tbody></table>`:escapeHtml(execution.presentation?.emptyText||'Không có dữ liệu.');node.appendChild(wrapper);decorateWorkflowTable(wrapper,value,keys);}
       else {const text=document.createElement('span');text.textContent=formatDisplayValue(value);node.appendChild(text);}
     }
     if(execution.error){const text=document.createElement('p');text.textContent=execution.error;node.appendChild(text);}

@@ -4,6 +4,7 @@
  */
 
 const { callOllama }    = require('./ollama');
+const { callOllamaDecision } = require('./ollama_decision');
 const { callOpenAI }    = require('./openai');
 const { callGemini }    = require('./gemini');
 const { callAnthropic } = require('./anthropic');
@@ -24,6 +25,8 @@ async function dispatchToProvider(provider, messages, tools, signal) {
   const url  = (provider.baseUrl   || '').toLowerCase();
   const type = (provider.type      || '').toLowerCase();
 
+  if (fmt === 'ollama-decision') return callOllamaDecision(provider, provider.decisionTask, signal);
+
   if (fmt === 'anthropic' || type === 'anthropic' || url.includes('anthropic.com')) {
     return callAnthropic(provider, messages, tools, signal);
   }
@@ -41,6 +44,7 @@ async function dispatchToProvider(provider, messages, tools, signal) {
 module.exports = {
   dispatchToProvider,
   callOllama,
+  callOllamaDecision,
   callOpenAI,
   callGemini,
   callAnthropic

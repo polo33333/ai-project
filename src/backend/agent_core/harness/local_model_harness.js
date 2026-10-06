@@ -409,7 +409,7 @@ class LocalModelHarness {
       const abortFromCaller = () => controller.abort();
       if (externalSignal?.aborted) controller.abort();
       else externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-      const configuredTimeoutMs = Number(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS);
+      const configuredTimeoutMs = Number(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS || 180000);
       const timeoutMs = executionBudget
         ? Math.min(configuredTimeoutMs, executionBudget.remainingMs())
         : configuredTimeoutMs;
@@ -450,7 +450,7 @@ class LocalModelHarness {
       maxSqlAttempts: Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3)
     });
     let activeProvider = provider || aiProviderManager.getActiveProvider();
-    const candidates = localCandidates(activeProvider);
+    const candidates = context.lockProvider ? [activeProvider] : localCandidates(activeProvider);
     const toolContext = { ...context, allowedToolNames: enabledToolNames };
     const toolDefs = this.toolManager ? this.toolManager.getToolDefinitions(toolContext) : [];
     const effectiveUserMessage = userMessage || [...messages].reverse().find(message => message.role === 'user')?.content || '';

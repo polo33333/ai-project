@@ -4,12 +4,24 @@
 function buildChatDiagnostics(trace) {
   if (!trace) return null;
   const plan = trace.training?.plan || {};
+  const routing = trace.workflowRouting;
   return {
     iterations: trace.iterations,
     completionStatus: trace.completionStatus,
     harness: trace.harness,
     executionBudget: trace.executionBudget,
     stopReason: trace.stopReason,
+    workflowRouting: routing ? {
+      requestId: routing.requestId, routingMode: routing.routingMode, decisionSource: routing.decisionSource,
+      routingModel: routing.routingModel, chatModel: routing.chatModel, escalated: routing.escalated,
+      escalationReason: routing.escalationReason, route: routing.route, workflowId: routing.workflowId,
+      inputDisposition: routing.inputDisposition, skippedReason: routing.skippedReason, errorCode: routing.errorCode,
+      latencyMs: routing.latencyMs, chatFallbackReason: routing.chatFallbackReason, quickReplyKind: routing.quickReplyKind,
+      stages: (routing.stages || []).map(stage => ({ decisionSource: stage.decisionSource, model: stage.model,
+        status: stage.status, calls: stage.calls, httpRequests: stage.httpRequests, decisionEvaluations: stage.decisionEvaluations,
+        inputTokens: stage.inputTokens, outputTokens: stage.outputTokens, totalTokens: stage.totalTokens,
+        latencyMs: stage.latencyMs, errorCode: stage.errorCode, decisionScores: stage.decisionScores }))
+    } : null,
     plan: { table: plan.table, intent: plan.intent, unfilteredList: plan.unfilteredList,
       requiredColumns: plan.requiredColumns, schemaColumns: plan.schemaColumns, outputs: plan.outputs },
     sqlEvaluations: (trace.training?.sqlEvaluations || []).slice(-20).map(item => ({ valid: item.valid, violations: item.violations })),

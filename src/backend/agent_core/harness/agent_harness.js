@@ -18,7 +18,7 @@ const { buildSqlRowsFallbackReply } = require('./grounded_reply');
 const { buildEnrichedListSql, isSimpleEntityListRequest } = require('../../services/sql_enrichment_builder');
 
 const REQUEST_TIMEOUT_MS = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
-const LOCAL_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS, 10);
+const LOCAL_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS || '180000', 10);
 
 function providerTimeoutMs(provider) {
   return isLocalProvider(provider) ? LOCAL_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
@@ -52,21 +52,23 @@ function isWebScopeRefusal(text = '') {
     && /(?:web|thoi gian thuc|thi truong|thong tin|du lieu)/.test(normalized);
 }
 
-async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, collectUsage, externalSignal = null) {
+async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, collectUsage, externalSignal = null, executionBudget = null) {
   const ordered = [currentProvider, ...candidates.filter(candidate => candidate.id !== currentProvider?.id)];
   let lastError = null;
 
   for (const candidate of ordered) {
+    executionBudget?.consumeModelCall();
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort();
     if (externalSignal?.aborted) controller.abort();
     else externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-    const timeoutMs = providerTimeoutMs(candidate);
+    const timeoutMs = executionBudget ? Math.min(providerTimeoutMs(candidate), executionBudget.remainingMs()) : providerTimeoutMs(candidate);
     const timer = Number.isFinite(timeoutMs) && timeoutMs > 0
       ? setTimeout(() => controller.abort(), timeoutMs)
       : null;
     try {
       const response = await dispatchToProvider(candidate, messages, tools, controller.signal);
+      for (let index = 1; index < Math.max(1, Number(response?.usage?.calls) || 1); index += 1) executionBudget?.consumeModelCall();
       if (collectUsage && response?.usage) {
         collectUsage(response.usage);
       }
@@ -136,7 +138,7 @@ class AgentHarness {
       trace.tokenUsage.inputTokens += input;
       trace.tokenUsage.outputTokens += output;
       trace.tokenUsage.totalTokens += Number(usage.totalTokens) || (input + output);
-      trace.tokenUsage.calls += 1;
+      trace.tokenUsage.calls += Math.max(1, Number(usage.calls) || 1);
       trace.tokenUsage.available = true;
     };
 
@@ -204,7 +206,8 @@ class AgentHarness {
           toolDefs,
           providerFallbacks,
           collectUsage,
-          context.signal
+          context.signal,
+          context.executionBudget
         );
         assistantMsg = dispatched.response;
         activeProvider = dispatched.provider;
@@ -359,7 +362,8 @@ class AgentHarness {
           [],
           providerFallbacks,
           collectUsage,
-          context.signal
+          context.signal,
+          context.executionBudget
         );
         activeProvider = dispatched.provider;
         finalText = dispatched.response.content || '';

@@ -83,8 +83,12 @@ async function callGemini(provider, messages, tools, signal) {
 
   const body = {
     contents,
-    generationConfig: { temperature: 0.3, maxOutputTokens: Math.max(256, Number(provider.outputReserve || process.env.AI_PROVIDER_OUTPUT_RESERVE) || 2048) }
+    generationConfig: { temperature: provider.temperature ?? 0.3, maxOutputTokens: Math.max(256, Number(provider.outputReserve || process.env.AI_PROVIDER_OUTPUT_RESERVE) || 2048) }
   };
+  if (provider.responseFormat) {
+    body.generationConfig.responseMimeType = 'application/json';
+    if (typeof provider.responseFormat === 'object') body.generationConfig.responseJsonSchema = provider.responseFormat;
+  }
 
   if (systemMsg) {
     body.systemInstruction = { parts: [{ text: systemMsg.content }] };

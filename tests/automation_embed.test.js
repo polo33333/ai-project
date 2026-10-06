@@ -1,9 +1,15 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');
 test('embed workflow credentials isolate sessions and support inputs, result, restart and cancel',async t=>{
- process.env.WORKFLOW_PLUGINS_ENABLED='true';process.env.BOOTSTRAP_ADMIN_PASSWORD='isolated-embed-test';
+ process.env.WORKFLOW_PLUGINS_ENABLED='true';process.env.CHAT_ROUTING_MODE='chat_model';process.env.BOOTSTRAP_ADMIN_PASSWORD='isolated-embed-test';
  const automation=require('../src/backend/automation'),embed=require('../src/backend/services/embed_chat_service');
- const providers=require('../src/backend/services/ai_provider_manager');t.mock.method(providers,'getProviderForExecution',()=>({status:'unconfigured'}));
+ const providers=require('../src/backend/services/ai_provider_manager');
+ const selected={id:'embed-chat-fixture',name:'Embed chat fixture',model:'fixture-chat',apiFormat:'openai',executionClass:'remote',baseUrl:'https://fixture.invalid'};
+ t.mock.method(providers,'getProviderForExecution',()=>selected);t.mock.method(providers,'getActiveProvider',()=>selected);
+ t.mock.method(require('../src/backend/intelligent_core/adapters'),'dispatchToProvider',async(_,messages)=>{
+   const question=JSON.parse(messages[1].content).question,workflow=question==='Tra cứu đối tượng';
+   return {content:JSON.stringify({route:workflow?'workflow':'chat',workflowId:workflow?'phase1_examples/lookup':null,candidateIds:[],inputDisposition:workflow?'new_request':'none',pendingRunId:null,inputs:{},inputEvidence:{},evidence:workflow?[{source:'user_message',text:question}]:[],requestedScope:workflow?'targeted':'unclear',supportedScope:workflow?'targeted':'unclear',needsClarification:false,abstain:false,cancelPending:false})};
+ });
  const admin={accountId:'admin',permissions:['admin']};const bundle=require('../src/backend/automation/pilot.json');
  let record=await automation.registry.import(bundle,admin);await automation.registry.test(record.id,admin);record=await automation.repository.get('catalog',record.id);await automation.registry.publish(record.id,admin,record.revision);await automation.configure({enabled:true,revision:null},admin);
  const config=embed.createConfig({name:'test widget',allowedOrigins:['http://widget.test'],rateLimit:100});
@@ -11,7 +17,7 @@ test('embed workflow credentials isolate sessions and support inputs, result, re
  t.mock.method(core,'chat',async(question,options)=>await require('../src/backend/automation/orchestrator').handle(question,options)||({success:true,replyText:'Chat bình thường',toolCalls:[],trace:{completionStatus:'PARTIAL'}}));
  const {handleRequest}=require('../src/backend/routes/router');const server=http.createServer((req,res)=>handleRequest(req,res).catch(e=>{res.writeHead(500);res.end(e.message);}));await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{server.closeAllConnections();return new Promise(resolve=>server.close(resolve));});
  const request=async body=>{const response=await fetch(`http://127.0.0.1:${server.address().port}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://widget.test'},body:JSON.stringify({embedId:config.id,sessionId:'session-one',...body})});return {status:response.status,body:await response.json()};};
- let response=await request({question:'Tra cứu đối tượng'});assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.execution.status,'WAITING_INPUT');
+ let response=await request({question:'Tra cứu đối tượng'});assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.execution.status,'WAITING_INPUT');assert.equal(response.body.routing.decisionSource,'chat_model');
  const token=response.body.workflowToken,id=response.body.execution.id,revision=response.body.execution.revision;assert.ok(token);
  response=await request({workflowAction:'inputs',workflowToken:token,runId:id,revision,inputs:{code:'EMBED001'}});assert.equal(response.status,200);await automation.runtime.process(id);
  response=await request({workflowAction:'get',workflowToken:token,runId:id});assert.equal(response.body.execution.status,'SUCCEEDED');assert.equal(response.body.execution.result.code,'EMBED001');
@@ -34,4 +40,9 @@ test('embed workflow credentials isolate sessions and support inputs, result, re
  assert.equal((await request({workflowAction:'get',workflowToken:other.body.workflowToken,sessionId:'session-two',runId:id})).status,404);
  response=await request({workflowAction:'create',workflowToken:token,templateId:'phase1_examples/lookup',requestId:'restart-one'});assert.equal(response.body.execution.status,'WAITING_INPUT');assert.notEqual(response.body.execution.id,id);
  const next=response.body.execution;response=await request({workflowAction:'cancel',workflowToken:token,runId:next.id,revision:next.revision});assert.equal(response.body.execution.status,'CANCELLED');
+ t.mock.method(core,'chat',async()=>({success:true,replyText:'Tool metadata',toolCalls:[{toolName:'search_schema',success:true,result:{rowCount:9},durationMs:180,args:{privateValue:'must-not-leak'}}],trace:{completionStatus:'PARTIAL'}}));
+ response=await request({question:'Tool metadata',sessionId:'tool-ui-session'});
+ assert.equal(response.status,200);
+ assert.deepEqual(response.body.toolCalls,[{name:'search_schema',success:true,rowCount:9,error:null,durationMs:180}]);
+ assert.equal(JSON.stringify(response.body.toolCalls).includes('must-not-leak'),false);
 });

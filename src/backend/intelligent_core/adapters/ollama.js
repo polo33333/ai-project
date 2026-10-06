@@ -53,6 +53,9 @@ async function callOllama(provider, messages, tools, signal) {
     keep_alive: provider.keepAlive || process.env.LOCAL_MODEL_KEEP_ALIVE || '10m'
   };
 
+  if (provider.responseFormat === 'json') body.format = 'json';
+  else if (provider.responseFormat && typeof provider.responseFormat === 'object') body.format = provider.responseFormat;
+
   if (provider.supportsToolCalling && tools && tools.length > 0) {
     body.tools = tools.map(tool => ({
       type: 'function',

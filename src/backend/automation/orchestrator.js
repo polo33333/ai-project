@@ -205,7 +205,9 @@ function reply(execution) {
 function result(execution, text) {
   return { success: true, replyText: text || reply(execution), execution, tokenUsage: execution.tokenUsage, executionMode: 'workflow', toolCalls: [], sqlExecutions: [], trace: { completionStatus: execution?.status === 'SUCCEEDED' ? 'SUCCESS' : 'PARTIAL' } };
 }
-async function handle(question, options = {}) {
+// Kept for callers of the pre-flag API. Application chat always supplies a
+// routingContext and uses the single-decision implementation below.
+async function handleLegacy(question, options = {}) {
   const onRouting = options.onWorkflowRouting;
   options = { ...options, onWorkflowRouting: event => {
     onRouting?.(event);
@@ -264,4 +266,97 @@ async function handle(question, options = {}) {
   options.onProgress?.({ type: 'workflow_selected', label: `Đã chọn ${definition.name}`, status: 'running' });
   return workflowResult(await automation.runtime.create(definition.id, inputs, context, { conversationId, tokenUsage, preservePending: Boolean(current), separateRequest: Boolean(current && Object.keys(inputs).length) }));
 }
-module.exports = { handle, interpret, reply, result };
+async function handleRouted(question, options) {
+  const router = require('./chat_router');
+  const routingContext = options.routingContext || router.createRoutingContext(options);
+  options = { ...options, routingContext };
+  const config = await automation.settings();
+  if (!config.enabled || !options.session?.accountId || !options.session?.id) {
+    routingContext.trace.skippedReason = !config.enabled ? 'workflows_disabled' : 'no_conversation';
+    return null;
+  }
+  const context = { accountId: options.session.accountId, tenantId: options.session.tenantId, permissions: options.permissions || [] };
+  const conversationId = options.session.id;
+  const current = await automation.runtime.pending(context, conversationId);
+  const definitions = await automation.registry.list(context);
+  // A pending definition is an immutable run snapshot. Recheck that the
+  // workflow remains authorized before allowing that snapshot to be routed.
+  const catalog = definitions.map(item => current?.templateId === item.id ? current.definition : item);
+  if (!catalog.length) { routingContext.trace.skippedReason = 'empty_catalog'; return null; }
+  const tokenUsage = { available: false, inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0 };
+  const onUsage = options.onWorkflowUsage;
+  options.onWorkflowUsage = usage => {
+    onUsage?.(usage);
+    if (!usage) return;
+    tokenUsage.available = true;
+    tokenUsage.inputTokens += Number(usage.inputTokens) || 0;
+    tokenUsage.outputTokens += Number(usage.outputTokens) || 0;
+    tokenUsage.totalTokens += Number(usage.totalTokens) || (Number(usage.inputTokens) || 0) + (Number(usage.outputTokens) || 0);
+    tokenUsage.calls += Math.max(1, Number(usage.calls) || 1);
+  };
+  const onRouting = options.onWorkflowRouting;
+  options.onWorkflowRouting = event => {
+    onRouting?.(event);
+    require('../services/logger_service').addLog('INFO', 'Workflow Routing', event.reason, {
+      ...event, conversationId, requestId: routingContext.trace.requestId
+    });
+  };
+  options.onProgress?.({ type: 'workflow_routing', label: 'Đang xác định yêu cầu…', status: 'running', icon: 'brain' });
+  const decorate = response => ({ ...response, tokenUsage, usedProvider: router.publicProvider(routingContext.chatProviderSnapshot),
+    trace: { ...(response.trace || {}), workflowRouting: routingContext.trace, executionBudget: routingContext.executionBudget.snapshot() } });
+  let decision;
+  try { decision = await router.decide(question, catalog, current, options); }
+  catch (error) {
+    if (options.signal?.aborted || error.name === 'AbortError') throw error;
+    routingContext.trace.errorCode = error.code || 'ROUTING_PROVIDER_ERROR';
+    options.onProgress?.({ type: 'workflow_routing', label: 'Không thể xác định yêu cầu', status: 'error', icon: 'brain' });
+    options.onWorkflowRouting({ reason: 'routing_failed', ...routingContext.trace });
+    if (routingContext.config.mode === 'auto' && /^ROUTING_/.test(routingContext.trace.errorCode)) {
+      routingContext.trace.chatFallbackReason = 'routing_failed_ask_user';
+      return decorate(result({ status: 'SELECT_TEMPLATE', conversationId,
+        candidates: catalog.map(item => ({ id: item.id, name: item.name, description: item.description })) },
+      'Mình chưa xác định chắc nghiệp vụ. Bạn chọn nghiệp vụ cần tra cứu bên dưới để mình hỏi đúng thông tin.'));
+    }
+    return decorate({ success: false, completionStatus: 'ERROR', executionMode: 'error', type: 'error',
+      question, replyText: null, error: error.message, errorCode: routingContext.trace.errorCode,
+      toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'ERROR' } });
+  }
+  options.onProgress?.({ type: 'workflow_routing', label: 'Đã xác định yêu cầu', status: 'done', icon: 'brain' });
+  if (decision.route === 'chat') {
+    if (routingContext.config.quickGreetingEnabled && routingContext.trace.decisionSource === 'local_tev1' && decision.quickGreeting === true) {
+      routingContext.trace.quickReplyKind = 'greeting';
+      return decorate({ success: true, replyText: 'Chào bạn! Bạn muốn tra cứu thông tin gì?',
+        executionMode: 'chat', toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'SUCCESS' } });
+    }
+    return null;
+  }
+  if (decision.route === 'unclear') {
+    const candidates = catalog.filter(item => decision.candidateIds.includes(item.id))
+      .map(item => ({ id: item.id, name: item.name, description: item.description }));
+    if (candidates.length) return decorate(result({ status: 'SELECT_TEMPLATE', conversationId, candidates },
+      'Có một số nghiệp vụ có thể phù hợp. Bạn chọn nghiệp vụ cần thực hiện bên dưới.'));
+    return decorate({ success: true, completionStatus: 'PARTIAL', replyText: 'Bạn muốn hỏi thông tin hay thực hiện nghiệp vụ nào? Hãy mô tả thêm yêu cầu để mình chọn đúng.',
+      executionMode: 'chat', toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'PARTIAL' } });
+  }
+  if (options.signal?.aborted) throw Object.assign(new Error('Request aborted'), { name: 'AbortError' });
+  routingContext.executionBudget.assertTimeRemaining();
+  if (decision.cancelPending) return decorate(result(await automation.runtime.cancel(current.id, context, current.revision)));
+  if (decision.inputDisposition === 'slot_answer') {
+    return decorate(result(await automation.runtime.inputs(current.id, decision.inputs, context, current.revision, tokenUsage)));
+  }
+  const definition = catalog.find(item => item.id === decision.workflowId);
+  const existing = await automation.runtime.pending(context, conversationId, definition.id);
+  if (existing?.templateId === definition.id && !Object.keys(decision.inputs).length) {
+    return decorate(result(automation.runtime.view(existing)));
+  }
+  options.onProgress?.({ type: 'workflow_selected', label: `Đang chuẩn bị: ${definition.name}`, status: 'running', icon: 'diagram-project' });
+  return decorate(result(await automation.runtime.create(definition.id, decision.inputs, context, {
+    conversationId, requestId: options.requestId, tokenUsage, preservePending: Boolean(current),
+    separateRequest: Boolean(current && Object.keys(decision.inputs).length)
+  })));
+}
+
+async function handle(question, options = {}) {
+  return handleRouted(question, options);
+}
+module.exports = { handle, handleRouted, handleLegacy, interpretLegacy: interpret, reply, result };

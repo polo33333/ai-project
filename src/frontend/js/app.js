@@ -960,25 +960,7 @@ function renderCopilotDownloadAction(downloadUrl, renderedReply = '') {
 }
 
 function renderCopilotToolCalls(toolCalls = []) {
-  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return '';
-  const steps = toolCalls.map(tc => {
-    const ok = tc.success !== false;
-    const label = tc.name || tc.toolName || 'tool';
-    return `
-      <div class="copilot-tool-step ${ok ? 'ok' : 'error'}">
-        <i class="fa-solid ${label === 'execute_sql_query' ? 'fa-database' : label === 'render_chart' ? 'fa-chart-column' : label === 'get_current_datetime' ? 'fa-clock' : 'fa-wrench'}"></i>
-        <strong>${escapeCopilotHtml(label)}</strong>
-        ${tc.rowCount != null ? `<span>${escapeCopilotHtml(tc.rowCount)} dòng</span>` : ''}
-        <em>${ok ? 'Thành công' : 'Lỗi'}</em>
-      </div>
-    `;
-  }).join('');
-  return `
-    <details class="copilot-tool-panel" open>
-      <summary>Quá trình xử lý <span>${toolCalls.length} bước</span></summary>
-      <div>${steps}</div>
-    </details>
-  `;
+  return window.ChatToolUI?.render(toolCalls) || '';
 }
 
 function renderCopilotSql(sqlQuery, label = 'Câu lệnh SQL') {

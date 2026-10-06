@@ -1,5 +1,6 @@
 'use strict';
 process.env.WORKFLOW_PLUGINS_ENABLED = 'false';
+process.env.CHAT_ROUTING_MODE = 'chat_model';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
@@ -11,7 +12,16 @@ test('phase 1 HTTP, chat SSE, ownership and event replay work together', async t
   const automation = require('../src/backend/automation');
   const { handleRequest } = require('../src/backend/routes/router');
   t.mock.method(auth, 'getAccountBySession', token => token ? { id: token, role: token === 'admin' ? 'admin' : 'user' } : null);
-  t.mock.method(providers, 'getProviderForExecution', () => ({ status: 'unconfigured' }));
+  const selected = { id: 'http-chat-fixture', name: 'HTTP fixture chat', model: 'fixture-chat',
+    apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://fixture.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(require('../src/backend/intelligent_core/adapters'), 'dispatchToProvider', async () => ({
+    content: JSON.stringify({ route: 'workflow', workflowId: 'phase1_examples/lookup', candidateIds: [],
+      inputDisposition: 'new_request', pendingRunId: null, inputs: {}, inputEvidence: {},
+      evidence: [{ source: 'user_message', text: 'Tra cứu đối tượng' }], requestedScope: 'targeted', supportedScope: 'targeted',
+      needsClarification: false, abstain: false, cancelPending: false })
+  }));
   t.mock.method(automation.runtime, 'authorizeContext', async accountId => ({ accountId, permissions: ['sql:read'] }));
   const server = http.createServer((req, res) => handleRequest(req, res).catch(error => { res.statusCode = 500; res.end(JSON.stringify({ message: error.message })); }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -55,4 +65,16 @@ test('phase 1 HTTP, chat SSE, ownership and event replay work together', async t
   assert.ok(summaries.some(run=>run.id===id && run.status==='SUCCEEDED'));
   assert.equal(summaries.some(run=>run.result!==undefined || run.inputs!==undefined),false);
   assert.equal((await (await request('/api/automation-runs?summary=1','GET',null,'other')).json()).runs.length,0);
+  t.mock.method(require('../src/backend/intelligent_core/adapters'), 'dispatchToProvider', async () => ({ content: 'not JSON' }));
+  const failed = await (await request('/api/intelligent-core/chat', 'POST', { question: 'Yêu cầu thử nghiệm', sessionId: 'routing-error-json' }, 'user')).json();
+  assert.equal(failed.status, 'error');
+  assert.equal(failed.errorCode, 'ROUTING_INVALID_OUTPUT');
+  assert.equal(failed.routing.routingMode, 'chat_model');
+  assert.equal(failed.execution, undefined);
+  const failedStream = await (await request('/api/intelligent-core/chat/stream', 'POST', { question: 'Yêu cầu thử nghiệm', sessionId: 'routing-error-stream' }, 'user')).text();
+  assert.match(failedStream, /event: error/);
+  assert.match(failedStream, /ROUTING_INVALID_OUTPUT/);
+  assert.match(failedStream, /"routingMode":"chat_model"/);
+  assert.equal(await automation.runtime.pending({ accountId: 'user' }, 'routing-error-json'), null);
+  assert.equal(await automation.runtime.pending({ accountId: 'user' }, 'routing-error-stream'), null);
 });

@@ -35,7 +35,7 @@
 .workflow-editor-body label, .workflow-execution-panel label { display: grid; gap: 6px; margin: 10px 0; font-size: 13px; }
 .workflow-editor-body input, .workflow-editor-body select, .workflow-execution-panel input, .workflow-execution-panel select, .workflow-execution-panel textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border-color, #dbe2ea); border-radius: 8px; color: var(--text-primary, #1e293b); background: var(--bg-primary, #fff); box-sizing: border-box; }
 .workflow-editor-body fieldset { margin: 16px 0; border: 1px solid var(--border-color, #dbe2ea); border-radius: 10px; padding: 12px; }
-.workflow-execution-panel { margin: 12px 0; border: 1px solid var(--border-color, #dbe2ea); border-radius: 12px; padding: 16px; background: var(--bg-secondary, #f8fafc); color: var(--text-primary, #1e293b); }
+.workflow-execution-panel { margin: 12px 0; border: 1px solid var(--border-color, #dbe2ea); border-radius: 16px; padding: 20px; background: var(--bg-primary, #fff); color: var(--text-primary, #1e293b); font-family: Inter, system-ui, sans-serif; box-shadow: 0 3px 14px rgb(15 23 42 / 3%); }
 .workflow-execution-panel pre, .workflow-editor-body pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; }
 .workflow-execution-panel .btn-secondary-sm { margin: 8px 8px 0 0; display: inline-block; }
 .workflow-execution-panel li { margin: 5px 0; }
@@ -628,3 +628,55 @@
 }
 .wp-step-check { color:#15803d; font-weight:700; }
 :root[data-theme="dark"] .wp-step-check { color:#4ade80; }
+
+/* Chat workflow forms and data results. */
+.wp-execution-header { display:flex; align-items:center; gap:12px; padding-bottom:16px; border-bottom:1px solid var(--border-color,#e8edf4); }
+.wp-execution-icon { display:grid; place-items:center; flex:0 0 38px; height:38px; border-radius:11px; background:#f0edff; color:#7057d9; }
+.wp-execution-title { flex:1; min-width:0; font-size:14px; line-height:1.55; font-weight:600; overflow-wrap:anywhere; }
+.wp-execution-status { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; padding:5px 9px; border-radius:6px; color:#64748b; background:#f1f5f9; font-size:11px; font-weight:600; }
+.wp-execution-status::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+[data-status="WAITING_INPUT"] .wp-execution-status { background:#fff7e6; color:#946200; }
+[data-status="SUCCEEDED"] .wp-execution-status { background:#eaf8f0; color:#187349; }
+[data-status="FAILED"] .wp-execution-status,[data-status="NEEDS_REVIEW"] .wp-execution-status { background:#fff0ef; color:#b3423a; }
+.workflow-execution-panel .wp-execution-details { margin:14px 0; font-size:12px; }
+.workflow-execution-panel .wp-execution-details summary { width:fit-content; border-radius:5px; padding:3px 0; }
+.wp-form-intro { color:var(--text-secondary,#64748b); font-size:13px; line-height:1.6; margin:6px 0 8px; }
+.wp-form-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:18px; }
+.workflow-execution-panel .wp-form-fields > label { margin:0; gap:8px; font-size:13px; font-weight:500; line-height:1.6; align-content:start; grid-template-rows:minmax(42px,auto) 44px auto; }
+.workflow-execution-panel .wp-form-fields > fieldset { grid-column:1 / -1; }
+.workflow-execution-panel .wp-form-fields :is(input,select,textarea) { min-height:44px; padding:10px 12px; font:400 14px Inter,system-ui,sans-serif; border-color:var(--border-color,#d9e1ee); border-radius:9px; transition:border-color .15s,box-shadow .15s; }
+.workflow-execution-panel .wp-form-fields :is(input,select,textarea):focus { outline:0; border-color:#947ce4; box-shadow:0 0 0 3px rgb(112 87 217 / 12%); }
+.wp-input-hint { display:block; color:var(--text-secondary,#7c899c); font-size:11px; font-weight:400; line-height:1.4; }
+.workflow-execution-panel .wp-execution-actions { padding-top:16px; border-top:1px solid var(--border-color,#e8edf4); gap:10px; }
+.workflow-execution-panel .wp-execution-actions > button { min-height:40px; height:auto; border-radius:9px; font-size:12px; font-weight:600; padding:10px 16px; }
+.wp-execution-error { background:#fff0ef; border:1px solid #ffd5d0; padding:10px 12px; border-radius:8px; color:#b3423a; font-size:12px; line-height:1.6; }
+.wp-execution-error:empty { display:none; }
+.wp-workflow-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:10px; }
+.workflow-execution-panel .wp-workflow-choice { display:flex; align-items:center; text-align:left; gap:10px; margin:0; padding:14px; border-radius:10px; line-height:1.6; background:var(--bg-primary,#fff); border:1px solid var(--border-color,#e1e7f0); }
+.wp-workflow-choice > i:first-child { color:#7c63d9; }
+.wp-workflow-choice > i:last-child { margin-left:auto; font-size:11px; color:#94a3b8; }
+.wp-workflow-choice:hover { border-color:#a894e7; box-shadow:0 3px 10px rgb(112 87 217 / 8%); }
+.wp-table-section { min-width:0; margin:12px 0; }
+.wp-table-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
+.wp-table-count { color:var(--text-secondary,#64748b); font-size:12px; font-weight:500; }
+.workflow-execution-panel label.wp-table-search { display:flex; align-items:center; gap:8px; margin:0; width:min(240px,100%); padding:0 10px; border:1px solid var(--border-color,#e1e7f0); border-radius:8px; color:#94a3b8; }
+.workflow-execution-panel .wp-table-search input { min-width:0; margin:0; padding:8px 0; border:0; background:transparent; font:inherit; font-size:12px; box-shadow:none; outline:none; }
+.wp-table-search:focus-within { outline:2px solid #c7b9ef; outline-offset:2px; }
+.workflow-execution-panel .workflow-result-table { border-color:var(--border-color,#e1e7f0); border-radius:10px; background:var(--bg-primary,#fff); scrollbar-width:thin; }
+.workflow-execution-panel .workflow-result-table th { background:#f5f7fb; color:#56657b; font-size:11px; font-weight:600; padding:12px 16px; border-bottom:1px solid var(--border-color,#e1e7f0); }
+.workflow-execution-panel .workflow-result-table td { padding:12px 16px; font-size:13px; line-height:1.6; border-bottom:1px solid var(--border-color,#edf0f5); }
+.workflow-execution-panel .workflow-result-table tbody tr:nth-child(even) { background:rgb(148 163 184 / 4%); }
+.workflow-execution-panel .workflow-result-table tbody tr:hover { background:rgb(112 87 217 / 5%); }
+.workflow-execution-panel .workflow-result-table tr:last-child td { border-bottom:0; }
+.workflow-execution-panel .workflow-result-table .wp-cell-number { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.wp-cell-empty { color:#94a3b8; }
+.workflow-execution-panel .wp-result-empty { display:flex; justify-content:center; align-items:center; gap:10px; padding:28px 16px; box-sizing:border-box; color:#7c899c; font-size:13px; }
+.wp-table-no-match { text-align:center; color:var(--text-secondary,#64748b); padding:14px; font-size:13px; }
+.wp-result-summary > span { background:var(--bg-secondary,#f5f7fb); color:var(--text-secondary,#64748b); font-size:12px; font-weight:500; border:1px solid var(--border-color,#e8edf4); }
+:root[data-theme="dark"] .wp-execution-icon { background:#302945; color:#c4b5fd; }
+:root[data-theme="dark"] .wp-execution-status { background:#25324a; color:#cbd5e1; }
+:root[data-theme="dark"] [data-status="WAITING_INPUT"] .wp-execution-status { background:#3c3220; color:#f3ca7e; }
+:root[data-theme="dark"] [data-status="SUCCEEDED"] .wp-execution-status { background:#17392f; color:#83dcb1; }
+:root[data-theme="dark"] :is([data-status="FAILED"],[data-status="NEEDS_REVIEW"]) .wp-execution-status,:root[data-theme="dark"] .wp-execution-error { background:#3d272d; color:#fda4af; border-color:#663641; }
+:root[data-theme="dark"] .workflow-execution-panel .workflow-result-table th { background:#253149; color:#cbd5e1; }
+@media (max-width:600px) { .wp-execution-header { flex-wrap:wrap; gap:10px; } .wp-execution-status { margin-left:48px; } .workflow-execution-panel { padding:16px; } .workflow-execution-panel .wp-execution-actions > button { flex:1 1 auto; } .wp-form-fields { grid-template-columns:1fr; } }

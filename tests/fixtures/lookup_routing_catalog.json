@@ -1,0 +1,91 @@
+[
+  {
+    "id": "employee_lookup/employee_details",
+    "name": "Tra cứu chi tiết nhân viên theo tên hoặc mã",
+    "description": "Tra cứu chi tiết nhân viên (nv) theo tên hoặc mã nhân viên; tối đa 50 hồ sơ với các trường đã cấu hình. Thiếu tên/mã thì hỏi bổ sung. Không dùng cho danh sách toàn bộ nhân viên hoặc thống kê.",
+    "examples": [
+      "thông tin chi tiết nv",
+      "tra cứu nhân viên theo tên hoặc mã",
+      "thông tin nhân viên tên Duy",
+      "nhân viên mã NV004"
+    ],
+    "instructions": "query chỉ lấy tên/mã nêu rõ, thiếu thì hỏi. Mã khớp chính xác; tên tìm chuỗi chứa. Trả mọi kết quả và trường thực tế, không suy diễn. Không có kết quả thì báo; đủ 50 thì đề nghị thu hẹp.",
+    "inputs": {
+      "query": {
+        "ask": "Bạn muốn tra cứu chi tiết nhân viên theo tên gì hoặc mã nào?",
+        "label": "Tên hoặc mã nhân viên",
+        "schema": {
+          "type": "string",
+          "maxLength": 100,
+          "minLength": 1
+        },
+        "required": true
+      }
+    },
+    "routingScope": "targeted"
+  },
+  {
+    "id": "electricity_sales/last_seven_months",
+    "name": "Chi tiết sản lượng điện bán ra",
+    "description": "Báo cáo sản lượng điện bán ra theo các tháng có dữ liệu mới nhất trong DB. Thu thập số tháng, lựa chọn vẽ biểu đồ và xuất Excel trước khi chạy. Có ít tháng hơn yêu cầu thì chỉ trả số tháng thực có.",
+    "examples": [
+      "Chi tiết sản lượng điện bán ra",
+      "Báo cáo sản lượng điện bán ra",
+      "Vẽ biểu đồ sản lượng điện bán ra 7 tháng gần nhất và xuất file"
+    ],
+    "instructions": "Chọn mẫu khi yêu cầu báo cáo sản lượng điện bán ra. Bắt buộc thu thập months, drawChart, exportFile; không tự gán mặc định. Chỉ trích xuất những lựa chọn được người dùng nêu rõ. Hỏi lại phần còn thiếu. Câu hỏi chung chưa nêu tháng hoặc lựa chọn biểu đồ/xuất file phải chờ bổ sung. Có hoặc không đều là câu trả lời hợp lệ cho lựa chọn boolean. Lấy N tháng có dữ liệu mới nhất trong DB, không dựa vào ngày hiện tại, không chèn tháng trống. SUM(TotalQty) theo ElectricityOutputDate, đơn vị kWh. Chỉ vẽ biểu đồ khi drawChart=true; chỉ xuất Excel khi exportFile=true.",
+    "inputs": {
+      "months": {
+        "ask": "Bạn muốn xem bao nhiêu tháng có dữ liệu gần nhất (1–100 tháng)?",
+        "label": "Số tháng gần nhất trong DB",
+        "schema": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1
+        },
+        "required": true
+      },
+      "drawChart": {
+        "ask": "Bạn có muốn vẽ biểu đồ không?",
+        "label": "Vẽ biểu đồ",
+        "schema": {
+          "type": "boolean"
+        },
+        "required": true
+      },
+      "exportFile": {
+        "ask": "Bạn có muốn xuất file Excel không?",
+        "label": "Xuất file Excel",
+        "schema": {
+          "type": "boolean"
+        },
+        "required": true
+      }
+    }
+  },
+  {
+    "id": "contract_lookup/contract_details",
+    "name": "Tra cứu chi tiết hợp đồng theo tên khách hàng hoặc mã",
+    "description": "Tra cứu chi tiết hợp đồng (hđ) theo tên khách hàng hoặc mã/số hợp đồng, hỗ trợ tìm chuỗi chứa; tối đa 50 kết quả. Thiếu tên/mã thì hỏi bổ sung. Không dùng cho danh sách toàn bộ, thống kê hoặc tra cứu nhân viên.",
+    "examples": [
+      "thông tin chi tiết hợp đồng",
+      "chi tiết hđ theo tên hoặc mã",
+      "hợp đồng số HD001",
+      "hợp đồng của khách hàng An"
+    ],
+    "instructions": "query chỉ lấy tên khách hàng hoặc mã/số hợp đồng nêu rõ, thiếu thì hỏi. Tìm chuỗi chứa; không lấy cả câu yêu cầu. Trả mọi kết quả thực tế, không suy diễn; không có thì báo, đủ 50 thì đề nghị thu hẹp.",
+    "inputs": {
+      "query": {
+        "ask": "Bạn muốn tra cứu chi tiết hợp đồng theo tên khách hàng nào hoặc mã/số hợp đồng nào?",
+        "label": "Tên khách hàng hoặc mã/số hợp đồng",
+        "schema": {
+          "type": "string",
+          "maxLength": 100,
+          "minLength": 1
+        },
+        "required": true
+      }
+    },
+    "routingScope": "targeted"
+  }
+]

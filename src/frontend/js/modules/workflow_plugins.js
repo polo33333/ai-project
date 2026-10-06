@@ -859,16 +859,28 @@
     }
     const label = key => presentation.labels?.[prefix ? `${prefix}.${key}` : key] || key;
     if (Array.isArray(value) && value.every(row => row && typeof row === 'object' && !Array.isArray(row))) {
+      const section = document.createElement('section'); section.className = 'wp-table-section';
       const wrapper = document.createElement('div'); wrapper.className = 'workflow-result-table';
-      if (!value.length) { wrapper.textContent = presentation.emptyText || 'Không có dữ liệu.'; return wrapper; }
+      if (!value.length) { wrapper.classList.add('wp-result-empty'); wrapper.append(icon('fa-inbox'), document.createTextNode(presentation.emptyText || 'Không có dữ liệu.')); return wrapper; }
       const keys = presentation.columns?.[prefix] ?? [...new Set(value.flatMap(row => Object.keys(row)))];
       if (!keys.length) { wrapper.textContent = 'Không có cột được bật hiển thị trong cấu trúc bảng.'; return wrapper; }
+      const toolbar = document.createElement('div'); toolbar.className = 'wp-table-toolbar';
+      const count = document.createElement('span'); count.className = 'wp-table-count'; count.textContent = `${value.length} kết quả`; toolbar.appendChild(count);
+      const numericKeys = new Set(keys.filter(key => value.some(row => typeof row[key] === 'number') && value.every(row => row[key] == null || typeof row[key] === 'number')));
       const table = document.createElement('table'), header = document.createElement('tr');
-      keys.forEach(key => { const cell = document.createElement('th'); cell.textContent = label(key); header.appendChild(cell); });
+      table.setAttribute('aria-label', presentation.labels?.[prefix] || 'Kết quả nghiệp vụ');
+      keys.forEach(key => { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label(key); if (numericKeys.has(key)) cell.className = 'wp-cell-number'; header.appendChild(cell); });
       const head = document.createElement('thead'); head.appendChild(header); table.appendChild(head);
       const body = document.createElement('tbody');
-      value.forEach(row => { const line = document.createElement('tr'); keys.forEach(key => { const cell = document.createElement('td'); cell.textContent = resultText(row[key]); line.appendChild(cell); }); body.appendChild(line); });
-      table.appendChild(body); wrapper.appendChild(table); return wrapper;
+      value.forEach(row => { const line = document.createElement('tr'); keys.forEach(key => { const cell = document.createElement('td'); cell.textContent = typeof row[key] === 'number' ? new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 20 }).format(row[key]) : resultText(row[key]); if (numericKeys.has(key)) cell.className = 'wp-cell-number'; if (row[key] == null || row[key] === '') cell.classList.add('wp-cell-empty'); line.appendChild(cell); }); body.appendChild(line); });
+      const empty = document.createElement('p'); empty.className = 'wp-table-no-match'; empty.textContent = 'Không có kết quả phù hợp.'; empty.hidden = true;
+      if (value.length > 8) {
+        const search = document.createElement('label'); search.className = 'wp-table-search'; search.appendChild(icon('fa-magnifying-glass'));
+        const input = document.createElement('input'); input.type = 'search'; input.placeholder = 'Tìm trong kết quả…'; input.setAttribute('aria-label', 'Tìm trong kết quả nghiệp vụ'); search.appendChild(input); toolbar.appendChild(search);
+        const normalize = text => text.toLocaleLowerCase('vi-VN').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+        input.oninput = () => { const query = normalize(input.value.trim()); let shown = 0; for (const line of body.children) { line.hidden = !normalize(line.textContent).includes(query); if (!line.hidden) shown++; } count.textContent = query ? `${shown} / ${value.length} kết quả` : `${value.length} kết quả`; empty.hidden = shown !== 0; };
+      }
+      table.appendChild(body); wrapper.appendChild(table); section.append(toolbar, wrapper, empty); return section;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const tables = Object.entries(value).filter(([, child]) => Array.isArray(child) && child.every(row => row && typeof row === 'object' && !Array.isArray(row)));
@@ -933,20 +945,33 @@
     const processing = ['READY', 'RUNNING', 'QUEUED'].includes(execution.status);
     node.setAttribute('aria-busy', String(processing));
     if (execution.status === 'SELECT_TEMPLATE') {
-      for (const candidate of execution.candidates || []) node.appendChild(button(candidate.name, async () => { const data = await api('/api/automation-runs', 'POST', { templateId: candidate.id, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID() }); mount(node, data.execution); })); return;
+      const choices = document.createElement('div'); choices.className = 'wp-workflow-choices';
+      for (const candidate of execution.candidates || []) { const choice = button(candidate.name, async () => { const data = await api('/api/automation-runs', 'POST', { templateId: candidate.id, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID() }); mount(node, data.execution); }); choice.classList.add('wp-workflow-choice'); choice.prepend(icon('fa-layer-group')); choice.appendChild(icon('fa-arrow-right')); choices.appendChild(choice); } node.appendChild(choices); return;
     }
-    const title = document.createElement('strong'); title.textContent = `${execution.name} · ${statuses[execution.status] || execution.status}`; node.appendChild(title);
+    node.dataset.status = execution.status;
+    const header = document.createElement('div'); header.className = 'wp-execution-header';
+    const visual = document.createElement('span'); visual.className = 'wp-execution-icon'; visual.appendChild(icon(execution.status === 'SUCCEEDED' ? 'fa-check' : 'fa-layer-group'));
+    const title = document.createElement('strong'); title.textContent = execution.name; title.className = 'wp-execution-title';
+    const badge = document.createElement('span'); badge.className = 'wp-execution-status'; badge.textContent = statuses[execution.status] || execution.status;
+    header.append(visual, title, badge); node.appendChild(header);
     const actions = document.createElement('div'); actions.className = 'wp-execution-actions';
     if (processing) { const loading = document.createElement('div'); loading.className = 'wp-execution-loading'; loading.setAttribute('role', 'status'); loading.innerHTML = '<span class="wp-loading-spinner" aria-hidden="true"></span><span>Đang xử lý yêu cầu…</span>'; node.appendChild(loading); }
     if (execution.steps?.length) { const list = document.createElement('ol'); for (const step of execution.steps) { const item = document.createElement('li'); if (step.status === 'SUCCEEDED') { item.appendChild(document.createTextNode(step.name + ': ')); const check = document.createElement('span'); check.className = 'wp-step-check'; check.textContent = '✓'; check.setAttribute('role', 'img'); check.setAttribute('aria-label', statuses.SUCCEEDED); check.title = statuses.SUCCEEDED; item.appendChild(check); } else item.textContent = `${step.name}: ${statuses[step.status] || ({ PENDING: 'Ch\u01b0a ch\u1ea1y', SKIPPED: 'B\u1ecf qua' }[step.status]) || step.status}`; list.appendChild(item); } if (done(execution.status) || execution.status === 'WAITING_INPUT') { const details = document.createElement('details'); details.className = 'wp-execution-details'; const summary = document.createElement('summary'); summary.textContent = 'Chi tiết thực hiện'; details.append(summary, list); node.appendChild(details); } else node.appendChild(list); }
-    if (execution.error) { const message = document.createElement('p'); message.textContent = execution.error; node.appendChild(message); }
+    if (execution.error) { const message = document.createElement('p'); message.className = 'wp-execution-error'; message.setAttribute('role', 'alert'); message.textContent = execution.error; node.appendChild(message); }
     if (execution.status === 'WAITING_INPUT') {
-      const form = document.createElement('form'); const inputs = [];
+      const form = document.createElement('form'); form.className = 'wp-execution-form'; const inputs = [];
+      const hint = document.createElement('p'); hint.className = 'wp-form-intro'; hint.textContent = 'Hoàn thiện thông tin bên dưới để tiếp tục nghiệp vụ.'; form.appendChild(hint);
+      const fields = document.createElement('div'); fields.className = 'wp-form-fields'; form.appendChild(fields);
       for (const slot of execution.missingInputs || []) {
-        inputs.push({ slot, read: schemaInput(form, slot.schema, slot.ask || slot.label) });
+        inputs.push({ slot, read: schemaInput(fields, slot.schema, slot.ask || slot.label, slot.required !== false) });
+        const wrapper = fields.lastElementChild; wrapper.classList.add('wp-form-field');
+        const helper = document.createElement('span'); helper.className = 'wp-input-hint';
+        if (slot.schema.minimum !== undefined && slot.schema.maximum !== undefined) helper.textContent = `Từ ${slot.schema.minimum} đến ${slot.schema.maximum}`;
+        else if (slot.required !== false) helper.textContent = 'Bắt buộc';
+        if (helper.textContent) wrapper.appendChild(helper);
       }
       const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'btn-primary'; submit.textContent = 'Bổ sung và tiếp tục'; actions.appendChild(submit); form.appendChild(actions);
-      const message = document.createElement('p'); message.setAttribute('role', 'alert'); form.appendChild(message);
+      const message = document.createElement('p'); message.className = 'wp-execution-error'; message.setAttribute('role', 'alert'); form.appendChild(message);
       form.onsubmit = async event => { event.preventDefault(); submit.disabled = true; submit.textContent = 'Đang xử lý…'; node.setAttribute('aria-busy', 'true'); try { const values = Object.fromEntries(inputs.map(({ slot, read }) => [slot.key, read()])); const data = await api(`/api/automation-runs/${encodeURIComponent(execution.id)}/inputs`, 'POST', { inputs: values, revision: execution.revision }); mount(node, data.execution); } catch (failure) { message.textContent = failure.message; } finally { submit.disabled = false; submit.textContent = 'Bổ sung và tiếp tục'; if (node.contains(form)) node.setAttribute('aria-busy', 'false'); } }; node.appendChild(form);
     }
     const defaults = Object.entries(execution.provenance || {}).filter(([, source]) => source.source === 'default');

@@ -1,5 +1,12 @@
 // Human-readable help for every setting exposed by the settings API.
 module.exports = {
+  CHAT_QUICK_GREETING_ENABLED: ['Trả lời chào hỏi nhanh', 'true: TEV1 nhận diện câu chỉ chào hỏi và backend trả lời mẫu, không gọi model chat; false: xử lý qua luồng chat bình thường. Chỉ áp dụng với auto/local_tev1; chào kèm yêu cầu vẫn chọn nghiệp vụ.'],
+  CHAT_ROUTING_MODE: ['Model quyết định định tuyến', 'local_tev1: dùng TEV1 local; chat_model: dùng đúng model chat đã chọn; auto: TEV1 trước, chuyển một lần sang model chat nếu mơ hồ hoặc lỗi. Model trả lời luôn giữ theo lựa chọn chat. Áp dụng sau khi khởi động lại.'],
+  CHAT_ROUTING_LOCAL_MODEL: ['Model local định tuyến', 'Tên model Ollama chuyên quyết định chat/nghiệp vụ và nhận diện input, mặc định tev1:4b. Model này phải được cài trên endpoint routing.'],
+  CHAT_ROUTING_LOCAL_BASE_URL: ['Địa chỉ Ollama định tuyến', 'Endpoint Ollama cho model quyết định, mặc định http://127.0.0.1:11434. Độc lập với provider chat và embedding.'],
+  CHAT_ROUTING_TIMEOUT_MS: ['Thời gian chờ định tuyến', 'Giới hạn mỗi lần gọi model quyết định, tính bằng mili giây; cả routing và model trả lời cùng dùng ngân sách tổng request.'],
+  CHAT_ROUTING_MIN_PROBABILITY: ['Ngưỡng lựa chọn TEV1', 'Xác suất lựa chọn tối thiểu để chấp nhận quyết định TEV1 (0–1). Đây không phải độ chính xác; cần kiểm chứng trên nghiệp vụ thật.'],
+  CHAT_ROUTING_MIN_MARGIN: ['Khoảng cách lựa chọn TEV1', 'Chênh lệch tối thiểu giữa hai xác suất cao nhất của TEV1 (0–1). Dưới ngưỡng thì hỏi lại hoặc chuyển model chat trong auto.'],
   WORKFLOW_PLUGINS_ENABLED: ['Bật mẫu nghiệp vụ', 'Cho phép nhận diện và chạy mẫu nghiệp vụ trong hội thoại và embed chat. Tắt để ngừng tạo và chạy tác vụ. Áp dụng sau khi khởi động lại máy chủ; cấu hình tạm tắt tại trang Mẫu nghiệp vụ vẫn được giữ.'],
   HOST: ['Địa chỉ máy chủ', 'Địa chỉ backend lắng nghe. 127.0.0.1 chỉ cho phép truy cập từ máy hiện tại.'],
   SHUTDOWN_TIMEOUT_MS: ['Thời gian chờ tắt máy chủ', 'Thời gian tối đa chờ request và worker kết thúc trước khi tắt, tính bằng mili giây.'],

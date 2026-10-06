@@ -20,31 +20,18 @@ const { emitProgress } = require('../agent_core/harness/progress_events');
 const { trainingService } = require('../training_core');
 const webSearchService = require('../services/web_search_service');
 const { memoryService, policy: memoryPolicy } = require('../memory_core');
-const { RequestExecutionBudget } = require('../agent_core/harness/request_execution_budget');
 const { estimateTokens, fitOptionalMessages, measureMessages } = require('../agent_core/harness/context_budget');
 const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 const { resolvePlan } = require('../agent_core/harness/completion_policy');
-const { createProviderBudget } = require('../agent_core/harness/guarded_agent_harness');
 const { buildCalculationReply } = require('../agent_core/harness/calculation_reply');
-const { isSimpleEntityListRequest } = require('../services/sql_enrichment_builder');
+const chatRouter = require('../automation/chat_router');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
 const REQUEST_TIMEOUT_MS  = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
-const LOCAL_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS, 10);
+const LOCAL_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_LOCAL_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS || '180000', 10);
 
 function providerTimeoutMs(provider) {
   return isLocalProvider(provider) ? LOCAL_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
-}
-
-function getProviderCandidates(selectedProvider) {
-  let fallbacks = aiProviderManager.getProvidersForExecution()
-    .filter(candidate => candidate.id !== selectedProvider?.id)
-    .filter(candidate => candidate.baseUrl && candidate.model && candidate.status !== 'unconfigured')
-    .sort((a, b) => (Number(a.priority) || 999) - (Number(b.priority) || 999));
-  if (isLocalProvider(selectedProvider) && process.env.LOCAL_MODEL_ALLOW_CLOUD_FALLBACK !== 'true') {
-    fallbacks = fallbacks.filter(isLocalProvider);
-  }
-  return [selectedProvider, ...fallbacks].filter(Boolean);
 }
 
 async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, externalSignal = null, executionBudget = null) {
@@ -79,7 +66,7 @@ async function dispatchWithProviderFallback(currentProvider, candidates, message
     } catch (error) {
       lastError = error;
       if (externalSignal?.aborted || error?.name === 'AbortError') throw error;
-      console.warn(`[AI Router] Provider ${candidate.name || candidate.id} lỗi, thử provider priority tiếp theo: ${error.message}`);
+      console.warn(`[AI Router] Provider ${candidate.name || candidate.id} lỗi: ${error.message}`);
     } finally {
       clearTimeout(timer);
       externalSignal?.removeEventListener('abort', abortFromCaller);
@@ -135,30 +122,31 @@ class IntelligentCore {
     if (providerId && !explicitlySelectedProvider) {
       return this._buildErrorResponse(userMessage, null, 'Model đã chọn không khả dụng. Hãy chọn lại model.');
     }
+    let routingContext;
+    try { routingContext = chatRouter.createRoutingContext({ ...options, chatProviderSnapshot: explicitlySelectedProvider || undefined }); }
+    catch (error) { return { ...this._buildErrorResponse(userMessage, explicitlySelectedProvider, error.message), errorCode: error.code }; }
+    let provider = routingContext.chatProviderSnapshot;
+    const providerCandidates = [provider];
+    const executionBudget = routingContext.executionBudget;
     const workflowResponse = await require('../automation/orchestrator').handle(userMessage, {
-      ...options,
-      preferDirectDataList: !webSearch && !knowledgeSourceIds.length && isSimpleEntityListRequest(userMessage),
+      ...options, routingContext, executionBudget,
       onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); }
     });
     if (workflowResponse) return workflowResponse;
-
-    // ── Resolve provider ───────────────────────────────────────────────────
-    let provider = aiProviderManager.getActiveProvider();
-    if (explicitlySelectedProvider) provider = explicitlySelectedProvider;
-    const providerCandidates = explicitlySelectedProvider ? [provider] : getProviderCandidates(provider);
-    const executionBudget = isLocalProvider(provider) ? new RequestExecutionBudget({
-      maxModelCalls: Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 9),
-      maxSqlAttempts: Number(process.env.LOCAL_MODEL_MAX_SQL_CALLS || 3)
-    }) : (process.env.AI_PROVIDER_GUARDS_ENABLED !== 'false' ? createProviderBudget() : null);
+    // All response paths carry the same routing trace, including chat errors.
+    const finish = response => ({ ...response,
+      trace: { ...(response.trace || {}), workflowRouting: routingContext.trace, executionBudget: executionBudget.snapshot() },
+      ...(response.success === false && tokenUsage.available ? { tokenUsage } : {})
+    });
     emitProgress(options.onProgress, { type: 'request_started', label: 'Đang phân tích yêu cầu', status: 'running', icon: 'brain', providerName: provider?.name });
     const providerFallbacks = [];
 
     const scope = securityGuard.checkScope(userMessage);
     if (!scope.allowed) {
-      return this._buildSuccessResponse(
+      return finish(this._buildSuccessResponse(
         userMessage, scope.reply, [], provider, tokenUsage, [],
         { mode: 'restricted', selectedTables: [], retrieval: { reason: 'out_of_scope' } }
-      );
+      ));
     }
 
     // ── Retrieve only relevant schema; general chat gets no database context ──
@@ -363,7 +351,7 @@ ${strictSelectedKnowledge
           provider,
           enabledToolNames: effectiveUseTools && !requestPlan.codeOnly ? enabledToolNames : [],
           context: {
-            lockProvider: Boolean(explicitlySelectedProvider),
+            lockProvider: true,
             permissions: options.permissions || [], session: options.session, dbSourceId: selectedDb?.id || null,
             selectedTables: contextSelection.selectedTables || [],
             joinPlan: contextSelection.joinPlan || null,
@@ -404,7 +392,7 @@ ${strictSelectedKnowledge
         };
         if (memoryPolicy.traceEnabled()) trace.memoryDecision = { ...memoryDecision, fallbackHistory: undefined, accountId: undefined };
 
-        return this._buildSuccessResponse(
+        return finish(this._buildSuccessResponse(
           userMessage,
           harnessResult.replyText,
           harnessResult.toolCalls,
@@ -413,11 +401,11 @@ ${strictSelectedKnowledge
           allFallbacks,
           contextSelection,
           trace
-        );
+        ));
       } catch (agentErr) {
         if (options.signal?.aborted) throw agentErr;
-        console.error(`[IntelligentCore] AgentHarness lỗi: ${agentErr.message}. Kiểm tra fallback nếu cần.`);
-        return this._buildErrorResponse(userMessage, provider, agentErr.message);
+        console.error(`[IntelligentCore] AgentHarness lỗi: ${agentErr.message}`);
+        return finish(this._buildErrorResponse(userMessage, provider, agentErr.message));
       }
     }
 
@@ -437,7 +425,7 @@ ${strictSelectedKnowledge
         provider = dispatched.provider;
       } catch (llmErr) {
         if (options.signal?.aborted) throw llmErr;
-        return this._buildErrorResponse(userMessage, provider, llmErr.message);
+        return finish(this._buildErrorResponse(userMessage, provider, llmErr.message));
       }
       collectUsage(assistantMsg.usage);
 
@@ -495,7 +483,7 @@ ${strictSelectedKnowledge
       }
     }
 
-    return this._buildSuccessResponse(userMessage, finalText, toolCallsLog, provider, tokenUsage, providerFallbacks, contextSelection);
+    return finish(this._buildSuccessResponse(userMessage, finalText, toolCallsLog, provider, tokenUsage, providerFallbacks, contextSelection));
   }
 
   // ─── Response Builders ───────────────────────────────────────────────────
@@ -594,7 +582,7 @@ ${strictSelectedKnowledge
   }
 
   _buildErrorResponse(question, provider, errMsg) {
-    if (isLocalProvider(provider) && /fetch failed|ECONNREFUSED/i.test(String(errMsg))) {
+    if (isLocalProvider(provider || {}) && /fetch failed|ECONNREFUSED/i.test(String(errMsg))) {
       errMsg = 'Không kết nối được dịch vụ Ollama. Hãy mở Ollama hoặc chạy ollama serve, rồi gửi lại câu hỏi.';
     }
     return {
