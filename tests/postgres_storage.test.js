@@ -114,3 +114,16 @@ test('PostgreSQL real import, rollback, encryption, idempotency and tamper detec
     await admin.end();
   }
 });
+
+test('chat diagnostics with missing token fields survive encrypted storage', () => {
+  const { protect } = require('../src/backend/storage/postgres/crypto');
+  const { buildChatDiagnostics } = require('../src/backend/utils/chat_diagnostics');
+  const diagnostics = buildChatDiagnostics({ workflowRouting: { stages: [{ status: 'skipped', calls: 0 }] },
+    steps: [{ type: 'MODEL_USAGE', stage: 'knowledge_answer', inputTokens: 100, outputTokens: 10, totalTokens: 110, usageAvailable: true }] });
+  const restored = protect(JSON.parse(JSON.stringify(protect(diagnostics, 'test/diagnostics'))), 'test/diagnostics', true);
+  assert.equal(restored.workflowRouting.stages[0].calls, 0);
+  assert.equal(Object.hasOwn(restored.workflowRouting.stages[0], 'inputTokens'), false);
+  assert.equal(restored.steps[0].inputTokens, 100);
+  assert.equal(restored.steps[0].totalTokens, 110);
+  assert.equal(restored.steps[0].stage, 'knowledge_answer');
+});

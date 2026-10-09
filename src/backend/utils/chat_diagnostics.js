@@ -17,8 +17,9 @@ function buildChatDiagnostics(trace) {
       escalationReason: routing.escalationReason, route: routing.route, workflowId: routing.workflowId,
       inputDisposition: routing.inputDisposition, skippedReason: routing.skippedReason, errorCode: routing.errorCode,
       latencyMs: routing.latencyMs, chatFallbackReason: routing.chatFallbackReason, quickReplyKind: routing.quickReplyKind,
+      retrieval: routing.retrieval || null, flow: routing.flow,
       stages: (routing.stages || []).map(stage => ({ decisionSource: stage.decisionSource, model: stage.model,
-        status: stage.status, calls: stage.calls, httpRequests: stage.httpRequests, decisionEvaluations: stage.decisionEvaluations,
+        status: stage.status, stage: stage.stage, flow: stage.flow, calls: stage.calls, httpRequests: stage.httpRequests, decisionEvaluations: stage.decisionEvaluations,
         inputTokens: stage.inputTokens, outputTokens: stage.outputTokens, totalTokens: stage.totalTokens,
         latencyMs: stage.latencyMs, errorCode: stage.errorCode, decisionScores: stage.decisionScores }))
     } : null,
@@ -34,7 +35,11 @@ function buildChatDiagnostics(trace) {
       exampleCount: trace.skill.exampleCount, injected: trace.skill.injected
     } : null,
     steps: (trace.steps || []).slice(-50).map(step => ({ type: step.type, iteration: step.iteration, toolName: step.toolName, success: step.success,
-      ...(step.failures ? { failures: step.failures } : {}) }))
+      ...(step.failures ? { failures: step.failures } : {}),
+      ...(step.type === 'MODEL_USAGE' ? { stage: step.stage, repairAttempt: step.repairAttempt, providerId: step.providerId,
+        model: step.model, durationMs: step.durationMs, calls: step.calls, inputTokens: step.inputTokens,
+        outputTokens: step.outputTokens, totalTokens: step.totalTokens, inputTokensEstimated: step.inputTokensEstimated,
+        usageAvailable: step.usageAvailable } : {}) }))
   };
 }
 

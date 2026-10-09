@@ -41,6 +41,8 @@ README đối chiếu với mã nguồn ngày **06/10/2026**. Trạng thái dư�
 
 ### Quy trình tự động và định tuyến chat
 
+- Chọn nhóm nghiệp vụ trước TEV1 bằng `hybrid` (Qdrant + BM25, gộp RRF) hoặc `lexical` (BM25 độc lập, không cần embedding/Qdrant cho routing). Chỉ tìm trong catalog được phép, giữ tác vụ chờ và nhóm cạnh tranh đã khai báo, kiểm tra ngân sách token/evaluation. Chat không tự lập chỉ mục workflow; dùng publish hoặc `npm run index:workflows`, kiểm tra sau restore bằng `npm run index:workflows -- --check`. Xem [hướng dẫn retrieval](docs/WORKFLOW_RETRIEVAL_RUNBOOK.md).
+
 - Tab **Quy trình tự động** quản lý catalog/plugin có phiên bản, mẫu câu hỏi và slot đầu vào; hỗ trợ sửa draft, validate, chạy fixture, publish, bật/tắt và rollback. Mẫu tham khảo tra cứu hợp đồng, nhân viên và báo cáo điện ở `docs/templates/` cần cấu hình nguồn thực tế.
 - Workflow đọc SQL có parameter, gọi API, đọc file Thư viện hoặc kế thừa kết quả bước trước; hỗ trợ mapping cột, transform/condition/assert/collect/delay, biểu đồ và export CSV/XLSX. API có thể ghi dữ liệu; tác vụ ghi bị gián đoạn chuyển `NEEDS_REVIEW`, không tự retry.
 - Run có owner, revision, checkpoint, thu thập input, resume/cancel và artifact có hạn tải. Chat chính và embed hỗ trợ form nghiệp vụ, bảng/biểu đồ và kết quả; embed không hiển thị Thinking/timeline xử lý.
@@ -542,9 +544,9 @@ npm run restore:pg -- <file.dump> knowledgehub_restore_kiemtra
 npm run data:pg:export -- <thu-muc-moi>
 ```
 
-Backup và import chung PostgreSQL + Qdrant (hai collection schema/tài liệu) và file thư viện:
+Backup và import chung PostgreSQL + Qdrant (ba collection schema/tài liệu/workflow) và file thư viện:
 
-Trong giao diện admin, mở **Cài đặt hệ thống → PostgreSQL + Qdrant**. Nút **Tạo backup ngay** tự tạm dừng request và worker ghi của ứng dụng trong lúc chụp dữ liệu, rồi mở lại. Tải file `.khbackup` về để cất giữ. Để khôi phục **vào database hiện tại**, tải file lên, kiểm tra và xem kế hoạch; nhập lại đúng tên database để xác nhận. Chức năng này cần chạy bằng `npm start`: supervisor dừng server, tạo một gói backup an toàn của dữ liệu hiện tại, ghi đè schema `app` và hai collection Qdrant, phục hồi file thư viện rồi khởi động lại. Nếu có lỗi sau khi bắt đầu ghi đè, server sẽ không tự khởi động; xem báo cáo `*-restore-current-report.json` và gói backup an toàn trước khi xử lý tiếp. Các tiến trình ghi bên ngoài ứng dụng vẫn cần được dừng riêng.
+Trong giao diện admin, mở **Cài đặt hệ thống → PostgreSQL + Qdrant**. Nút **Tạo backup ngay** tự tạm dừng request và worker ghi của ứng dụng trong lúc chụp dữ liệu, rồi mở lại. Tải file `.khbackup` về để cất giữ. Để khôi phục **vào database hiện tại**, tải file lên, kiểm tra và xem kế hoạch; nhập lại đúng tên database để xác nhận. Chức năng này cần chạy bằng `npm start`: supervisor dừng server, tạo một gói backup an toàn của dữ liệu hiện tại, ghi đè schema `app` và ba collection Qdrant, phục hồi file thư viện rồi khởi động lại. Nếu có lỗi sau khi bắt đầu ghi đè, server sẽ không tự khởi động; xem báo cáo `*-restore-current-report.json` và gói backup an toàn trước khi xử lý tiếp. Các tiến trình ghi bên ngoài ứng dụng vẫn cần được dừng riêng.
 
 ```powershell
 # Dừng ứng dụng, supervisor và mọi job ghi PostgreSQL/Qdrant trước khi chạy.
@@ -556,7 +558,7 @@ npm run backup:import -- <thu-muc-goi-backup> knowledgehub_restore_kiemtra
 Remove-Item Env:BACKUP_APP_STOPPED
 ```
 
-Lệnh CLI `backup:import` vẫn tạo database mới và hai collection Qdrant mới có tiền tố `<ten_database>_`; không đổi cấu hình ứng dụng. File `library_files` và `library_content` được giữ trong `<goi>/files` để sao chép vào `KNOWLEDGEHUB_DATA_DIR` của môi trường đích khi cutover. Xem `*-import-report.json` ở thư mục cha gói trước khi chuyển traffic; chỉ chuyển khi `readyForCutover=true`. Khóa `APP_DATA_ENCRYPTION_KEY_FILE` phải được cấp riêng ở đích. Snapshot Qdrant cần server tương thích; nên diễn tập import ở môi trường riêng trước. Giữ gói backup ngoài máy chủ theo chính sách lưu giữ và bảo vệ như dữ liệu nhạy cảm.
+Lệnh CLI `backup:import` vẫn tạo database mới và ba collection Qdrant mới có tiền tố `<ten_database>_`; không đổi cấu hình ứng dụng. File `library_files` và `library_content` được giữ trong `<goi>/files` để sao chép vào `KNOWLEDGEHUB_DATA_DIR` của môi trường đích khi cutover. Xem `*-import-report.json` ở thư mục cha gói trước khi chuyển traffic; chỉ chuyển khi `readyForCutover=true`. Khóa `APP_DATA_ENCRYPTION_KEY_FILE` phải được cấp riêng ở đích. Snapshot Qdrant cần server tương thích; nên diễn tập import ở môi trường riêng trước. Giữ gói backup ngoài máy chủ theo chính sách lưu giữ và bảo vệ như dữ liệu nhạy cảm.
 
 Lệnh CLI `restore:pg` chỉ tạo database mới tên `knowledgehub_restore_*`. UI có thao tác riêng để khôi phục DB hiện tại sau khi dừng server và tạo backup an toàn. Export JSON legacy chưa bao gồm `ui_chat_sessions`; phục hồi đầy đủ cần database dump, file tài liệu và khóa mã hóa. Sau khi PostgreSQL đã nhận ghi mới, không đổi về JSON cũ hoặc chạy importer ghi đè. Volume Docker không thay thế backup; lịch backup tự động/PITR chưa được cấu hình.
 

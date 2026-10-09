@@ -40,7 +40,7 @@ function protect(value, context, reverse = false) {
   if (reverse && value && value.$khSecret === 1) return decrypt(value, context);
   if (Array.isArray(value)) return value.map((entry, i) => protect(entry, `${context}/${i}`, reverse));
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key,
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined).map(([key, entry]) => [key,
     !reverse && secretField.test(key) && entry !== null ? encrypt(entry, `${context}/${key}`) : protect(entry, `${context}/${key}`, reverse)
   ]));
 }

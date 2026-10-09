@@ -17,7 +17,7 @@ test('phase 1 HTTP, chat SSE, ownership and event replay work together', async t
   t.mock.method(providers, 'getProviderForExecution', () => selected);
   t.mock.method(providers, 'getActiveProvider', () => selected);
   t.mock.method(require('../src/backend/intelligent_core/adapters'), 'dispatchToProvider', async () => ({
-    content: JSON.stringify({ route: 'workflow', workflowId: 'phase1_examples/lookup', candidateIds: [],
+    content: JSON.stringify({ route: 'workflow', purpose: 'execute', workflowId: 'phase1_examples/lookup', candidateIds: [],
       inputDisposition: 'new_request', pendingRunId: null, inputs: {}, inputEvidence: {},
       evidence: [{ source: 'user_message', text: 'Tra cứu đối tượng' }], requestedScope: 'targeted', supportedScope: 'targeted',
       needsClarification: false, abstain: false, cancelPending: false })

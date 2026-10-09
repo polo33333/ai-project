@@ -289,6 +289,31 @@
     .kh-workflow .kh-cell-number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     .kh-workflow-count{font-size:11px;color:#64748b;margin:6px 0}
     .dark .kh-workflow-header,.dark .kh-workflow-actions{border-color:#354158}.dark .kh-workflow .kh-embed-table-wrap{border-color:#354158}.dark .kh-workflow .kh-embed-table-wrap th{background:#253149;color:#cbd5e1}.dark .kh-workflow-status{background:#25324a;color:#cbd5e1}.dark .kh-workflow[data-status="WAITING_INPUT"] .kh-workflow-status{background:#3c3220;color:#f3ca7e}.dark .kh-workflow[data-status="SUCCEEDED"] .kh-workflow-status{background:#17392f;color:#83dcb1}.dark .kh-workflow-hint,.dark .kh-workflow-count{color:#94a3b8}
+    .kh-input-caption{display:flex;align-items:flex-start;gap:8px}
+    .kh-workflow-header>strong{flex:1;min-width:0}
+    .kh-workflow .kh-workflow-header .kh-workflow-fold{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;padding:5px;border:1px solid #d9e1ee;border-radius:8px;background:transparent;color:#7387a9;cursor:pointer}
+    .kh-workflow-fold svg{width:16px;height:16px}.kh-workflow .kh-workflow-fold:hover{color:var(--kh-primary);background:color-mix(in srgb,var(--kh-primary) 12%,transparent)}
+    .kh-workflow-fold:focus-visible{outline:2px solid var(--kh-primary);outline-offset:2px}
+    .dark .kh-workflow .kh-workflow-header .kh-workflow-fold{border-color:#354158;color:#a8b6cd}
+    .kh-workflow[data-collapsed="true"]>:not(.kh-workflow-header){display:none!important}
+    .kh-workflow[data-collapsed="true"]>.kh-workflow-header{margin-bottom:0;padding-bottom:0;border-bottom:0}
+    .kh-input-icon{display:grid;place-items:center;flex:0 0 26px;height:26px;border-radius:8px;background:color-mix(in srgb,var(--kh-primary) 12%,transparent);color:var(--kh-primary)}
+    .kh-input-icon svg{width:15px;height:15px}
+    .kh-workflow-progress.kh-processing{display:flex;flex-direction:column;gap:18px;padding:28px 8px;color:var(--kh-primary)}
+    .kh-processing-graphic{display:flex;align-items:center;gap:10px;width:100%;max-width:300px}
+    .kh-processing-source,.kh-processing-core{display:grid;place-items:center;flex:0 0 36px;height:36px;border-radius:11px;background:color-mix(in srgb,var(--kh-primary) 12%,transparent)}
+    .kh-processing-source svg{width:19px;height:19px}
+    .kh-processing-core{flex-basis:50px;height:50px;border-radius:15px;background:var(--kh-primary);color:#fff;animation:kh-processing-pulse 2s ease-in-out infinite}
+    .kh-processing-core svg{width:26px;height:26px}
+    .kh-processing-flow{display:flex;flex:1;justify-content:space-around;gap:3px}
+    .kh-processing-flow b{width:4px;height:4px;border-radius:2px;background:currentColor;animation:kh-processing-data 1.5s ease-in-out infinite}
+    .kh-processing-flow b:nth-child(2){animation-delay:.2s}.kh-processing-flow b:nth-child(3){animation-delay:.4s}
+    .kh-processing-copy{display:grid;gap:6px;text-align:center}.kh-processing-copy strong{color:#172033;font-size:14px}.kh-processing-copy>span{color:#64748b;font-size:12px}
+    .dark .kh-processing-copy strong{color:#e1e8f5}.dark .kh-processing-copy>span{color:#a8b6cd}
+    .dark .kh-input-icon,.dark .kh-processing-graphic{color:color-mix(in srgb,var(--kh-primary) 60%,#fff)}
+    @keyframes kh-processing-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+    @keyframes kh-processing-data{0%,100%{opacity:.2;transform:translateX(-3px)}50%{opacity:1;transform:translateX(3px)}}
+    @media(prefers-reduced-motion:reduce){.kh-processing-core,.kh-processing-flow b{animation:none}}
     @supports selector(::-webkit-scrollbar){
       .kh-embed-root :is(.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data){scrollbar-width:auto}
       .kh-embed-root :is(.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data)::-webkit-scrollbar{width:6px;height:6px}
@@ -304,8 +329,15 @@
     const numeric=keys.map(key=>rows.some(row=>typeof row[key]==='number')&&rows.every(row=>row[key]==null||typeof row[key]==='number'));
     wrapper.querySelectorAll('tbody tr').forEach((line,index)=>line.querySelectorAll('td').forEach((cell,column)=>{if(numeric[column]){cell.className='kh-cell-number';const value=rows[index][keys[column]];if(typeof value==='number')cell.textContent=new Intl.NumberFormat('vi-VN',{maximumFractionDigits:20}).format(value);}}));
   }
+  function workflowIcon(kind) {
+    const paths={number:'M9 3 7 21M17 3l-2 18M3 9h18M2 15h18',calendar:'M4 5h16v16H4zM8 3v4M16 3v4M4 10h16',toggle:'M8 6h8a6 6 0 0 1 0 12H8A6 6 0 0 1 8 6zM8 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',list:'M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1',layers:'m12 3 10 5-10 5L2 8zM2 12l10 5 10-5M2 16l10 5 10-5',text:'M4 5h16M12 5v15M8 20h8',data:'M4 6c0-4 16-4 16 0s-16 4-16 0M4 6v12c0 4 16 4 16 0V6M4 12c0 4 16 4 16 0',file:'M5 3h9l5 5v13H5zM14 3v6h5M9 13h6M9 17h6'};
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[kind]||paths.text}"/></svg>`;
+  }
   function workflowInput(parent,schema,label,required=true) {
     const group=document.createElement('label');const title=document.createElement('span');title.textContent=label;group.appendChild(title);parent.appendChild(group);
+    title.className='kh-input-caption';
+    const kind=schema.enum?'list':schema.type==='boolean'?'toggle':['date','date-time'].includes(schema.format)?'calendar':['integer','number'].includes(schema.type)?'number':schema.type==='array'?'list':schema.type==='object'?'layers':'text';
+    const icon=document.createElement('span');icon.className='kh-input-icon';icon.innerHTML=workflowIcon(kind);title.prepend(icon);
     if(schema.type==='object') {const reads=Object.entries(schema.properties||{}).map(([key,s])=>[key,workflowInput(group,s,s.title||key)]);return ()=>Object.fromEntries(reads.map(([key,read])=>[key,read()]));}
     if(schema.type==='array') {const reads=[];const add=document.createElement('button');add.type='button';add.textContent='Thêm mục';add.onclick=()=>reads.push(workflowInput(group,schema.items,`Mục ${reads.length+1}`));group.appendChild(add);return ()=>reads.map(read=>read());}
     const choices=schema.enum||(schema.type==='boolean'?[true,false]:null);const control=document.createElement(choices?'select':'input');
@@ -333,15 +365,18 @@
     if(execution.id&&!workflowRuns.includes(execution.id)){workflowRuns.push(execution.id);workflowRuns=workflowRuns.slice(-20);saveWorkflow();}
     node.replaceChildren();node.classList.add('kh-workflow');node.dataset.status=execution.status;const heading=document.createElement('strong');const states={READY:'Đang chờ chạy',RUNNING:'Đang xử lý',WAITING_INPUT:'Chờ bổ sung',SUCCEEDED:'Hoàn thành',FAILED:'Không thành công',CANCELLED:'Đã hủy',NEEDS_REVIEW:'Cần kiểm tra'};heading.textContent=execution.name||'Chọn nghiệp vụ';const header=document.createElement('div');header.className='kh-workflow-header';const badge=document.createElement('span');badge.className='kh-workflow-status';badge.textContent=states[execution.status]||execution.status;header.append(heading,badge);node.appendChild(header);
     const processing=['READY','RUNNING','QUEUED'].includes(execution.status);
+    const fold=document.createElement('button');fold.type='button';fold.className='kh-workflow-fold';
+    const updateFold=()=>{const collapsed=node.dataset.collapsed==='true';fold.setAttribute('aria-expanded',String(!collapsed));fold.setAttribute('aria-label',collapsed?'Mở rộng nghiệp vụ':'Thu gọn nghiệp vụ');fold.title=collapsed?'Mở rộng':'Thu gọn';fold.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${collapsed?'m6 9 6 6 6-6':'m6 15 6-6 6 6'}"/></svg>`;};
+    fold.onclick=()=>{node.dataset.collapsed=String(node.dataset.collapsed!=='true');updateFold();};updateFold();header.appendChild(fold);
     node.classList.toggle('kh-workflow-processing',processing);node.setAttribute('aria-busy',String(processing));
     if(processing){
       heading.textContent=execution.name||'Xử lý nghiệp vụ';heading.className='kh-workflow-title';
       const progress=document.createElement('div');progress.className='kh-workflow-progress';progress.setAttribute('role','status');
-      const dots=document.createElement('span');dots.className='kh-workflow-dots';dots.setAttribute('aria-hidden','true');for(let i=0;i<3;i++)dots.appendChild(document.createElement('i'));
-      const text=document.createElement('span');text.textContent=execution.status==='RUNNING'?'Đang xử lý dữ liệu…':'Đang chuẩn bị xử lý…';progress.append(dots,text);node.appendChild(progress);
+      progress.classList.add('kh-processing');
+      progress.innerHTML=`<div class="kh-processing-graphic" aria-hidden="true"><span class="kh-processing-source">${workflowIcon('data')}</span><span class="kh-processing-flow"><b></b><b></b><b></b></span><span class="kh-processing-core">${workflowIcon('layers')}</span><span class="kh-processing-flow"><b></b><b></b><b></b></span><span class="kh-processing-source">${workflowIcon('file')}</span></div><div class="kh-processing-copy"><strong>Đang xử lý thông tin</strong><span>Kết quả sẽ hiển thị khi hoàn tất.</span></div>`;node.appendChild(progress);
     }
     const actions=document.createElement('div');actions.className='kh-workflow-actions';
-    const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{const version=conversationVersion;button.disabled=true;try{const data=await workflowApi(typeof body==='function'?body():body);if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){if(body.parentRunId)mountWorkflow(node,{...execution,retryRunId:data.execution.id,retryWaitingInput:data.execution.status==='WAITING_INPUT'});const next=append('','ai');mountWorkflow(next,data.execution);}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;}};actions.appendChild(button);return button;};
+    const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{if(button.disabled)return;const version=conversationVersion;button.disabled=true;const originalText=button.textContent;const payload=typeof body==='function'?null:body;if(payload?.parentRunId)button.textContent='Đang mở form…';try{const data=await workflowApi(payload||body());if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){if(body.parentRunId)mountWorkflow(node,{...execution,retryRunId:data.execution.id,retryWaitingInput:data.execution.status==='WAITING_INPUT'});const next=append('','ai');mountWorkflow(next,data.execution);next.scrollIntoView({block:'start',behavior:'smooth'});next.querySelector('input,select,textarea')?.focus({preventScroll:true});}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;button.textContent=originalText;}};actions.appendChild(button);return button;};
     if(execution.status==='SELECT_TEMPLATE')for(const candidate of execution.candidates||[])action(candidate.name,{workflowAction:'create',templateId:candidate.id,requestId:createSessionId()});
     if(execution.status==='WAITING_INPUT'){const form=document.createElement('form');form.className='kh-workflow-form';node.appendChild(form);const reads=(execution.missingInputs||[]).map(slot=>[slot.key,workflowInput(form,slot.schema,slot.ask||slot.label,slot.required!==false)]);const submit=action('Bổ sung và tiếp tục',()=>{if(!form.reportValidity())throw new Error('Vui lòng hoàn thiện thông tin bắt buộc.');return {workflowAction:'inputs',runId:execution.id,revision:execution.revision,inputs:Object.fromEntries(reads.map(([key,read])=>[key,read()]))};},true);form.onsubmit=event=>{event.preventDefault();submit.click();};}
     for(const [key,value] of Object.entries(execution.result||{})){

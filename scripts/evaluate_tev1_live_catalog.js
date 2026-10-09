@@ -16,7 +16,8 @@ async function main() {
     const records = (await pool.query('SELECT document FROM app.workflow_catalog')).rows.map(row => row.document);
     definitions = records.filter(record => record.enabled && record.published).flatMap(record => record.published.templates
       .filter(template => template.enabled !== false && !record.deletedTemplates?.[template.id])
-      .map(template => ({ ...template, id: `${record.id}/${template.id}` })));
+      .map(template => ({ ...template, id: `${record.id}/${template.id}`, packageVersion: record.published.manifest.version,
+        definitionHash: require('../src/backend/automation/contract').hash(template), domain: template.domain || record.published.manifest.domain || '' })));
     const snapshot = await new PostgresRepository(pool).snapshot(['ai_providers.json']);
     chatProvider = snapshot.documents.get('ai_providers.json').find(provider => process.env.CHAT_ROUTING_EVAL_CHAT_MODEL
       ? provider.model === process.env.CHAT_ROUTING_EVAL_CHAT_MODEL : provider.isActive);
@@ -72,7 +73,7 @@ async function main() {
   const report = { mode: process.env.CHAT_ROUTING_MODE, chatModel: chatProvider.model,
     passed: results.filter(item => item.passed).length, total: results.length,
     directTev1: results.filter(item => item.passed && item.trace.decisionSource === 'local_tev1').length, results };
-  const destination = path.resolve(__dirname, `../artifacts/tev1-live-catalog-${process.argv.includes('--greetings') ? 'greetings-' : ''}${localOnly ? 'local' : 'auto'}.json`);
+  const destination = path.resolve(__dirname, `../artifacts/tev1-live-catalog-${process.env.CHAT_ROUTING_RETRIEVAL_MODE === 'on' ? 'retrieval-' : ''}${process.argv.includes('--greetings') ? 'greetings-' : ''}${localOnly ? 'local' : 'auto'}.json`);
   fs.writeFileSync(destination, JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ passed: report.passed, total: report.total, directTev1: report.directTev1, chatModel: report.chatModel }));
   if (report.passed !== report.total) process.exitCode = 1;

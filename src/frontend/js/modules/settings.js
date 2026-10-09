@@ -300,12 +300,20 @@
     };
     poll();
   }
-  window.startStorageBackup = () => startBackupAction('/create', {});
-  window.downloadStorageBackup = () => { const id = el('settings-backup-select').value; if (id) window.location.href = `/api/backups/download/${encodeURIComponent(id)}`; };
+  window.startStorageBackup = async () => {
+    if (!await window.showUiConfirm('Tạo bản sao PostgreSQL, các collection Qdrant và file thư viện? Ứng dụng sẽ tạm dừng ghi dữ liệu trong lúc tạo gói.', { title: 'Xác nhận tạo backup', confirmText: 'Tạo backup', icon: 'fa-database' })) return;
+    await startBackupAction('/create', {});
+  };
+  window.downloadStorageBackup = async () => {
+    const id = el('settings-backup-select').value;
+    if (!id || !await window.showUiConfirm(`Tải gói backup "${id}" về máy?`, { title: 'Xác nhận tải backup', confirmText: 'Tải về', icon: 'fa-download' })) return;
+    window.location.href = `/api/backups/download/${encodeURIComponent(id)}`;
+  };
   window.updateStorageBackupFileName = () => { const file = el('settings-backup-file').files[0]; el('settings-backup-file-name').textContent = file ? file.name : 'Chưa chọn file .khbackup'; };
   window.uploadStorageBackup = async () => {
     const file = el('settings-backup-file').files[0];
     if (!file || !file.name.endsWith('.khbackup')) { backupMessage('Chọn file .khbackup để tải lên.', true); return; }
+    if (!await window.showUiConfirm(`Tải file "${file.name}" lên máy chủ và kiểm tra gói backup?`, { title: 'Xác nhận tải lên backup', confirmText: 'Tải lên & kiểm tra', icon: 'fa-upload' })) return;
     backupMessage('Đang tải file lên và kiểm tra checksum…');
     try {
       const response = await fetch('/api/backups/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
@@ -317,17 +325,22 @@
       backupMessage('Đã tải lên và kiểm tra gói. Có thể xem kế hoạch rồi restore vào đích mới.');
     } catch (error) { backupMessage(error.message, true); }
   };
-  window.verifyStorageBackup = () => { const id = el('settings-backup-select').value; if (id) startBackupAction('/verify', { id }); };
+  window.verifyStorageBackup = async () => {
+    const id = el('settings-backup-select').value;
+    if (!id || !await window.showUiConfirm(`Kiểm tra tính toàn vẹn của gói backup "${id}"?`, { title: 'Xác nhận kiểm tra backup', confirmText: 'Kiểm tra', icon: 'fa-check' })) return;
+    await startBackupAction('/verify', { id });
+  };
   window.importStorageBackup = async dryRun => {
     const id = el('settings-backup-select').value; const database = el('settings-backup-target').value.trim();
     if (!id || !database || database === 'Chưa xác định') { backupMessage('Chọn gói backup hợp lệ.', true); return; }
     if (dryRun) {
+      if (!await window.showUiConfirm(`Xem kế hoạch khôi phục gói "${id}" vào database ${database}?`, { title: 'Xem kế hoạch khôi phục', confirmText: 'Xem kế hoạch', icon: 'fa-database' })) return;
       try { const result = await backupApi('/restore-current', { id, dryRun: true }); backupResult(result); backupMessage('Đã kiểm tra kế hoạch ghi đè DB hiện tại.'); }
       catch (error) { backupMessage(error.message, true); }
       return;
     }
     const confirm = await window.showUiPrompt(
-      `Thao tác này sẽ ghi đè database ${database} và hai collection Qdrant hiện tại. Nhập chính xác tên database để xác nhận:`,
+      `Thao tác này sẽ ghi đè database ${database} và các collection Qdrant trong gói backup. Nhập chính xác tên database để xác nhận:`,
       '',
       { title: 'Xác nhận khôi phục Database', confirmText: 'Khôi phục DB hiện tại', icon: 'fa-database', tone: 'danger', requiredValue: database }
     );

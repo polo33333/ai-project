@@ -115,6 +115,16 @@ function validatePackage(bundle) {
     classification(template);
     if (template.review) ensure(['off', 'advisory', 'required'].includes(template.review.mode), 'Chế độ review không hợp lệ.');
     if (template.routingScope !== undefined) ensure(['collection', 'targeted', 'aggregate'].includes(template.routingScope), 'routingScope phải là collection, targeted hoặc aggregate.');
+    if (template.routingDescription !== undefined) ensure(typeof template.routingDescription === 'string' && template.routingDescription.trim(), 'routingDescription phải là mô tả không rỗng.');
+    if (template.capabilities !== undefined) {
+      ensure(template.capabilities && typeof template.capabilities === 'object' && !Array.isArray(template.capabilities), 'capabilities phải là metadata dạng object.');
+      for (const [key, value] of Object.entries(template.capabilities)) {
+        ensure(['summary', 'timeGranularities', 'units', 'limitations'].includes(key), 'Trường capabilities không được hỗ trợ.');
+        ensure(key === 'summary' ? typeof value === 'string' && value.trim() : Array.isArray(value) && value.every(item => typeof item === 'string' && item.trim()), `capabilities.${key} không hợp lệ.`);
+      }
+    }
+    if (template.routingGroup !== undefined) ensure(typeof template.routingGroup === 'string' && /^[a-zA-Z0-9_.-]{1,100}$/.test(template.routingGroup), 'routingGroup phải là mã nhóm 1–100 ký tự (chữ, số, _, ., -).');
+    for (const key of ['aliases', 'routingExamples']) if (template[key] !== undefined) ensure(Array.isArray(template[key]) && template[key].every(value => typeof value === 'string' && value.trim()), `${key} phải là danh sách chuỗi không rỗng.`);
     id(template.id); ensure(!identifiers.has(template.id), 'Template ID trùng.'); identifiers.add(template.id);
     ensure(typeof template.name === 'string' && template.name.trim() && typeof template.description === 'string', 'Template cần name/description.');
     ensure(Array.isArray(template.examples) && template.examples.length && template.examples.every(value => typeof value === 'string' && value.trim()), 'Template cần examples để discovery.');

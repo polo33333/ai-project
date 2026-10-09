@@ -7,6 +7,9 @@ const schema = require('../src/backend/intelligent_core/schema_context_service')
 const connector = require('../src/backend/services/sql_connector');
 const { trainingService } = require('../src/backend/training_core');
 const fixture = require('./fixtures/provider_raw_contract_chat.json');
+test.beforeEach(t => {
+  t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', async () => ({ flow: 'chat' }));
+});
 
 test('a contract attribute follow-up uses verified workflow data and bypasses automatic document/schema retrieval', async t => {
   const memory = require('../src/backend/memory_core').memoryService;
@@ -216,4 +219,85 @@ test('core preserves workflow routing usage alongside verified provider data and
   assert.ok(progress.some(event => event.type === 'policy_repair'));
   assert.ok(progress.every(event => !JSON.stringify(event).includes('SELECT')));
   assert.equal(progress.at(-1).status, 'done');
+});
+
+test('selected knowledge bypasses workflow/schema and excludes old history even without hits', async t => {
+  const flowCalls = t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', async (_, options) => {
+    options.routingContext.trace.decisionSource = 'local_tev1';
+    return { flow: 'knowledge' };
+  });
+  const documents = require('../src/backend/knowledge_core/services/retrieval_service');
+  const selected = { id: 'knowledge-test', name: 'Knowledge', model: 'test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid', supportsToolCalling: true };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  const workflow = t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => { throw new Error('No workflow routing'); });
+  const schemaCalls = t.mock.method(schema, 'buildSchemaContext', async () => { throw new Error('No schema retrieval'); });
+  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
+  let hits = [];
+  let expectedSources;
+  t.mock.method(documents, 'search', async (_, options) => {
+    assert.deepEqual(options.documentIds, expectedSources);
+    assert.equal(options.scopeMode, expectedSources.length ? 'selected' : 'all_authorized');
+    return { results: hits, mode: 'hybrid' };
+  });
+  const requests = [];
+  t.mock.method(require('../src/backend/agent_core').defaultHarness, 'run', async request => {
+    requests.push(request);
+    return { replyText: 'Hướng dẫn tải app [1]', toolCalls: [], tokenUsage: { available: false } };
+  });
+  for (const sourceIds of [['selected-doc'], []]) {
+  expectedSources = sourceIds;
+  for (const found of [false, true]) {
+    hits = found ? [{ payload: { title: 'IPMS', fullText: 'Tải IPMS từ cửa hàng ứng dụng.', chunkIndex: 0 } }] : [];
+    const result = await core.chat('tìm trong kho tri thức: cách tải app', { providerId: selected.id, knowledgeSourceIds: sourceIds, history: [{ role: 'user', content: 'OLD_HISTORY_SENTINEL' }], permissions: ['knowledge:read'] });
+    assert.equal(result.trace.workflowRouting.decisionSource, sourceIds.length ? 'selected_knowledge' : 'local_tev1');
+    const request = requests.at(-1);
+    assert.equal(request.context.mode, 'knowledge');
+    assert.deepEqual(request.enabledToolNames, []);
+    assert.deepEqual(request.context.selectedTables, []);
+    assert.equal(request.messages.length, 2);
+    assert.doesNotMatch(JSON.stringify(request.messages), /OLD_HISTORY_SENTINEL/);
+    assert.match(request.messages[0].content, found ? /IPMS/ : /No matching document passages/);
+  }
+  }
+  assert.equal(workflow.mock.callCount(), 0);
+  assert.equal(schemaCalls.mock.callCount(), 0);
+  assert.equal(flowCalls.mock.callCount(), 2);
+});
+
+test('early workflow replies include flow selection usage exactly once', async t => {
+  const selected = { id: 'usage-test', name: 'Usage', model: 'chat-test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', async (_, options) => {
+    options.onWorkflowUsage({ inputTokens: 970, outputTokens: 9, totalTokens: 979, calls: 2 });
+    return { flow: 'chat' };
+  });
+  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async (_, options) => {
+    const usage = { available: true, inputTokens: 179, outputTokens: 1, totalTokens: 180, calls: 1 };
+    options.onWorkflowUsage(usage);
+    return { success: true, replyText: 'Hello', tokenUsage: usage, trace: { completionStatus: 'SUCCESS' } };
+  });
+  const result = await core.chat('Hello', { providerId: selected.id });
+  assert.deepEqual({ ...result.tokenUsage, byModel: undefined }, { available: true, inputTokens: 1149, outputTokens: 10, totalTokens: 1159, calls: 3, byModel: undefined });
+  assert.equal(result.tokenUsage.byModel[0].inputTokens, 1149);
+});
+
+test('confident TEV1 greeting returns immediately without workflow or schema work', async t => {
+  const selected = { id: 'greeting-test', name: 'Chat', model: 'chat', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', async (_, options) => {
+    options.onWorkflowUsage({ inputTokens: 300, outputTokens: 1, totalTokens: 301, calls: 1 });
+    return { flow: 'chat', quickGreeting: true };
+  });
+  const workflow = t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', async () => { throw new Error('No second greeting probe'); });
+  const schemaCall = t.mock.method(schema, 'buildSchemaContext', async () => { throw new Error('No schema for greeting'); });
+  const result = await core.chat('hello', { providerId: selected.id });
+  assert.equal(result.success, true);
+  assert.equal(result.tokenUsage.calls, 1);
+  assert.equal(result.tokenUsage.totalTokens, 301);
+  assert.equal(result.trace.workflowRouting.quickReplyKind, 'greeting');
+  assert.equal(workflow.mock.callCount(), 0);
+  assert.equal(schemaCall.mock.callCount(), 0);
 });

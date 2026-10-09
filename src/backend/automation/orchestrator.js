@@ -313,9 +313,9 @@ async function handleRouted(question, options) {
     options.onWorkflowRouting({ reason: 'routing_failed', ...routingContext.trace });
     if (routingContext.config.mode === 'auto' && /^ROUTING_/.test(routingContext.trace.errorCode)) {
       routingContext.trace.chatFallbackReason = 'routing_failed_ask_user';
-      return decorate(result({ status: 'SELECT_TEMPLATE', conversationId,
-        candidates: catalog.map(item => ({ id: item.id, name: item.name, description: item.description })) },
-      'Mình chưa xác định chắc nghiệp vụ. Bạn chọn nghiệp vụ cần tra cứu bên dưới để mình hỏi đúng thông tin.'));
+      return decorate({ success: true, completionStatus: 'PARTIAL',
+        replyText: 'Mình chưa xác định rõ yêu cầu. Bạn muốn tìm hiểu khả năng của nghiệp vụ hay yêu cầu thực hiện? Hãy cho biết nghiệp vụ bạn đang hỏi.',
+        executionMode: 'chat', toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'PARTIAL' } });
     }
     return decorate({ success: false, completionStatus: 'ERROR', executionMode: 'error', type: 'error',
       question, replyText: null, error: error.message, errorCode: routingContext.trace.errorCode,
@@ -323,6 +323,17 @@ async function handleRouted(question, options) {
   }
   options.onProgress?.({ type: 'workflow_routing', label: 'Đã xác định yêu cầu', status: 'done', icon: 'brain' });
   if (decision.route === 'chat') {
+    if (decision.purpose === 'explain') {
+      // Re-fetch the authorized published definition; explanation never touches a run.
+      try {
+        const relevant = await automation.registry.getTemplate(decision.workflowId, context);
+        return decorate(await require('./workflow_explanation').explain(question, relevant, options));
+      }
+      catch (error) {
+        if (options.signal?.aborted || error.name === 'AbortError') throw error;
+        return decorate({ success: false, executionMode: 'error', replyText: null, error: error.message, errorCode: error.code || 'ROUTING_PROVIDER_ERROR', toolCalls: [], sqlExecutions: [] });
+      }
+    }
     if (routingContext.config.quickGreetingEnabled && routingContext.trace.decisionSource === 'local_tev1' && decision.quickGreeting === true) {
       routingContext.trace.quickReplyKind = 'greeting';
       return decorate({ success: true, replyText: 'Chào bạn! Bạn muốn tra cứu thông tin gì?',
@@ -331,8 +342,13 @@ async function handleRouted(question, options) {
     return null;
   }
   if (decision.route === 'unclear') {
+    if (decision.purpose === 'unclear' && decision.candidateIds.length === 1) {
+      const relevant = catalog.find(item => item.id === decision.candidateIds[0]);
+      return decorate({ success: true, completionStatus: 'PARTIAL', replyText: `Bạn muốn tìm hiểu khả năng của “${relevant.name}” hay yêu cầu thực hiện nghiệp vụ này?`,
+        executionMode: 'chat', toolCalls: [], sqlExecutions: [], trace: { completionStatus: 'PARTIAL' } });
+    }
     const candidates = catalog.filter(item => decision.candidateIds.includes(item.id))
-      .map(item => ({ id: item.id, name: item.name, description: item.description }));
+      .map(item => ({ id: item.id, name: item.name, description: item.capabilities?.summary || '' }));
     if (candidates.length) return decorate(result({ status: 'SELECT_TEMPLATE', conversationId, candidates },
       'Có một số nghiệp vụ có thể phù hợp. Bạn chọn nghiệp vụ cần thực hiện bên dưới.'));
     return decorate({ success: true, completionStatus: 'PARTIAL', replyText: 'Bạn muốn hỏi thông tin hay thực hiện nghiệp vụ nào? Hãy mô tả thêm yêu cầu để mình chọn đúng.',

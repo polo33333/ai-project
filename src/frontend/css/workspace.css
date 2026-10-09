@@ -417,7 +417,7 @@ button:disabled { cursor: not-allowed; }
 /* New conversations share the message area's space with a compact welcome. */
 .chat-welcome { display: none; }
 #page-chat-messages-container:not(:has(> *)),
-#page-chat-messages-container:not(:has(> *)) ~ #quick-prompts-bar {
+.chat-main:has(#page-chat-messages-container:not(:has(> *))) #quick-prompts-bar {
   display: none !important;
 }
 #page-chat-messages-container:not(:has(> *)) + .chat-welcome {

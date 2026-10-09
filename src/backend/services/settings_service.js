@@ -28,6 +28,8 @@ Object.assign(defaults, {
 });
 const choices = {
   CHAT_ROUTING_MODE: ['local_tev1', 'chat_model', 'auto'],
+  CHAT_ROUTING_RETRIEVAL_MODE: ['off', 'shadow', 'on'],
+  CHAT_ROUTING_RETRIEVAL_METHOD: ['lexical', 'hybrid'],
   NODE_ENV: ['production', 'development', 'test'],
   APP_STORAGE_BACKEND: ['postgres', 'json'],
   EMBEDDING_PROVIDER: ['ollama', 'openai'],

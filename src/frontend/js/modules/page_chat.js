@@ -391,10 +391,16 @@ function cleanReplyText(text) {
     .replace(/\{\s*(?:render[_-]?)?chart\s*\}/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  // Remove raw JSON blocks that look like chartSpec (starts with { "type": ...)
-  text = text.replace(/```json[\s\S]*?```/gi, '').trim();
-  // Remove bare JSON objects at start/end of text that came from render_chart
-  text = text.replace(/^[\s\n]*\{[\s\n]*"type":[\s\S]*?\}[\s\n]*/m, '').trim();
+  // Preserve API request/response examples, including mislabeled curl blocks.
+  // Only suppress a complete Chart.js payload, never arbitrary JSON by language.
+  text = text.replace(/```json\s*([\s\S]*?)```/gi, (block, content) => {
+    try {
+      const spec = JSON.parse(content);
+      const isChart = ['bar', 'line', 'pie', 'doughnut', 'radar', 'polarArea', 'bubble', 'scatter'].includes(spec?.type)
+        && Array.isArray(spec.data?.labels) && Array.isArray(spec.data?.datasets);
+      return isChart ? '' : block;
+    } catch { return block; }
+  }).trim();
   return text;
 }
 
@@ -502,12 +508,52 @@ function renderMarkdownTable(headerLine, bodyLines) {
   return `<div class="chat-markdown-table-wrap"><table class="chat-markdown-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
 }
 
+function renderChatCodeBlock(content, language = '') {
+  let code = content;
+  let label = language.toLowerCase();
+  if (/^\s*curl\b/.test(code)) label = 'bash';
+  else if (label === 'json') {
+    try { code = JSON.stringify(JSON.parse(code), null, 2); } catch { /* Preserve incomplete examples. */ }
+  }
+  return `<div class="chat-code-block"><div class="chat-code-toolbar"><span>${escapeChatMarkdown(label || 'code')}</span><button type="button" onclick="copyChatCodeBlock(this)" aria-label="Sao chép mã"><i class="fa-regular fa-copy"></i> Sao chép</button></div><pre tabindex="0"><code>${escapeChatMarkdown(code)}</code></pre></div>`;
+}
+
+async function copyChatCodeBlock(button) {
+  const code = button.closest('.chat-code-block')?.querySelector('code');
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code.textContent);
+    button.textContent = 'Đã sao chép';
+    setTimeout(() => { button.textContent = 'Sao chép'; }, 1800);
+  } catch { button.textContent = 'Không thể sao chép'; }
+}
+
 function parseMarkdown(text) {
   if (!text) return '';
   const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
   const blocks = [];
 
   for (let index = 0; index < lines.length;) {
+    const fence = lines[index].match(/^\s*(`{3,}|`)([a-zA-Z0-9_+-]*)\s*$/);
+    // Single-backtick blocks must name a language; ordinary inline code stays inline.
+    if (fence && (fence[1].length >= 3 || fence[2])) {
+      const delimiter = fence[1];
+      const code = [];
+      let citation = '';
+      index++;
+      while (index < lines.length) {
+        const closing = lines[index].match(/^\s*(`+)\s*(\[\d+(?:\s*,\s*\d+)*\])?\s*$/);
+        if (closing && closing[1] === delimiter) {
+          citation = closing[2] || '';
+          index++;
+          break;
+        }
+        code.push(lines[index++]);
+      }
+      blocks.push(renderChatCodeBlock(code.join('\n'), fence[2]));
+      if (citation) blocks.push(parseMarkdownInline(citation));
+      continue;
+    }
     if (index + 1 < lines.length && lines[index].includes('|') && isMarkdownTableDivider(lines[index + 1])) {
       const rows = [];
       index += 2;
@@ -932,7 +978,7 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
   container.appendChild(node);
   node.addEventListener('workflow-execution-updated', event => {
     const execution = event.detail.execution;
-    if (execution.tokenUsage?.available) { const feedback = node.querySelector('.chat-feedback'); if (feedback) { feedback.querySelector('.chat-token-usage')?.remove(); feedback.insertAdjacentHTML('beforeend', renderChatTokenUsage(execution.tokenUsage)); } }
+    if (execution.tokenUsage?.available) { const feedback = node.querySelector('.chat-feedback'); if (feedback) { feedback.querySelector('.chat-token-usage')?.remove(); feedback.querySelector('.chat-routing-usage')?.remove(); feedback.insertAdjacentHTML('beforeend', renderChatTokenUsage(execution.tokenUsage, execution.routing)); } }
     const answer = node.querySelector('.chat-ai-answer');
     if (answer && execution.status === 'SUCCEEDED') answer.textContent = `${execution.name} đã hoàn thành.`;
     if (answer && execution.status === 'CANCELLED') answer.textContent = `Đã hủy ${execution.name}.`;
@@ -1016,20 +1062,38 @@ function renderChatFeedback(data = {}, tokenUsage = null) {
       <button type="button" data-rating="like" onclick="submitChatFeedback(this)" title="Hữu ích" aria-label="Thích câu trả lời"><i class="fa-regular fa-thumbs-up"></i></button>
       <button type="button" data-rating="dislike" onclick="submitChatFeedback(this)" title="Chưa hữu ích" aria-label="Không thích câu trả lời"><i class="fa-regular fa-thumbs-down"></i></button>
     </div>
-    ${renderChatTokenUsage(tokenUsage, true)}
+    ${renderChatTokenUsage(tokenUsage, data.routing)}
   </div>`;
 }
 
-function renderChatTokenUsage(usage) {
+function renderChatTokenUsage(usage, routing = null) {
   if (!usage || usage.available === false) return '';
   const input = Number(usage.inputTokens) || 0;
   const output = Number(usage.outputTokens) || 0;
   const total = Number(usage.totalTokens) || input + output;
   return `<div class="chat-token-usage" title="Tổng token của toàn bộ các lượt gọi model trong yêu cầu này">
-    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Đầu vào: <strong>${input.toLocaleString('vi-VN')}</strong></span>
-    <span><i class="fa-solid fa-arrow-down"></i> Trả lời: <strong>${output.toLocaleString('vi-VN')}</strong></span>
+    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Đầu vào: <strong>${input.toLocaleString('vi-VN')}</strong>${renderDecisionModelUsage(usage)}</span>
+    <span title="Tổng token đầu ra của các lần gọi model trong yêu cầu, bao gồm định tuyến"><i class="fa-solid fa-arrow-down"></i> Trả lời: <strong>${output.toLocaleString('vi-VN')}</strong></span>
     <span class="chat-token-total"><i class="fa-solid fa-coins"></i> Tổng: <strong>${total.toLocaleString('vi-VN')}</strong> token</span>
   </div>`;
+}
+
+function renderDecisionModelUsage(usage) {
+  const stages = usage?.byModel || [];
+  if (!stages.length) return '';
+  const models = new Map();
+  for (const stage of stages) {
+    const name = String(stage.model || 'Không rõ model');
+    const item = models.get(name) || { input: 0, output: 0, total: 0, calls: 0 };
+    item.input += Number(stage.inputTokens) || 0;
+    item.output += Number(stage.outputTokens) || 0;
+    item.total += Number(stage.totalTokens) || (Number(stage.inputTokens) || 0) + (Number(stage.outputTokens) || 0);
+    item.calls += Number(stage.calls) || 0;
+    models.set(name, item);
+  }
+  const format = value => value.toLocaleString('vi-VN');
+  const detail = [...models].map(([name, item]) => `${name}: đầu vào ${format(item.input)}, đầu ra ${format(item.output)}, tổng ${format(item.total)} token; ${format(item.calls)} lượt đánh giá/gọi`).join('\n');
+  return `<small class="chat-routing-inline" title="${escapeChatMarkdown(detail)}">(${[...models].map(([name, item]) => `<strong>${escapeChatMarkdown(name)}</strong>: <strong>${format(item.input)}</strong>`).join('; ')})</small>`;
 }
 
 async function copyPageChatQuestion(button) {
@@ -1513,11 +1577,11 @@ function renderChatSessionsList() {
     div.className = `chat-session-item${isCurrent ? ' is-current' : ''}${session.pinned ? ' is-pinned' : ''}`;
     div.dataset.sessionId = session.id;
     div.innerHTML = `
-      <div class="chat-session-main" onclick="selectChatSession('${session.id}')">
-        <i class="fa-${session.pinned ? 'solid' : 'regular'} ${session.pinned ? 'fa-thumbtack' : 'fa-message'}"></i>
+      <button type="button" class="chat-session-main" ${isCurrent ? 'aria-current="true"' : ''} onclick="selectChatSession('${session.id}')">
+        <i aria-hidden="true" class="fa-${session.pinned ? 'solid' : 'regular'} ${session.pinned ? 'fa-thumbtack' : 'fa-message'}"></i>
         <span title="${escapeChatMarkdown(session.title)}">${escapeChatMarkdown(session.title)}</span>
         <time>${formatSessionTime(session.updatedAt)}</time>
-      </div>
+      </button>
       <button class="chat-session-more" onclick="toggleChatSessionMenu('${session.id}',event)" title="Tùy chọn" aria-label="Tùy chọn đoạn chat" aria-expanded="false">
         <i class="fa-solid fa-ellipsis"></i>
       </button>
@@ -1673,13 +1737,7 @@ async function populateChatModelSelector() {
   let providers = [];
   try {
     providers = window.aiProvidersData;
-    if (!providers || providers.length === 0) {
-      const res = await fetch('/api/ai-providers');
-      if (res.ok) {
-        const data = await res.json();
-        providers = Array.isArray(data) ? data : (data.providers || []);
-      }
-    }
+    if (!providers?.length) providers = await window.loadChatProviders();
     selector.innerHTML = '';
     if (providers && providers.length > 0) {
       providers.forEach(prov => {
@@ -1714,24 +1772,38 @@ async function populateChatModelSelector() {
   selectPageChatModel(selectedValue);
 }
 
-async function fetchAndRenderQuickPrompts() {
+let quickPromptsRequest = null;
+function renderQuickPrompts(prompts) {
   const container = document.getElementById('quick-prompts-bar');
   if (!container) return;
-  try {
-    const res = await fetch('/api/persona');
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const prompts = data.quickPrompts || [];
-    if (prompts.length > 0) {
-      container.innerHTML = prompts.map(p => `
-        <button onclick="useQuickPrompt('${p.prompt.replace(/'/g, "\\'")}')" style="font-size:11.5px;padding:6px 14px;border-radius:20px;background:#fff;border:1px solid #cbd5e1;box-shadow:0 2px 5px rgba(0,0,0,.03);color:#334155;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;">
-          <i class="fa-solid ${p.icon || 'fa-lightbulb'}" style="color:#6366f1;margin-right:6px;"></i>${p.label}
-        </button>
-      `).join('');
-    }
-  } catch { /* silent */ }
+  container.replaceChildren();
+  for (const prompt of prompts) {
+    const button = document.createElement('button'); button.type = 'button';
+    const icon = document.createElement('i');
+    icon.className = `fa-solid ${/^fa-[a-z0-9-]+$/.test(prompt.icon || '') ? prompt.icon : 'fa-lightbulb'}`;
+    icon.setAttribute('aria-hidden', 'true');
+    button.append(icon, document.createTextNode(prompt.label));
+    button.onclick = () => useQuickPrompt(prompt.prompt);
+    container.appendChild(button);
+  }
 }
-
+async function fetchAndRenderQuickPrompts() {
+  let cached = null;
+  try { cached = JSON.parse(sessionStorage.getItem('kh-quick-prompts')); } catch (_) {}
+  if (cached && Date.now() - cached.at < 300000 && Array.isArray(cached.prompts)) renderQuickPrompts(cached.prompts);
+  if (Array.isArray(window.aiPersona?.quickPrompts)) renderQuickPrompts(window.aiPersona.quickPrompts);
+  if (!quickPromptsRequest) {
+    quickPromptsRequest = (async () => {
+      const response = await fetch('/api/persona');
+      if (!response.ok) throw new Error('Unable to load quick prompts');
+      const data = await response.json(); window.aiPersona = data;
+      const prompts = Array.isArray(data.quickPrompts) ? data.quickPrompts : [];
+      try { sessionStorage.setItem('kh-quick-prompts', JSON.stringify({ at: Date.now(), prompts })); } catch (_) {}
+      renderQuickPrompts(prompts);
+    })().catch(() => {}).finally(() => { quickPromptsRequest = null; });
+  }
+  await quickPromptsRequest;
+}
 // Exports
 window.sendPageChatMessage = sendPageChatMessage;
 window.handlePageChatSendAction = handlePageChatSendAction;

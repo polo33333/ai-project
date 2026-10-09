@@ -125,8 +125,16 @@ class GuardedAgentHarness {
         }
         budget.consumeModelCall();
         try {
+          const callStartedAt = Date.now();
           const response = await boundedCall(signal => this.dispatch(candidate, outgoing, definitions, signal), context.signal, Math.min(providerTimeout, budget.remainingMs()));
           const usage = response.usage;
+          trace.steps.push({ type: 'MODEL_USAGE', stage: context.mode === 'knowledge' ? 'knowledge_answer' : 'agent',
+            iteration: trace.iterations, repairAttempt: repairs, providerId: candidate.id, model: candidate.model,
+            durationMs: Date.now() - callStartedAt, calls: Math.max(1, Number(usage?.calls) || 1),
+            inputTokens: usage ? Number(usage.inputTokens) || 0 : null,
+            outputTokens: usage ? Number(usage.outputTokens) || 0 : null,
+            totalTokens: usage ? Number(usage.totalTokens) || (Number(usage.inputTokens) || 0) + (Number(usage.outputTokens) || 0) : null,
+            inputTokensEstimated: estimateTokens(outgoing) + estimateTokens(definitions), usageAvailable: Boolean(usage) });
           trace.tokenUsage.calls += Math.max(1, Number(usage?.calls) || 1);
           for (let i = 1; i < (Number(usage?.calls) || 1); i++) budget.consumeModelCall();
           if (usage) {
@@ -153,7 +161,7 @@ class GuardedAgentHarness {
       if (repairs >= this.maxRepairs) { stopReason = 'REPAIR_BUDGET_EXCEEDED'; return false; }
       repairs++; budget.recordRepair();
       const citationInstruction = failures.includes('MISSING_KNOWLEDGE_CITATION')
-        ? ` Rewrite the answer from the supplied document context. After every document claim, insert the actual numbered marker such as [1] or [2], matching Tài liệu 1 or Tài liệu 2. Never output the literal text [N] and do not invent marker numbers. Available evidence:\n\n${String(context.knowledgeGrounding?.documentContext || '')}`
+        ? ` Rewrite the answer from the supplied document context. After every document claim, insert the actual numbered marker such as [1] or [2], matching Tài liệu 1 or Tài liệu 2. Never output the literal text [N] and do not invent marker numbers. Use the document evidence already supplied in the system message.`
         : '';
       conversation.push({ role: 'user', content: `The request is incomplete: ${failures.join(', ')}. Use the enabled tools to produce the missing outputs from verified data. Do not print SQL/tool JSON as the final answer. If tools already succeeded, answer from their results. For document/web questions use the supplied sources.${citationInstruction}` });
       emitProgress(onProgress, { type: 'policy_repair', label: 'Kết quả chưa đầy đủ, đang điều chỉnh', status: 'warning', icon: 'wrench', iteration: trace.iterations });

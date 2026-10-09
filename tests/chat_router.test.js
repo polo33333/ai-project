@@ -7,6 +7,7 @@ const providers = require('../src/backend/services/ai_provider_manager');
 const automation = require('../src/backend/automation');
 const orchestrator = require('../src/backend/automation/orchestrator');
 const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
+const retrieval = require('../src/backend/automation/workflow_retrieval');
 
 const chatProvider = { id: 'chosen', name: 'Chosen chat', model: 'chosen-chat', type: 'openai', apiFormat: 'openai',
   executionClass: 'remote', baseUrl: 'https://chosen.invalid/v1', apiKey: 'test-secret', contextWindow: 32768 };
@@ -14,7 +15,7 @@ const definition = { id: 'contracts/detail', name: 'Tra cứu hợp đồng', de
   inputs: { code: { required: true, ask: 'Mã hợp đồng?', schema: { type: 'string', minLength: 1 } } } };
 const other = { id: 'employees/detail', name: 'Tra cứu nhân viên', description: 'Tra cứu nhân viên theo mã', inputs: definition.inputs };
 function decision(overrides = {}) {
-  return { route: 'chat', workflowId: null, candidateIds: [], inputDisposition: 'none', pendingRunId: null,
+  return { route: 'chat', purpose: overrides.route === 'workflow' ? 'execute' : overrides.route === 'unclear' ? 'unclear' : 'none', workflowId: null, candidateIds: [], inputDisposition: 'none', pendingRunId: null,
     inputs: {}, inputEvidence: {}, evidence: [], requestedScope: 'unclear', supportedScope: 'unclear',
     needsClarification: false, abstain: false, cancelPending: false, ...overrides };
 }
@@ -49,8 +50,9 @@ function response(value, provider) {
   for (const [key, query] of Object.entries(task.questions)) {
     let pick;
     if (key === 'route') pick = value.cancelPending ? 'cancel' : value.inputDisposition === 'slot_answer' ? 'slot_answer'
-      : value.route === 'workflow' ? value.workflowId === definition.id ? 'w0' : value.workflowId === other.id ? 'w1' : 'unauthorized'
+      : value.route === 'workflow' || value.purpose === 'explain' ? value.workflowId === definition.id ? 'w0' : value.workflowId === other.id ? 'w1' : 'unauthorized'
         : value.abstain ? 'unclear' : value.route;
+    else if (key === 'purpose') pick = value.purpose;
     else if (key === 'requested_scope') pick = value.requestedScope;
     else if (key.startsWith('scope_')) pick = value.route === 'workflow' ? value.supportedScope : 'targeted';
     else if (key === 'pending_turn') pick = value.cancelPending ? 'cancel' : value.inputDisposition === 'slot_answer' ? 'slot_answer' : value.route === 'workflow' ? 'new_request' : 'unrelated';
@@ -61,6 +63,67 @@ function response(value, provider) {
   }
   return { content: JSON.stringify({ answers }), usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, calls: Object.keys(task.questions).length } };
 }
+
+test('retrieval passes only the authorized shortlist to TEV1 from a large catalog', async t => {
+  const context = fixture(t, 'auto', { CHAT_ROUTING_RETRIEVAL_MODE: 'on' });
+  const catalog = [definition, other, ...Array.from({ length: 98 }, (_, i) => ({ ...other, id: `extra/${i}` }))];
+  t.mock.method(retrieval.service, 'search', async (_, allowed) => {
+    assert.equal(allowed.length, 100);
+    return { definitions: [definition], trace: { catalogCount: 100, candidateCount: 1 } };
+  });
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages) => {
+    assert.equal(JSON.parse(messages[1].content).catalog.length, 1);
+    assert.ok(provider.decisionTask);
+    return response(workflow('Tra cứu hợp đồng'), provider);
+  });
+  const result = await router.decide('Tra cứu hợp đồng', catalog, null, { routingContext: context });
+  assert.equal(result.workflowId, definition.id);
+  assert.equal(context.trace.retrieval.candidateCount, 1);
+});
+test('uncertain shortlist escalates once against the full authorized catalog', async t => {
+  const context = fixture(t, 'auto', { CHAT_ROUTING_RETRIEVAL_MODE: 'on' });
+  t.mock.method(retrieval.service, 'search', async () => ({ definitions: [definition], trace: {} }));
+  const calls = [];
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages) => {
+    calls.push(JSON.parse(messages[1].content).catalog.length);
+    return response(provider.decisionTask ? decision({ route: 'unclear', needsClarification: true }) : decision(), provider);
+  });
+  await router.decide('yêu cầu chưa rõ', [definition, other], null, { routingContext: context });
+  assert.deepEqual(calls, [1, 2]);
+});
+test('retrieval outage uses one chat escalation even if that model returns unclear', async t => {
+  const context = fixture(t, 'auto', { CHAT_ROUTING_RETRIEVAL_MODE: 'on' });
+  t.mock.method(retrieval.service, 'search', async () => { throw Object.assign(new Error('unavailable'), { code: 'ROUTING_RETRIEVAL_UNAVAILABLE' }); });
+  const mock = t.mock.method(adapters, 'dispatchToProvider', async provider => {
+    assert.equal(provider.model, chatProvider.model);
+    return response(decision({ route: 'unclear', needsClarification: true }), provider);
+  });
+  const result = await router.decide('Tra cứu hợp đồng', [definition, other], null, { routingContext: context });
+  assert.equal(result.route, 'unclear'); assert.equal(mock.mock.callCount(), 1);
+});
+test('local_tev1 retrieval outage never invokes model chat', async t => {
+  const context = fixture(t, 'local_tev1', { CHAT_ROUTING_RETRIEVAL_MODE: 'on' });
+  t.mock.method(retrieval.service, 'search', async () => { throw new Error('unavailable'); });
+  const mock = t.mock.method(adapters, 'dispatchToProvider', async () => { throw new Error('unexpected call'); });
+  await assert.rejects(router.decide('Tra cứu hợp đồng', [definition], null, { routingContext: context }), { code: 'ROUTING_RETRIEVAL_UNAVAILABLE' });
+  assert.equal(mock.mock.callCount(), 0);
+});
+test('chat failure after retrieval outage is propagated without a second escalation', async t => {
+  const context = fixture(t, 'auto', { CHAT_ROUTING_RETRIEVAL_MODE: 'on' });
+  t.mock.method(retrieval.service, 'search', async () => { throw new Error('unavailable'); });
+  const mock = t.mock.method(adapters, 'dispatchToProvider', async () => { throw new Error('chat unavailable'); });
+  await assert.rejects(router.decide('Tra cứu hợp đồng', [definition], null, { routingContext: context }), { code: 'ROUTING_PROVIDER_ERROR' });
+  assert.equal(mock.mock.callCount(), 1);
+});
+test('shadow retrieval does not change the catalog sent to the router', async t => {
+  const context = fixture(t, 'local_tev1', { CHAT_ROUTING_RETRIEVAL_MODE: 'shadow' });
+  t.mock.method(retrieval.service, 'search', async () => ({ definitions: [definition], trace: {} }));
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages) => {
+    assert.equal(JSON.parse(messages[1].content).catalog.length, 2);
+    return response(decision(), provider);
+  });
+  await router.decide('giải thích', [definition, other], null, { routingContext: context });
+});
 
 for (const mode of router.MODES) {
   test(`${mode}: pins routing and chat providers and records one decision`, async t => {
@@ -78,7 +141,7 @@ for (const mode of router.MODES) {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].model, mode === 'chat_model' ? chatProvider.model : 'tev1:4b');
     assert.equal(context.chatProviderSnapshot.model, chatProvider.model);
-    assert.equal(context.executionBudget.modelCalls, mode === 'chat_model' ? 1 : 6);
+    assert.equal(context.executionBudget.modelCalls, mode === 'chat_model' ? 1 : 7);
     assert.equal(usages.length, 1);
     assert.equal(context.trace.decisionSource, mode === 'chat_model' ? 'chat_model' : 'local_tev1');
     assert.equal(context.trace.chatModel, chatProvider.model);
@@ -123,7 +186,7 @@ for (const failure of ['unclear', 'abstain', 'invalid_json', 'unknown_id', 'prov
     assert.deepEqual(called, ['tev1:4b', 'chosen-chat']);
     assert.equal(context.trace.escalated, true);
     assert.equal(context.trace.decisionSource, 'chat_model');
-    assert.equal(context.executionBudget.modelCalls, 6);
+    assert.equal(context.executionBudget.modelCalls, 7);
     assert.equal(context.trace.stages.length, 2);
   });
 }
@@ -253,6 +316,37 @@ function handleFixture(t, mode = 'local_tev1', current = null, extraEnv = {}) {
   const cancels = t.mock.method(automation.runtime, 'cancel', async () => ({ id: current?.id, name: definition.name, status: 'CANCELLED' }));
   return { context, creates, updates, cancels, options: { routingContext: context, session: { id: 'conversation', accountId: 'actor' }, permissions: ['admin'] } };
 }
+
+for (const mode of ['local_tev1', 'chat_model']) test(`${mode} explains capabilities from metadata without modifying pending runs`, async t => {
+  const f = handleFixture(t, mode, { id: 'waiting', templateId: other.id, status: 'WAITING_INPUT', definition: other, missing: [{ key: 'code' }], input: {} });
+  const question = 'Which options does this operation support?';
+  const metadata = { ...definition, capabilities: { summary: 'Public summary', timeGranularities: ['configured-period'], units: ['configured-unit'] } };
+  t.mock.method(automation.registry, 'getTemplate', async id => { assert.equal(id, definition.id); return metadata; });
+  let calls = 0;
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages, tools) => {
+    calls++;
+    if (calls === 1) return response(decision({ purpose: 'explain', workflowId: definition.id, evidence: [{ source: 'user_message', text: question }] }), provider);
+    assert.deepEqual(tools, []); assert.equal(provider.model, chatProvider.model);
+    const payload = JSON.parse(messages[1].content);
+    assert.deepEqual(payload.workflow.capabilities, metadata.capabilities);
+    assert.equal(payload.workflow.workflow, undefined);
+    return { content: 'Configured options explained.', usage: { calls: 1 } };
+  });
+  const result = await orchestrator.handle(question, f.options);
+  assert.equal(result.replyText, 'Configured options explained.');
+  assert.equal(result.execution, undefined);
+  assert.equal(f.context.decision.purpose, 'explain');
+  assert.equal(f.creates.mock.callCount(), 0); assert.equal(f.updates.mock.callCount(), 0); assert.equal(f.cancels.mock.callCount(), 0);
+});
+
+test('purpose contract rejects explanation disguised as execution and unauthorized explanation', () => {
+  const question = 'Available options?';
+  assert.throws(() => router.validateDecision(workflow(question, { purpose: 'explain' }), question, [definition], null), { code: 'ROUTING_INVALID_OUTPUT' });
+  const explain = decision({ purpose: 'explain', workflowId: definition.id, evidence: [{ source: 'user_message', text: question }] });
+  assert.throws(() => router.validateDecision(explain, question, [other], null), { code: 'ROUTING_INVALID_OUTPUT' });
+  assert.throws(() => router.validateDecision({ ...explain, cancelPending: true }, question, [definition], null), { code: 'ROUTING_INVALID_OUTPUT' });
+  assert.throws(() => router.validateDecision({ ...explain, inputs: { code: 'Available' }, inputEvidence: { code: 'Available' } }, question, [definition], null), { code: 'ROUTING_INVALID_OUTPUT' });
+});
 
 test('an explicit reviewed entity list bypasses workflow selection and preserves pending runs', async t => {
   const f = handleFixture(t);
@@ -402,7 +496,7 @@ test('routing selects workflow before asking inputs and keeps chat provider visi
   assert.equal(f.creates.mock.callCount(), 1);
   assert.equal(result.usedProvider.model, 'chosen-chat');
   assert.equal(result.trace.workflowRouting.routingModel, 'tev1:4b');
-  assert.equal(result.trace.executionBudget.modelCalls, 6);
+  assert.equal(result.trace.executionBudget.modelCalls, 7);
   assert.equal(result.tokenUsage.totalTokens, 15);
 });
 
@@ -477,10 +571,61 @@ for (const finalResult of ['unclear', 'invalid_json', 'provider_error']) {
     });
     const result = await orchestrator.handle('thông tin chi tiết nv', f.options);
     assert.equal(result.success, true);
-    assert.equal(result.execution.status, 'SELECT_TEMPLATE');
+    assert.equal(result.completionStatus, 'PARTIAL'); assert.equal(result.execution, undefined);
     assert.equal(calls, 2);
     assert.equal(f.creates.mock.callCount(), 0);
     assert.equal(f.updates.mock.callCount(), 0);
     assert.equal(f.cancels.mock.callCount(), 0);
   });
 }
+
+test('flow selection uses one TEV1 evaluation without workflow catalog', async t => {
+  const context = fixture(t);
+  let requests = 0;
+  t.mock.method(adapters, 'dispatchToProvider', async provider => {
+    requests++;
+    assert.equal(Object.keys(provider.decisionTask.questions).length, 1);
+    assert.equal(provider.decisionTask.state.workflows, undefined);
+    assert.equal(provider.decisionTask.state.history.length, 2);
+    assert.ok(provider.decisionTask.state.history.every(item => item.content.length <= 500));
+    return response({ route: 'knowledge' }, provider);
+  });
+  const result = await router.classifyFlow('Show how to install our mobile application', { routingContext: context,
+    history: Array.from({ length: 10 }, () => ({ role: 'user', content: 'x'.repeat(4000) })) });
+  assert.equal(result.flow, 'knowledge');
+  assert.equal(requests, 1);
+  assert.equal(context.executionBudget.modelCalls, 1);
+  assert.equal(context.trace.stages[0].stage, 'flow_selection');
+});
+
+test('uncertain flow escalates with a small prompt and shared budget in auto mode', async t => {
+  const context = fixture(t, 'auto');
+  const calls = [];
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages) => {
+    calls.push(provider.model);
+    if (provider.decisionTask) return response({ route: 'unclear' }, provider);
+    assert.equal(messages.length, 2);
+    assert.doesNotMatch(JSON.stringify(messages), /contracts\/detail/);
+    return { content: JSON.stringify({ flow: 'knowledge' }), usage: { inputTokens: 120, outputTokens: 5, totalTokens: 125 } };
+  });
+  const result = await router.classifyFlow('How do I install the app?', { routingContext: context });
+  assert.equal(result.flow, 'knowledge');
+  assert.deepEqual(calls, ['tev1:4b', 'chosen-chat']);
+  assert.equal(context.executionBudget.modelCalls, 2);
+  assert.equal(context.trace.escalated, true);
+});
+
+test('flow classifier rejects invented routes instead of loading arbitrary executors', async t => {
+  const context = fixture(t, 'chat_model');
+  t.mock.method(adapters, 'dispatchToProvider', async () => ({ content: '{"flow":"invented"}' }));
+  await assert.rejects(router.classifyFlow('Question', { routingContext: context }), { code: 'ROUTING_INVALID_OUTPUT' });
+});
+
+test('flow selection also recognizes greeting in a single TEV1 evaluation', async t => {
+  const context = fixture(t, 'local_tev1', { CHAT_QUICK_GREETING_ENABLED: 'true' });
+  t.mock.method(adapters, 'dispatchToProvider', async provider => response({ route: 'greeting' }, provider));
+  const result = await router.classifyFlow('hello', { routingContext: context });
+  assert.equal(result.flow, 'chat');
+  assert.equal(result.quickGreeting, true);
+  assert.equal(context.executionBudget.modelCalls, 1);
+});

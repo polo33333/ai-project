@@ -8,7 +8,7 @@ test('embed workflow credentials isolate sessions and support inputs, result, re
  t.mock.method(providers,'getProviderForExecution',()=>selected);t.mock.method(providers,'getActiveProvider',()=>selected);
  t.mock.method(require('../src/backend/intelligent_core/adapters'),'dispatchToProvider',async(_,messages)=>{
    const question=JSON.parse(messages[1].content).question,workflow=question==='Tra cứu đối tượng';
-   return {content:JSON.stringify({route:workflow?'workflow':'chat',workflowId:workflow?'phase1_examples/lookup':null,candidateIds:[],inputDisposition:workflow?'new_request':'none',pendingRunId:null,inputs:{},inputEvidence:{},evidence:workflow?[{source:'user_message',text:question}]:[],requestedScope:workflow?'targeted':'unclear',supportedScope:workflow?'targeted':'unclear',needsClarification:false,abstain:false,cancelPending:false})};
+   return {content:JSON.stringify({route:workflow?'workflow':'chat',purpose:workflow?'execute':'none',workflowId:workflow?'phase1_examples/lookup':null,candidateIds:[],inputDisposition:workflow?'new_request':'none',pendingRunId:null,inputs:{},inputEvidence:{},evidence:workflow?[{source:'user_message',text:question}]:[],requestedScope:workflow?'targeted':'unclear',supportedScope:workflow?'targeted':'unclear',needsClarification:false,abstain:false,cancelPending:false})};
  });
  const admin={accountId:'admin',permissions:['admin']};const bundle=require('../src/backend/automation/pilot.json');
  let record=await automation.registry.import(bundle,admin);await automation.registry.test(record.id,admin);record=await automation.repository.get('catalog',record.id);await automation.registry.publish(record.id,admin,record.revision);await automation.configure({enabled:true,revision:null},admin);

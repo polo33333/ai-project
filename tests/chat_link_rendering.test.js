@@ -97,3 +97,73 @@ test('chat result renderers convert ISO database dates to Vietnamese display for
   assert.match(embed, /formatDisplayValue\(row\[cellIndex\]/);
   assert.match(embed, /escapeHtml\(formatDisplayValue\(cell, data\.toolResult\.columns\[cellIndex\]\)\)/);
 });
+
+test('API examples survive reply cleaning while internal chart payloads are hidden', () => {
+  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const start = source.indexOf('function cleanReplyText');
+  const end = source.indexOf('function escapeChatMarkdown', start);
+  const context = vm.createContext({});
+  vm.runInContext(source.slice(start, end), context);
+  const clean = value => context.cleanReplyText(value);
+  const request = '```json\ncurl --request POST https://example.com/api --data-raw \'{"user_id":"demo"}\'\n```';
+  const response = '```json\n{"status_code":200,"data":{"certificates":[]}}\n```';
+  const text = 'Request:\n' + request + '\n\nResponse:\n' + response;
+  assert.equal(clean(text), text);
+  assert.equal(clean('```json\n{"type":"customer","name":"demo"}\n```'), '```json\n{"type":"customer","name":"demo"}\n```');
+  assert.equal(clean('Before\n```json\n{"type":"bar","data":{"labels":["A"],"datasets":[{"data":[1]}]}}\n```\nAfter'), 'Before\n\nAfter');
+});
+
+test('knowledge API blocks render as escaped copyable code and normalize malformed fences', () => {
+  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const context = vm.createContext({ URL });
+  vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('// Render Chart.js')), context);
+  const standard = context.parseMarkdown('Request:\n```json\n{"status":200,"html":"<script>alert(1)</script>"}\n```\nResponse');
+  assert.match(standard, /class="chat-code-block"/);
+  assert.match(standard, /copyChatCodeBlock\(this\)/);
+  assert.match(standard, /&lt;script&gt;/);
+  assert.doesNotMatch(standard, /<script>/);
+  assert.match(standard, /\n  &quot;status&quot;: 200/);
+  assert.match(standard, /Response/);
+  const malformed = context.parseMarkdown('`json\ncurl --request POST https://example.com/api\n` [2, 3]\nNext paragraph');
+  assert.match(malformed, /<span>bash<\/span>/);
+  assert.match(malformed, /curl --request POST/);
+  assert.match(malformed, /Next paragraph/);
+  assert.doesNotMatch(malformed, /`json/);
+  assert.equal((malformed.match(/chat-code-block/g) || []).length, 1);
+  assert.match(context.parseMarkdown('Use `POST` here'), /<code/);
+});
+
+test('copy code uses only the displayed code text', async () => {
+  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  let copied;
+  const context = vm.createContext({ navigator: { clipboard: { writeText: async text => { copied = text; } } }, setTimeout: () => {} });
+  vm.runInContext(source.slice(source.indexOf('async function copyChatCodeBlock'), source.indexOf('function parseMarkdown(text)')), context);
+  const button = { closest: () => ({ querySelector: () => ({ textContent: '{"status":200}' }) }) };
+  await context.copyChatCodeBlock(button);
+  assert.equal(copied, '{"status":200}');
+  assert.ok(button.textContent);
+});
+
+test('decision model usage separates routing tokens without adding them to the request total', () => {
+  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const context = vm.createContext({});
+  vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('function sanitizeSystemPaths')) + source.slice(source.indexOf('function renderChatTokenUsage'), source.indexOf('async function copyPageChatQuestion')), context);
+  const routing = { stages: [
+    { model: 'tev1:4b', calls: 1, inputTokens: 323, outputTokens: 1, totalTokens: 324 },
+    { model: 'tev1:4b', calls: 1, inputTokens: 100, outputTokens: 1, totalTokens: 101 },
+    { model: '<chat-model>', calls: 1, inputTokens: 200, outputTokens: 5, totalTokens: 205 },
+    { status: 'skipped', calls: 0 }
+  ] };
+  const html = context.renderChatTokenUsage({ available: true, inputTokens: 3903, outputTokens: 1111, totalTokens: 5014, byModel: routing.stages.filter(x => x.calls) }, routing);
+  assert.match(html, /5\.014/);
+  assert.match(html, /423/);
+  assert.match(html, /425/);
+  assert.match(html, /tev1:4b/);
+  assert.match(html, /&lt;chat-model&gt;/);
+  assert.doesNotMatch(html, /<chat-model>/);
+  assert.match(html, /chat-routing-inline/);
+  assert.doesNotMatch(html, /<details/);
+  assert.ok(html.indexOf("chat-routing-inline") < html.indexOf("fa-arrow-down"));
+  assert.equal(context.renderDecisionModelUsage({ stages: [{ calls: 0 }] }), '');
+  assert.equal(context.renderDecisionModelUsage(null), '');
+});

@@ -1486,17 +1486,10 @@ window.populateCopilotModelSelector = async function populateCopilotModelSelecto
   const menu = document.getElementById('copilot-model-menu');
   if (!selector || !menu) return;
 
-  selector.innerHTML = `<option value="">Đang tải model...</option>`;
   let providers = [];
   try {
     providers = window.aiProvidersData;
-    if (!providers || providers.length === 0) {
-      const res = await fetch('/api/ai-providers');
-      if (res.ok) {
-        const data = await res.json();
-        providers = Array.isArray(data) ? data : (data.providers || []);
-      }
-    }
+    if (!providers?.length) providers = await window.loadChatProviders();
 
     selector.innerHTML = '';
     if (providers && providers.length > 0) {
@@ -1692,6 +1685,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAccountMenu();
   initPwaInstall();
   await loadCurrentAccount();
+  window.loadChatProviders?.().catch(() => {});
+  window.fetchAndRenderQuickPrompts?.();
   startAuthHeartbeat();
   initGlobalFeatureSearch();
   await switchMainTab(getRememberedMainTab());

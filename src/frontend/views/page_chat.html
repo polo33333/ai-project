@@ -103,14 +103,10 @@
         </div>
       </section>
 
-      <!-- Quick Suggestion Prompts Bar -->
-      <div id="quick-prompts-bar"
-        style="display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;">
-        <!-- Dynamically populated via JS -->
-      </div>
-
       <!-- Bottom Input Box -->
       <div class="page-chat-composer-area" style="padding: 12px 22px 18px 22px;">
+        <!-- Floating suggestions do not reserve a separate layout row. -->
+        <div id="quick-prompts-bar" role="group" aria-label="Gợi ý câu hỏi"></div>
         <div class="chat-input-wrapper page-chat-composer">
           <textarea id="page-chat-user-input" rows="1"
             placeholder="Nhập câu hỏi, yêu cầu SQL... (Enter để gửi · Shift+Enter xuống dòng)"

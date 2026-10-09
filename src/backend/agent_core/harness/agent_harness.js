@@ -238,7 +238,7 @@ class AgentHarness {
           trace.steps.push({ iteration: iterations, type: 'knowledge_citation_repair' });
           conversation.push({
             role: 'user',
-            content: `Rewrite the answer from the supplied document context. After every document claim, insert the actual numbered marker such as [1] or [2], matching Tài liệu 1 or Tài liệu 2. Never output the literal text [N] and do not invent marker numbers.\n\n${String(context.knowledgeGrounding.documentContext || '')}`
+            content: `Rewrite the answer from the supplied document context. After every document claim, insert the actual numbered marker such as [1] or [2], matching Tài liệu 1 or Tài liệu 2. Never output the literal text [N] and do not invent marker numbers. Use the document evidence already supplied in the system message.`
           });
           continue;
         }

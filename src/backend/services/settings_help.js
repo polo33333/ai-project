@@ -2,6 +2,12 @@
 module.exports = {
   CHAT_QUICK_GREETING_ENABLED: ['Trả lời chào hỏi nhanh', 'true: TEV1 nhận diện câu chỉ chào hỏi và backend trả lời mẫu, không gọi model chat; false: xử lý qua luồng chat bình thường. Chỉ áp dụng với auto/local_tev1; chào kèm yêu cầu vẫn chọn nghiệp vụ.'],
   CHAT_ROUTING_MODE: ['Model quyết định định tuyến', 'local_tev1: dùng TEV1 local; chat_model: dùng đúng model chat đã chọn; auto: TEV1 trước, chuyển một lần sang model chat nếu mơ hồ hoặc lỗi. Model trả lời luôn giữ theo lựa chọn chat. Áp dụng sau khi khởi động lại.'],
+  CHAT_ROUTING_RETRIEVAL_MODE: ['Tìm nhóm nghiệp vụ', 'off: catalog đầy đủ; shadow: đo retrieval nhưng giữ quyết định cũ; on: tìm nhóm ứng viên bằng phương pháp đã chọn trước router. Không tìm được nhóm hoặc lỗi chỉ mục chuyển model chat trong auto.'],
+  CHAT_ROUTING_RETRIEVAL_COLLECTION: ['Collection nghiệp vụ', 'Collection Qdrant riêng, mặc định workflow_routing_v1; có thể backup/restore sang máy khác với cùng model embedding.'],
+  CHAT_ROUTING_RETRIEVAL_METHOD: ['Cách tìm nghiệp vụ', 'hybrid: vector + BM25, cần embedding và chỉ mục đã publish; lexical: BM25 + alias, chạy độc lập không cần embedding/Qdrant cho bước chọn nghiệp vụ.'],
+  CHAT_ROUTING_RETRIEVAL_TOP_K: ['Số ứng viên nghiệp vụ', 'Tối đa ứng viên trước kiểm tra ngân sách token/evaluation, mặc định 15.'],
+  CHAT_ROUTING_RETRIEVAL_TIMEOUT_MS: ['Thời gian tìm nghiệp vụ', 'Deadline embedding và Qdrant, mặc định 15000 ms, nằm trong deadline request.'],
+  CHAT_ROUTING_RETRIEVAL_TASK_TARGET_TOKENS: ['Ngân sách task nghiệp vụ', 'Mục tiêu token ước lượng cho task TEV1, mặc định 1700.'],
   CHAT_ROUTING_LOCAL_MODEL: ['Model local định tuyến', 'Tên model Ollama chuyên quyết định chat/nghiệp vụ và nhận diện input, mặc định tev1:4b. Model này phải được cài trên endpoint routing.'],
   CHAT_ROUTING_LOCAL_BASE_URL: ['Địa chỉ Ollama định tuyến', 'Endpoint Ollama cho model quyết định, mặc định http://127.0.0.1:11434. Độc lập với provider chat và embedding.'],
   CHAT_ROUTING_TIMEOUT_MS: ['Thời gian chờ định tuyến', 'Giới hạn mỗi lần gọi model quyết định, tính bằng mili giây; cả routing và model trả lời cùng dùng ngân sách tổng request.'],

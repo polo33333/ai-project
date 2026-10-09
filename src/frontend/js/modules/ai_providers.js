@@ -4,6 +4,21 @@
 
 window.aiProvidersData = [];
 window.editingAiProviderId = null;
+let chatProvidersRequest = null;
+let chatProvidersLoadedAt = 0;
+window.loadChatProviders = async function loadChatProviders() {
+  if (chatProvidersLoadedAt && Date.now() - chatProvidersLoadedAt < 60000) return window.aiProvidersData;
+  if (!chatProvidersRequest) {
+    chatProvidersRequest = (async () => {
+      const response = await fetch('/api/ai-providers');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      window.aiProvidersData = normalizeProvidersResponse(await response.json());
+      chatProvidersLoadedAt = Date.now();
+      return window.aiProvidersData;
+    })().finally(() => { chatProvidersRequest = null; });
+  }
+  return chatProvidersRequest;
+};
 
 function escapeProviderHtml(value) {
   return String(value ?? '')
@@ -34,6 +49,7 @@ async function fetchAiProviders() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     window.aiProvidersData = normalizeProvidersResponse(data);
+    chatProvidersLoadedAt = Date.now();
     renderAiProvidersTable();
   } catch (err) {
     console.error('Lỗi khi nạp danh sách AI Providers:', err);

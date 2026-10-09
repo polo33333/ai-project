@@ -391,3 +391,21 @@ test('legacy raw SQL and tool JSON turns do not re-enter memory through client h
   ]);
   assert.deepEqual(messages, [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'Xin chào' }]);
 });
+
+test('knowledge citation repair reuses evidence and records usage for each call', async () => {
+  const evidence = 'UNIQUE_DOCUMENT_EVIDENCE';
+  const s = setup([
+    { content: 'Tải ứng dụng từ cửa hàng.', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } },
+    { content: 'Tải ứng dụng từ cửa hàng [1].', usage: { inputTokens: 120, outputTokens: 12, totalTokens: 132 } }
+  ]);
+  const result = await s.run({ userMessage: 'cách tải app', enabledToolNames: [],
+    messages: [{ role: 'system', content: evidence }, { role: 'user', content: 'cách tải app' }],
+    context: { mode: 'knowledge', requestPlan: { intent: 'general', outputs: { data: false, chart: false, export: false } }, knowledgeGrounding: { required: true, documentContext: evidence } } });
+  assert.equal(s.requests.length, 2);
+  assert.equal(JSON.stringify(s.requests[1].messages).split(evidence).length - 1, 1);
+  const usage = result.trace.steps.filter(step => step.type === 'MODEL_USAGE');
+  assert.equal(usage.length, 2);
+  assert.equal(usage[1].repairAttempt, 1);
+  assert.equal(usage[0].stage, 'knowledge_answer');
+  assert.equal(result.tokenUsage.totalTokens, 242);
+});

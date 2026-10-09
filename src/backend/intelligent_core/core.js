@@ -11,9 +11,7 @@ const securityGuard     = require('./security_guard');
 const schemaContextService = require('./schema_context_service');
 const retrievalService = require('../knowledge_core/services/retrieval_service');
 const citationService = require('../knowledge_core/services/citation_service');
-const libraryService = require('../knowledge_core/services/library_service');
 const sqlConnector = require('../services/sql_connector');
-const { needsKnowledgeSearch } = require('./knowledge_intent');
 const { dispatchToProvider } = require('./adapters');
 const { isLocalProvider } = require('../agent_core/harness/provider_classifier');
 const { emitProgress } = require('../agent_core/harness/progress_events');
@@ -25,6 +23,7 @@ const { buildSelectedKnowledgeMessages } = require('./knowledge_prompt_policy');
 const { resolvePlan } = require('../agent_core/harness/completion_policy');
 const { buildCalculationReply } = require('../agent_core/harness/calculation_reply');
 const chatRouter = require('../automation/chat_router');
+const { withModelTokenUsage } = require('../utils/model_token_usage');
 
 const MAX_TOOL_ITERATIONS = parseInt(process.env.AI_MAX_TOOL_ITERATIONS || '10',    10);
 const REQUEST_TIMEOUT_MS  = parseInt(process.env.AI_DEFAULT_TIMEOUT_MS || '30000', 10);
@@ -107,6 +106,8 @@ class IntelligentCore {
     const inputCheck = securityGuard.validateInput(userMessage);
     if (!inputCheck.safe) return this._buildErrorResponse(userMessage, aiProviderManager.getActiveProvider(), inputCheck.reason);
 
+    const selectedKnowledgeRequest = knowledgeSearchEnabled && !webSearch && knowledgeSourceIds.length > 0;
+    let documentScopedRequest = selectedKnowledgeRequest;
     const tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0, available: false };
     const collectUsage = usage => {
       if (!usage) return;
@@ -128,6 +129,24 @@ class IntelligentCore {
     let provider = routingContext.chatProviderSnapshot;
     const providerCandidates = [provider];
     const executionBudget = routingContext.executionBudget;
+    if (!selectedKnowledgeRequest && knowledgeSearchEnabled && !webSearch) {
+      try {
+        const flow = await chatRouter.classifyFlow(userMessage, { ...options, routingContext,
+          onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); } });
+        documentScopedRequest = flow.flow === 'knowledge';
+        if (flow.quickGreeting) {
+          Object.assign(routingContext.trace, { route: 'chat', quickReplyKind: 'greeting' });
+          return { success: true, replyText: 'Chào bạn! Bạn muốn tra cứu thông tin gì?',
+            executionMode: 'chat', usedProvider: chatRouter.publicProvider(provider),
+            tokenUsage: tokenUsage.available ? withModelTokenUsage(tokenUsage, routingContext.trace, provider.model) : null, toolCalls: [], sqlExecutions: [],
+            trace: { completionStatus: 'SUCCESS', workflowRouting: routingContext.trace, executionBudget: executionBudget.snapshot() } };
+        }
+      } catch (error) {
+        if (options.signal?.aborted || error.name === 'AbortError') throw error;
+        return { ...this._buildErrorResponse(userMessage, provider, error.message), errorCode: error.code,
+          tokenUsage: tokenUsage.available ? tokenUsage : null, trace: { workflowRouting: routingContext.trace } };
+      }
+    }
     let storedHistory = memoryService.getLegacyContext(options.session?.id, [], 6, options.session?.accountId || null);
     const priorWorkflow = memoryService.getSession(options.session?.id, false, options.session?.accountId || null)?.lastWorkflowRun;
     let workflowMemoryAllowed = true;
@@ -149,7 +168,16 @@ class IntelligentCore {
           entities: priorDataset.entityKeys || []
         }]
       } : null;
-    const workflowResponse = await require('../automation/orchestrator').handle(userMessage, {
+    if (documentScopedRequest) {
+      routingContext.decision = { route: 'chat', purpose: 'none', workflowId: null };
+      if (selectedKnowledgeRequest) {
+        routingContext.trace.decisionSource = 'selected_knowledge';
+        routingContext.trace.stages.push({ decisionSource: 'selected_knowledge', status: 'skipped', calls: 0, httpRequests: 0, decisionEvaluations: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+      }
+      routingContext.trace.route = 'chat';
+    }
+    const preWorkflowUsage = { ...tokenUsage };
+    const workflowResponse = documentScopedRequest ? null : await require('../automation/orchestrator').handle(userMessage, {
       ...options, history: routingHistory.slice(-10), routingContext, executionBudget,
       workflowMemory: workflowMemoryAllowed && priorWorkflow ? {
         runId: priorWorkflow.runId, name: priorWorkflow.name, inputs: priorWorkflow.inputs,
@@ -157,11 +185,21 @@ class IntelligentCore {
       } : sqlDatasetMemory,
       onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); }
     });
-    if (workflowResponse) return workflowResponse;
+    if (workflowResponse) {
+      // The orchestrator's subtotal starts after flow selection. Add that earlier
+      // usage once, rather than adding callbacks that already include routing.
+      const workflowUsage = workflowResponse.tokenUsage || {};
+      const combined = { available: preWorkflowUsage.available || workflowUsage.available === true };
+      for (const key of ['inputTokens', 'outputTokens', 'totalTokens', 'calls']) {
+        combined[key] = (Number(preWorkflowUsage[key]) || 0) + (Number(workflowUsage[key]) || 0);
+      }
+      return { ...workflowResponse, tokenUsage: combined.available ? withModelTokenUsage(combined, routingContext.trace, provider.model) : null };
+    }
     // All response paths carry the same routing trace, including chat errors.
     const finish = response => ({ ...response,
+      tokenUsage: withModelTokenUsage(response.tokenUsage || (tokenUsage.available ? tokenUsage : null), routingContext.trace, provider.model),
       trace: { ...(response.trace || {}), workflowRouting: routingContext.trace, executionBudget: executionBudget.snapshot() },
-      ...(response.success === false && tokenUsage.available ? { tokenUsage } : {})
+      ...(response.success === false && tokenUsage.available ? { tokenUsage: withModelTokenUsage(tokenUsage, routingContext.trace, provider.model) } : {})
     });
     emitProgress(options.onProgress, { type: 'request_started', label: 'Đang phân tích yêu cầu', status: 'running', icon: 'brain', providerName: provider?.name });
     const providerFallbacks = [];
@@ -178,13 +216,15 @@ class IntelligentCore {
     const selectedDb = options.dbSourceId
       ? sqlConnector.getDbSources().find(source => source.id === options.dbSourceId)
       : sqlConnector.getDefaultDbSource();
-    const verifiedWorkflowFollowup = !webSearch && !knowledgeSourceIds.length && workflowMemoryAllowed && priorWorkflow
+    const verifiedWorkflowFollowup = !documentScopedRequest && !webSearch && !knowledgeSourceIds.length && workflowMemoryAllowed && priorWorkflow
       && memoryPolicy.hasReferencePronoun(userMessage) && routingContext.decision?.route === 'chat';
     const contextualRequest = memoryPolicy.isShortContextualFollowup(userMessage)
       ? webSearchService.buildContextualQuery(userMessage, history, true)
       : userMessage;
     emitProgress(options.onProgress, { type: 'context_started', label: 'Đang chọn ngữ cảnh và cấu trúc dữ liệu', status: 'running', icon: 'book-open' });
-    let contextSelection = verifiedWorkflowFollowup
+    let contextSelection = documentScopedRequest
+      ? { mode: 'knowledge', selectedTables: [], schemaContext: '', useTools: false }
+      : verifiedWorkflowFollowup
       ? { mode: 'general', selectedTables: [], schemaContext: '', useTools: true, memorySource: 'completed_workflow' }
       : webSearch
       ? { mode: 'general', selectedTables: [], schemaContext: '', useTools: false }
@@ -245,10 +285,9 @@ class IntelligentCore {
       }
     }
     if (!knowledgeSearchEnabled || webSearch) contextSelection.knowledgeMode = 'disabled';
-    const knowledgeIntent = needsKnowledgeSearch(userMessage, {
-      sourceIds: knowledgeSourceIds,
-      documents: libraryService.getDocuments()
-    });
+    const knowledgeIntent = documentScopedRequest
+      ? { needed: true, reason: selectedKnowledgeRequest ? 'selected_sources' : 'model_knowledge_flow' }
+      : { needed: false, reason: 'model_non_knowledge_flow' };
     const skipUtilitySearch = /^\s*(hi|hello|hey|chào|xin chào|cảm ơn)\s*[.!?]*$/i.test(userMessage)
       || isSimpleArithmeticQuery(userMessage);
     const automaticDocumentMatchForData = contextSelection.mode === 'data' && knowledgeIntent.reason === 'document_title_match';
@@ -263,7 +302,7 @@ class IntelligentCore {
       if (relevant.length) {
         const contextWindow = Number(provider?.contextWindow || provider?.numCtx || process.env.LOCAL_MODEL_NUM_CTX || 16384);
         const outputReserve = Number(provider?.outputReserve || process.env.LOCAL_MODEL_NUM_PREDICT || 2048);
-        const requiredTokens = estimateTokens(userMessage) + estimateTokens(contextSelection.schemaContext || '') + measureMessages(history) + 512;
+        const requiredTokens = estimateTokens(userMessage) + estimateTokens(contextSelection.schemaContext || '') + (documentScopedRequest ? 0 : measureMessages(history)) + 512;
         const available = Math.max(0, contextWindow - outputReserve - requiredTokens - 256);
         const packed = retrievalService.packContext(relevant, Math.min(Number(process.env.AI_DOCUMENT_CONTEXT_TOKENS || 3000), available));
         documentContext = packed.text;
@@ -291,16 +330,18 @@ class IntelligentCore {
           : skipUtilitySearch ? 'utility_query' : knowledgeIntent.reason
       };
     }
-    const strictSelectedKnowledge = knowledgeSourceIds.length > 0 && Boolean(documentContext);
+    const strictSelectedKnowledge = documentScopedRequest;
     if (strictSelectedKnowledge) {
       contextSelection.mode = 'knowledge';
       contextSelection.selectedTables = [];
       contextSelection.schemaContext = '';
     }
     const schemaContext = strictSelectedKnowledge ? '' : (contextSelection.schemaContext || '');
-    const knowledgePrompt = documentContext ? `
+    const knowledgePrompt = !documentContext && documentScopedRequest
+      ? '\n\nNo matching document passages were found in the selected sources. Explain this in Vietnamese and ask the user to clarify. Do not answer using knowledge outside the selected sources.'
+      : documentContext ? `
 
-# Nguồn tài liệu doanh nghiệp${strictSelectedKnowledge ? ' được người dùng chọn — BẮT BUỘC ƯU TIÊN' : ''}
+# Nguồn tài liệu doanh nghiệp${strictSelectedKnowledge ? ' — BẮT BUỘC ƯU TIÊN' : ''}
 ${documentContext}
 
 ${strictSelectedKnowledge

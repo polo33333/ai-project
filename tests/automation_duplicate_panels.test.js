@@ -17,8 +17,11 @@ test('repeated messages keep one actionable panel per run and archived panels su
     await page.evaluate(() => {
       window.testRun = { id: 'same-run', templateId: 'report', conversationId: 'chat', name: 'Report', status: 'WAITING_INPUT', revision: 1, missingInputs: [{ key: 'query', label: 'Identifier', ask: 'Which identifier?', schema: { type: 'string' } }], steps: [] };
       window.submissions = 0;
+      window.retryCreates = 0;
       window.fetch = async (url, options = {}) => {
         if (options.method === 'POST' && url === '/api/automation-runs') {
+          window.retryCreates++;
+          await new Promise(resolve => setTimeout(resolve, 300));
           const body = JSON.parse(options.body);
           if (body.parentRunId !== 'same-run') throw Error('Missing retry parent');
           window.parentRun = { ...window.testRun, retryRunId: 'retry-child', retryWaitingInput: true };
@@ -52,7 +55,9 @@ test('repeated messages keep one actionable panel per run and archived panels su
   await page.locator('form button[type="submit"]').click();
   const original = page.locator('[data-automation-run="same-run"]:not([data-execution-archived])');
   await original.getByRole('button', { name: 'L\u00e0m l\u1ea1i', exact: true }).click();
+  assert.equal(await original.getByRole('button', { name: 'Đang mở form…', exact: true }).isDisabled(), true);
   await page.waitForFunction(() => document.querySelector('[data-automation-run="retry-child"] input'));
+  assert.equal(await page.evaluate(() => window.retryCreates), 1, 'One click creates the retry form');
   assert.equal(await original.getByRole('button', { name: 'L\u00e0m l\u1ea1i', exact: true }).count(), 0);
   await page.locator('[data-automation-run="retry-child"] input').fill('A003');
   await page.locator('[data-automation-run="retry-child"] button[type="submit"]').click();

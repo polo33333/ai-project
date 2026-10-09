@@ -42,7 +42,7 @@ function nativeAnswers(prepared, selectedId, targeted = 'yes') {
   const selected = prepared.workflows.find(item => item.definition.id === selectedId);
   return { answers: Object.fromEntries(Object.entries(prepared.task.questions).map(([key, query]) => {
     const options = Object.keys(query.criteria);
-    const pick = key === 'route' ? selected.key : key === 'targeted_request' ? targeted
+    const pick = key === 'purpose' ? 'execute' : key === 'route' ? selected.key : key === 'targeted_request' ? targeted
       : key === 'requested_scope' ? 'targeted' : key.startsWith('provided_') ? 'no'
         : key.startsWith('input_') ? options.find(value => value !== 'none') : 'aggregate';
     return [key, { type: 'choice', choice: pick, probabilities: Object.fromEntries(options.map(option => [option, option === pick ? 0.98 : 0.02 / (options.length - 1)])) }];

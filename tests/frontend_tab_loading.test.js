@@ -5,6 +5,40 @@ const vm = require('node:vm');
 const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '../src/frontend/js', file), 'utf8');
 
+test('main and popup model lists share one request, including an empty result', async () => {
+  const source = read('modules/ai_providers.js');
+  let resolve, calls = 0;
+  const context = { window: {}, Date, fetch: () => { calls++; return new Promise(done => { resolve = done; }); } };
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('window.aiProvidersData'), source.indexOf('function getProviderFormat')), context);
+  const first = context.window.loadChatProviders();
+  const second = context.window.loadChatProviders();
+  assert.equal(calls, 1);
+  resolve({ ok: true, json: async () => ({ providers: [] }) });
+  await Promise.all([first, second]);
+  await context.window.loadChatProviders();
+  assert.equal(calls, 1, 'An empty catalog is cached too');
+});
+
+test('quick prompts render cached data before the server replies and share the preload request', async () => {
+  const source = read('modules/page_chat.js');
+  let resolve, calls = 0;
+  const container = { children: [], replaceChildren() { this.children = []; }, appendChild(node) { this.children.push(node); } };
+  const cached = [{ label: 'Cached', prompt: 'cached question' }];
+  const context = { window: {}, Date, sessionStorage: { getItem: () => JSON.stringify({ at: Date.now(), prompts: cached }), setItem() {} },
+    document: { getElementById: () => container, createElement: () => ({ setAttribute() {}, append(...children) { this.children = children; } }), createTextNode: text => text },
+    useQuickPrompt() {}, fetch: () => { calls++; return new Promise(done => { resolve = done; }); } };
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('let quickPromptsRequest'), source.indexOf('// Exports')), context);
+  const first = context.fetchAndRenderQuickPrompts();
+  assert.equal(container.children[0].children[1], 'Cached');
+  const second = context.fetchAndRenderQuickPrompts();
+  assert.equal(calls, 1);
+  resolve({ ok: true, json: async () => ({ quickPrompts: [] }) });
+  await Promise.all([first, second]);
+  assert.equal(container.children.length, 0, 'Deleted suggestions are cleared after refresh');
+});
+
 test('table loading coalesces requests and clears busy state after failure', async () => {
   let reject, calls = 0;
   const classes = new Set();

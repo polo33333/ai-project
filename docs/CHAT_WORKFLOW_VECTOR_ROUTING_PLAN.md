@@ -1,12 +1,14 @@
 # Plan lọc ứng viên nghiệp vụ bằng embedding trước TEV1
 
-Ngày: 04/10/2026. Trạng thái: đề xuất, chưa triển khai, chưa đổi cấu hình hay restart hệ thống.
+Ngày lập: 04/10/2026. Cập nhật thiết kế: 08/10/2026. Đã triển khai bản đầu, lập chỉ mục và đặt cấu hình máy hiện tại `on`; trạng thái tiến trình đang chạy phải kiểm tra riêng, không suy ra từ cấu hình. Các mục thiết kế bên dưới gồm cả phần còn dự kiến; xem mục 15–16 và runbook để biết phạm vi thực tế và công việc tiếp theo.
+
+Rà soát cập nhật: 07/10/2026, đối chiếu code hiện tại và `TEV1_CAPACITY_REPORT.md` ngày 05/10; sau rà soát đã triển khai bản đầu theo yêu cầu người dùng.
 
 ## 1. Kết luận và phạm vi
 
-Khả thi cho danh mục khoảng 100 nghiệp vụ. Backend truy hồi ứng viên từ chỉ mục đã nhúng sẵn, TEV1 đánh giá danh sách rút gọn, model chat đã chọn xử lý trường hợp chưa rõ. Vector không quyết định thực thi và không cấp quyền.
+Mục tiêu kiểm chứng: danh mục khoảng 100 nghiệp vụ. Backend truy hồi ứng viên bằng hybrid hoặc BM25 độc lập, TEV1 đánh giá danh sách rút gọn, model chat đã chọn xử lý trường hợp chưa rõ. Vector không quyết định thực thi và không cấp quyền.
 
-Lợi ích dự kiến: ngữ cảnh TEV1 tăng theo số ứng viên thay vì toàn bộ danh mục; giảm số trường đầu vào không liên quan; giảm trường hợp vượt context. Chưa có benchmark chứng minh độ chính xác hoặc thời gian của thiết kế này trên hệ thống.
+Lợi ích dự kiến: ngữ cảnh TEV1 tăng theo số ứng viên thay vì toàn bộ danh mục; giảm số trường đầu vào không liên quan; giảm trường hợp vượt context. Đã có eval trên lịch sử thật của catalog nhỏ, nhưng chất lượng toàn luồng còn thấp hơn baseline; chưa có benchmark chứng minh lợi ích trên catalog lớn (xem mục 16).
 
 Giữ luồng một request TEV1 đang có cho tập ứng viên, gồm quyết định nghiệp vụ/phạm vi/input trong cùng task. **Không khôi phục thử nghiệm tách chọn nghiệp vụ rồi gọi TEV1 riêng để lấy tham số đã bị người dùng yêu cầu bỏ.** Nếu task vẫn quá dài, chuyển model chat thay vì âm thầm mất ứng viên hoặc tham số.
 
@@ -32,18 +34,19 @@ Theo [tài liệu TEV1 của Ollama](https://ollama.com/library/tev1), scorer s�
 ```mermaid
 flowchart TD
     A[Nhận câu chat] --> B[Snapshot model chat, danh mục được phép và tác vụ chờ]
-    B --> C{Chào hỏi nhanh hoặc thao tác form rõ ràng?}
-    C -->|Có| D[Luồng hiện có: trả lời chào / bổ sung / hủy]
+    B --> C{Run chờ, tham chiếu kết quả, hoặc xã giao rõ ràng?}
+    C -->|Có| D[Luồng hiện có: memoryProbe / slot_answer / greeting]
     C -->|Không| E[Chuẩn hóa nhẹ, giữ nguyên bản gốc, đếm token]
     E --> F{Câu quá dài hoặc nhiều yêu cầu phức tạp?}
     F -->|Có| L[Model chat đã chọn suy luận]
     F -->|Không| G[Cache hoặc gọi embedding một lần]
     G --> H[Tìm vector trong nghiệp vụ được phép, hợp nhất từ khóa]
     H --> I{Chỉ mục đúng phiên bản và ứng viên đủ phù hợp?}
-    I -->|Không| L
+    I -->|Không| M[Mở rộng retrieval hoặc catalog gọn được phép]
+    M --> L
     I -->|Có| J[Đóng gói tập ứng viên vừa context, giữ nhóm cạnh tranh]
     J --> K{Task vừa context và ngân sách đánh giá?}
-    K -->|Không| L
+    K -->|Không| M
     K -->|Có| T[TEV1: route, scope, input theo contract hiện tại]
     T --> U{Schema, p1, margin, scope, evidence hợp lệ?}
     U -->|Không / ESCALATE| L
@@ -52,7 +55,7 @@ flowchart TD
     W -->|Không| X[Hỏi làm rõ / hiện gợi ý / báo lỗi phù hợp]
     W -->|Có| V
     V --> Y{Nghiệp vụ hay chat?}
-    Y -->|Chat| Z[Model chat trả lời]
+    Y -->|Chat| Z[Intelligent Core hiện có: memory, RAG, SQL và công cụ]
     Y -->|Nghiệp vụ| P[Kiểm tra quyền, version và trạng thái run]
     P --> Q{Đủ tham số hợp lệ?}
     Q -->|Không| R[Form bổ sung, không chạy nghiệp vụ]
@@ -94,7 +97,7 @@ Với 100 nghiệp vụ, phép cosine rất nhỏ: 100 × 1.024 × 4 byte khoả
 
 Giữ câu gốc cho evidence; bản chuẩn hóa chỉ trim, Unicode normalize, xử lý khoảng trắng. Không xóa dấu, mã hoặc phủ định trong đầu vào model. Từ khóa có thể có bản chuẩn hóa không dấu riêng. Aliases từ catalog quản trị, không hardcode chỉ ba nghiệp vụ hiện tại.
 
-Một embedding câu yêu cầu, ưu tiên cache theo câu chuẩn hóa + embedding model/digest. Câu nối tiếp như “người đó”, “7”, “HD001” cần ngữ cảnh tác vụ chờ có giới hạn; phải kiểm chứng cách tạo query bổ sung, không biến một câu trả lời tham số thành nghiệp vụ mới. ID tác vụ chờ chỉ được thêm vào ứng viên nếu người dùng còn quyền. Không tự chọn chỉ vì đang có pending.
+Một embedding truy vấn khi cần, ưu tiên cache theo truy vấn + embedding model/digest và định dạng tạo truy vấn. Chỉ dùng chung vector với RAG khi cùng model/digest/dimension và cùng nội dung, cách tiền xử lý truy vấn. Routing ghép ngữ cảnh còn RAG dùng câu gốc thì không dùng chung vector. Câu nối tiếp như “người đó”, “7”, “HD001” ưu tiên luồng memory/pending hiện có; nếu vẫn phải retrieval thì ghép workflow/kết quả liên quan có giới hạn và kiểm chứng cách tạo query, không biến câu trả lời tham số thành nghiệp vụ mới. ID tác vụ chờ chỉ được thêm vào ứng viên nếu người dùng còn quyền. Không tự chọn chỉ vì đang có pending.
 
 Retrieval hợp nhất cosine với matches aliases/từ khóa. Không so trực tiếp điểm từ hai hệ khác nhau; dùng hợp nhất thứ hạng và đánh giá nhãn rõ ràng. Một cosine query hoặc margin retrieval thấp không cho phép vector tự quyết định chạy nghiệp vụ.
 
@@ -102,9 +105,13 @@ Ngân sách hiện tại: `estimateTokens(task) + 200 <= 2050`. Giai đoạn đ�
 
 Ví dụ ngân sách thiết kế: câu 200 + chỉ dẫn/câu hỏi cố định 450 + pending 150 + trường/candidate input 300 + dự phòng 200 = 1.300 token. Còn khoảng 750 token cho mô tả ứng viên: 15 mục chỉ khoảng 50 token/mục. Câu 500 token làm phần còn lại xuống khoảng 450; nhiều field/câu hỏi tiếp tục giảm. Đây là ví dụ tính toán, cần thay bằng số đo task thật.
 
-Mô tả đầy đủ phục vụ retrieval offline; mô tả ngắn dành cho task. Giữ đối tượng/thao tác/scope và điểm loại trừ quan trọng. Thử k = 5/8/10/15. Khi giảm k để vừa token phải log lý do, đánh giá recall và giữ cả nhóm có điểm sát nhau. Không cắt cuối danh mục theo thứ tự hoặc bỏ ứng viên cạnh tranh chỉ để ép vừa. Nếu không giữ được nhóm cạnh tranh: escalate.
+Mô tả đầy đủ phục vụ retrieval offline; mô tả ngắn dành cho task. Giữ đối tượng/thao tác/scope và điểm loại trừ quan trọng. Thử k = 5/8/10/12/15; 8–12 là phương án thử, chưa phải cấu hình chốt. Bổ sung nhóm cạnh tranh theo đối tượng và phạm vi: lookup/list/aggregate cho cùng đối tượng khi các workflow đó có trong catalog được phép. RRF hoặc bảo vệ đồng điểm không bảo đảm giữ đủ nhóm này. Khi giảm k để vừa token phải log lý do, đánh giá recall sau packing và tỷ lệ giữ đủ nhóm. Không cắt cuối danh mục theo thứ tự hoặc bỏ ứng viên cạnh tranh chỉ để ép vừa. Nếu không giữ được nhóm cạnh tranh: escalate với tập mở rộng hoặc hỏi rõ.
 
 Tổng token TEV1 thực tế không bằng một lần kích thước task: phải ghi usage và số `decisionEvaluations`, vì mỗi câu hỏi có thể được đánh giá với cùng context. Một HTTP request không đồng nghĩa một phép đánh giá.
+
+Đóng gói phải kiểm tra **cả context lẫn số evaluation**, không chỉ top-k/token. `buildTask` hiện có 2 câu cố định, thêm câu targeted/aggregate khi cần, pending khi có run, một câu scope cho mỗi workflow thiếu `routingScope`, và câu chọn/presence cho các input có ứng viên. `callRouter` tính mỗi câu này vào ngân sách dùng chung; ở `auto` giữ thêm 2 lượt cho escalation và câu trả lời. Greeting/memory probe trước đó cũng tiêu ngân sách. Cấu hình `.env` lúc rà soát đặt local budget 12; đây là cấu hình, không phải giới hạn cố định của model. Lấy budget còn lại từ request thực tế thay vì hardcode 9 câu hay một số workflow tối đa thực tế.
+
+Chuẩn hóa `routingScope` ở bước publish cho nghiệp vụ mới; kiểm kê/migrate metadata nghiệp vụ cũ qua quy trình publish hiện có, không tự suy luận rồi ghi scope. Thiếu scope vẫn dùng kiểm tra hiện tại và có thể escalate. Dựng task trước khi dispatch để ghi `questionCount`, token estimate, remaining/reserved calls và lý do overflow. Một HTTP request vẫn chứa route/scope/input cùng nhau. Không giải quyết thiếu budget bằng tăng giới hạn toàn hệ thống khi chưa đo.
 
 ## 6. Cổng quyết định và tham số
 
@@ -118,7 +125,7 @@ Nghiệp vụ ghi: xác nhận server-issued gắn user, workflow version, param
 
 ## 7. Cấu hình đề xuất
 
-Các biến bảng dưới **chưa tồn tại**, chỉ thêm khi triển khai. Không đổi `.env` ở bước lập plan.
+Bảng dưới gồm cấu hình đã có và đề xuất chưa triển khai, không phải danh sách biến đều đang hoạt động. Đã có `CHAT_ROUTING_RETRIEVAL_MODE`, `CHAT_ROUTING_RETRIEVAL_COLLECTION`, `CHAT_ROUTING_RETRIEVAL_TOP_K`, `CHAT_ROUTING_RETRIEVAL_TASK_TARGET_TOKENS`; deadline retrieval hiện dùng chung `CHAT_ROUTING_RETRIEVAL_TIMEOUT_MS` (mặc định 15.000 ms). Các biến query limit, min score, timeout từng stage và TTL trong bảng vẫn là đề xuất. Không đổi `.env` trong lần cập nhật plan này.
 
 | Biến dự kiến | Giá trị ban đầu | Ý nghĩa |
 | --- | --- | --- |
@@ -183,6 +190,8 @@ So sánh: luồng hiện tại; vector shortlist + router hiện tại; hybrid s
 | Chỉ số nghiệm thu đề xuất | Mục tiêu trước bật |
 | --- | --- |
 | Recall nghiệp vụ đúng trong tập được đóng gói | >= 99% trên yêu cầu rõ ràng, báo thêm theo từng nghiệp vụ |
+| Giữ đủ nhóm cạnh tranh sau packing | Báo riêng cho lookup/list/aggregate; không được làm mất lựa chọn cần phân biệt phạm vi để ép vừa task |
+| Gọi nhầm workflow trên câu chat/câu hỏi khả năng | Không tăng so baseline trên tập test độc lập; báo số lỗi và tỷ lệ riêng |
 | Đúng trong nhóm tự chọn, không tính fallback | >= 98%, kèm coverage và khoảng tin cậy thống kê |
 | Chất lượng cuối sau fallback | Không thấp hơn baseline trên bộ test độc lập |
 | Lỗi cấp quyền, gắn input sai run, thực thi không xác nhận | 0 trong bộ test; không coi đây là chứng minh không còn lỗi |
@@ -216,3 +225,130 @@ Không lưu nguyên kết quả SQL hay câu chứa tên/mã theo mặc định.
 ## 13. Điều kiện bắt đầu
 
 Plan không yêu cầu mua máy trước. Đo máy hiện tại với TEV1 và bge-m3 warm/cold, xác định số chat đồng thời mục tiêu, xây bộ câu nhãn rồi chạy shadow. Chỉ triển khai active sau khi shortlist giữ được nghiệp vụ đúng và toàn luồng đạt chất lượng ít nhất bằng baseline. Hướng này phù hợp mở rộng danh mục, nhưng không tự chữa mọi lỗi semantic của TEV1.
+
+## 14. Cập nhật sau rà soát 07/10/2026
+
+### Bằng chứng mới và giới hạn kết luận
+
+[Báo cáo capacity ngày 05/10](TEV1_CAPACITY_REPORT.md) dùng 3 workflow thật: eval local-only đạt 5/11 ca, 6 ca trả unclear. Trong tải sạch, throughput khoảng 1,57 lượt/giây; p95 router 0,71 giây ở concurrency 1, 2,58 ở 4, 7,10 ở 11 và 9,64 ở 15. Đây là tải router hiện tại, chưa gồm embedding, truy vấn vector, model trả lời hoặc SQL. Chưa chứng minh shortlist cải thiện chất lượng; bài eval nhỏ cũng chưa đủ quy nguyên nhân cho model hay ngưỡng. Mục tiêu warm p95 <=3 giây ở phần trên phải gắn tải mục tiêu rõ ràng; không dùng kết quả một request để cam kết burst 15 request.
+
+Không khẳng định call budget luôn nghẽn trước token: thứ tự phụ thuộc scope, input, độ dài card và probe. Ước lượng token/workflow chỉ là giả thuyết; estimator hiện dùng số ký tự /3,2, chưa xác minh sai số tiếng Việt. Đo task thật và usage/template trước khi chốt hệ số hoặc capacity catalog.
+
+### Thay đổi thiết kế cần chốt trước triển khai
+
+1. **Hybrid retrieval cụ thể:** baseline lexical dùng tên/aliases/ví dụ (so sánh BM25 với matcher hiện có), vector dùng embedding thật; hợp nhất thứ hạng bằng RRF và gộp theo workflow ID. Snapshot catalog đã kiểm tra quyền là nguồn sự thật. Routing card ngắn giữ entity/operation/scope, ranh giới và tên/ý nghĩa slot; schema input cần thiết của các ứng viên vẫn có trong task để kiểm tra/extract cùng request. Không bỏ schema chỉ để giảm token, không đưa toàn bộ instructions thực thi vào prompt mặc định.
+2. **Fallback theo ngân sách:** model chat trước hết nhận nhóm ứng viên khi retrieval đủ tin cậy. Khi có dấu hiệu bỏ sót, truy hồi mở rộng và giữ nhóm cạnh tranh; nếu không đủ coverage thì dùng catalog được phép đầy đủ khi vừa context hoặc hỏi rõ. Quy định tối đa một model-chat escalation mỗi request ở bản đầu; mở rộng retrieval trước lần gọi đó. Phương án gọi model chat hai lượt cần quyết định ngân sách riêng, chưa thuộc bản đầu. Không gửi tất cả workflow lên UI nếu quá lớn; dùng câu hỏi phân biệt/nhóm gợi ý nhỏ hoặc bộ chọn có tìm kiếm/phân trang.
+3. **Embedding adapter bắt buộc strict:** `qdrant_service.embedTexts()` hiện có thể trả deterministic vector khi biến fallback bật. Routing cần đường gọi strict không phụ thuộc biến global, nhận abort/deadline và kiểm tra dimension, giá trị hữu hạn, norm khác 0, model/index identity. Không thể chỉ tái sử dụng hàm hiện tại rồi coi vector trả về là embedding ngữ nghĩa. Không đổi fallback của RAG ngoài phạm vi.
+4. **Lối tắt có giới hạn:** regex greeting chỉ khớp toàn câu xã giao thuần túy; không bắt câu có yêu cầu nghiệp vụ. `registry.match()` ngưỡng 0,65 là độ trùng từ, không phải exact matcher hay probability; dùng để bổ sung retrieval. Chọn trực tiếp chỉ cân nhắc exact match duy nhất và vẫn qua contract/quyền/input/run; các trường hợp collision, phủ định, đa ý định phải được eval. Thao tác form chọn workflow/input là hành động backend rõ ràng, không cần biến thành câu chat để định tuyến lại.
+5. **Cache và domain:** bản đầu cache embedding/retrieval; không cache quyết định chỉ theo câu + quyền vì câu không pending vẫn có thể tham chiếu dataset/history. Cache shortlist phải kiểm tra generation/ACL và re-filter. Nếu thêm decision cache, chỉ cho câu độc lập hoặc đưa fingerprint ngữ cảnh vào key. Domain dùng để ưu tiên/rerank, không làm bộ lọc cứng khi chưa chắc. `memory_policy.getDomain()` suy domain từ tên bảng/metadata, không phải bộ phân loại câu chat; không gọi trực tiếp để chọn domain từ câu người dùng.
+6. **Tải và rollback:** thêm giới hạn concurrency/queue cho embedding và routing, stage deadline nằm trong deadline request; hết budget thì hỏi lại/báo quá tải theo mode, tránh fallback hàng loạt. Rollback `off` quay lại luồng cũ vốn vẫn có giới hạn catalog lớn: không coi rollback là bảo đảm scale. Giữ đường chọn thủ công có tìm kiếm khi cả luồng cũ và mới không đủ context.
+
+### Thứ tự công việc và kiểm chứng bổ sung
+
+- P0: baseline task/token/evaluation và lỗi semantic trên 3 workflow; bộ catalog 20/50/100 có nghiệp vụ gần nghĩa, scope/input đa dạng. Catalog tổng hợp kiểm tra capacity; nhãn và câu thực tế độc lập kiểm tra chất lượng.
+- P1: routing card/version lifecycle, strict embedding adapter, hybrid retrieval và trace; chạy shadow có sampling/deadline riêng để không giữ tài nguyên request vô hạn.
+- P2: packing theo token và evaluation, shortlist cho cả TEV1/model-chat, mở rộng retrieval và UI hỏi rõ giới hạn; giữ pending/memory/form semantics hiện có.
+- P3: pilot chỉ đọc sau kiểm chứng chất lượng và tải toàn pipeline trên máy hiện tại; cache/domain nâng cao chỉ thêm khi số đo cho thấy lợi ích.
+
+Đo riêng recall trước packing và sau packing, recall theo workflow/domain, coverage/accuracy tự chọn, chất lượng sau fallback, false workflow trên chat/no-match/denied, đúng input/run, lý do overflow, stage latency/queue, warm/cold, p95 ở concurrency 1/4/8/15 và tổng chi phí mọi evaluation. Giữ mục tiêu recall sau packing >=99% hiện có; cần báo số mẫu và khoảng tin cậy, không hạ thành 98% chỉ để dễ bật. Eval phải đi qua đường `handleRouted` và retrieval mới; không mặc định `npm run eval:routing` hiện tại đã kiểm thử những thành phần chưa triển khai.
+
+## 15. Phạm vi đã triển khai ngày 07/10/2026
+
+Đã có service retrieval Qdrant + BM25 + RRF, bộ lọc ID từ snapshot được phép, digest model embedding thật, hash/version point bất biến, index publish/overlay và script `npm run index:workflows`. Packing theo token/evaluation giữ pending, không cắt nhóm đồng điểm; router dùng shortlist cho quyết định chính, giữ contract và tối đa một escalation. Query embedding cache có giới hạn, vector lỗi không dùng deterministic fallback. Routing description/examples/aliases là metadata tùy chọn được validate. Trace retrieval đi vào diagnostics.
+
+Đã index 3 nghiệp vụ published hiện có bằng bge-m3. Eval inference thật local-only đạt 5/11; auto đạt 11/11, trong đó TEV1 tự quyết định đúng 5 ca và model chat xử lý 6 ca. Không thực thi workflow/SQL nghiệp vụ trong eval. Đây là bộ nhỏ trên 3 nghiệp vụ, chưa chứng minh recall hay SLA ở 100 nghiệp vụ. Unit/integration có catalog giả lập 100 mục để kiểm tra plumbing, ACL, packing, pending và fallback.
+
+Khác biệt/phần chưa triển khai: chưa hiệu chỉnh cosine hoặc nhóm gần điểm (guard hiện chỉ bảo vệ đồng điểm); chưa có queue/concurrency controller riêng, toàn bộ stage timings, shadow worker nền, GC point tự động, domain reranker, hoặc UI tìm kiếm/phân trang nghiệp vụ. Đã có script dọn point cũ có snapshot an toàn, chưa phải lifecycle GC tự động. Index dùng hash từng version thay cho active generation toàn catalog. Fallback uncertain vẫn dùng full catalog nếu vừa context, rồi dùng SELECT_TEMPLATE hiện có khi không vừa; chưa có vòng retrieval mở rộng. Những phần này cần eval và vòng triển khai tiếp, không coi là đã hoàn thành toàn bộ plan.
+
+[Runbook triển khai và chuyển sang Mac mini](WORKFLOW_RETRIEVAL_RUNBOOK.md) mô tả cấu hình, index, giới hạn, rollback và các bài kiểm chứng.
+
+## 16. Rà soát và thứ tự thực hiện ngày 08/10/2026
+
+### Kết quả lịch sử đã đo
+
+Replay 71 lượt từ 3 phiên, gồm 41 câu khác nhau, trên catalog 3 workflow. Đây là eval quyết định router với ngữ cảnh, không thực thi workflow/SQL, không phải benchmark end-to-end của toàn ứng dụng. Nhiều lượt liên quan cùng phiên nên không coi 71 lượt là 71 mẫu độc lập.
+
+| Chỉ số | Retrieval off (baseline) | Retrieval on |
+| --- | --- | --- |
+| Đúng route/workflow/input theo nhãn strict | 66/71 | 63/71 |
+| Đúng route | 69/71 | 67/71 |
+| Router p95 trong bài replay | 2.658 ms | 3.530 ms |
+| Quyết định local / escalation | 33 / 38 | 36 / 35 |
+
+Retrieval giữ đúng workflow ở 28/28 ca nghiệp vụ được đo; top-1 cũng đúng 28/28, nhóm ứng viên trung bình 2,89. Mẫu nhỏ trên ba workflow không chứng minh recall >=98% hoặc >=99% ở catalog lớn. Shortlist tìm đúng nhưng toàn luồng giảm độ đúng: cần sửa quyết định semantic/input, không tăng confidence hoặc giảm K để che lỗi.
+
+Các regression cần giải quyết trước pilot tiếp: câu hỏi khả năng “sản lượng điện bán ra có thể tổng hợp theo thời gian nào” bị chọn thành workflow; yêu cầu vẽ biểu đồ thiếu `drawChart`. Các lỗi chung baseline/on còn gồm câu danh sách bị chọn lookup hoặc unclear, bỏ sót tên và mã trong input. Nhãn cần được rà lại trước khi dùng làm tiêu chí nghiệm thu. Báo cáo chi tiết tạo bởi `scripts/report_history_routing_eval.js`; corpus/nhãn thô giữ riêng trong artifacts private.
+
+### Quy tắc thiết kế chốt cho vòng tiếp theo
+
+1. **Quyền trước retrieval:** BM25, vector, bổ sung nhóm cạnh tranh và fallback đều chỉ dùng snapshot catalog được phép, enabled/published. Kiểm tra lại quyền/version trước thực thi. Sơ đồ không đặt lọc quyền sau RRF.
+2. **Nhóm cạnh tranh rõ ràng:** khai báo hoặc suy từ metadata đã kiểm chứng đối tượng/domain/operation/scope, không dùng domain làm lọc cứng. Giữ lookup/list/aggregate cần phân biệt; chỉ bảo vệ đồng điểm là chưa đủ. Log lý do thêm/loại từng ứng viên và overflow khi cả nhóm không vừa.
+3. **Fallback phân biệt nguyên nhân:** TEV1 unclear với retrieval đủ coverage có thể dùng shortlist; lỗi embedding, thiếu/stale index, mất nhóm hoặc nghi bỏ sót phải mở rộng trước lần model-chat escalation duy nhất. Catalog gọn gồm id, tên, mô tả ngắn và scope; không mặc định id/tên đủ nghĩa. Nếu vẫn không vừa context, hỏi làm rõ/chọn thủ công. Không lặp lại shortlist đã nghi sai rồi coi đó là fallback an toàn.
+4. **Không suy intent từ retrieval score:** cosine/RRF thấp không kết luận chat; vẫn có chat/unclear trong task. Điểm cao cũng không đủ cho phép chạy workflow. Câu hỏi về khả năng, giải thích và yêu cầu thực thi phải được phân biệt qua bằng chứng câu gốc.
+5. **Ngữ cảnh và chi phí:** giữ memoryProbe/slot_answer/pending trước retrieval. Chỉ embed khi cần và cache miss; chỉ tái dùng vector RAG khi truy vấn và model identity trùng. Một request TEV1 có nhiều evaluation, greeting/memory cũng có thể dùng call; không cam kết mỗi lượt chỉ một embed và một model call.
+6. **TEV1 giữ contract hiện tại:** yêu cầu `routingScope` khi publish, kiểm kê template cũ; chỉ tạo input questions cho tập đóng gói. Kiểm tra cả `estimateTokens(task)+200 <= 2050` và budget còn lại. Không tách TEV1 thành hai request, không bỏ schema/input hoặc cắt nhóm để ép vừa.
+
+### Công việc tiếp theo, theo thứ tự ưu tiên
+
+| Ưu tiên | Công việc | Bằng chứng hoàn thành |
+| --- | --- | --- |
+| P0 | Rà nhãn lịch sử và thêm câu ngắn, viết tắt, câu hỏi khả năng, chat thường, pending/tham chiếu; gắn input và nhóm cạnh tranh mong đợi | Tập hiệu chỉnh/test tách theo phiên hoặc họ câu, tránh bản gần trùng rơi vào cả hai; có số mẫu mỗi nhóm |
+| P1 | Chạy retrieval riêng trên cùng tập và catalog 20/50/100; so vector/BM25/hybrid, K=5/8/10/12/15 | Recall trước/sau packing, giữ đủ nhóm cạnh tranh, token/questionCount/overflow; chưa chốt K=8–12 |
+| P2 | Thêm nhóm cạnh tranh và fallback mở rộng theo nguyên nhân; sửa lỗi câu hỏi khả năng, lookup/list và input/chart | Regression đã biết qua, kiểm thử phủ định/ambiguous và không tạo regression mới; không hardcode câu lịch sử |
+| P3 | Replay toàn luồng router off/on, sau đó kiểm thử runtime trong môi trường riêng | Strict route/workflow/input, false workflow trên chat, đúng run, coverage/escalation; chất lượng không thấp hơn baseline |
+| P4 | Đo toàn pipeline trên máy mục tiêu warm/cold và concurrency 1/4/8/15 | Embedding/cache/vector/packing/TEV1/fallback/queue latency, mọi evaluation/token và lỗi quá tải |
+| P5 | Pilot chỉ đọc có phạm vi sau khi đạt tiêu chí mục 10 | Recall sau packing mục tiêu >=99%, số mẫu/khoảng tin cậy, chất lượng cuối không giảm; rollout và rollback có số đo |
+
+98% là mốc sàng lọc để nghiên cứu retrieval; giữ mục tiêu nghiệm thu sau packing >=99% đã đặt trong plan. Không công bố đạt chỉ từ 28/28. Nhóm cạnh tranh và false workflow là chỉ số riêng, không thay bằng recall của một workflow đúng. Retrieval không tự giải quyết throughput TEV1: p95 9,64 giây ở concurrency 15 của báo cáo capacity vẫn cần đối chiếu bằng bài tải pipeline mới.
+
+Lần cập nhật này chỉ sửa tài liệu kế hoạch; không đổi runtime, ngưỡng, cấu hình K hoặc tự chạy nghiệp vụ.
+
+## 17. Triển khai tiếp theo hướng project ngày 08/10/2026
+
+Phần này cập nhật trạng thái sau mục 16 (mục 16 ghi nhận lần rà soát trước triển khai).
+
+- Đã tách `CHAT_ROUTING_RETRIEVAL_METHOD=lexical|hybrid` khỏi `off|shadow|on`. Lexical dùng catalog được phép trong bộ nhớ, không gọi embedding/Qdrant; không match thì fallback/hỏi rõ theo mode, không coi đó là kết luận chat. Hybrid vẫn là mặc định để giữ cấu hình máy hiện có.
+- Chat chỉ kiểm tra index hybrid, không tạo collection, upsert hoặc embedding workflow. Lập chỉ mục diễn ra khi publish/overlay hoặc qua script index; thêm `--check` chỉ đọc để kiểm tra sau restore. Hybrid publish lỗi index thì không cập nhật published; lexical publish không phụ thuộc index. Chưa triển khai outbox/worker index riêng.
+- Thêm contract `routingGroup` tùy chọn, giữ cả nhóm được phép khi đóng gói. Nhóm vượt khả năng task thì fallback; không tự gán nhóm cho catalog đang published. Đây là metadata do người quản trị khai báo, không suy nhóm bằng tên domain một cách cứng nhắc.
+- Model chat fallback dùng catalog gọn bỏ instructions thực thi, giữ scope và schema input để quyết định cùng một lượt. Chưa có truy hồi mở rộng theo nhiều bậc; full authorized catalog vượt context vẫn dùng SELECT_TEMPLATE hiện có.
+- Nhánh chat vẫn trả về Intelligent Core hiện có để dùng memory/RAG/SQL/tools. Không biến workflow router thành bộ trả lời thay cho core.
+- Đã bổ sung hướng dẫn phân biệt câu hỏi khả năng với yêu cầu tạo báo cáo vào task TEV1. Đây là điều chỉnh prompt cần eval, không khẳng định đã sửa toàn bộ regression semantic/input.
+- Có runner retrieval riêng theo K và lexical/hybrid trên lịch sử, cùng lựa chọn replay router lexical lưu report riêng. Bộ 71 lượt hiện tại chỉ có 3 workflow; kiểm chứng chất lượng catalog 20/50/100 và pilot tải vẫn là việc tiếp theo, chưa coi là đạt nghiệm thu.
+
+Máy Mac mini độc lập cần đặt method lexical. Điều này chỉ bỏ phụ thuộc embedding/Qdrant của bước routing; TEV1/model trả lời và RAG khác vẫn có yêu cầu dịch vụ riêng. Chuyển method qua cấu hình và khởi động lại theo quy trình vận hành; lần triển khai này không tự sửa `.env` máy hiện tại.
+
+### Kết quả kiểm chứng vòng triển khai
+
+- Suite toàn repo sau sửa guard: 504 test, 493 pass, 11 skip, 0 fail. Sau đó thêm ba ca plumbing lexical 20/50/100 mục; suite retrieval 20/20 qua. Không dùng dữ liệu giả lập này để khẳng định semantic recall ở catalog lớn.
+- Kiểm tra index chỉ đọc trên máy hiện tại: `ready`, đủ 3 workflow published, không embedding lại.
+- Retrieval riêng, 71 lượt lịch sử/28 lượt nghiệp vụ, K=5/8/10/12/15: lexical và hybrid đều tìm đúng 28/28. Lexical có 13 lượt cần fallback vì không có ứng viên; hybrid không có lỗi retrieval trên bộ này. Đây là số đo catalog ba workflow.
+- Replay lexical ban đầu đạt strict 60/71. Sau khi không cho scope chung ghi đè việc phủ nhận lookup/report và chuyển input extraction mâu thuẫn/thiếu chắc chắn sang xác minh: strict 67/71, route 67/71, router wall p95 2.253 ms; 18 lượt local và 53 lượt escalation. Có 27 lượt nghiệp vụ đo được shortlist đều tìm đúng; lượt còn lại đi nhánh khác trước retrieval, không tính vào mẫu recall này.
+- Bốn lượt còn sai gồm câu hỏi khả năng, câu danh sách và yêu cầu phụ thuộc ngữ cảnh. Chưa đạt hết regression gate. Tỷ lệ escalation cao là tradeoff phải báo rõ; không coi kết quả này chứng minh chạy local-only tốt hoặc đạt SLA Mac mini. Baseline lịch sử cũ 66/71 chỉ là tham chiếu, chưa phải A/B đồng thời của phiên bản mới.
+- Báo cáo private mới: `artifacts/workflow-retrieval-evaluation-1791406486647.private.json` và `artifacts/history-routing-evaluation-lexical-1791406629578.private.json`. Giữ nguyên báo cáo baseline cũ.
+
+### So sánh hybrid sau sửa guard (08/10/2026)
+
+Chạy cùng 71 lượt/41 câu khác nhau, catalog 3 workflow, cùng nhãn và model chat với lượt lexical vừa đo. Runner có thêm `--hybrid` để chọn rõ phương pháp và lưu report timestamp riêng.
+
+| Chỉ số router | Lexical | Hybrid (embedding + BM25 + RRF) |
+| --- | --- | --- |
+| Strict route/workflow/input đúng | 67/71 (94,4%) | 68/71 (95,8%) |
+| Quyết định local | 18 | 22 |
+| Model chat escalation | 53 | 49 |
+| Recall trên lượt thực sự có shortlist và nhãn workflow | 27/27 | 27/27 |
+| Wall p50 | 1.606 ms | 1.978 ms |
+| Wall p95 | 2.253 ms | 2.590 ms |
+
+Hybrid còn ba lượt sai. Chênh lệch strict chỉ một lượt trong nhóm hỏi khả năng; đây là replay tuần tự một lần, có context và model chat, chưa chứng minh cải thiện do embedding. Không suy ra throughput hoặc độ trễ Mac mini; số đo không gồm SQL/workflow thực thi. Cả hai phương pháp vẫn phụ thuộc fallback nhiều, chưa đạt mục tiêu pilot về chất lượng trên catalog lớn.
+
+Báo cáo hybrid: `artifacts/history-routing-evaluation-hybrid-1791406869908.private.json`. Lệnh chạy lại: `node --require ./tests/helpers/setup_isolated_data.js scripts/evaluate_history_routing.js --retrieval-only --hybrid`.
+
+## 18. Phân biệt giải thích và thực thi (08/10/2026)
+
+Đã thêm mục đích `explain/execute/unclear/none` vào schema model chat và cùng task TEV1 hiện tại. Chỉ `execute` được tạo/cập nhật/hủy run. `explain` chọn ID liên quan nhưng giữ route chat; backend kiểm tra lại quyền qua registry rồi trả lời từ metadata bằng model chat đã ghim, không truyền tool/SQL/workflow steps. Mục đích chưa rõ với một ứng viên thì hỏi tìm hiểu hay thực hiện. Lỗi routing hỏi lại bằng văn bản thay cho bảng toàn catalog.
+
+Metadata `capabilities` tùy chọn gồm summary/timeGranularities/units/limitations được validate khi import/validate/publish. Nội dung do catalog quyết định, không dùng regex theo câu hỏi, ID hay tên nghiệp vụ để rẽ nhánh. Nếu chưa khai báo, dùng mô tả/schema input hiện tại và không suy ra khả năng chưa được mô tả. UI gợi ý chỉ dùng summary công khai, bỏ mô tả routing kỹ thuật.
+
+Kiểm chứng: suite toàn repo 510 test, 499 pass, 11 skip, 0 fail trước thay đổi nhỏ phần mô tả công khai của bảng gợi ý; kiểm tra router lại sau thay đổi đó. Test mới bao gồm explanation giữ nguyên pending, không tạo run, không sửa/hủy, không tool/SQL và từ chối ID ngoài quyền hoặc purpose trái route.
+
+Eval model thật: 11/11 ca ở auto và 11/11 ở chat_model (22 ca), gồm câu giải thích, phủ định thực thi, yêu cầu thực thi sinh từ tên ba template và hai lượt capability trong lịch sử. Câu hỏi thời gian sản lượng điện đã chọn explain và trả lời theo tháng từ metadata, không chạy workflow. Report `artifacts/workflow-purpose-evaluation-1791408102371.private.json`. Đây là eval mục đích và nội dung giải thích trên catalog nhỏ, không thay thế replay 71 lượt hoặc bài tải/catalog 100 workflow. Không tự sửa metadata published hoặc restart server trong bước này.

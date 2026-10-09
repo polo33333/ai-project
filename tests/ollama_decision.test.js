@@ -59,7 +59,7 @@ test('report confirmation resolves unclear scope but rejects explicit entity-lis
     return [key, { type: 'choice', choice, probabilities: Object.fromEntries(options.map(option => [option, option === choice ? 0.96 : 0.04 / (options.length - 1)])) }];
   })) });
   const config = { minProbability: 0.65, minMargin: 0.15 };
-  const picks = { route: 'w0', requested_scope: 'unclear', aggregate_request: 'yes' };
+  const picks = { route: 'w0', purpose: 'execute', requested_scope: 'unclear', aggregate_request: 'yes' };
   const result = tev1.convertAnswers(payload(picks), prepared, question, null, config).decision;
   assert.equal(result.route, 'workflow');
   assert.equal(result.workflowId, definition.id);

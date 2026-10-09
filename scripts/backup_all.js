@@ -13,7 +13,7 @@ const { createPool } = require('../src/backend/storage/postgres/pool');
 const { getExportsDirectory } = require('../src/backend/utils/export_paths');
 
 const root = path.resolve(__dirname, '..');
-const collections = () => [...new Set([process.env.QDRANT_COLLECTION || 'database_schema_v2', process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents_bge_m3_v1'])];
+const collections = () => [process.env.QDRANT_COLLECTION || 'database_schema_v2', process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents_bge_m3_v1', process.env.CHAT_ROUTING_RETRIEVAL_COLLECTION || 'workflow_routing_v1'];
 const safeName = value => typeof value === 'string' && /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/.test(value) && value !== '.' && value !== '..';
 const safePathPart = value => typeof value === 'string' && value.length > 0 && value !== '.' && value !== '..' && !/[\\/:\x00-\x1f]/.test(value);
 const digest = async file => {
@@ -105,7 +105,7 @@ async function verify(directory) {
 }
 
 function collectionsFromManifest(manifest) {
-  if (!Array.isArray(manifest.collections) || manifest.collections.length !== 2 || manifest.collections.some(c => !safeName(c))) throw new Error('Invalid collection list.');
+  if (!Array.isArray(manifest.collections) || ![2, 3].includes(manifest.collections.length) || new Set(manifest.collections).size !== manifest.collections.length || manifest.collections.some(c => !safeName(c))) throw new Error('Invalid collection list.');
   return manifest.collections;
 }
 
@@ -113,7 +113,7 @@ async function backup({ coordinated = false, allowMissingCollections = false } =
   if (process.env.APP_STORAGE_BACKEND !== 'postgres') throw new Error('APP_STORAGE_BACKEND=postgres is required.');
   if (!coordinated && process.env.BACKUP_APP_STOPPED !== '1') throw new Error('Stop the app and all writers, then set BACKUP_APP_STOPPED=1.');
   const names = collections();
-  if (names.length !== 2 || names.some(c => !safeName(c))) throw new Error('Two distinct, safe Qdrant collection names are required.');
+  if (new Set(names).size !== 3 || names.some(c => !safeName(c))) throw new Error('Three distinct, safe Qdrant collection names are required.');
   const backupRoot = path.resolve(process.env.KNOWLEDGEHUB_BACKUP_DIR || path.join(root, 'backups'));
   await fsp.mkdir(backupRoot, { recursive: true, mode: 0o700 });
   const backupId = `storage-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(4).toString('hex')}`;
@@ -166,7 +166,8 @@ async function importPackage(directory, target, { dryRun = false } = {}) {
   if (!/^knowledgehub_restore_[a-z0-9_]+$/.test(target || '')) throw new Error('Target must be a NEW knowledgehub_restore_* database.');
   const targetCollections = collectionsFromManifest(manifest).map(name => `${target}_${name}`);
   if (targetCollections.some(name => !safeName(name))) throw new Error('Unsafe target collection name.');
-  const plan = { package: manifest.backupId, database: target, collections: targetCollections, files: manifest.components.filter(c => c.kind === 'file').length };
+  const configuration = Object.fromEntries(['QDRANT_COLLECTION', 'QDRANT_DOCUMENT_COLLECTION', 'CHAT_ROUTING_RETRIEVAL_COLLECTION'].slice(0, targetCollections.length).map((key, index) => [key, targetCollections[index]]));
+  const plan = { package: manifest.backupId, database: target, collections: targetCollections, configuration, workflowRoutingRestored: targetCollections.length === 3, files: manifest.components.filter(c => c.kind === 'file').length };
   if (dryRun) return { dryRun: true, ...plan };
   const endpoint = qdrantUrl();
   const targetVersion = (await request(new URL('/', endpoint))).version;
@@ -224,10 +225,11 @@ async function restoreCurrent(directory, { dryRun = false } = {}) {
   const manifest = await verify(base);
   if (manifest.absentCollections?.length) throw new Error('Cannot restore from a backup with missing Qdrant collections.');
   const database = process.env.APP_PG_DATABASE || process.env.POSTGRES_DB || 'knowledgehub_app';
-  const names = collections();
+  const configured = collections();
+  const names = collectionsFromManifest(manifest);
   if (process.env.APP_STORAGE_BACKEND !== 'postgres') throw new Error('Current storage backend must be PostgreSQL.');
-  if (names.length !== 2 || names.some((name, index) => name !== manifest.collections[index])) throw new Error('Backup collection names do not match the current Qdrant configuration.');
-  const plan = { package: manifest.backupId, database, collections: names, overwriteCurrent: true, restartRequired: true };
+  if (new Set(configured).size !== 3 || names.some((name, index) => name !== configured[index])) throw new Error('Backup collection names do not match the current Qdrant configuration.');
+  const plan = { package: manifest.backupId, database, collections: names, workflowRoutingRestored: names.length === 3, warnings: names.length === 2 ? ['Legacy backup lacks workflow routing vectors; rebuild the workflow index before vector routing.'] : [], overwriteCurrent: true, restartRequired: true };
   if (dryRun) return { dryRun: true, ...plan };
   if (process.env.BACKUP_APP_STOPPED !== '1') throw new Error('Stop the application before restoring the current database.');
   const endpoint = qdrantUrl();

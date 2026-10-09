@@ -4,6 +4,10 @@
 const auth=['accounts.json','sessions.json'];
 const routes=new Map([
   ['/api/auth/me',[]], ['/api/page-chat/sessions',[]],
+  // These definitions/runs live in their own SQL repository, not JSON stores.
+  ['/api/workflow-plugins',[]], ['/api/question-templates',[]],
+  // Full run views resolve presentation through the current dictionary.
+  ['/api/automation-runs',['dictionary.json','table_relationships.json']],
   ['/api/persona',['ai_persona.json']],
   ['/api/ai-providers',['ai_providers.json']],
   ['/api/sql/sources',['db_sources.json']],
