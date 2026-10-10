@@ -8,6 +8,7 @@ const { RequestExecutionBudget } = require('../agent_core/harness/request_execut
 const { createProviderBudget } = require('../agent_core/harness/guarded_agent_harness');
 const { isLocalProvider } = require('../agent_core/harness/provider_classifier');
 const tev1 = require('./tev1_decision');
+const { emitProgress } = require('../agent_core/harness/progress_events');
 
 const MODES = Object.freeze(['local_tev1', 'chat_model', 'auto']);
 const routingError = (code, message) => Object.assign(new Error(message), { code, dependency: 'routing_model' });
@@ -200,6 +201,7 @@ async function callRouter(context, provider, source, messages, question, definit
   const stage = { decisionSource: source, model: provider.model, status: 'running', calls: 0, httpRequests: 0,
     decisionEvaluations: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   context.trace.stages.push(stage);
+  const reasoningId = `routing:${context.trace.stages.length}`;
   context.trace.decisionSource = source;
   context.trace.routingModel = provider.model;
   const started = Date.now();
@@ -238,11 +240,22 @@ async function callRouter(context, provider, source, messages, question, definit
       timer = setTimeout(() => { controller.abort(); reject(routingError('ROUTING_TIMEOUT', 'Model quyết định routing hết thời gian chờ.')); }, Math.max(1, timeoutMs));
     });
     stage.httpRequests = 1;
+    let reasoningReceived = false;
     const response = await Promise.race([
       Promise.resolve().then(() => require('../intelligent_core/adapters').dispatchToProvider({ ...provider, temperature: 0,
         ...(prepared ? { decisionTask: prepared.task } : /ollama|gemini/i.test(String(provider.apiFormat)) || /google|gemini/i.test(String(provider.type)) ? { responseFormat: options.flowProbe ? { type: 'object', properties: { flow: { type: 'string', enum: ['knowledge', 'database', 'workflow', 'chat', 'unclear'] } }, required: ['flow'], additionalProperties: false } : decisionSchema(definitions, current) } : {})
-      }, messages, [], controller.signal)), stopped
+      }, messages, [], controller.signal, !prepared && typeof options.onProgress === 'function' ? {
+        onReasoning: delta => {
+          reasoningReceived = true;
+          emitProgress(options.onProgress, {
+            type: 'reasoning_delta', delta, reasoningId, label: 'Reasoning · định tuyến', icon: 'brain'
+          });
+        }
+      } : {})), stopped
     ]);
+    if (!prepared && !reasoningReceived) emitProgress(options.onProgress, {
+      type: 'reasoning_unavailable', label: 'Model định tuyến không gửi nội dung Reasoning ở lượt này', status: 'done', icon: 'circle-info'
+    });
     stage.calls = Math.max(reservedCalls, Number(response.usage?.calls) || 1);
     for (let index = reservedCalls; index < stage.calls; index += 1) context.executionBudget.consumeModelCall();
     for (const key of ['inputTokens', 'outputTokens', 'totalTokens']) stage[key] = Number(response.usage?.[key]) || 0;

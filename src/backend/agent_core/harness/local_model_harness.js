@@ -401,7 +401,7 @@ class LocalModelHarness {
     this.dispatch = dispatch;
   }
 
-  async _dispatch(provider, candidates, messages, tools, trace, collectUsage, externalSignal = null, executionBudget = null) {
+  async _dispatch(provider, candidates, messages, tools, trace, collectUsage, externalSignal = null, executionBudget = null, onProgress = null) {
     let lastError;
     for (const candidate of [provider, ...candidates.filter(item => item.id !== provider?.id)]) {
       executionBudget?.consumeModelCall();
@@ -417,7 +417,7 @@ class LocalModelHarness {
         ? setTimeout(() => controller.abort(), timeoutMs)
         : null;
       try {
-        const response = await this.dispatch(candidate, messages, tools, controller.signal);
+        const response = await this.dispatch(candidate, messages, tools, controller.signal, { onReasoning: delta => emitProgress(onProgress, { type: 'reasoning_delta', delta, iteration: trace.iterations, label: 'Reasoning', icon: 'brain' }) });
         const internalRetries = Math.max(0, (Number(response?.usage?.calls) || 1) - 1);
         for (let index = 0; index < internalRetries; index += 1) executionBudget?.consumeModelCall();
         collectUsage(response?.usage);
@@ -591,7 +591,7 @@ class LocalModelHarness {
       emitProgress(onProgress, { type: 'model_started', label: `Model đang phân tích · vòng ${trace.iterations}`, status: 'running', icon: 'brain', iteration: trace.iterations, providerName: activeProvider?.name });
       let dispatched;
       try {
-        dispatched = await this._dispatch(activeProvider, candidates, conversation, toolDefs, trace, collectUsage, context.signal, executionBudget);
+        dispatched = await this._dispatch(activeProvider, candidates, conversation, toolDefs, trace, collectUsage, context.signal, executionBudget, onProgress);
       } catch (error) {
         trace.steps.push({ iteration: trace.iterations, type: 'DISPATCH_ERROR', error: error.message });
         lastDispatchError = error;
@@ -667,7 +667,7 @@ class LocalModelHarness {
         type: 'function',
         function: { name: call.name, arguments: JSON.stringify(call.arguments || {}) }
       }] : [];
-      conversation.push({ role: 'assistant', content: '', tool_calls: canonicalToolCall });
+      conversation.push({ role: 'assistant', content: '', tool_calls: canonicalToolCall, responseItems: dispatched.response.responseItems, reasoning_content: dispatched.response.reasoning_content });
       const validation = validateToolCall(this.toolManager, call, enabledToolNames);
       if (!validation.valid) {
         trace.steps.push({ iteration: trace.iterations, type: validation.category, toolName: call?.name, errors: validation.errors });
@@ -909,7 +909,7 @@ class LocalModelHarness {
           ].join('\n')
           }
         ];
-        const synthesis = await this._dispatch(activeProvider, candidates, synthesisConversation, [], trace, collectUsage, context.signal, executionBudget);
+        const synthesis = await this._dispatch(activeProvider, candidates, synthesisConversation, [], trace, collectUsage, context.signal, executionBudget, onProgress);
         activeProvider = synthesis.provider;
         finalText = sanitizeFinalText(synthesis.response.content || '', hasSuccessfulTool(toolCalls, 'render_chart'));
       } catch (error) {

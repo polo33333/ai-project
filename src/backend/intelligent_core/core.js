@@ -33,7 +33,7 @@ function providerTimeoutMs(provider) {
   return isLocalProvider(provider) ? LOCAL_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
 }
 
-async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, externalSignal = null, executionBudget = null) {
+async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, externalSignal = null, executionBudget = null, onReasoning = null) {
   const ordered = [currentProvider, ...candidates.filter(candidate => candidate.id !== currentProvider?.id)];
   let lastError = null;
   for (const candidate of ordered) {
@@ -50,7 +50,7 @@ async function dispatchWithProviderFallback(currentProvider, candidates, message
       ? setTimeout(() => controller.abort(), timeoutMs)
       : null;
     try {
-      const response = await dispatchToProvider(candidate, messages, tools, controller.signal);
+      const response = await dispatchToProvider(candidate, messages, tools, controller.signal, { onReasoning });
       const internalRetries = Math.max(0, (Number(response?.usage?.calls) || 1) - 1);
       for (let index = 0; index < internalRetries; index += 1) executionBudget?.consumeModelCall();
       if (candidate.id !== currentProvider?.id) {
@@ -525,7 +525,7 @@ ${strictSelectedKnowledge
 
       let assistantMsg;
       try {
-        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, tools, providerFallbacks, options.signal, executionBudget);
+        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, tools, providerFallbacks, options.signal, executionBudget, delta => emitProgress(options.onProgress, { type: 'reasoning_delta', delta, label: 'Reasoning', icon: 'brain' }));
         assistantMsg = dispatched.response;
         provider = dispatched.provider;
       } catch (llmErr) {
@@ -538,6 +538,8 @@ ${strictSelectedKnowledge
         role: 'assistant',
         content: assistantMsg.content || '',
         rawParts: assistantMsg.rawParts || null,
+        responseItems: assistantMsg.responseItems,
+        reasoning_content: assistantMsg.reasoning_content,
         tool_calls: assistantMsg.tool_calls
       });
 
@@ -581,7 +583,7 @@ ${strictSelectedKnowledge
 
     if (finalText === null && toolCallsLog.length > 0) {
       try {
-        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, [], providerFallbacks, options.signal, executionBudget);
+        const dispatched = await dispatchWithProviderFallback(provider, providerCandidates, messages, [], providerFallbacks, options.signal, executionBudget, delta => emitProgress(options.onProgress, { type: 'reasoning_delta', delta, label: 'Reasoning', icon: 'brain' }));
         provider = dispatched.provider;
         collectUsage(dispatched.response.usage);
         finalText = dispatched.response.content || '';

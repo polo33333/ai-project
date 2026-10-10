@@ -58,6 +58,9 @@ test('repeated messages keep one actionable panel per run and archived panels su
   assert.equal(await original.getByRole('button', { name: 'Đang mở form…', exact: true }).isDisabled(), true);
   await page.waitForFunction(() => document.querySelector('[data-automation-run="retry-child"] input'));
   assert.equal(await page.evaluate(() => window.retryCreates), 1, 'One click creates the retry form');
+  assert.equal(await original.getAttribute('data-collapsed'), 'true', 'Retry collapses the previous card in the same reply');
+  assert.equal(await original.locator('.wp-execution-fold').getAttribute('aria-expanded'), 'false');
+  assert.notEqual(await page.locator('[data-automation-run="retry-child"]').getAttribute('data-collapsed'), 'true', 'The new retry form remains expanded');
   assert.equal(await original.getByRole('button', { name: 'L\u00e0m l\u1ea1i', exact: true }).count(), 0);
   await page.locator('[data-automation-run="retry-child"] input').fill('A003');
   await page.locator('[data-automation-run="retry-child"] button[type="submit"]').click();
@@ -129,4 +132,40 @@ test('embed repeated requests keep one input panel and reload restores one run',
   await page.waitForFunction(() => [...document.querySelector('#knowledgehub-embed-host').shadowRoot.querySelectorAll('button')].filter(button => button.textContent === 'L\u00e0m l\u1ea1i' && !button.disabled).length === 1);
   assert.equal(inputs, 2);
   assert.equal(await host.getByRole('button', { name: 'L\u00e0m l\u1ea1i', exact: true }).count(), 1, 'Only the latest completed child has a retry action in the embed');
+});
+
+test('refresh restores waiting forms without waiting for historical cards and deduplicates run requests', { skip: process.env.KNOWLEDGEHUB_TEST_BROWSER !== '1' }, async t => {
+  const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.tmpdir(), 'knowledgehub-phase1-ui-tools/node_modules/playwright'));
+  const browser = await chromium.launch({ executablePath: process.env.TEST_BROWSER_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  await page.route('http://localhost:12345/**', route => route.fulfill({ contentType: 'text/html', body: '<main></main>' }));
+  await page.goto('http://localhost:12345/');
+  await page.evaluate(() => {
+    window.runRequests = [];
+    window.inputSubmissions = 0;
+    const waiting = { id: 'waiting', templateId: 'report', conversationId: 'chat', name: 'Waiting form', status: 'WAITING_INPUT', revision: 1,
+      missingInputs: [{ key: 'query', label: 'Identifier', schema: { type: 'string' } }], steps: [] };
+    window.fetch = async (url, options = {}) => {
+      if (options.method === 'POST') {
+        window.inputSubmissions++;
+        return { ok: true, json: async () => ({ execution: { ...waiting, revision: 2, status: 'SUCCEEDED', missingInputs: [] } }) };
+      }
+      window.runRequests.push(url);
+      if (url.endsWith('/historical')) return new Promise(resolve => { window.releaseHistory = () => resolve({ ok: true, json: async () => ({ execution: { id: 'historical', name: 'History', status: 'SUCCEEDED', revision: 1, steps: [] } }) }); });
+      return { ok: true, json: async () => ({ execution: waiting }) };
+    };
+    document.querySelector('main').innerHTML = '<article><div class="workflow-execution-panel" data-automation-run="historical"><strong>History</strong><button>Old action</button></div><div class="workflow-execution-panel" data-automation-run="waiting"><strong>Saved form</strong><form><input><button type="submit">Continue</button></form></div></article><article><div class="workflow-execution-panel" data-automation-run="waiting"><strong>Newer saved form</strong><form><input><button type="submit">Continue</button></form></div></article>';
+  });
+  await page.addScriptTag({ content: fs.readFileSync(path.resolve('src/frontend/js/modules/workflow_plugins.js'), 'utf8') });
+  await page.evaluate(() => { window.restorePromise = window.restoreWorkflowExecutions(document); });
+  await page.waitForFunction(() => document.querySelector('[data-automation-run="waiting"]:not([data-execution-archived]) form')?.onsubmit);
+  assert.equal(await page.locator('[data-automation-run="historical"]').getAttribute('data-restoring'), 'true', 'History is still loading when the form becomes usable');
+  assert.equal(await page.evaluate(() => window.runRequests.filter(url => url.endsWith('/waiting')).length), 1, 'Duplicate panels share one owner-checked request');
+  assert.equal(await page.locator('form').count(), 1);
+  await page.locator('form input').fill('A001');
+  await page.locator('form button[type="submit"]').click();
+  assert.equal(await page.evaluate(() => window.inputSubmissions), 1, 'Submit works before history finishes loading');
+  await page.evaluate(async () => { window.releaseHistory(); await window.restorePromise; });
 });

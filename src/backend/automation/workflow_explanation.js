@@ -1,5 +1,6 @@
 'use strict';
 const { measureMessages } = require('../agent_core/harness/context_budget');
+const { emitProgress } = require('../agent_core/harness/progress_events');
 function publicMetadata(definition) {
   return { id: definition.id, name: definition.name,
     description: definition.capabilities?.summary || definition.description || '',
@@ -19,9 +20,18 @@ async function explain(question, definition, options) {
   const signal = AbortSignal.any([controller.signal, ...(options.signal ? [options.signal] : [])]);
   signal.throwIfAborted();
   let timer, onAbort, response;
+  let reasoningReceived = false;
   try {
     response = await Promise.race([
-      require('../intelligent_core/adapters').dispatchToProvider({ ...provider, temperature: 0 }, messages, [], signal),
+      require('../intelligent_core/adapters').dispatchToProvider({ ...provider, temperature: 0 }, messages, [], signal,
+        typeof options.onProgress === 'function' ? {
+          onReasoning: delta => {
+            reasoningReceived = true;
+            emitProgress(options.onProgress, {
+              type: 'reasoning_delta', delta, reasoningId: 'workflow:explanation', label: 'Reasoning · giải thích nghiệp vụ', icon: 'brain'
+            });
+          }
+        } : {}),
       new Promise((_, reject) => {
         onAbort = () => reject(Object.assign(new Error('Request aborted'), { name: 'AbortError' }));
         signal.addEventListener('abort', onAbort, { once: true });
@@ -29,6 +39,9 @@ async function explain(question, definition, options) {
       })
     ]);
   } finally { clearTimeout(timer); signal.removeEventListener('abort', onAbort); }
+  if (!reasoningReceived) emitProgress(options.onProgress, {
+    type: 'reasoning_unavailable', label: 'Model giải thích nghiệp vụ không gửi nội dung Reasoning ở lượt này', status: 'done', icon: 'circle-info'
+  });
   options.onWorkflowUsage?.(response.usage);
   const text = String(response.content || '').trim();
   if (!text) throw Object.assign(new Error('Model chưa trả lời phần giải thích.'), { code: 'ROUTING_INVALID_OUTPUT' });

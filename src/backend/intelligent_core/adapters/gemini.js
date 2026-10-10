@@ -4,6 +4,7 @@
  * Hỗ trợ lưu nguyên gốc thought_signature từ Gemini 2.0 / 3.0+ cho tool calling multi-turn.
  */
 
+const { readJsonStream, reasoningEmitter } = require('./stream_reader');
 const { callOpenAI } = require('./openai');
 
 /**
@@ -69,9 +70,9 @@ function convertMessagesToGeminiContents(messages) {
   return contents;
 }
 
-async function callGemini(provider, messages, tools, signal) {
+async function callGemini(provider, messages, tools, signal, options = {}) {
   if (provider.baseUrl.includes('/openai')) {
-    return callOpenAI(provider, messages, tools, signal);
+    return callOpenAI(provider, messages, tools, signal, options);
   }
 
   const model = provider.model || 'gemini-1.5-flash';
@@ -105,7 +106,24 @@ async function callGemini(provider, messages, tools, signal) {
     body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } };
   }
 
-  const url = `${provider.baseUrl}/v1beta/models/${model}:generateContent?key=${provider.apiKey}`;
+  const streaming = typeof options.onReasoning === 'function' && provider.supportsStreaming !== false;
+  const emit = reasoningEmitter(options.onReasoning);
+  if (streaming && /^gemini-(?:2\.5|3)/.test(model)) {
+    body.generationConfig.thinkingConfig = { includeThoughts: true };
+    if (/^gemini-3/.test(model)) {
+      // Flash-Lite defaults to minimal effort and can return no thoughts at all.
+      // Request actual thinking as well as summaries for interactive chat.
+      body.generationConfig.thinkingConfig.thinkingLevel = String(
+        provider.thinkingLevel ?? process.env.AI_GEMINI_THINKING_LEVEL ?? (/pro/i.test(model) ? 'HIGH' : 'MEDIUM')
+      ).toUpperCase();
+    } else if (/flash-lite/.test(model)) {
+      body.generationConfig.thinkingConfig.thinkingBudget = Math.max(0, Number(
+        provider.thinkingBudget ?? process.env.AI_GEMINI_THINKING_BUDGET ?? 1024
+      ) || 0);
+    }
+  }
+  const operation = streaming ? 'streamGenerateContent' : 'generateContent';
+  const url = `${provider.baseUrl}/v1beta/models/${model}:${operation}?key=${provider.apiKey}${streaming ? '&alt=sse' : ''}`;
 
   const res = await fetch(url, {
     method: 'POST',
@@ -121,7 +139,26 @@ async function callGemini(provider, messages, tools, signal) {
     throw Object.assign(new Error(`Gemini API: ${errMsg}`), { status: res.status });
   }
 
-  const data = await res.json();
+  let data;
+  if (streaming && res.body && (res.headers?.get('content-type') || '').includes('text/event-stream')) {
+    const parts = [];
+    let finishReason;
+    let usageMetadata;
+    await readJsonStream(res, chunk => {
+      const candidate = chunk.candidates?.[0];
+      for (const part of candidate?.content?.parts || []) {
+        parts.push(part);
+        if (part.thought) emit(part.text);
+      }
+      if (candidate?.finishReason) finishReason = candidate.finishReason;
+      if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
+    }, true);
+    if (!finishReason) throw new Error('Gemini stream ended before completion');
+    data = { candidates: [{ content: { parts }, finishReason }], usageMetadata };
+  } else {
+    data = await res.json();
+    for (const part of data.candidates?.[0]?.content?.parts || []) if (part.thought) emit(part.text);
+  }
   const candidate = data.candidates?.[0];
   const content = candidate?.content;
   if (!content) throw new Error('Gemini không trả về candidate.');
@@ -131,7 +168,7 @@ async function callGemini(provider, messages, tools, signal) {
   if (funcParts.length) {
     return {
       role: 'assistant',
-      content: content.parts?.filter(p => p.text && !p.thought).map(p => p.text).join('\n') || null,
+      content: content.parts?.filter(p => p.text && !p.thought).map(p => p.text).join(streaming ? '' : '\n') || null,
       finish_reason: candidate.finishReason,
       rawParts: content.parts, // Lưu nguyên vẹn parts gốc chứa thought & thought_signature
       usage: data.usageMetadata ? {
@@ -152,7 +189,7 @@ async function callGemini(provider, messages, tools, signal) {
 
   return {
     role: 'assistant',
-    content: content.parts?.filter(p => p.text && !p.thought).map(p => p.text).join('\n') || null,
+    content: content.parts?.filter(p => p.text && !p.thought).map(p => p.text).join(streaming ? '' : '\n') || null,
     finish_reason: candidate.finishReason,
     tool_calls: null,
     usage: data.usageMetadata ? {

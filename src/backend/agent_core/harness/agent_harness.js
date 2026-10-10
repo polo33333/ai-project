@@ -52,7 +52,7 @@ function isWebScopeRefusal(text = '') {
     && /(?:web|thoi gian thuc|thi truong|thong tin|du lieu)/.test(normalized);
 }
 
-async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, collectUsage, externalSignal = null, executionBudget = null) {
+async function dispatchWithProviderFallback(currentProvider, candidates, messages, tools, fallbackLog, collectUsage, externalSignal = null, executionBudget = null, onReasoning = null) {
   const ordered = [currentProvider, ...candidates.filter(candidate => candidate.id !== currentProvider?.id)];
   let lastError = null;
 
@@ -67,7 +67,7 @@ async function dispatchWithProviderFallback(currentProvider, candidates, message
       ? setTimeout(() => controller.abort(), timeoutMs)
       : null;
     try {
-      const response = await dispatchToProvider(candidate, messages, tools, controller.signal);
+      const response = await dispatchToProvider(candidate, messages, tools, controller.signal, { onReasoning });
       for (let index = 1; index < Math.max(1, Number(response?.usage?.calls) || 1); index += 1) executionBudget?.consumeModelCall();
       if (collectUsage && response?.usage) {
         collectUsage(response.usage);
@@ -207,7 +207,8 @@ class AgentHarness {
           providerFallbacks,
           collectUsage,
           context.signal,
-          context.executionBudget
+          context.executionBudget,
+          delta => emitProgress(onProgress, { type: 'reasoning_delta', delta, iteration: iterations, label: 'Reasoning', icon: 'brain' })
         );
         assistantMsg = dispatched.response;
         activeProvider = dispatched.provider;
@@ -221,6 +222,8 @@ class AgentHarness {
         role: 'assistant',
         content: assistantMsg.content || '',
         rawParts: assistantMsg.rawParts || null,
+        responseItems: assistantMsg.responseItems,
+        reasoning_content: assistantMsg.reasoning_content,
         tool_calls: assistantMsg.tool_calls
       });
 
@@ -363,7 +366,8 @@ class AgentHarness {
           providerFallbacks,
           collectUsage,
           context.signal,
-          context.executionBudget
+          context.executionBudget,
+          delta => emitProgress(onProgress, { type: 'reasoning_delta', delta, iteration: iterations, label: 'Reasoning', icon: 'brain' })
         );
         activeProvider = dispatched.provider;
         finalText = dispatched.response.content || '';

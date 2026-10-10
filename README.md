@@ -623,3 +623,19 @@ Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ
 ## License
 
 Project hiện khai báo license `ISC` trong `package.json`. Trước khi phân phối công khai, cần bổ sung file `LICENSE` chính thức và xác nhận lại chủ sở hữu/quyền phân phối mã nguồn.
+
+### Reasoning trong giao diện chat
+
+Khung Reasoning xuất hiện khi provider thực sự gửi nội dung suy luận hoặc bản tóm tắt được công khai qua API. Nội dung cập nhật qua SSE trong lúc chờ câu trả lời, có thể mở/thu gọn và được giữ trong phần Thinking của kết quả. Không tạo nội dung giả khi model không gửi Reasoning.
+
+- Ollama: đọc `message.thinking` từ NDJSON. Tôn trọng `provider.think` và `LOCAL_MODEL_THINK`; nếu chưa cấu hình thì dùng mặc định của model khi chat streaming. Cấu hình `false` vẫn tắt thinking.
+- OpenAI-compatible: đọc `reasoning_content` hoặc `reasoning` từ Chat Completions SSE. Ghép lại nội dung và tool arguments trước khi chạy tool. Nếu endpoint báo không hỗ trợ streaming thì thử lại chế độ JSON; có thể đặt `supportsStreaming: false` trong cấu hình provider.
+- OpenAI chính thức: các model reasoning o1/o3/o4 và GPT-5/GPT-6 dùng Responses API với `reasoning.summary: auto`; cũng có thể chọn `apiFormat: openai-responses`. Giữ các reasoning item mã hóa trong ngữ cảnh tool của cùng yêu cầu.
+- Gemini 2.5/3: bật `includeThoughts` và nhận thought summaries từ `streamGenerateContent`; giữ thought signatures cho lượt tool tiếp theo.
+- Anthropic: adapter hiện giữ luồng cũ, chưa bật extended thinking.
+
+Giới hạn phần hiển thị 32.000 ký tự mỗi lượt gọi model. Giao diện dùng văn bản thuần để nội dung provider không được thực thi như HTML. Không hỗ trợ Reasoning thì chỉ hiện các bước tiến trình hiện có. Việc summary xuất hiện sớm hay muộn phụ thuộc provider.
+
+Kiểm thử: `node --require ./tests/helpers/setup_isolated_data.js --test tests/reasoning_stream.test.js tests/chat_pending_panel.test.js`.
+
+Gemini Flash-Lite có thể không gửi summary ở mức thinking mặc định. Chat streaming hiện yêu cầu thinking level `MEDIUM` cho Gemini 3 Flash/Lite (`HIGH` cho Pro), hoặc budget 1024 cho Gemini 2.5 Flash-Lite. Có thể ghi đè bằng `provider.thinkingLevel` / `AI_GEMINI_THINKING_LEVEL`, và `provider.thinkingBudget` / `AI_GEMINI_THINKING_BUDGET`. Điều này có thể tăng thời gian phản hồi và số token suy luận. Các lượt định tuyến TEV1 và gọi JSON không streaming giữ cấu hình cũ; không bảo đảm mỗi câu đều có summary. Ollama vẫn tôn trọng `LOCAL_MODEL_THINK=false`.

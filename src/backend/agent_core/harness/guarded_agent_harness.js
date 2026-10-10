@@ -126,7 +126,7 @@ class GuardedAgentHarness {
         budget.consumeModelCall();
         try {
           const callStartedAt = Date.now();
-          const response = await boundedCall(signal => this.dispatch(candidate, outgoing, definitions, signal), context.signal, Math.min(providerTimeout, budget.remainingMs()));
+          const response = await boundedCall(signal => this.dispatch(candidate, outgoing, definitions, signal, { onReasoning: delta => emitProgress(onProgress, { type: 'reasoning_delta', delta, iteration: trace.iterations, label: 'Reasoning', icon: 'brain' }) }), context.signal, Math.min(providerTimeout, budget.remainingMs()));
           const usage = response.usage;
           trace.steps.push({ type: 'MODEL_USAGE', stage: context.mode === 'knowledge' ? 'knowledge_answer' : 'agent',
             iteration: trace.iterations, repairAttempt: repairs, providerId: candidate.id, model: candidate.model,
@@ -212,7 +212,7 @@ class GuardedAgentHarness {
         const calls = acceptCalls ? normalized.calls : [];
         const canonicalCalls = calls.map((call, index) => ({ id: call.id || `call-${trace.iterations}-${index}`, type: 'function',
           function: { name: call.name, arguments: JSON.stringify(call.arguments) } }));
-        conversation.push({ role: 'assistant', content: response.content || '',
+        conversation.push({ role: 'assistant', content: response.content || '', responseItems: response.responseItems, reasoning_content: response.reasoning_content,
           ...(calls.length ? { tool_calls: canonicalCalls, rawParts: native ? response.rawParts : undefined } : {}) });
         emitProgress(onProgress, { type: 'model_completed', label: 'Đã nhận phản hồi từ model', status: 'done', icon: 'robot', iteration: trace.iterations });
         if (!calls.length) {

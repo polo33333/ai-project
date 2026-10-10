@@ -36,11 +36,14 @@ function parseBoolean(value, fallback = false) {
   return String(value).trim().toLowerCase() === 'true';
 }
 
-async function callOllama(provider, messages, tools, signal) {
+const { readJsonStream, reasoningEmitter } = require('./stream_reader');
+
+async function callOllama(provider, messages, tools, signal, options = {}) {
+  const emit = reasoningEmitter(options.onReasoning);
   const body = {
     model: provider.model || 'qwen2.5-coder',
     messages: convertMessagesToOllama(messages),
-    stream: false,
+    stream: typeof options.onReasoning === 'function',
     options: {
       temperature: Number(provider.temperature ?? process.env.LOCAL_MODEL_TEMPERATURE ?? 0.1),
       ...(Number(provider.numCtx || process.env.LOCAL_MODEL_NUM_CTX) > 0 ? { num_ctx: Number(provider.numCtx || process.env.LOCAL_MODEL_NUM_CTX) } : {}),
@@ -52,6 +55,8 @@ async function callOllama(provider, messages, tools, signal) {
     think: parseBoolean(provider.think ?? process.env.LOCAL_MODEL_THINK, false),
     keep_alive: provider.keepAlive || process.env.LOCAL_MODEL_KEEP_ALIVE || '10m'
   };
+
+  if (body.stream && provider.think == null && !process.env.LOCAL_MODEL_THINK) delete body.think;
 
   if (provider.responseFormat === 'json') body.format = 'json';
   else if (provider.responseFormat && typeof provider.responseFormat === 'object') body.format = provider.responseFormat;
@@ -78,7 +83,22 @@ async function callOllama(provider, messages, tools, signal) {
       const errText = await res.text();
       throw new Error(`Ollama HTTP ${res.status}: ${errText.slice(0, 200)}`);
     }
-    return res.json();
+    if (!requestBody.stream || !res.body || (res.headers?.get('content-type') || '').includes('application/json')) {
+      const data = await res.json(); emit(data.message?.thinking); return data;
+    }
+    let final = {};
+    const message = { content: '', thinking: '', tool_calls: [] };
+    let done = false;
+    await readJsonStream(res, chunk => {
+      final = chunk;
+      message.content += chunk.message?.content || '';
+      message.thinking += chunk.message?.thinking || '';
+      emit(chunk.message?.thinking);
+      if (chunk.message?.tool_calls) message.tool_calls.push(...chunk.message.tool_calls);
+      if (chunk.done) done = true;
+    });
+    if (!done) throw new Error('Ollama stream ended before completion');
+    return { ...final, message };
   };
 
   const usage = { promptEvalCount: 0, evalCount: 0, requests: 0 };

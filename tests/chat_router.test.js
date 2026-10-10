@@ -629,3 +629,47 @@ test('flow selection also recognizes greeting in a single TEV1 evaluation', asyn
   assert.equal(result.quickGreeting, true);
   assert.equal(context.executionBudget.modelCalls, 1);
 });
+
+test('chat routing forwards streamed reasoning immediately with a stage identity', async t => {
+  const context = fixture(t, 'chat_model');
+  const events = [];
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages, tools, signal, options) => {
+    assert.equal(typeof options.onReasoning, 'function');
+    options.onReasoning('Routing summary');
+    assert.equal(events[0].delta, 'Routing summary');
+    return { content: '{"flow":"workflow"}' };
+  });
+  const result = await router.classifyFlow('Which report periods are available?', { routingContext: context, onProgress: event => events.push(event) });
+  assert.equal(result.flow, 'workflow');
+  assert.equal(events[0].type, 'reasoning_delta');
+  assert.match(events[0].reasoningId, /^routing:/);
+  assert.equal(events.some(event => event.type === 'reasoning_unavailable'), false);
+});
+
+test('routing reports missing reasoning without fabricating a summary', async t => {
+  const context = fixture(t, 'chat_model');
+  const events = [];
+  t.mock.method(adapters, 'dispatchToProvider', async () => ({ content: '{"flow":"workflow"}' }));
+  await router.classifyFlow('Which report periods are available?', { routingContext: context, onProgress: event => events.push(event) });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'reasoning_unavailable');
+  assert.equal(events[0].delta, undefined);
+});
+
+test('workflow explanation streams reasoning without running the workflow', async t => {
+  const f = handleFixture(t, 'chat_model', null);
+  const question = 'Which options does this operation support?';
+  const events = [];
+  t.mock.method(automation.registry, 'getTemplate', async () => definition);
+  let calls = 0;
+  t.mock.method(adapters, 'dispatchToProvider', async (provider, messages, tools, signal, options) => {
+    if (++calls === 1) return response(decision({ purpose: 'explain', workflowId: definition.id, evidence: [{ source: 'user_message', text: question }] }), provider);
+    options.onReasoning('Checking supported report options');
+    assert.ok(events.some(event => event.delta === 'Checking supported report options'));
+    return { content: 'Available options explained.', usage: { calls: 1 } };
+  });
+  const result = await orchestrator.handle(question, { ...f.options, onProgress: event => events.push(event) });
+  assert.equal(result.replyText, 'Available options explained.');
+  assert.equal(events.find(event => event.type === 'reasoning_delta').reasoningId, 'workflow:explanation');
+  assert.equal(f.creates.mock.callCount(), 0);
+});

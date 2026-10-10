@@ -751,6 +751,8 @@ function formatExecutionTime(value) {
 
 function disposeThinkingBubble(root) {
   if (root?._elapsedTimer) clearInterval(root._elapsedTimer);
+  const current = root?.querySelector('.chat-thinking-copy span');
+  if (current?._typingTimer) clearInterval(current._typingTimer);
   root._elapsedTimer = null;
 }
 
@@ -760,16 +762,27 @@ function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '') {
   return `<div><a class="chat-download-link" href="${escapeChatMarkdown(url)}" download><i class="fa-solid fa-download"></i>Tải file báo cáo</a></div>`;
 }
 
-function typeThinkingText(element, value) {
+function typeThinkingText(element, value, streamKey = null) {
   if (!element) return;
-  if (element._typingTimer) clearInterval(element._typingTimer);
-  const text = String(value || 'Đang xử lý...');
-  let index = 0;
-  element.textContent = '';
+  const streaming = streamKey !== null;
+  const target = String(value || '').replace(/[*`#]/g, '').replace(/\s+/g, ' ').trim();
+  const continuing = streaming && element._streamKey === streamKey && target.startsWith(element._typingTarget || '');
+  if (!continuing) {
+    if (element._typingTimer) clearInterval(element._typingTimer);
+    element._typingTimer = null;
+    element._typingIndex = 0;
+    element.textContent = '';
+  }
+  element._streamKey = streamKey;
+  element._typingTarget = target;
+  if (element._typingTimer || !target) return;
   element._typingTimer = setInterval(() => {
-    index += 1;
-    element.textContent = text.slice(0, index);
-    if (index >= text.length) {
+    const remaining = element._typingTarget.length - element._typingIndex;
+    element._typingIndex += streaming ? Math.max(1, Math.ceil(remaining / 30)) : 1;
+    const visible = element._typingTarget.slice(0, element._typingIndex);
+    element.textContent = streaming && visible.length > 180 ? '…' + visible.slice(-180) : visible;
+    if (streaming) element.scrollLeft = element.scrollWidth;
+    if (element._typingIndex >= element._typingTarget.length) {
       clearInterval(element._typingTimer);
       element._typingTimer = null;
     }
@@ -781,6 +794,25 @@ function addThinkingStep(containerId, icon, label, status = 'running', event = {
   const root = pending?.node?.id === containerId ? pending.node : document.getElementById(containerId);
   const stepsEl = root?.querySelector('.chat-thinking-steps');
   if (!stepsEl) return;
+  if (event.type === 'reasoning_delta') {
+    let panel = Array.from(stepsEl.children).find(item => item.dataset?.reasoningIteration === String(event.reasoningId || event.iteration || 0));
+    if (!panel) {
+      panel = document.createElement('details');
+      panel.className = 'chat-reasoning-panel';
+      panel.dataset.reasoningIteration = String(event.reasoningId || event.iteration || 0);
+      panel.open = false;
+      const summary = document.createElement('summary');
+      summary.textContent = 'Reasoning';
+      panel.appendChild(summary);
+      panel.appendChild(document.createElement('pre'));
+      stepsEl.appendChild(panel);
+    }
+    const text = panel.querySelector('pre');
+    text.textContent = (text.textContent + String(event.delta || '')).slice(0, 32000);
+    typeThinkingText(root.querySelector('.chat-thinking-copy span'), text.textContent,
+      String(event.reasoningId || event.iteration || 0));
+    return;
+  }
   typeThinkingText(root.querySelector('.chat-thinking-copy span'), label);
   const key = event.toolName ? `tool:${event.toolName}` : event.iteration != null && /^model_/.test(event.type || '') ? `model:${event.iteration}` : '';
   let step = key ? Array.from(stepsEl.children).reverse().find(item => item.dataset?.stepKey === key && item.dataset?.status === 'running') : null;
@@ -1198,7 +1230,11 @@ async function sendPageChatMessage() {
       attachments: attachedFiles.map(file => ({ name: file.name, type: file.type, size: file.size }))
     };
     const data = await fetchStreamingChat(requestPayload, event => {
-      progressEvents.push(event);
+      if (event.type === 'reasoning_delta') {
+        const previous = progressEvents.find(item => item.type === 'reasoning_delta' && item.reasoningId === event.reasoningId && item.iteration === event.iteration);
+        if (previous) previous.delta = (previous.delta + (event.delta || '')).slice(0, 32000);
+        else progressEvents.push({ ...event });
+      } else progressEvents.push(event);
       addThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running', event);
       window.updatePageChatMiniPanel({ status: 'running', label: event.label || 'Đang xử lý yêu cầu…' });
     }, requestController.signal);
@@ -1307,6 +1343,7 @@ async function sendPageChatMessage() {
         <div class="chat-embedded-thinking-title"><i class="fa-solid fa-brain"></i> Thinking · ${progressEvents.length} bước · ${escapeChatMarkdown(data.executionTime || '')}</div>
         <div class="chat-embedded-thinking-steps">
           ${progressEvents.map(event => {
+            if (event.type === 'reasoning_delta') return '<details class="chat-reasoning-panel"><summary>Reasoning</summary><pre>' + escapeChatMarkdown(event.delta || '') + '</pre></details>';
             const status = event.status || 'running';
             const color = status === 'done' ? '#16a34a' : status === 'error' ? '#dc2626' : status === 'warning' ? '#d97706' : '#6366f1';
             const icon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : (event.icon || 'circle-notch');

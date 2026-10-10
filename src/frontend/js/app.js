@@ -1027,6 +1027,7 @@ function renderCopilotTechnicalDetails(toolCalls, sqlQuery, toolResult, sqlExecu
       <div class="chat-embedded-thinking-title"><i class="fa-solid fa-brain"></i> Thinking · ${progressEvents.length} bước${executionTime ? ` · ${escapeCopilotHtml(executionTime)}` : ''}</div>
       <div class="chat-embedded-thinking-steps">
         ${progressEvents.map(event => {
+          if (event.type === 'reasoning_delta') return '<details class="chat-reasoning-panel"><summary>Reasoning</summary><pre>' + escapeCopilotHtml(event.delta || '') + '</pre></details>';
           const status = event.status || 'running';
           const color = status === 'done' ? '#16a34a' : status === 'error' ? '#dc2626' : status === 'warning' ? '#d97706' : '#6366f1';
           const fallbackIcon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : 'circle-notch';
@@ -1057,9 +1058,22 @@ function renderCopilotChart(chartSpec) {
   return `<div class="copilot-chart-box"><div class="chat-chart-stage"><canvas id="${chartId}" class="chat-chart-canvas"></canvas></div></div>`;
 }
 
-function addCopilotThinkingStep(containerId, icon, label, status = 'running') {
+function addCopilotThinkingStep(containerId, icon, label, status = 'running', event = {}) {
   const stepsEl = document.getElementById(`${containerId}-steps`);
   if (!stepsEl) return;
+  if (event.type === 'reasoning_delta') {
+    let panel = Array.from(stepsEl.children).find(item => item.dataset?.reasoningIteration === String(event.reasoningId || event.iteration || 0));
+    if (!panel) {
+      panel = document.createElement('details'); panel.className = 'chat-reasoning-panel';
+      panel.dataset.reasoningIteration = String(event.reasoningId || event.iteration || 0); panel.open = false;
+      panel.innerHTML = '<summary>Reasoning</summary><pre></pre>'; stepsEl.appendChild(panel);
+    }
+    const text = panel.querySelector('pre');
+    text.textContent = (text.textContent + String(event.delta || '')).slice(0, 32000);
+    typeCopilotThinkingText(document.getElementById(`${containerId}-current`), text.textContent,
+      String(event.reasoningId || event.iteration || 0));
+    return;
+  }
   typeCopilotThinkingText(document.getElementById(`${containerId}-current`), label);
   const color = status === 'done' ? '#22c55e' : status === 'error' ? '#ef4444' : status === 'warning' ? '#f59e0b' : '#6366f1';
   const fallbackIcon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : 'circle-notch';
@@ -1069,16 +1083,27 @@ function addCopilotThinkingStep(containerId, icon, label, status = 'running') {
   stepsEl.insertAdjacentHTML('beforeend', `<div class="chat-thinking-step"><span style="color:${color};"><i class="fa-solid fa-${statusIcon} ${spinClass}"></i></span><span>${escapeCopilotHtml(label)}</span></div>`);
 }
 
-function typeCopilotThinkingText(element, value) {
+function typeCopilotThinkingText(element, value, streamKey = null) {
   if (!element) return;
-  if (element._typingTimer) clearInterval(element._typingTimer);
-  const text = String(value || 'Đang xử lý...');
-  let index = 0;
-  element.textContent = '';
+  const streaming = streamKey !== null;
+  const target = String(value || '').replace(/[*`#]/g, '').replace(/\s+/g, ' ').trim();
+  const continuing = streaming && element._streamKey === streamKey && target.startsWith(element._typingTarget || '');
+  if (!continuing) {
+    if (element._typingTimer) clearInterval(element._typingTimer);
+    element._typingTimer = null;
+    element._typingIndex = 0;
+    element.textContent = '';
+  }
+  element._streamKey = streamKey;
+  element._typingTarget = target;
+  if (element._typingTimer || !target) return;
   element._typingTimer = setInterval(() => {
-    index += 1;
-    element.textContent = text.slice(0, index);
-    if (index >= text.length) {
+    const remaining = element._typingTarget.length - element._typingIndex;
+    element._typingIndex += streaming ? Math.max(1, Math.ceil(remaining / 30)) : 1;
+    const visible = element._typingTarget.slice(0, element._typingIndex);
+    element.textContent = streaming && visible.length > 180 ? '…' + visible.slice(-180) : visible;
+    if (streaming) element.scrollLeft = element.scrollWidth;
+    if (element._typingIndex >= element._typingTarget.length) {
       clearInterval(element._typingTimer);
       element._typingTimer = null;
     }
@@ -1583,8 +1608,12 @@ window.sendChatMessage = async function sendChatMessage() {
       webSearch: window.copilotWebSearchEnabled,
       attachments: attachedFiles.map(file => ({ name: file.name, type: file.type, size: file.size }))
     }, event => {
-      progressEvents.push(event);
-      addCopilotThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running');
+      if (event.type === 'reasoning_delta') {
+        const previous = progressEvents.find(item => item.type === 'reasoning_delta' && item.reasoningId === event.reasoningId && item.iteration === event.iteration);
+        if (previous) previous.delta = (previous.delta + (event.delta || '')).slice(0, 32000);
+        else progressEvents.push({ ...event });
+      } else progressEvents.push(event);
+      addCopilotThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running', event);
     }, requestController.signal);
     const reply = data.execution?.status === 'WAITING_INPUT' ? 'Bổ sung thông tin bên dưới để tiếp tục.' : data.reply || data.replyText || data.message || 'Không tìm thấy thông tin tương ứng.';
     const sqlQuery = data.generatedSql || data.sql || null;

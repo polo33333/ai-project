@@ -5,6 +5,7 @@
 
 const { callOllama }    = require('./ollama');
 const { callOllamaDecision } = require('./ollama_decision');
+const { callOpenAIResponses } = require('./openai_responses');
 const { callOpenAI }    = require('./openai');
 const { callGemini }    = require('./gemini');
 const { callAnthropic } = require('./anthropic');
@@ -16,7 +17,7 @@ const { callAnthropic } = require('./anthropic');
  * @param {Array}  tools    - Tools array (OpenAI format)
  * @param {AbortSignal} signal
  */
-async function dispatchToProvider(provider, messages, tools, signal) {
+async function dispatchToProvider(provider, messages, tools, signal, options = {}) {
   if (typeof fetch === 'undefined') {
     throw new Error('Fetch API không khả dụng trong môi trường Node.js này (yêu cầu Node.js >= 18).');
   }
@@ -25,20 +26,24 @@ async function dispatchToProvider(provider, messages, tools, signal) {
   const url  = (provider.baseUrl   || '').toLowerCase();
   const type = (provider.type      || '').toLowerCase();
 
+  if (fmt === 'openai-responses' || (typeof options.onReasoning === 'function' && provider.supportsStreaming !== false && provider.supportsReasoning !== false && !/chat/i.test(provider.model || '') && (provider.baseUrl || '').replace(/\/$/, '') === 'https://api.openai.com/v1' && /^(?:o[134](?:-|$)|gpt-[56])/.test(provider.model || ''))) {
+    return callOpenAIResponses(provider, messages, tools, signal, options);
+  }
+
   if (fmt === 'ollama-decision') return callOllamaDecision(provider, provider.decisionTask, signal);
 
   if (fmt === 'anthropic' || type === 'anthropic' || url.includes('anthropic.com')) {
-    return callAnthropic(provider, messages, tools, signal);
+    return callAnthropic(provider, messages, tools, signal, options);
   }
   if (fmt === 'gemini' || type === 'google' || type === 'google gemini api' || url.includes('googleapis.com') || url.includes('generativelanguage')) {
-    return callGemini(provider, messages, tools, signal);
+    return callGemini(provider, messages, tools, signal, options);
   }
   if (fmt === 'ollama' || type === 'local' || type === 'ollama (local)' || url.includes('11434')) {
-    return callOllama(provider, messages, tools, signal);
+    return callOllama(provider, messages, tools, signal, options);
   }
 
   // Default: OpenAI-compat (OpenAI, DeepSeek, LM Studio, OpenRouter, ...)
-  return callOpenAI(provider, messages, tools, signal);
+  return callOpenAI(provider, messages, tools, signal, options);
 }
 
 module.exports = {

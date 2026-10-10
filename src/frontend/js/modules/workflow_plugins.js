@@ -2,6 +2,7 @@
 (() => {
   const state = { packages: [], templates: [], runs: [], settings: {}, admin: false, search: '', domain: '', layout: 'grid' };
   const views = new Map();
+  const restoringRuns = new Map();
   const chatScrollStates = new WeakMap();
   const observedChatPanels = new WeakSet();
   function followChatPanel(node) {
@@ -1006,7 +1007,14 @@
       const icon = document.createElement('i');
       const symbol = schema.enum ? 'fa-list-ul' : schema.type === 'boolean' ? 'fa-toggle-on' : ['date', 'date-time'].includes(schema.format) ? 'fa-calendar-alt' : ['integer', 'number'].includes(schema.type) ? 'fa-hashtag' : schema.type === 'array' ? 'fa-list' : schema.type === 'object' ? 'fa-layer-group' : 'fa-font';
       icon.className = `fas ${symbol} wp-input-icon`; icon.setAttribute('aria-hidden', 'true');
-      text.replaceWith(caption); caption.append(icon, text);
+      text.replaceWith(caption); caption.appendChild(text);
+      const input = wrapper.tagName === 'FIELDSET' ? null : wrapper.querySelector(':scope > input, :scope > select, :scope > textarea');
+      if (input) {
+        const control = document.createElement('span'); control.className = 'wp-input-control';
+        input.replaceWith(control); control.append(icon, input);
+      } else {
+        caption.prepend(icon);
+      }
     };
     if (schema.enum || schema.type === 'boolean') {
       const wrapper = document.createElement('label'); wrapper.textContent = label;
@@ -1247,6 +1255,10 @@
       try {
       const data = await api('/api/automation-runs', 'POST', { templateId: execution.templateId, conversationId: execution.conversationId, inputs: {}, requestId: crypto.randomUUID(), parentRunId: execution.id });
       mount(node, { ...execution, retryRunId: data.execution.id, retryWaitingInput: data.execution.status === 'WAITING_INPUT' });
+      // Retry cards share this reply container. Keep only the new form expanded.
+      for (const previous of node.parentElement.querySelectorAll('.workflow-execution-panel')) {
+        if (previous.dataset.collapsed !== 'true') previous.querySelector(':scope > .wp-execution-header > .wp-execution-fold')?.click();
+      }
       const next = document.createElement('div'); node.after(next); mount(next, data.execution); next.scrollIntoView({ block: 'start', behavior: 'smooth' });
       next.querySelector('input, select, textarea')?.focus({ preventScroll: true });
       } finally { retry.textContent = 'Làm lại'; }
@@ -1264,7 +1276,11 @@
   };
   window.initWorkflowsView = async () => { try { await refresh(); } catch (failure) { notify(failure.message, true); } };
   window.restoreWorkflowExecutions = async root => {
-    for (const node of root.querySelectorAll('[data-automation-run]')) {
+    const jobs = [];
+    const panels = [...root.querySelectorAll('[data-automation-run]')];
+    // Bind waiting forms before spending connections on historical result cards.
+    panels.sort((a, b) => Number(Boolean(b.querySelector('form'))) - Number(Boolean(a.querySelector('form'))));
+    for (const node of panels) {
       if (node.dataset.executionArchived) {
         const link = node.querySelector('button');
         if (link) link.onclick = () => focusCurrentPanel(node.dataset.automationRun);
@@ -1272,10 +1288,22 @@
       }
       if (!node.dataset.automationRun || node.dataset.executionArchived || views.has(node) || node.dataset.restoring) continue;
       node.dataset.restoring = 'true';
+      node.setAttribute('aria-busy', 'true');
+      node.querySelectorAll('button, input, select, textarea').forEach(control => { control.disabled = true; });
       if (!node.querySelector('strong')) node.textContent = 'Đang tải tác vụ đã lưu…';
-      try { const { execution } = await api(`/api/automation-runs/${encodeURIComponent(node.dataset.automationRun)}`); delete node.dataset.restoring; if (node.isConnected) mount(node, execution); }
-      catch (_) { delete node.dataset.restoring; if (!node.querySelector('strong')) node.textContent = 'Không thể tải tác vụ đã lưu. Đang thử lại…'; }
+      jobs.push((async () => {
+        const id = node.dataset.automationRun;
+        let request = restoringRuns.get(id);
+        if (!request) {
+          request = api(`/api/automation-runs/${encodeURIComponent(id)}`).finally(() => restoringRuns.delete(id));
+          restoringRuns.set(id, request);
+        }
+        try { const { execution } = await request; if (node.isConnected) mount(node, execution); }
+        catch (_) { if (!node.querySelector('strong')) node.textContent = 'Không thể tải tác vụ đã lưu. Đang thử lại…'; }
+        finally { delete node.dataset.restoring; }
+      })());
     }
+    await Promise.all(jobs);
   };
   // Rehydrate saved chat HTML and poll only mounted panels. Owner checks are server-side.
   let pollInFlight = false;

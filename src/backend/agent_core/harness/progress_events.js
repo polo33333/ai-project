@@ -15,6 +15,8 @@ function sanitizeProgressEvent(event = {}) {
   if (event.rowCount != null) clean.rowCount = Math.max(0, Number(event.rowCount) || 0);
   if (event.durationMs != null) clean.durationMs = Math.max(0, Number(event.durationMs) || 0);
   if (event.providerName) clean.providerName = String(event.providerName).slice(0, 100);
+  if (clean.type === 'reasoning_delta' && typeof event.delta === 'string') clean.delta = event.delta.slice(0, 8192);
+  if (clean.type === 'reasoning_delta' && event.reasoningId) clean.reasoningId = String(event.reasoningId).slice(0, 100);
   return clean;
 }
 
