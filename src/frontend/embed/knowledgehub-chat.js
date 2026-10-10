@@ -278,6 +278,14 @@
     .kh-workflow-form>label{margin:0;font-weight:500;line-height:1.6}
     .kh-workflow input,.kh-workflow select{min-height:40px;font:inherit;font-weight:400;padding:9px 10px}
     .kh-workflow input:focus,.kh-workflow select:focus{outline:2px solid color-mix(in srgb,var(--kh-primary) 30%,transparent);outline-offset:2px;border-color:var(--kh-primary)}
+    .kh-workflow-form>.kh-boolean-field{min-width:0;margin:0;padding:0;border:0}
+    .kh-boolean-field>legend{padding:0;margin-bottom:8px;font-weight:500;line-height:1.6}
+    .kh-boolean-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .kh-workflow .kh-boolean-choice{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;box-sizing:border-box;padding:8px 12px;margin:0;border:1px solid #dbe3ef;border-radius:9px;cursor:pointer}
+    .kh-boolean-choice:has(input:checked){border-color:var(--kh-primary);background:color-mix(in srgb,var(--kh-primary) 12%,transparent)}
+    .kh-workflow .kh-boolean-choice input[type="radio"]{width:16px;height:16px;min-height:0;padding:0;margin:0;flex-shrink:0;accent-color:var(--kh-primary);box-shadow:none;outline:none}
+    .kh-boolean-choice:has(input:focus-visible){outline:2px solid var(--kh-primary);outline-offset:3px}
+    .dark .kh-boolean-choice{border-color:#41516b}
     .kh-workflow-hint{font-size:10px;color:#7c899c;font-weight:400}
     .kh-workflow-actions{padding-top:12px;border-top:1px solid #e8edf4}
     .kh-workflow-actions>button{min-height:36px;font:500 11px Inter,system-ui,sans-serif;line-height:1.5;padding:8px 12px}
@@ -334,15 +342,27 @@
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[kind]||paths.text}"/></svg>`;
   }
   function workflowInput(parent,schema,label,required=true) {
-    const group=document.createElement('label');const title=document.createElement('span');title.textContent=label;group.appendChild(title);parent.appendChild(group);
+    const group=document.createElement(schema.type==='boolean'?'fieldset':'label');const title=document.createElement(schema.type==='boolean'?'legend':'span');title.textContent=label;group.appendChild(title);parent.appendChild(group);
     title.className='kh-input-caption';
     const kind=schema.enum?'list':schema.type==='boolean'?'toggle':['date','date-time'].includes(schema.format)?'calendar':['integer','number'].includes(schema.type)?'number':schema.type==='array'?'list':schema.type==='object'?'layers':'text';
     const icon=document.createElement('span');icon.className='kh-input-icon';icon.innerHTML=workflowIcon(kind);title.prepend(icon);
+    if(schema.type==='boolean') {
+      group.className='kh-boolean-field';
+      const options=document.createElement('div');options.className='kh-boolean-choices';group.appendChild(options);
+      const name=`kh-boolean-${createSessionId()}`;
+      for(const value of schema.enum||[true,false]) {
+        const card=document.createElement('label');card.className='kh-boolean-choice';
+        const input=document.createElement('input');input.type='radio';input.name=name;input.value=String(value);input.required=required;
+        const caption=document.createElement('span');caption.textContent=value?'C\u00f3':'Kh\u00f4ng';card.append(input,caption);options.appendChild(card);
+      }
+      if(required){const hint=document.createElement('span');hint.className='kh-workflow-hint';hint.textContent='B\u1eaft bu\u1ed9c';group.appendChild(hint);}
+      return ()=>{const selected=options.querySelector('input:checked');return selected?selected.value==='true':undefined;};
+    }
     if(schema.type==='object') {const reads=Object.entries(schema.properties||{}).map(([key,s])=>[key,workflowInput(group,s,s.title||key)]);return ()=>Object.fromEntries(reads.map(([key,read])=>[key,read()]));}
     if(schema.type==='array') {const reads=[];const add=document.createElement('button');add.type='button';add.textContent='Thêm mục';add.onclick=()=>reads.push(workflowInput(group,schema.items,`Mục ${reads.length+1}`));group.appendChild(add);return ()=>reads.map(read=>read());}
     const choices=schema.enum||(schema.type==='boolean'?[true,false]:null);const control=document.createElement(choices?'select':'input');
     if(choices) {control.appendChild(new Option('Chọn…',''));choices.forEach((value,index)=>control.appendChild(new Option(formatDisplayValue(value),String(index))));}
-    else {control.type=['number','integer'].includes(schema.type)?'number':schema.format==='date'?'date':'text';if(schema.type==='integer')control.step='1';}
+    else {control.type=['number','integer'].includes(schema.type)?'number':schema.format==='date'?'date':'text';if(control.type==='number')control.placeholder='0';if(schema.type==='integer')control.step='1';}
     control.required=required;for(const [key,attr]of [['minimum','min'],['maximum','max'],['minLength','minLength'],['maxLength','maxLength']])if(schema[key]!==undefined)control[attr]=schema[key];if(schema.type==='number')control.step='any';
     group.appendChild(control);const hint=document.createElement('span');hint.className='kh-workflow-hint';hint.textContent=schema.minimum!==undefined&&schema.maximum!==undefined?`Từ ${schema.minimum} đến ${schema.maximum}`:required?'Bắt buộc':'';if(hint.textContent)group.appendChild(hint);return ()=>choices?(control.value===''?undefined:choices[Number(control.value)]):control.value===''?undefined:['number','integer'].includes(schema.type)?Number(control.value):control.value;
   }
