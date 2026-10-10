@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>KnowledgeHub AI — Kế hoạch nâng cấp kiến trúc và chất lượng trả lời</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+:root{--bg:#f4f6fa;--paper:#fff;--text:#17243a;--muted:#52627a;--line:#dce3ee;--accent:#225bc4;--soft:#edf3ff;--good:#176c4a;--warn:#925900;--shadow:0 8px 30px #18345709;color-scheme:light}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:30px}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.75 Inter,system-ui,sans-serif}a{color:var(--accent);text-underline-offset:3px}button,input{font:inherit}button{cursor:pointer;border:1px solid var(--line);background:var(--paper);color:var(--text);border-radius:8px;padding:8px 13px}button:hover{border-color:var(--accent)}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #719ef3;outline-offset:3px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(28px,4vw,44px);line-height:1.22;letter-spacing:-1.3px;margin-bottom:22px}h2{font-size:25px;line-height:1.35;margin-bottom:18px}h3{font-size:18px;line-height:1.5;margin-bottom:10px}p{margin-bottom:14px}li{margin-bottom:8px}ul,ol{padding-left:23px}code{font:13px/1.6 ui-monospace,Consolas,monospace;background:var(--soft);padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}.layout{max-width:1440px;margin:auto;display:grid;grid-template-columns:240px minmax(0,1fr);gap:38px;padding:40px 30px 70px}.sidebar{position:sticky;top:28px;align-self:start;min-width:0}.brand{font-weight:700;font-size:18px;margin-bottom:5px}.sub{font-size:13px;color:var(--muted)}nav{margin-top:28px;display:grid;gap:5px}nav a{color:var(--muted);text-decoration:none;padding:8px 10px;border-radius:7px}nav a:hover{background:var(--soft);color:var(--accent)}main{min-width:0}.hero{padding:34px;background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);margin-bottom:28px}.eyebrow{color:var(--accent);font-size:13px;font-weight:700;letter-spacing:1px;margin-bottom:13px}.lead{font-size:18px;line-height:1.7}.meta,.actions,.tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.meta{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:18px;margin-top:23px}.actions{margin-top:22px}.primary{background:var(--accent);color:#fff;border-color:var(--accent)}section{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:28px;margin-bottom:24px;box-shadow:var(--shadow)}.note{border-left:4px solid var(--accent);background:var(--soft);padding:15px 18px;margin:18px 0}.note p:last-child{margin-bottom:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.tile{border-top:2px solid var(--line);padding-top:14px}.muted{color:var(--muted)}.badge{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border-radius:6px;padding:3px 8px;margin-right:7px}.priority{color:var(--warn)}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;padding:13px 12px;border-bottom:1px solid var(--line)}th{background:var(--soft);font-weight:600}td:first-child{font-weight:500}details{border-top:1px solid var(--line);padding:17px 0}summary{cursor:pointer;font-weight:600;font-size:17px}details>div{padding:15px 0 0}details:last-child{padding-bottom:0}.source{font-size:13px;color:var(--muted);margin-top:12px}.source a{overflow-wrap:anywhere}.phase{padding:20px 0;border-top:1px solid var(--line)}.phase h3{font-size:20px}.phase:last-child{padding-bottom:0}.phase-label{font-size:12px;letter-spacing:.8px;color:var(--accent);font-weight:700}.accept{background:var(--soft);padding:14px 17px;border-radius:8px;margin-top:14px}.accept strong{display:block;margin-bottom:5px}.checklist li{padding-left:3px}.tools{margin:15px 0}.tools label{display:flex;gap:10px;align-items:center}.tools input{width:130px}.diagram-box{overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px}.diagram-box svg{display:block;width:100%;min-width:820px;height:auto;max-width:none}.diagram-box.expanded{position:fixed;inset:15px;z-index:20;padding:25px;box-shadow:0 0 0 30px #1018279e}.diagram-box.expanded svg{width:100%;min-width:900px}.close-diagram{display:none;position:sticky;top:0;left:100%;z-index:21;background:var(--paper)}.expanded .close-diagram{display:block}.diagram-title{fill:var(--text);font:600 20px Inter,system-ui,sans-serif}.diagram-detail{fill:var(--muted);font:400 16px Inter,system-ui,sans-serif}.node{fill:var(--paper);stroke:var(--line);stroke-width:1.5}.focus-node{fill:var(--soft);stroke:var(--accent);stroke-width:1.5}.arrow{fill:none;stroke:var(--muted);stroke-width:2;marker-end:url(#arrow)}.step-number{fill:var(--accent);font:700 14px Inter,system-ui,sans-serif}.diagram-caption{margin:12px 0 0;font-size:13px;color:var(--muted)}.footer{font-size:13px;color:var(--muted);text-align:center;padding:15px}.target{font-weight:600;color:var(--good)}
+@media(prefers-color-scheme:dark){:root{--bg:#101722;--paper:#172130;--text:#e5ecf6;--muted:#a9b8cc;--line:#334359;--accent:#8cb5ff;--soft:#20334f;--good:#85d8b4;--warn:#f2c375;--shadow:none;color-scheme:dark}.primary{color:#11203a}}
+@media(max-width:1000px){.layout{grid-template-columns:1fr;padding:22px 18px;gap:20px}.sidebar{position:static}.sidebar nav{display:flex;overflow:auto;gap:8px;margin-top:12px;padding-bottom:5px}.sidebar nav a{white-space:nowrap;font-size:13px}.hero{padding:25px}section{padding:23px}}
+@media(max-width:580px){.grid{grid-template-columns:1fr}.layout{padding:14px 10px}.hero,section{padding:20px 16px}h2{font-size:22px}.lead{font-size:16px}.tools{align-items:flex-start}.tools label{width:100%}th,td{padding:10px 8px;min-width:140px}}
+@media print{:root{--bg:#fff;--paper:#fff;--text:#111;--muted:#444;--line:#ccc;--accent:#194b99;--soft:#f2f5fa;--shadow:none;color-scheme:light}body{font-size:10pt}.layout{display:block;max-width:none;padding:0}.sidebar,.actions,.tools,.close-diagram{display:none!important}.hero,section{box-shadow:none;border-radius:0;padding:16px;margin-bottom:14px}h1{font-size:25pt}h2{font-size:17pt}h3{font-size:13pt}details{break-inside:avoid}.diagram-box{overflow:visible;padding:0}.diagram-box svg{min-width:0!important;width:100%!important}.diagram-box.expanded{position:static;box-shadow:none}.table-wrap{overflow:visible}tr,.tile,.accept{break-inside:avoid}a{color:#194b99}code{font-size:9pt}section{break-before:auto}.phase{break-inside:auto}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar"><div class="brand">KnowledgeHub AI</div><div class="sub">Architecture &amp; Answer Quality</div><nav aria-label="Mục lục"><a href="#revision">00 · Thay đổi bản 1.2</a><a href="#overview">01 · Đánh giá chung</a><a href="#strengths">02 · Điểm mạnh</a><a href="#gaps">03 · Vấn đề cần khắc phục</a><a href="#architecture">04 · Sơ đồ kiến trúc</a><a href="#contracts">05 · Thiết kế chi tiết</a><a href="#roadmap">06 · Lộ trình thực hiện</a><a href="#evaluation">07 · Đo lường &amp; nghiệm thu</a><a href="#operations">08 · Kiến trúc nền</a><a href="#existing">09 · Đối chiếu plan đã có</a><a href="#additions">10 · Gợi ý bổ sung</a><a href="#references">11 · Bằng chứng &amp; tài liệu</a></nav></aside>
+<main>
+<header class="hero"><div class="eyebrow">KẾ HOẠCH NÂNG CẤP · BẢN 1.2 · 11/10/2026</div><h1>Trả lời chính xác hơn.<br>Hiểu ngữ cảnh tốt hơn.<br>Diễn đạt tự nhiên hơn.</h1>
+<p class="lead">Kế hoạch tổng hợp đánh giá kiến trúc KnowledgeHub AI và các nâng cấp ưu tiên, từ kiểm chứng dữ kiện đến hội thoại nhiều lượt và hiểu nghiệp vụ.</p><div class="actions"><a class="primary" style="display:inline-block;text-decoration:none;padding:9px 15px;border-radius:8px" href="#architecture">Xem sơ đồ trực quan</a><button type="button" id="print">In / lưu PDF</button><button type="button" id="expand-details">Mở toàn bộ chi tiết</button></div><div class="meta"><span>Trạng thái: bản 1.2 để review, chưa triển khai</span><span>Đã đối chiếu với code (commit f2b16f5)</span><span>Baseline: 7 file liên quan 78/78 · toàn suite 531/544 đạt, 12 bỏ qua, 1 lỗi</span></div></header>
+
+<section id="revision">
+<h2>00 · Kết quả review và thay đổi bản 1.2</h2>
+<div class="note">
+<p><strong>Bản 1.2 — các điểm đã sửa để kiểm tra lại:</strong></p>
+<ol>
+<li>Placeholder chỉ bảo đảm giá trị gắn đúng evidence; thêm binding và kiểm tra ngữ nghĩa.</li>
+<li>Training Core có task xuyên suốt từ history đến collector, classifier và report.</li>
+<li>Phân biệt kiểm tra tất định trong runtime, semantic verifier có điều kiện và LLM-judge offline.</li>
+<li>Chốt nguyên tắc ACL thiếu dữ liệu, thu hồi quyền, cache và rollback.</li>
+<li>Bổ sung resolver hội thoại; helper nối câu hỏi hiện có chỉ là điểm tái sử dụng.</li>
+<li>Phân biệt corpus validation với đo chất lượng; bổ sung bảng task và gate có bằng chứng.</li></ol>
+<p><strong>Kiểm chứng gần nhất:</strong> review ngày 11/10/2026 trên workspace ở commit <code>f2b16f5</code>, chạy lại <code>npm test</code> với dependencies hiện có: 544 test, 531 đạt, 12 bỏ qua, 1 lỗi G08. Không chạy lại npm ci trong lượt review này. Mô tả clone/npm ci bên dưới là ghi nhận của bản 1.1.</p>
+<p><strong>Điểm cần bạn xem:</strong> <a href="#contracts">mục 05: contract, quyền và kiểm chứng</a>; <a href="#roadmap">mục 06: task và nghiệm thu</a>. Các quyết định mới đều là đề xuất để review, chưa thay đổi runtime.</p></div>
+<p>Đã clone <code>polo33333/ai-project</code> (commit <code>f2b16f5</code>), đọc lại các file plan trích dẫn, tái hiện các ví dụ trong G01, chạy <code>npm ci</code> và toàn bộ <code>npm test</code>. <strong>Các vấn đề chính có căn cứ; bản 1.2 hiệu chỉnh mức bảo đảm và cách triển khai sau review.</strong> Bản 1.1 sửa bốn việc: bổ sung phát hiện mới (G08–G10), đổi mức ưu tiên phân quyền tài liệu lên P0, bám vào cơ chế đã có thay vì tạo mới, và hợp nhất với các plan đã có trong <code>docs/</code>.</p><div class="table-wrap"><table><thead>
+<tr><th>Mục</th><th>Kết quả đối chiếu</th><th>Hướng xử lý sau review</th></tr></thead><tbody>
+<tr><td>G01</td><td>Đúng. Tái hiện: tool=100, reply=999 → <code>valid: true</code>; nguồn=100, reply “999 [1]” → marker hợp lệ.</td><td>Cổng thật là <code>evaluateCompletion</code>; đã có đối chiếu chart/export nhưng chưa có cho văn bản. Thêm cách điền số bằng code.</td></tr>
+<tr><td>G02</td><td>Đúng. <code>memoryHistory = []</code> và retrieval bằng câu gốc. Nhánh dữ liệu/web đã nối ngữ cảnh câu hỏi; chưa có resolver đầy đủ cho tham chiếu tài liệu.</td><td>Tái dùng điểm tích hợp; bổ sung resolver theo ConversationState và giữ ràng buộc rewrite RAG plan §3.6.</td></tr>
+<tr><td>G03</td><td>Đúng. Có <code>documentContext</code> là bật <code>knowledgeGrounding.required</code>; câu thừa nhận thiếu thông tin bị đánh lỗi.</td><td>Chỉ rõ điểm gây áp lực trả lời; thay bằng trạng thái đủ bằng chứng.</td></tr>
+<tr><td>G04</td><td>Đúng. Planner còn regex theo từ khóa; Dictionary đã có <code>defaultMetric</code>, <code>defaultTimeColumn</code>, <code>defaultAggregation</code>.</td><td>Mở rộng các trường có sẵn, không tạo store song song; theo rà soát hardcode.</td></tr>
+<tr><td>G05</td><td>Đúng. Payload Qdrant không có page/sheet/section.</td><td>Gắn vào RAG-4/RAG-5 thay vì thiết kế riêng.</td></tr>
+<tr><td>G06</td><td>Đúng, cần sửa chi tiết: <code>test:ci</code> = <code>npm test</code> + <code>eval:local</code> + <code>eval:sql</code>.</td><td>Đưa corpus validation offline vào CI; đo chất lượng model/SQL bằng live eval riêng.</td></tr>
+<tr><td>G07</td><td>Đúng. Còn nhánh legacy; chế độ <code>chat_model</code> đã có hai tầng (flow probe → decision).</td><td>Không thêm tầng phân loại thứ ba.</td></tr>
+<tr><td>O01, O03, O06</td><td>Đúng.</td><td>O01 gắn RAG-4.</td></tr>
+<tr><td>O02</td><td>Đúng, cụ thể hơn: route chat không nằm trong bảng thu hẹp store.</td><td>Thêm bằng chứng; vẫn cần đo.</td></tr>
+<tr><td>O04</td><td>Đúng, nhưng xếp quá muộn (Phase 4).</td><td>Nâng thành G10 (P0), track riêng.</td></tr>
+<tr><td>O05</td><td>Đúng; lỗi bị nuốt, không có log.</td><td>Thêm chi tiết.</td></tr>
+<tr><td>Baseline</td><td>78/78 của 7 file: đúng. Toàn suite: 544 test, 531 đạt, 12 bỏ qua, <strong>1 lỗi</strong>.</td><td>Thêm G08.</td></tr>
+<tr><td>Mới</td><td>G08 test đỏ · G09 tokenizer BM25 mất chữ “đ” · G10 phạm vi tài liệu chưa gắn người dùng.</td><td>Thêm vào mục 03 và lộ trình.</td></tr>
+</tbody></table></div><div class="note">
+<p><strong>Giới hạn của lần đối chiếu:</strong> đọc code, chạy test và tái hiện ví dụ cô lập. Lần đối chiếu bản 1.1 không có Qdrant, PostgreSQL, SQL Server hay model thật; review bản 1.2 cũng chưa chạy benchmark live. Chưa kết luận latency, chi phí hoặc độ đúng live. Mục 02 (điểm mạnh) được đối chiếu ở mức code và README; chưa kiểm từng chi tiết của Memory (TTL, owner).</p></div>
+</section>
+
+<section id="overview">
+<h2>01 · Đánh giá chung</h2>
+<p><strong>Nền tảng thực thi đã khá đầy đủ; khả năng kiểm chứng đúng ý và đúng sự thật cần được nâng cấp.</strong> Hệ thống có agent loop, tool guard, SQL, hybrid retrieval, memory và workflow. Chất lượng cuối cùng vẫn phụ thuộc vào việc chọn đúng ngữ cảnh, hiểu đúng chỉ tiêu và chứng minh được từng dữ kiện trong câu trả lời.</p><div class="note">
+<p><strong>Quyết định kiến trúc:</strong> tiếp tục phát triển ứng dụng một khối chia module rõ ràng. Ưu tiên một luồng điều phối thống nhất, trạng thái hội thoại có cấu trúc và bằng chứng dùng chung. Chỉ tăng độ phức tạp khi benchmark chứng minh nhu cầu.</p>
+<p><strong>Thứ tự ưu tiên của project</strong> (README): bảo vệ quyền và dữ liệu → ổn định vận hành → chất lượng câu trả lời → mở rộng. Bản 1.1 giữ thứ tự này nên phân quyền tài liệu (G10) được đưa lên P0, song song với baseline.</p></div><div class="grid"><div class="tile">
+<h3>Mục tiêu sản phẩm</h3>
+<ul>
+<li>Trả đúng chỉ tiêu, số liệu, thời gian và nguồn.</li>
+<li>Hiểu câu tiếp nối, sửa yêu cầu và đổi chủ đề.</li>
+<li>Biết trả lời một phần hoặc hỏi lại khi thiếu căn cứ.</li>
+<li>Kết luận rõ, giải thích vừa đủ, tránh lặp bảng và lời dẫn máy móc.</li></ul></div><div class="tile">
+<h3>Giới hạn của đánh giá</h3>
+<ul>
+<li>Đã đọc luồng chat, SQL, retrieval, memory, workflow và storage.</li>
+<li>Bản 1.1 chạy lại 78 kiểm thử liên quan (đạt) và toàn bộ suite (544 test, 1 lỗi — xem G08) trong môi trường dữ liệu cô lập.</li>
+<li>Chưa benchmark model, SQL Server và kho tài liệu đang vận hành.</li>
+<li>Kết quả test đạt chứng minh các hành vi đã kiểm tra; chưa đại diện cho độ đúng thực tế.</li></ul></div></div>
+</section>
+
+<section id="strengths">
+<h2>02 · Điểm mạnh nên giữ và phát triển</h2><div class="table-wrap"><table><thead>
+<tr><th>Nền tảng hiện có</th><th>Giá trị</th><th>Hướng tiếp tục</th></tr></thead><tbody>
+<tr><td>Các core theo chức năng</td><td>Intelligent, Agent, Knowledge, Memory, Training và Automation đã có ranh giới chức năng.</td><td>Làm rõ contract giữa các core; giảm logic điều phối trùng lặp.</td></tr>
+<tr><td>Harness và guard</td><td>Kiểm tra tool arguments, SQL, giới hạn call/deadline, repair và SUCCESS/PARTIAL.</td><td>Dùng chung chính sách và thêm kiểm chứng chất lượng câu trả lời.</td></tr>
+<tr><td>Dictionary / Glossary / Relationship</td><td>Có cơ sở để nối ngôn ngữ người dùng với dữ liệu và quan hệ bảng.</td><td>Chuẩn hóa định nghĩa chỉ tiêu nghiệp vụ và join.</td></tr>
+<tr><td>Hybrid retrieval</td><td>Dense + BM25 + RRF; đã có tích hợp reranker tùy cấu hình.</td><td>Đo hiệu quả trên corpus thực, bổ sung cấu trúc và mức đủ bằng chứng.</td></tr>
+<tr><td>Memory có reference</td><td>Có entity/dataset/export reference, TTL và kiểm tra owner; hạn chế ghi PARTIAL vào bộ nhớ thành công.</td><td>Mở rộng trạng thái có cấu trúc cho hội thoại theo tài liệu.</td></tr>
+<tr><td>Workflow và PostgreSQL</td><td>Checkpoint, output contract, outbox/retry/lease và lưu trữ ứng dụng.</td><td>Giữ workflow cho tác vụ ổn định; cải thiện truy vấn theo phạm vi và reconciliation.</td></tr>
+<tr><td>Kết xuất xác định</td><td>Đã có <code>buildSqlRowsFallbackReply</code>, <code>calculation_reply</code> và <code>validateOutputData</code> (đối chiếu chart/export với rows SQL).</td><td>Mở rộng thành cơ chế điền số bằng code cho câu trả lời văn bản (G01).</td></tr>
+<tr><td>Training và đánh giá</td><td><code>training_core</code> (case_collector, failure_classifier, regression_runner), nhiều script <code>eval:*</code> và fixture SQL seed riêng.</td><td>Dùng làm nguồn corpus và vòng phản hồi; thêm mã lỗi mới thay vì xây hệ thống song song.</td></tr></tbody></table></div>
+</section>
+
+<section id="gaps">
+<h2>03 · Các vấn đề cần khắc phục</h2>
+<p class="muted">P0: làm trước để có baseline và bịt lỗ hổng chất lượng. P1: nâng chất lượng xử lý nghiệp vụ. P2: tối ưu vận hành theo số đo. Bản 1.1 thêm G08–G10 và ghi kết quả đối chiếu code ngay trong từng mục.</p>
+<details open><summary><span class="badge">P0 · G01</span>Kiểm tra thành công chưa chứng minh dữ kiện đúng</summary><div>
+<p>Response evaluator chủ yếu kiểm tra có nội dung, có tool SQL/chart/export và một số mẫu lỗi. Citation validator kiểm tra marker có khớp nguồn đã cung cấp; chưa xác minh nguồn hỗ trợ từng nhận định.</p>
+<p><strong>Bằng chứng thử cô lập:</strong> tool trả giá trị 100, câu trả lời ghi 999 vẫn được <code>evaluateResponse</code> đánh giá hợp lệ. Nguồn ghi 100, câu trả lời ghi “999 [1]” vẫn có marker hợp lệ. Đây là giới hạn của các hàm kiểm tra; chưa phải bằng chứng về tỷ lệ lỗi trên request thực tế.</p>
+<p><strong>Khắc phục:</strong> đối chiếu số liệu, đơn vị, ngày và phép tính bằng code; kiểm tra từng nhận định với nguồn; tách trạng thái thực thi và chất lượng câu trả lời. Dùng model đánh giá bổ sung khi cần, kết hợp kiểm tra tất định và review của con người.</p>
+<p><strong>Đối chiếu code (v1.1):</strong> đã tái hiện cả hai ví dụ. Cổng chấp nhận thật là <code>evaluateCompletion</code> (bọc <code>evaluateResponse</code>). <code>validateOutputData</code> đã đối chiếu dữ liệu chart/export với rows SQL nhưng chưa có kiểm tra tương tự cho văn bản trả lời. <strong>Hướng ưu tiên:</strong> ở đường SQL, model viết câu trả lời với placeholder và code điền số từ evidence (theo tiền lệ <code>calculation_reply.js</code>, <code>buildSqlRowsFallbackReply</code>), để ngăn model tự sửa giá trị đã liên kết. Vẫn có thể chọn nhầm metric/kỳ/thực thể, gắn sai nhãn hoặc nhận xét sai chiều tăng giảm; phải kiểm tra binding và ngữ nghĩa. Ví dụ tháng 9 = 100, tháng 10 = 80 thì “tăng lên 80” vẫn sai dù số 80 do code điền. Binding và gate nằm ở mục 05; số tự viết phải được đối chiếu hoặc fallback sang renderer đã kiểm chứng. Các cụm tiếng Việt cố định ở <code>completion_policy.js</code> và <code>grounded_reply.js</code> nên được thay bằng trạng thái có cấu trúc.</p><div class="source">Code: <a href="../src/backend/training_core/response_evaluator.js">response_evaluator.js</a> · <a href="../src/backend/agent_core/harness/completion_policy.js">completion_policy.js</a> · <a href="../src/backend/agent_core/harness/calculation_reply.js">calculation_reply.js</a> · <a href="../src/backend/knowledge_core/services/citation_service.js">citation_service.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P0 · G02</span>Hỏi tiếp theo tài liệu bị mất ngữ cảnh</summary><div>
+<p>Nhánh tài liệu đặt <code>memoryHistory = []</code>; prompt chỉ chứa system và câu hỏi hiện tại. Retrieval gọi bằng câu hỏi gốc. Điều này giảm nhiễu lịch sử cũ nhưng làm yếu các câu tiếp nối có đại từ hoặc thiếu chủ thể.</p>
+<p><strong>Ví dụ:</strong> “Quy trình đăng ký gồm những bước nào?” → “Còn nếu thiếu giấy tờ đó thì sao?”</p>
+<p><strong>Khắc phục:</strong> lưu chủ đề, thực thể và nguồn đang dùng theo conversation scope; viết lại truy vấn tìm kiếm thành câu đầy đủ bằng context đã xác minh. Giữ câu hỏi gốc để soạn câu trả lời; chỉ đưa lịch sử liên quan và còn quyền truy cập.</p>
+<p><strong>Đối chiếu code (v1.1):</strong> <code>core.js</code> đặt <code>memoryHistory = []</code> ở nhánh chọn nguồn (comment trong code nêu lý do: replay lượt cũ làm model trả lời lại câu cũ) và gọi <code>retrievalService.search(userMessage, …)</code>. Hai nhánh khác đã có điểm ghép ngữ cảnh: dữ liệu dùng <code>memoryPolicy.isShortContextualFollowup</code> → <code>contextualRequest</code>, web dùng <code>webSearchService.buildContextualQuery</code>. Helper hiện chỉ nối câu hỏi người dùng trước với câu hiện tại; chưa giải đại từ hay đọc danh sách trong câu trả lời trước. Tái dùng điểm tích hợp/ngân sách, bổ sung resolver dựa trên ConversationState, thứ tự thực thể đã hiển thị và evidence references. “Cái thứ hai” phải trỏ đúng phần tử trong câu trả lời trước; mơ hồ thì hỏi lại. Không replay toàn bộ lịch sử. Ràng buộc rewrite đã có ở RAG plan §3.6 (giữ mã/số/ngày/phủ định, không đổi scope, tối đa 1–2 biến thể, timeout thì dùng câu gốc) tiếp tục áp dụng. Nếu câu gốc còn mơ hồ sau timeout, hỏi làm rõ; không tự chọn thực thể hoặc nới scope.</p><div class="source">Code: <a href="../src/backend/intelligent_core/core.js">core.js</a> · <a href="../src/backend/intelligent_core/knowledge_prompt_policy.js">knowledge_prompt_policy.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P0 · G03</span>Có kết quả retrieval nhưng chưa biết có đủ đáp án</summary><div>
+<p>Retrieval lấy ứng viên, gộp hạng và rerank, nhưng chưa có bước đánh giá rõ mức đủ bằng chứng. Completion policy có thể đánh lỗi câu “không có thông tin” khi đã có document context, dù các đoạn được lấy có thể không chứa đáp án.</p>
+<p><strong>Khắc phục:</strong> phân loại <code>sufficient / partial / insufficient / conflicting</code>; cho phép trả lời một phần hoặc hỏi lại đúng lúc. Hiệu chỉnh ngưỡng trên cả câu hỏi có và không có đáp án. Điểm RRF là điểm gộp thứ hạng, không phải xác suất câu trả lời đúng.</p>
+<p><strong>Đối chiếu code (v1.1):</strong> có hai điểm khiến model chịu áp lực trả lời dù đoạn lấy về chưa chứa đáp án. (1) <code>core.js</code> bật <code>knowledgeGrounding.required</code> ngay khi có <code>documentContext</code>, và <code>evaluateCompletion</code> đánh lỗi <code>UNGROUNDED_KNOWLEDGE_RESPONSE</code> với câu thừa nhận thiếu thông tin. (2) Prompt chế độ chọn nguồn chỉ dặn “không nói thiếu thông tin nếu nội dung đã có trong nguồn”, không có hướng dẫn cho trường hợp đoạn lấy về không chứa đáp án. Cần thay bằng <code>evidenceStatus</code> có cấu trúc và coi “chưa thấy trong tài liệu” là kết quả hợp lệ khi trạng thái là <code>insufficient</code>.</p><div class="source">Code: <a href="../src/backend/knowledge_core/services/retrieval_service.js">retrieval_service.js</a> · <a href="../src/backend/agent_core/harness/completion_policy.js">completion_policy.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P1 · G04</span>Hiểu nghiệp vụ còn phụ thuộc từ khóa và tên cột</summary><div>
+<p>Request planner đã dùng metadata nhưng còn nhiều regex suy ra metric, thời gian và intent. SQL hợp lệ vẫn có thể lấy sai chỉ tiêu, sai kỳ hoặc nhân đôi dữ liệu do join.</p>
+<p><strong>Ví dụ:</strong> “doanh thu” có thể là trước thuế, sau thuế, đã thu tiền hoặc đã ghi nhận. “7 tháng gần nhất” cần phân biệt theo lịch và các tháng gần nhất có dữ liệu.</p>
+<p><strong>Khắc phục:</strong> tạo semantic layer dùng chung: định nghĩa chỉ tiêu, công thức, đơn vị, grain, thời gian, bộ lọc, trạng thái loại trừ, join cardinality và cách tránh đếm trùng. Model chọn chỉ tiêu và tham số; backend kiểm tra định nghĩa. Hỏi ngắn khi cách hiểu còn làm thay đổi kết quả.</p>
+<p><strong>Đối chiếu code (v1.1):</strong> <code>request_planner.js</code> vẫn dùng cụm từ khóa trong regex (ví dụ nhóm “doanh thu / thành tiền / revenue / amount”, “sản lượng / số lượng” và mẫu “N tháng”). Bù lại, Dictionary đã có <code>defaultMetric</code>, <code>defaultTimeColumn</code>, <code>defaultAggregation</code> theo bảng và planner đã dùng chúng, nên <code>MetricDefinition</code> nên <strong>mở rộng các trường này</strong> (công thức, đơn vị, grain, bộ lọc mặc định, version) thay vì tạo store song song. Định nghĩa là dữ liệu quản trị có version, không phải regex chuyển sang JSON; xem <a href="BACKEND_HARDCODE_AUDIT_230926.md">rà soát hardcode</a> và nguyên tắc không hard-code của <a href="SEMANTIC_QUERY_UNDERSTANDING_PLAN_220926.md">plan hiểu truy vấn</a>.</p><div class="source">Code: <a href="../src/backend/training_core/request_planner.js">request_planner.js</a> · <a href="../src/backend/services/join_planner_service.js">join_planner_service.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P1 · G05</span>Parsing và chunking chưa giữ đủ cấu trúc nguồn</summary><div>
+<p>PDF/DOCX chuyển thành text; Excel thành CSV; chunk chủ yếu theo đoạn và giới hạn ký tự. Điều kiện có thể tách khỏi quy định; bảng có thể mất liên hệ tiêu đề–hàng; khó mở đúng vị trí nguồn.</p>
+<p><strong>Khắc phục:</strong> chunk theo heading/điều khoản/bảng; giữ page, sheet, section, phiên bản và ngày hiệu lực; bổ sung ngữ cảnh cha cho chunk. Benchmark reranker và contextual retrieval với baseline hiện có trước khi chọn cấu hình mặc định.</p>
+<p><strong>Đối chiếu code (v1.1):</strong> payload chunk trong Qdrant chỉ gồm <code>type, documentId, title, fileType, category, chunkIndex, fullText</code>; chưa có page/sheet/section. <code>pageCount</code> của PDF được suy từ ký tự ngắt trang nhưng không gắn vào chunk. Excel được đổi thành văn bản “# Sheet: tên” cộng CSV, nên với sheet dài hơn một chunk, dòng tiêu đề cột chỉ nằm ở chunk đầu. Phần này trùng RAG-4 (manifest/revision) và RAG-5 (parent-child) trong <a href="RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md">RAG plan</a> và mục Phase 1 của README: làm theo các plan đó, không mở thêm đường song song.</p><div class="source">Code: <a href="../src/backend/knowledge_core/services/library_service.js">library_service.js</a> · <a href="../src/backend/knowledge_core/services/retrieval_service.js">retrieval_service.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P0 · G06</span>Bộ đánh giá thực tế còn nhỏ và chưa thành release gate</summary><div>
+<p>Corpus semantic SQL hiện có 12 case. Fixture retrieval mặc định vẫn là placeholder. <code>test:ci</code> hiện chạy <code>npm test</code>, <code>eval:local</code> và <code>eval:sql</code>; chưa có <code>eval:retrieval</code>, <code>eval:local:semantic</code> (validate chỉ kiểm tra cấu trúc corpus, chạy offline; không chạy model/SQL hay đo accuracy) và bản <code>--live</code> (cần datasource nghiệm thu). Fixture retrieval mẫu còn nguyên câu “Thay câu hỏi mẫu này bằng câu hỏi nghiệm thu”.</p>
+<p><strong>Khắc phục:</strong> tạo corpus nghiệm thu từ câu hỏi thực tế đã loại dữ liệu nhạy cảm; có trường hợp mơ hồ, không có đáp án, nhiều lượt, sai kỳ, join đếm trùng và câu hỏi kết hợp SQL với tài liệu. Chấm riêng từng lớp và đánh giá end-to-end; dùng bộ test giữ kín để tránh tối ưu theo ví dụ mẫu.</p>
+<p><strong>Bổ sung (v1.1):</strong> nguồn corpus nên lấy từ <code>training:collect</code> (history và feedback đã có) cùng các mã lỗi của <code>failure_classifier</code>, thay vì viết tay toàn bộ. <code>sanitize:chat-data</code> loại secret khỏi dữ liệu chat đã lưu; dữ liệu nghiệp vụ và thông tin cá nhân vẫn cần rà thủ công trước khi đưa vào corpus. Theo quy ước README, case SQL chạy trên fixture <code>tests/fixtures/sql_server_seed</code> hoặc datasource nghiệm thu riêng, không giả lập trạng thái SQL đã kết nối.</p><div class="source">Code: <a href="../package.json">package.json</a> · <a href="../tests/fixtures/local_sql_golden.json">local_sql_golden.json</a> · <a href="../tests/fixtures/retrieval_golden.sample.json">retrieval_golden.sample.json</a></div></div>
+</details>
+<details open><summary><span class="badge">P1 · G07</span>Điều phối và cách trả lời cần thống nhất hơn</summary><div>
+<p>Các nhánh local/provider/legacy và luồng workflow có hành vi riêng; việc duy trì chính sách và chất lượng đồng đều sẽ khó hơn khi thêm tính năng. Câu hỏi kết hợp định nghĩa trong tài liệu với số liệu SQL cần kế hoạch nhiều nguồn.</p>
+<p><strong>Khắc phục:</strong> contract chung cho request plan, evidence và answer quality; planner chọn một hoặc nhiều bước cần thiết trong cùng ngân sách. Lớp soạn trả lời dùng bằng chứng chuẩn hóa, kết luận trước, giải thích vừa đủ, không lặp toàn bộ bảng. Chỉ thêm lượt gọi model khi độ phức tạp yêu cầu.</p>
+<p><strong>Đối chiếu code (v1.1):</strong> còn nhánh legacy khi <code>AGENT_CORE_ENABLED=false</code> (<code>core.js</code>, mặc định bật). Ở chế độ <code>chat_model</code>, <code>chat_router.js</code> đã chạy hai tầng: phân loại luồng (flow probe: knowledge / database / workflow / chat / unclear) rồi mới ra quyết định. RequestPlan v2 phải đặt trên quyết định này và hợp nhất với “Understanding contract” của plan hiểu truy vấn (§4.4), không thêm tầng phân loại thứ ba. Nguyên tắc một quyết định cho mỗi request đã nằm trong <a href="CHAT_ROUTING_TOKEN_OPTIMIZATION_PLAN_270926.md">plan routing/token</a>.</p><div class="source">Code: <a href="../src/backend/intelligent_core/core.js">core.js</a> · <a href="../src/backend/agent_core/harness/local_model_harness.js">local_model_harness.js</a> · <a href="../src/backend/agent_core/harness/guarded_agent_harness.js">guarded_agent_harness.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P0 · G08</span>Baseline test chưa xanh: toàn suite còn 1 lỗi</summary><div>
+<p>Sau <code>npm ci</code>, <code>npm test</code> chạy 544 test: 531 đạt, 12 bỏ qua, <strong>1 lỗi</strong> (<code>tests/automation_routes.test.js</code>, lỗi cả khi chạy riêng). Theo log, fixture trả JSON dạng quyết định workflow, trong khi <code>chat_router.js</code> ở chế độ <code>chat_model</code> trước hết gọi tầng phân loại luồng và yêu cầu trường <code>flow</code>; thiếu trường này nên trả <code>ROUTING_INVALID_OUTPUT</code> (“Invalid flow classification.”). Đây là lệch giữa test và contract routing hiện tại; chưa kết luận hành vi production sai.</p>
+<p>Nếu chưa cài dependency, 63 test lỗi vì thiếu <code>pg</code> và <code>node-sql-parser</code>. Pipeline cần ghi rõ <code>npm ci</code> để baseline không bị nhiễu.</p>
+<p><strong>Khắc phục:</strong> cập nhật mock theo hai tầng (flow probe rồi decision), thêm case âm cho đầu ra thiếu <code>flow</code>. Chỉ lấy baseline chất lượng khi toàn suite xanh.</p><div class="source">Code: <a href="../src/backend/automation/chat_router.js">chat_router.js</a> · <a href="../tests/automation_routes.test.js">automation_routes.test.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P1 · G09</span>Tokenizer BM25 làm mất chữ “đ” (sửa nhanh)</summary><div>
+<p><code>retrieval_service.js</code> chuẩn hóa bằng NFD rồi bỏ dấu nhưng không đổi “đ” thành “d” (khác <code>request_planner.js</code> và <code>citation_service.js</code>). Mẫu token chỉ nhận <code>[a-z0-9_]</code> nên “đ” bị cắt khỏi từ. Đã chạy thử: “Điều kiện đăng ký đơn” cho ra <code>ieu, kien, ang, ky, on</code>.</p>
+<p>Hệ quả: từ khóa mất ký tự đầu (“đăng” → “ang”, “đơn” → “on”), dễ trùng nhầm với từ khác, và từ như “đã” biến mất. Query và tài liệu bị xử lý giống nhau nên không vỡ hẳn, nhưng nhánh lexical (và graph, dùng cùng hàm) kém đi với tiếng Việt. Chưa đo mức ảnh hưởng lên Recall@K.</p>
+<p><strong>Khắc phục:</strong> dùng helper chuẩn hóa cho các trường tìm kiếm của retrieval, citation và planner, xử lý cả <code>đ/Đ</code>, có dấu/không dấu. Giữ nguyên văn bản hiển thị, mã định danh và quy tắc memory cần phân biệt dấu (như “đó” với “đồ”). Đo Recall@K/MRR trước và sau trên corpus giai đoạn 0. Thay đổi nhỏ nhưng làm đổi điểm BM25, nên không gộp chung với thay đổi retrieval khác.</p><div class="source">Code: <a href="../src/backend/knowledge_core/services/retrieval_service.js">retrieval_service.js</a> · <a href="../src/backend/knowledge_core/services/citation_service.js">citation_service.js</a></div></div>
+</details>
+<details open><summary><span class="badge">P0 · G10</span>Phạm vi tài liệu chưa gắn với người dùng (nâng từ O04)</summary><div>
+<p><code>RetrievalService.resolveScope(documentIds, scopeMode)</code> không nhận tài khoản; <code>all_authorized</code> được dựng từ toàn bộ <code>libraryService.getDocuments()</code>. Tài khoản thường và ngữ cảnh embed đều nhận <code>knowledge:read</code> (<code>router.js</code>, <code>automation/runtime.js</code>). README ghi rõ chưa có RBAC theo Library/folder/document, và RAG plan §4.4 ghi RAG-1 chưa được coi là hoàn tất cho phát hành nhiều người dùng cho tới khi có ACL tài liệu.</p>
+<p>Bản 1.0 đặt mục này ở O04 và Phase 4, mâu thuẫn với thứ tự ưu tiên của README (quyền và dữ liệu đứng trước chất lượng). Chưa có bằng chứng khai thác được; cần test âm để xác định, nhất là nếu chat nhúng cho phép truyền danh sách tài liệu.</p>
+<p><strong>Khắc phục:</strong> làm thành track riêng, song song với giai đoạn 0, bám <a href="WORKFLOW_ROLE_AUTHORIZATION_PLAN-091026.md">plan phân quyền 09/10</a> (principal chung; §9 chặn đường vòng RAG/SQL): thêm trường quyền cho tài liệu, truyền principal vào <code>resolveScope</code>, lọc trước dense/BM25/graph, kiểm tra lại khi mở nguồn, citation, memory và cache.</p><div class="source">Code: <a href="../src/backend/knowledge_core/services/retrieval_service.js">retrieval_service.js</a> · <a href="../src/backend/routes/router.js">router.js</a> · <a href="../src/backend/automation/runtime.js">runtime.js</a></div></div>
+</details>
+</section>
+
+<section id="architecture">
+<h2>04 · Sơ đồ kiến trúc đề xuất</h2>
+<p>Đọc từ trái sang phải ở hàng đầu, theo mũi tên xuống hàng tiếp theo. Các khối nền xanh là những điểm cần bổ sung hoặc nâng cấp đáng kể. Bước 01–03 không phải tầng mới: chúng nằm trên luồng flow probe → decision hiện có và “Understanding contract” của plan hiểu truy vấn.</p><div class="tools"><label for="zoom">Phóng to <input id="zoom" type="range" min="100" max="180" step="10" value="100"><output id="zoom-value" for="zoom">100%</output></label><button type="button" id="full-diagram">Mở sơ đồ lớn</button><button type="button" id="download-svg">Tải hình SVG</button></div><div class="diagram-box" id="diagram-box"><button type="button" class="close-diagram" id="close-diagram">Đóng · Esc</button>
+<svg id="architecture-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 810" role="img" aria-labelledby="svg-title svg-desc"><title id="svg-title">Kiến trúc nâng cấp chất lượng câu trả lời KnowledgeHub AI</title><desc id="svg-desc">Chín bước: câu hỏi và trạng thái hội thoại; hiểu yêu cầu; lập kế hoạch; truy xuất và thực thi; chuẩn hóa bằng chứng; kiểm tra mức đủ bằng chứng; soạn trả lời; kiểm chứng cuối; trả lời và cập nhật memory. Luồng chạy theo ba hàng hình chữ S. Quyền truy cập, ngân sách, tracing và đánh giá bao quanh mọi bước.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="context-stroke"/></marker></defs>
+<text x="35" y="35" class="diagram-detail">LUỒNG XỬ LÝ CÓ KẾ HOẠCH · BẰNG CHỨNG · KIỂM CHỨNG</text>
+<path class="arrow" d="M335 145H380"/><path class="arrow" d="M680 145H725"/><path class="arrow" d="M875 215V285"/>
+<path class="arrow" d="M725 360H680"/><path class="arrow" d="M380 360H335"/><path class="arrow" d="M185 430V500"/>
+<path class="arrow" d="M335 575H380"/><path class="arrow" d="M680 575H725"/>
+<g transform="translate(35 70)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">01 · NGỮ CẢNH</text><text class="diagram-title" x="20" y="61">Câu hỏi + hội thoại</text><text class="diagram-detail" x="20" y="91">Chủ đề, thực thể, nguồn,</text><text class="diagram-detail" x="20" y="115">yêu cầu chờ và phạm vi quyền</text></g>
+<g transform="translate(380 70)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">02 · HIỂU YÊU CẦU</text><text class="diagram-title" x="20" y="61">Xác định ý định</text><text class="diagram-detail" x="20" y="91">Giải đại từ, làm rõ chỉ tiêu,</text><text class="diagram-detail" x="20" y="115">viết lại truy vấn tìm kiếm</text></g>
+<g transform="translate(725 70)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">03 · KẾ HOẠCH</text><text class="diagram-title" x="20" y="61">Request plan dùng chung</text><text class="diagram-detail" x="20" y="91">Metric, kỳ, filter, nguồn,</text><text class="diagram-detail" x="20" y="115">đầu ra và phần cần hỏi thêm</text></g>
+<g transform="translate(725 285)"><rect class="node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">04 · THU THẬP</text><text class="diagram-title" x="20" y="61">Truy xuất / thực thi</text><text class="diagram-detail" x="20" y="91">SQL · Tài liệu · Workflow · Web</text><text class="diagram-detail" x="20" y="115">Một hoặc nhiều nguồn theo plan</text></g>
+<g transform="translate(380 285)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">05 · BẰNG CHỨNG</text><text class="diagram-title" x="20" y="61">Evidence chuẩn hóa</text><text class="diagram-detail" x="20" y="91">Dữ kiện, nguồn, thời điểm,</text><text class="diagram-detail" x="20" y="115">đơn vị, locator và giới hạn</text></g>
+<g transform="translate(35 285)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">06 · MỨC ĐỦ BẰNG CHỨNG</text><text class="diagram-title" x="20" y="61">Có đủ căn cứ trả lời?</text><text class="diagram-detail" x="20" y="91">Đủ · Một phần · Thiếu · Mâu thuẫn</text><text class="diagram-detail" x="20" y="115">Quyết định trả lời hoặc hỏi thêm</text></g>
+<g transform="translate(35 500)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">07 · DIỄN ĐẠT</text><text class="diagram-title" x="20" y="61">Soạn trả lời tự nhiên</text><text class="diagram-detail" x="20" y="91">Kết luận trước, đúng nhu cầu,</text><text class="diagram-detail" x="20" y="115">phân biệt dữ kiện và suy luận</text></g>
+<g transform="translate(380 500)"><rect class="focus-node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">08 · KIỂM CHỨNG CUỐI</text><text class="diagram-title" x="20" y="61">Kiểm tra dữ kiện</text><text class="diagram-detail" x="20" y="91">Binding, số liệu và nguồn;</text><text class="diagram-detail" x="20" y="115">ngữ nghĩa theo policy</text></g>
+<g transform="translate(725 500)"><rect class="node" width="300" height="145" rx="12"/><text class="step-number" x="20" y="28">09 · PHẢN HỒI</text><text class="diagram-title" x="20" y="61">Trả lời + memory</text><text class="diagram-detail" x="20" y="91">Lưu dữ kiện đã xác minh;</text><text class="diagram-detail" x="20" y="115">giữ phần chờ ở trạng thái riêng</text></g>
+<rect class="node" x="35" y="700" width="990" height="80" rx="10"/><text class="diagram-title" x="55" y="732">Xuyên suốt mọi bước</text><text class="diagram-detail" x="55" y="759">Quyền truy cập · Ngân sách call/deadline · Tracing · Phiên bản cấu hình · Evaluation</text>
+</svg></div>
+<p class="diagram-caption"><strong>Phạm vi bước 08:</strong> kiểm tra tất định ở 1A; ngữ nghĩa tự do có điều kiện ở 1B. Chưa kiểm phải ghi not_checked, không gắn verified toàn bộ. Hình vector được nhúng trực tiếp trong file; có thể tải SVG để mở riêng hoặc chèn vào tài liệu. Trên màn hình nhỏ, cuộn ngang để giữ chữ dễ đọc. Font có fallback khi mở ngoại tuyến.</p>
+<details><summary>Bản chữ của sơ đồ</summary><div>
+<ol>
+<li>Nhận câu hỏi và trạng thái hội thoại đúng phạm vi.</li>
+<li>Hiểu ý định, giải tham chiếu và làm rõ chỗ mơ hồ.</li>
+<li>Lập kế hoạch có cấu trúc dựa trên ngữ nghĩa nghiệp vụ.</li>
+<li>Lấy bằng chứng từ SQL, tài liệu, workflow hoặc web.</li>
+<li>Chuẩn hóa dữ kiện và nguồn gốc.</li>
+<li>Đánh giá mức đủ bằng chứng, kể cả thiếu hoặc mâu thuẫn.</li>
+<li>Soạn câu trả lời theo yêu cầu và phong cách hội thoại.</li>
+<li>Kiểm chứng số liệu, nhận định, nguồn và đầu ra.</li>
+<li>Trả lời; cập nhật memory chỉ với trạng thái phù hợp.</li></ol>
+<p>Repair hoặc thu thập thêm phải có giới hạn, dùng chung ngân sách request. Sau khi hết ngân sách, trả kết quả một phần hoặc câu hỏi làm rõ có căn cứ.</p></div>
+</details>
+</section>
+
+<section id="contracts">
+<h2>05 · Contract và quyết định triển khai đề xuất</h2>
+<p>Các contract dưới đây là thiết kế bản 1.2, chưa phải API đang tồn tại. Mỗi thay đổi cần version, kiểm thử tương thích và migration khi thêm cấu trúc lưu trữ.</p>
+<div class="note">
+<p><strong>Tái dùng nền tảng:</strong> RequestPlan mở rộng createRequestPlan và Understanding contract; ConversationState dựa trên memory_core; EvidenceBundle lấy dữ kiện từ SQL/workflow/citationEvidence. retrievalPipeline và routing.stages giữ trong trace, liên kết bằng requestId/evidenceId; telemetry không phải bằng chứng cho nhận định. AnswerQuality mở rộng completion policy và nối vào Training Core.</p></div>
+<div class="table-wrap"><table><thead>
+<tr><th>Contract</th><th>Trường tối thiểu / ràng buộc</th><th>Nguồn mở rộng</th></tr></thead><tbody>
+<tr><td>ConversationState v1</td><td>Owner/session, active scope, topic, sourceIds, ordered entity references, temporal scope, pending question, TTL, evidence/source/policy versions. Tham chiếu có provenance; kiểm tra quyền hiện tại khi dùng lại.</td><td>reference_store, topic_detector, memory_policy.</td></tr>
+<tr><td>RequestPlan v2</td><td>Intent, metricIds, dimensions, period, filters, sourceScope, steps, expectedOutputs, ambiguities. Giữ mã/số/ngày/phủ định trong rewrite; plan không tự cấp quyền.</td><td>createRequestPlan + Understanding contract.</td></tr>
+<tr><td>MetricDefinition v1</td><td>ID/version, aliases, formula, unit, grain, time field, default filters, allowed joins/cardinality, aggregation rules. Công thức qua validator; không thực thi code tùy ý.</td><td>Dictionary/Glossary/relationship; hỗ trợ nhiều metric và metric xuyên bảng; defaultMetric tham chiếu ID mặc định.</td></tr>
+<tr><td>EvidenceBundle v1</td><td>EvidenceId, type, source/version, fetchedAt, permissionScope, facts/row references, locator, completeness/truncation, derivations. Giữ số chính xác, đơn vị và nguồn input của phép tính.</td><td>Kết quả tool/citationEvidence; tách khỏi trace hiệu năng.</td></tr>
+<tr><td>FactBinding v1</td><td>BindingId, evidenceId, metricId/version hoặc fieldId, entity/dimensions, period, unit, row/field locator, derivationId và format. Backend đối chiếu với plan trước khi điền placeholder.</td><td>Renderer + calculation_reply; không nhận đường dẫn/phép biến đổi tùy ý từ model.</td></tr>
+<tr><td>AnswerQuality v1</td><td>EvidenceStatus; checks theo loại; claimChecks; failures; policyVersion và verificationPolicyId. Mỗi check có status pass/fail/not_checked/not_applicable, method và evidenceIds.</td><td>evaluateCompletion + validator dùng chung giữa các harness.</td></tr>
+</tbody></table></div>
+<h3>05.1 · Điền số có binding và kiểm tra kết luận</h3>
+<p>Model tham chiếu <code>bindingId</code>; renderer lấy giá trị từ evidence, định dạng theo đơn vị/locale. Binding phải khớp metric, thực thể, kỳ và phạm vi câu hỏi. Binding sai hoặc không tồn tại → reject/repair trong ngân sách; không điền rỗng hoặc đoán.</p>
+<ul>
+<li>Tổng, chênh lệch, tỷ lệ, min/max và chiều tăng/giảm được tính bằng code khi đủ dữ liệu; lưu input evidenceIds và quy tắc làm tròn. Dùng decimal/độ chính xác phù hợp cho số tiền; không mặc định mọi số an toàn với floating-point.</li>
+<li>“Tăng mạnh” cần ngưỡng nghiệp vụ có version; quan hệ nhân quả không được suy ra chỉ từ biến động số.</li>
+<li>Chỉ kết luận toàn dataset khi biết đủ dữ liệu. Preview/TOP/row limit không đủ để suy ra tổng hoặc cao nhất toàn bộ.</li>
+<li>Số tự viết vẫn phải kiểm tra. Nếu thất bại, dùng renderer cho phần đạt hoặc trả một phần có giới hạn rõ.</li></ul>
+<div class="accept"><strong>Gate bắt buộc</strong>100→999; đúng số/sai metric; đúng số/sai kỳ; sai entity; triệu↔tỷ; “tăng lên 80” khi 100→80; binding không tồn tại; tổng từ preview thiếu dòng; làm tròn tiền. Có expected output cho cả local/provider.</div>
+<h3>05.2 · Kiểm chứng trong runtime và offline</h3>
+<div class="table-wrap"><table><thead>
+<tr><th>Kiểm tra</th><th>Chính sách v1.2</th><th>Khi không kiểm được</th></tr></thead><tbody>
+<tr><td>Quyền / version / nguồn</td><td>Backend kiểm tra trước retrieval/rerank/model và khi mở/dùng lại nguồn.</td><td>Chặn nguồn chưa xác minh quyền; báo nguồn không khả dụng, không tuyên bố “không có đáp án”.</td></tr>
+<tr><td>Số / binding / phép tính</td><td>Tất định trong runtime; format/tolerance theo loại dữ liệu.</td><td>Repair giới hạn hoặc renderer cho phần đạt; không đánh pass mặc định.</td></tr>
+<tr><td>Marker / locator</td><td>Marker gắn với evidence thực sự vào prompt và nguồn còn hợp lệ.</td><td>Marker đúng chưa phải claim đúng; missing/invalid có mã lỗi riêng.</td></tr>
+<tr><td>Claim diễn đạt tự do</td><td>Giai đoạn 1A ghi not_checked cho entailment chưa kiểm. 1B thử semantic verifier có điều kiện cho claim quan trọng không kiểm tất định được, sau hiệu chuẩn bằng nhãn người. Tối đa một lượt verifier/request, dùng chung call/deadline budget; không bật mặc định.</td><td>Timeout/không hỗ trợ/hết ngân sách → not_checked. Policy yêu cầu kiểm chứng thì thu hẹp về phần đã xác minh hoặc partial/clarify; không gắn verified.</td></tr>
+<tr><td>Tự nhiên / chất lượng tổng thể</td><td>LLM-judge offline kết hợp chấm mù của người; không thêm call vào mọi request.</td><td>Chưa đủ nhãn thì chưa dùng điểm judge làm gate duy nhất.</td></tr>
+</tbody></table></div>
+<p>Model verifier chỉ cung cấp tín hiệu nguồn hỗ trợ nhận định, không chứng minh chân lý. Lưu method/model/version, evidence và kết quả từng claim; đo false-positive/false-negative. Corpus gồm phủ định, điều kiện, ngoại lệ, mâu thuẫn và không có đáp án. Tài liệu/tool output là dữ liệu, verifier không làm theo chỉ dẫn nằm trong nguồn.</p>
+<h3>05.3 · Trạng thái trả lời và memory</h3>
+<p>Tách <code>executionStatus</code> (trạng thái chạy), <code>answerDisposition = answered / partial / clarify / no_evidence / error</code> và <code>answerQuality</code> (các kiểm tra). <code>evidenceStatus = sufficient / partial / insufficient / conflicting / unavailable</code>; unavailable là nguồn lỗi, khác với tìm thành công nhưng thiếu bằng chứng.</p>
+<ul>
+<li>Chỉ đánh verified trong phạm vi verificationPolicyId đã công bố và mọi check bắt buộc đạt; score tổng không che được check fail/not_checked.</li>
+<li>Memory factual chỉ ghi claim/reference đạt policy, kèm source/version/TTL. Văn bản chưa kiểm chứng không thành fact chỉ vì tool thành công.</li>
+<li>Clarify lưu pending state với câu hỏi, slot và scope. Partial/no_evidence/error lưu UI history/audit, không đưa câu trả lời chưa kiểm chứng vào success memory. Reference được giữ phải kiểm tra độc lập.</li>
+<li>Adapter tương thích SUCCESS/PARTIAL, canPersist, history selector và các harness cần cập nhật đồng thời; có test round-trip lưu/đọc và lượt hỏi làm rõ.</li>
+<li>Chat chính/popup dùng component chung. Embed chỉ hiện trả lời, bảng/biểu đồ/form; giải thích thiếu dữ liệu nằm trong câu trả lời, không đưa trace kỹ thuật ra embed.</li></ul>
+<h3>05.4 · Resolver cho câu tiếp nối</h3>
+<p>Tái dùng điểm ghép context ở core và ngân sách. Resolver mới nhận câu gốc + ConversationState + thực thể đã hiển thị theo thứ tự + evidence references còn hiệu lực. Đầu ra: <code>resolvedQuery, referencedEvidenceIds, ambiguities, resolutionMethod</code>; giữ câu gốc khi trả lời.</p>
+<ul>
+<li>Thử resolution tất định khi rõ; fallback có điều kiện theo ngân sách, không thêm call cho mọi request.</li>
+<li>“Cái thứ hai” trỏ thứ tự danh sách đã trả, không lấy row thứ hai từ dataset chưa sắp xếp. Nhiều danh sách cạnh tranh → hỏi lại.</li>
+<li>Đổi chủ đề/nguồn/account, hết TTL/mất quyền → không dùng lại. Giữ mã/số/ngày/phủ định; rewrite không mở rộng scope.</li>
+<li>Timeout fallback câu gốc chỉ khi câu đủ độc lập; còn mơ hồ thì clarify.</li></ul>
+<h3>05.5 · ACL, migration và rollback</h3>
+<div class="table-wrap"><table><thead>
+<tr><th>Tình huống</th><th>Quyết định đề xuất cho strict mode</th></tr></thead><tbody>
+<tr><td>Tài liệu cũ thiếu ACL</td><td>Đánh unclassified; không tự gán public. Strict mode loại khỏi retrieval người dùng cuối cho tới khi quản trị phân loại. Legacy cohort được liệt kê rõ, không tuyên bố đã được ACL mới bảo vệ.</td></tr>
+<tr><td>Thiếu principal / policy lỗi</td><td>Không cấp quyền restricted. Anonymous chỉ khi policy public và endpoint/embed cho phép rõ ràng; lỗi đọc policy không thành public. Không tin owner/role client gửi.</td></tr>
+<tr><td>Cache / thu hồi</td><td>Cache nội dung/kết quả/decision gắn tenant, principal hoặc scope được chứng minh tương đương, policyVersion/sourceVersion. Query embedding thuần có thể dùng chung nhưng kết quả vẫn lọc quyền hiện tại. Recheck cache hit, mở nguồn/export/memory. Đề xuất TTL quyền tối đa 60 giây, không vượt identity expiry, bám plan phân quyền; hết TTL mà provider lỗi thì không dùng quyền cũ.</td></tr>
+<tr><td>Shadow → enforce</td><td>Shadow chỉ đo, chưa chặn; dùng trên môi trường/cohort legacy xác định. Enforce đồng bộ retrieval, reranker input, direct tools, file/content, citation, memory và cache đang dùng trước khi mở cohort mới.</td></tr>
+<tr><td>Rollback</td><td>Rollback chất lượng có thể về path cũ; rollback ACL không tự hạ strict cohort về legacy. Bản cũ không hiểu policy mới thì khóa tài nguyên restricted bị ảnh hưởng và phục hồi bản tương thích. Migration additive, dry-run policy audit, diễn tập backup/restore.</td></tr>
+</tbody></table></div>
+<p>G10 bao gồm cache hiện có; phase 4 chỉ tối ưu/thêm cache sau cùng gate. Thu hồi kiểm tra theo TTL đã chốt; nội dung đã gửi trước đó không thể thu hồi. Request đang chạy cần recheck trước khi gửi nguồn/kết quả ra ngoài.</p>
+<h3>05.6 · Nối chất lượng vào Training Core</h3>
+<p>Task xuyên suốt: <code>history payload → case_collector → failure_classifier → regression_runner/report</code>. Collector hiện chọn từng trường, phải thêm mapping tường minh; classifier đọc mã mới thay vì chỉ regex reply. Record cũ thiếu trường được đọc tương thích với unknown/not_checked.</p>
+<ul>
+<li>Lưu AnswerQuality và evidence references/version; excerpt/giá trị tối thiểu đã lọc dữ liệu nhạy cảm. Không mặc định nhân bản toàn SQL rows/tài liệu vào log.</li>
+<li>Mã lỗi: UNSUPPORTED_NUMBER, WRONG_FACT_BINDING, UNSUPPORTED_CLAIM, CONTRADICTED_CLAIM, LOST_REFERENCE. EVIDENCE_INSUFFICIENT là trạng thái, không tự là lỗi khi hệ thống hỏi lại đúng.</li>
+<li>Thumbs-down là case cần review, chưa là nhãn factual error. Review expected answer/evidence trước khi đưa vào golden corpus.</li>
+<li>Gate: UNSUPPORTED_NUMBER từ history tới report không mất trường; record legacy đọc được; clarify/no_evidence hợp lệ không bị đếm lỗi mặc định.</li></ul>
+</section>
+
+<section id="roadmap">
+<h2>06 · Lộ trình và nhiệm vụ có thể nghiệm thu</h2>
+<p>Triển khai theo gate. Vai trò dưới đây là đề xuất, chưa gán cá nhân hoặc ngày hoàn thành. Ngưỡng định lượng phụ thuộc baseline phải chốt cuối giai đoạn 0 trước khi enforce.</p>
+<article class="phase"><div class="phase-label">GIAI ĐOẠN 0 · BASELINE · G06 / G08</div>
+<h3>Đo chất lượng và đưa test về xanh</h3>
+<ul>
+<li>Sửa mock flow probe → decision, giữ case âm thiếu flow. CI dùng npm ci; log Node/OS/lockfile/commit/config và lý do skip. Integration bắt buộc phải chạy ở môi trường nghiệm thu; skip không là pass.</li>
+<li>Corpus đầu đề xuất 100 câu/hội thoại, gồm SQL/RAG/nhiều lượt/mơ hồ/ngoài nguồn/mâu thuẫn/nhiều nguồn. Lấy ứng viên Training Core, review nhãn và dữ liệu nhạy cảm; tách development/holdout theo conversation và nhóm câu gần giống.</li>
+<li>Đưa eval:local:semantic (--validate) vào CI dưới báo cáo <strong>corpus validation</strong>. Replay output ghi sẵn chỉ kiểm evaluator/contract; live eval đo model + SQL/retrieval trên datasource nghiệm thu.</li>
+<li>Runner JSON có pass/fail/skipped/unavailable theo nhóm, revision model/config/dataset/source. Model biến thiên thì chạy lặp và báo độ dao động.</li></ul><div class="accept"><strong>Gate</strong>Suite 0 lỗi; corpus hết placeholder, nhãn nguồn được review; report phân biệt validate/replay/live. Chốt accuracy/claim support, false-block/false-allow, p95 và call/token budget theo nhóm. Chưa có live baseline thì không tuyên bố cải thiện live.</div>
+</article>
+<article class="phase"><div class="phase-label">SONG SONG GIAI ĐOẠN 0 · G10 / O04</div>
+<h3>Phân quyền nguồn xuyên suốt</h3>
+<ul>
+<li>Principal/ACL theo mục 05.5 và plan phân quyền 09/10. Dry-run phân loại tài liệu cũ; unclassified không tự thành public.</li>
+<li>Lọc trước dense/BM25/graph/reranker/model; recheck file/content/citation/export/memory/cache. Test direct tool và API không qua chat.</li>
+<li>Test giữa tenant/account/embed, thu hồi trong TTL, policy outage, nguồn mới/cũ, đổi account cùng sessionId, cache hit sau đổi quyền.</li>
+<li>Enforce khi mọi đường cùng bảo vệ; shadow không ghi “đã bảo vệ”. Rollback giữ strict policy hoặc khóa tài nguyên bị ảnh hưởng.</li></ul><div class="accept"><strong>Gate</strong>0 nội dung/metadata ngoài quyền trong bộ test âm; không gửi candidate trái quyền tới reranker/model. Cache hiện có đã đạt gate. Revoke/outage/rollback test đạt trước khi mở cohort mới.</div>
+</article>
+<article class="phase"><div class="phase-label">GIAI ĐOẠN 1A · G01 / G02 / G03 / G09</div>
+<h3>Binding, hội thoại và trạng thái chất lượng</h3>
+<ul>
+<li>FactBinding + renderer cho 1–2 dạng SQL đơn giản; kiểm metric/kỳ/entity/unit và phép tính. Claim ngoài phạm vi ghi not_checked.</li>
+<li>Resolver dựa ConversationState/thứ tự tham chiếu; giữ scope/TTL/policy, xử lý ambiguity.</li>
+<li>EvidenceBundle + check-level AnswerQuality + disposition; tách insufficient/unavailable. Bỏ quy tắc ép trả lời khi nguồn không đủ.</li>
+<li>Cập nhật SUCCESS/PARTIAL, canPersist, history/pending. Nối payload → collector → classifier → report; tương thích record cũ.</li>
+<li>Sửa lexical đ/Đ riêng, đo trước/sau; giữ nguyên định danh/văn bản và normalization đại từ memory.</li>
+<li>Quality validator shadow rồi enforce theo nhóm sau gate false-block; không hạ ACL enforce xuống shadow.</li></ul><div class="accept"><strong>Gate</strong>Case binding mục 05.1 đạt; “cái thứ hai” đúng thứ tự hoặc clarify; không dùng reference khác quyền/hết hạn. Clarify giữ pending; fact chưa kiểm không vào success memory. UNSUPPORTED_NUMBER có trong report cuối. 1A chưa tuyên bố kiểm chứng ngữ nghĩa tự do.</div>
+</article>
+<article class="phase"><div class="phase-label">GIAI ĐOẠN 1B · G01 / G03 · VERIFIER CÓ ĐIỀU KIỆN</div>
+<h3>Đánh giá claim diễn đạt tự do</h3>
+<ul>
+<li>Hiệu chuẩn offline bằng nhãn người: supported/contradicted/unknown. Gồm phủ định, ngoại lệ, nguồn mâu thuẫn, marker đúng/nội dung sai và injection trong nguồn.</li>
+<li>Chỉ thử online nhóm request đã chọn, tối đa một lượt verifier trong ngân sách chung; câu đơn giản không thêm call mặc định.</li>
+<li>Timeout/nguồn lỗi/không chắc → not_checked/unknown, thu hẹp đáp án hoặc partial theo policy; không đổi unknown thành pass.</li></ul><div class="accept"><strong>Gate</strong>Đạt ngưỡng false-positive/false-negative và p95/cost đã chốt. “999 [1]” với nguồn “100” cùng corpus paraphrase/negation được phát hiện đúng; không nghiệm thu bằng một ví dụ. Chỉ bật cohort đạt gate; offline judge không chứng minh runtime đã kiểm chứng.</div>
+</article>
+<article class="phase"><div class="phase-label">GIAI ĐOẠN 2 · G04 / G05</div>
+<h3>Ngữ nghĩa nghiệp vụ và retrieval</h3>
+<ul>
+<li>Metadata quản trị metric/version/formula/unit/grain/join; defaultMetric trỏ ID, hỗ trợ nhiều metric và xuyên bảng.</li>
+<li>Manifest/revision/locator page/sheet/section theo RAG-4/5; bỏ rechunk toàn corpus mỗi query. Chọn lexical index bằng benchmark/consistency.</li>
+<li>Thử cấu trúc chunk/context cha/reranker riêng; ablation để tách hiệu quả từng thay đổi, kể cả resolver/rewrite ở 1A.</li>
+<li>Hiệu chỉnh evidence sufficiency/verifier khi đổi parser/chunk/embedding.</li></ul><div class="accept"><strong>Gate</strong>SQL đúng metric/kỳ/grain; join không trùng; nguồn đúng locator/version; retrieval/answer quality đạt ngưỡng so baseline, kèm latency/cost.</div>
+</article>
+<article class="phase"><div class="phase-label">GIAI ĐOẠN 3 · G07</div>
+<h3>Điều phối chung và câu hỏi nhiều nguồn</h3>
+<ul>
+<li>RequestPlan v2 mở rộng flow/decision, không thêm tầng phân loại mặc định; planner/quality policy chung local/provider.</li>
+<li>Kết hợp định nghĩa tài liệu với số liệu SQL; mọi claim giữ evidence binding/policy scope.</li>
+<li>Kết luận trước, tránh lặp bảng; nhận xét thống kê dùng derived facts. Review mù độ tự nhiên cùng accuracy.</li>
+<li>Thu hẹp legacy sau parity/rollback test; giữ khác biệt protocol/capability cần thiết.</li></ul><div class="accept"><strong>Gate</strong>Các path cùng contract nguồn/số/trạng thái; câu nhiều nguồn đúng định nghĩa và ngân sách; độ tự nhiên không đổi bằng độ đúng.</div>
+</article>
+<article class="phase"><div class="phase-label">GIAI ĐOẠN 4 · O01–O03 / O05–O06</div>
+<h3>Tối ưu theo số đo</h3>
+<ul>
+<li>Repository account/session/domain; đo trước khi thu hẹp request stores, phân trang/index history/audit.</li>
+<li>Đo event-loop delay/pool wait/corpus time/queue lag; tách parser/ingest worker khi cần.</li>
+<li>Trace degraded mode cho dense/reranker/provider; phân biệt empty/unavailable.</li>
+<li>Tối ưu/thêm cache sau gate ACL; cache hiện có đã bảo vệ ở G10. Mở rộng UI quản trị không trì hoãn backend enforcement.</li>
+<li>GraphRAG/multi-agent/microservices chỉ xem xét khi benchmark chứng minh nhu cầu.</li></ul><div class="accept"><strong>Gate</strong>Load/recovery đạt p95/p99; metadata/vector/source revision nhất quán; cache mới qua revoke/ACL; lỗi dependency không biến thành “không có dữ liệu”.</div>
+</article>
+<h3>Task đầu tiên và bằng chứng hoàn thành</h3>
+<div class="table-wrap"><table><thead>
+<tr><th>ID / phụ thuộc</th><th>Đầu ra / nơi sửa dự kiến</th><th>Vai trò đề xuất</th><th>Bằng chứng nghiệm thu</th></tr></thead><tbody>
+<tr><td>T01 · bắt đầu</td><td>Mock routing ở automation_routes.test.js.</td><td>Backend + QA</td><td>Test riêng/toàn suite 0 lỗi; case thiếu flow vẫn được từ chối.</td></tr>
+<tr><td>T02 · T01</td><td>Corpus, runner/baseline ở scripts/eval, fixtures, CI.</td><td>QA + nghiệp vụ</td><td>Report versioned, review nhãn, holdout và ngưỡng.</td></tr>
+<tr><td>T03 · bắt đầu thiết kế</td><td>Principal/ACL ở scope/routes/tools/cache/memory.</td><td>Backend/storage + QA</td><td>Ma trận quyền, migration audit, revoke/outage/rollback.</td></tr>
+<tr><td>T04 · T02</td><td>Helper lexical đ/Đ cho search fields.</td><td>Retrieval + QA</td><td>Đo riêng trước/sau; định danh/văn bản gốc không đổi.</td></tr>
+<tr><td>T05 · T02; dùng contract T03</td><td>Conversation resolver, prompt policy/memory.</td><td>Chat/memory + QA</td><td>Thứ tự tham chiếu, ambiguity, đổi scope/quyền, TTL.</td></tr>
+<tr><td>T06 · T02</td><td>Evidence/FactBinding/quality/disposition/renderer.</td><td>Agent/backend + nghiệp vụ</td><td>Số/nhãn/kỳ/entity/unit/trend/preview + memory compatibility.</td></tr>
+<tr><td>T07 · T06</td><td>History → collector → classifier → report.</td><td>Training/eval + QA</td><td>Round-trip lỗi mới, record cũ, feedback cần review.</td></tr>
+<tr><td>T08 · T02 + T06; online sau T03</td><td>Verifier hiệu chuẩn và failure policy.</td><td>AI/eval + QA</td><td>Confusion matrix từng loại claim; timeout/call/cost gate.</td></tr>
+</tbody></table></div>
+<p class="muted">Trước khi giao task: gán người chịu trách nhiệm, commit baseline, nhóm file, fixture/expected output, migration nếu có, feature flag và rollback. Thiết kế/dữ liệu cô lập có thể làm song song; cohort production chỉ bật sau gate phụ thuộc.</p>
+</section>
+
+<section id="evaluation">
+<h2>07 · Đo lường và bộ nghiệm thu</h2>
+<p>Các chỉ số dưới đây là thiết kế đánh giá. Mức chấp nhận cần chốt sau giai đoạn 0; không xem số lượng test đạt là tỷ lệ câu trả lời đúng.</p><div class="table-wrap"><table><thead>
+<tr><th>Khía cạnh</th><th>Cách đo</th><th>Case bắt buộc</th></tr></thead><tbody>
+<tr><td>Hiểu ý định</td><td>Route accuracy, metric/slot accuracy; phân tích lỗi theo domain.</td><td>Viết tắt, sai chính tả, hai nghĩa của “doanh thu”, đổi nguồn.</td></tr>
+<tr><td>Retrieval</td><td>Document/chunk Recall@K, MRR; evidence coverage.</td><td>Đáp án trong bảng, điều kiện ở mục kế bên, nguồn phiên bản mới/cũ.</td></tr>
+<tr><td>SQL</td><td>Đối chiếu result set có tolerance và định nghĩa metric.</td><td>Join một–nhiều, COUNT DISTINCT, kỳ lịch, dữ liệu trống.</td></tr>
+<tr><td>Grounding</td><td>Tỷ lệ claim được nguồn hỗ trợ; unsupported/contradicted claim rate.</td><td>Marker đúng nhưng nội dung sai; suy luận vượt nguồn; hai nguồn mâu thuẫn.</td></tr>
+<tr><td>Số liệu</td><td>Đối chiếu số, đơn vị, ngày, phép tính với tool/evidence.</td><td>100→999, triệu↔tỷ, tỷ lệ phần trăm, làm tròn.</td></tr>
+<tr><td>Hội thoại</td><td>Multi-turn success, reference resolution, topic switch accuracy.</td><td>“Người đó”, “còn tháng trước”, “làm tương tự”; hết TTL/mất quyền.</td></tr>
+<tr><td>Hỏi lại / thiếu đáp án</td><td>Độ đúng khi hỏi lại hoặc thừa nhận thiếu dữ liệu.</td><td>Thiếu slot, câu ngoài corpus, nhiều thực thể cạnh tranh.</td></tr>
+<tr><td>Tự nhiên</td><td>Review mù: rõ ý, vừa đủ, liên quan, không lặp, hỏi đúng lúc.</td><td>Tra cứu ngắn, giải thích dài, yêu cầu phân tích và dự báo ít dữ liệu.</td></tr>
+<tr><td>Hiệu năng / chi phí</td><td>End-to-end p50/p95, model/tool calls, tokens, timeout rate.</td><td>Đường đơn giản, nhiều nguồn, reranker lỗi, provider chậm.</td></tr></tbody></table></div>
+<h3>Release gate đề xuất</h3>
+<p><strong>Tách ba loại báo cáo:</strong> corpus validation (cấu trúc), replay/contract tests (logic evaluator/output ghi sẵn), live quality eval (model + nguồn thật trong môi trường nghiệm thu). Pass ở loại đầu không chứng minh accuracy loại cuối.</p>
+<ul class="checklist">
+<li>Toàn suite xanh (0 lỗi) sau <code>npm ci</code>; các regression bắt buộc và test quyền truy cập phải đạt.</li>
+<li>So sánh cùng corpus và snapshot dữ liệu; lưu code/config/model revision.</li>
+<li>Không giảm độ đúng ở nhóm quan trọng để đổi lấy điểm tổng hoặc câu văn hay hơn.</li>
+<li>Evaluation offline vào CI; live evaluation chạy trong môi trường nghiệm thu cô lập có datasource rõ ràng.</li>
+<li>Rollout theo ngưỡng đã chốt; rollback chất lượng giữ enforcement quyền. Integration bị skip phải có job nghiệm thu riêng trước release.</li></ul><div class="note">
+<p><strong>Kiểm thử đã thực hiện ở lượt đánh giá:</strong> 78 test đạt trong 7 file: citation_service, knowledge_prompt_policy, retrieval_service, memory_core, semantic_sql_evaluator, provider_harness và request_execution_budget. Đây là baseline kiểm thử chức năng, chưa phải baseline chất lượng model live.</p>
+<p><strong>Chạy lại ở bản 1.1:</strong> 7 file trên vẫn 78/78 đạt. Toàn bộ <code>npm test</code> (sau <code>npm ci</code>): 544 test, 531 đạt, 12 bỏ qua, 1 lỗi (G08). Số liệu toàn suite đã được xác nhận lại trong review bản 1.2. Các lượt kiểm thử này chưa đo latency, chi phí hoặc độ đúng với dịch vụ live.</p></div>
+</section>
+
+<section id="operations">
+<h2>08 · Kiến trúc nền và các nâng cấp cần cân nhắc</h2><div class="table-wrap"><table><thead>
+<tr><th>ID / Hiện trạng</th><th>Ảnh hưởng</th><th>Hành động</th></tr></thead><tbody>
+<tr><td>O01 · Dựng corpus BM25 lúc search (= R1/R2, RAG-4)</td><td>Đọc, chunk và tokenize lại theo request; tăng latency/CPU khi kho lớn.</td><td>Lập index lúc ingest; cập nhật theo version; đo thời gian và memory trước/sau.</td></tr>
+<tr><td>O02 · PostgreSQL snapshot</td><td>Một số đường xử lý nạp toàn bộ bảng; history/memory/audit lớn sẽ tốn tài nguyên. <em>Đối chiếu code:</em> <code>requestStores()</code> chỉ thu hẹp các route GET đã khai báo; route chat không có trong bảng nên giữ phạm vi đầy đủ theo chú thích trong file. Đây là kết luận từ đọc code, chưa đo.</td><td>Repository theo account/session/domain; truy vấn có phạm vi và pagination.</td></tr>
+<tr><td>O03 · Harness và legacy</td><td>Chính sách dễ lệch giữa local/provider/legacy.</td><td>Contract/policy dùng chung; test tương đương; thu hẹp legacy từng bước.</td></tr>
+<tr><td>O04 · Phạm vi tài liệu <span class="badge">đã nâng thành G10 · P0</span></td><td><code>all_authorized</code> hiện dựng từ toàn bộ Library; resolveScope chưa nhận account để lọc quyền tài liệu.</td><td>Truyền principal, lọc trước retrieval và kiểm tra lại khi mở nguồn/tái dùng memory. Thiết kế cache theo scope.</td></tr>
+<tr><td>O05 · Lỗi dependency</td><td>Dense search có nhánh trả [] khi lỗi; có thể khó phân biệt “không có kết quả” và “dịch vụ không khả dụng”. <em>Đối chiếu code:</em> <code>searchDocuments</code> bắt mọi lỗi, trả [] và không ghi log; cũng trả [] khi danh sách tài liệu rỗng.</td><td>Trace degraded mode và lý do; cho phép BM25 fallback nhưng phản ánh chất lượng và mức đầy đủ.</td></tr>
+<tr><td>O06 · Graph retrieval nền tảng</td><td>Graph search hiện dựa từ khóa và overlap thực thể; chưa tương đương persistent knowledge graph.</td><td>Đo trên câu quan hệ/multi-hop; chỉ đầu tư graph bền vững khi lỗi retrieval thực tế chứng minh giá trị.</td></tr></tbody></table></div>
+<h3>Điều kiện để tăng độ phức tạp kiến trúc</h3>
+<ul>
+<li><strong>Worker riêng:</strong> parsing/ingest làm tăng event-loop delay, queue lag hoặc p95 chat dưới tải thực.</li>
+<li><strong>Microservices:</strong> có nhu cầu scale/deploy độc lập và ownership rõ giữa các domain.</li>
+<li><strong>Multi-agent:</strong> tác vụ có phần việc độc lập, lợi ích chất lượng đo được và chi phí phối hợp chấp nhận được.</li>
+<li><strong>GraphRAG đầy đủ:</strong> có corpus quan hệ/multi-hop mà hybrid retrieval + metadata/contextual retrieval chưa đáp ứng.</li>
+<li><strong>Fine-tuning:</strong> đã có corpus chất lượng, ngữ nghĩa và retrieval ổn định; lỗi còn lại thuộc hành vi model lặp lại và đo được.</li></ul>
+</section>
+
+<section id="existing">
+<h2>09 · Đối chiếu với các kế hoạch đã có trong docs/</h2>
+<p>Bản 1.0 chỉ liệt kê các plan cũ ở phần tài liệu. Bản 1.1 đối chiếu trực tiếp để tránh hai nơi cùng thiết kế một việc.</p><div class="table-wrap"><table><thead>
+<tr><th>Plan hiện có</th><th>Trạng thái</th><th>Quan hệ với plan này</th></tr></thead><tbody>
+<tr><td><a href="RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md">RAG upgrade (18/09)</a></td><td>RAG-1, 2, 2b, 3 đã triển khai (đã đối chiếu code: filter tại Qdrant, đóng gói theo token, marker số <code>[1]</code>, <code>[2]</code>, giới hạn reranker). RAG-0 đang làm; RAG-4–8 chưa.</td><td>G05 và O01 = RAG-4/5. G02 = RAG-7 và §3.6. O06 = RAG-8. Citation hiện chỉ kiểm marker (RAG-2b); kiểm tra claim–nguồn (G01) là bước tiếp theo, tài liệu đó cũng xếp vào RAG-4.</td></tr>
+<tr><td><a href="SEMANTIC_QUERY_UNDERSTANDING_PLAN_220926.md">Hiểu truy vấn (22/09)</a></td><td>Đề xuất, chưa đổi runtime.</td><td>RequestPlan v2 hợp nhất với Understanding contract (§4.4) và catalog động (§4.2); chạy shadow theo P2–P3; nguyên tắc không hard-code (§2) áp dụng cho MetricDefinition.</td></tr>
+<tr><td><a href="CHAT_ROUTING_TOKEN_OPTIMIZATION_PLAN_270926.md">Routing và token (27/09)</a></td><td>Kế hoạch; một phần đã có trong code (flow probe, trace/usage).</td><td>G07: một quyết định cho mỗi request, ngân sách chung. Plan này không thêm lượt gọi model mặc định.</td></tr>
+<tr><td><a href="WORKFLOW_ROLE_AUTHORIZATION_PLAN-091026.md">Phân quyền nghiệp vụ (09/10)</a></td><td>Đề xuất, chưa triển khai.</td><td>G10 dùng principal chung và §9 (chặn đường vòng RAG/SQL) của plan đó.</td></tr>
+<tr><td><a href="SQL_RELATIONSHIP_JOIN_PLAN_190926.md">Relationship/join (19/09)</a></td><td>Đã có <code>join_planner_service</code> và <code>sql_join_validator</code>.</td><td>Phần join và đếm trùng của G04 bám plan này, không viết lại.</td></tr>
+<tr><td><a href="BACKEND_HARDCODE_AUDIT_230926.md">Rà soát hardcode (23/09)</a></td><td>Rà soát tĩnh.</td><td>G04: danh sách từ khóa/regex cần chuyển sang metadata có version.</td></tr>
+<tr><td><a href="NEXT_STEPS_PLAN_180926.md">Next steps (18/09)</a></td><td>Kế hoạch tổng; có gate A4 (quyền) và C2 (bộ eval).</td><td>G10 ↔ A4; G06 ↔ C2.</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="additions">
+<h2>10 · Gợi ý bổ sung phù hợp với project</h2>
+<p>Các gợi ý dưới đây dựa trên cơ chế đã có trong repo; đều là đề xuất chưa triển khai, cần đo trước khi chọn mặc định.</p><div class="table-wrap"><table><thead>
+<tr><th>Gợi ý</th><th>Vì sao hợp với project</th><th>Điều kiện / chi phí</th></tr></thead><tbody>
+<tr><td>Số liệu do code điền (placeholder)</td><td>Repo đã có renderer xác định và <code>validateOutputData</code>. Cách này ngăn model tự sửa giá trị đã liên kết; vẫn kiểm binding, metric/kỳ/entity/unit và kết luận.</td><td>Dùng FactBinding mục 05.1; reject binding sai. Làm trước 1–2 dạng; có fallback và test trend/đơn vị/preview.</td></tr>
+<tr><td>Mã lỗi chất lượng mới, nối vào <code>training_core</code></td><td>Collector chọn trường tường minh; thêm mapping AnswerQuality/evidence references, classifier, regression/report. Feedback cần review trước khi thành golden. EVIDENCE_INSUFFICIENT không tự là lỗi khi hỏi lại phù hợp.</td><td>T07 nghiệm thu end-to-end, tương thích record cũ, lọc dữ liệu nhạy cảm/giới hạn payload; không log toàn nguồn mặc định.</td></tr>
+<tr><td>Shadow mode kèm feature flag</td><td>Đúng cách repo đang làm (cờ trong <code>.env.example</code> với <code>@env</code>, rollout/rollback). Tránh chặn nhầm khi chưa có baseline.</td><td>Enforce theo độ phủ case/ngưỡng đã chốt, không chỉ theo số tuần. ACL strict không hạ xuống shadow khi rollback.</td></tr>
+<tr><td>Một lệnh <code>eval:quality</code> gộp các eval rời</td><td>Hiện có <code>eval:local</code>, <code>eval:sql</code>, <code>eval:retrieval</code>, <code>eval:memory</code>, <code>eval:provider</code>, <code>eval:routing</code>… chạy riêng. Runner mỏng xuất một báo cáo JSON theo commit/config phục vụ release gate.</td><td>Không viết lại evaluator; chỉ gom và so sánh.</td></tr>
+<tr><td>Trạng thái trả lời hạng nhất: <code>answered / partial / clarify / no_evidence</code></td><td>Hợp với G03; đo được “hỏi lại đúng lúc”. Chat chính/popup hiển thị qua component chung; chat nhúng chỉ hiện câu trả lời.</td><td>Thêm error cho lỗi nguồn/runtime; map executionStatus, quality, pending/memory theo mục 05.3.</td></tr>
+<tr><td>LLM-judge offline; verifier online có điều kiện</td><td>Judge tự nhiên/tổng thể offline, đối chiếu nhãn người. Claim verifier online ở track 1B riêng, có hiệu chuẩn/feature flag/ngân sách; không thêm call cho mọi request.</td><td>Mục 05.2: timeout/unknown không thành pass; chỉ enforce cohort đạt gate.</td></tr>
+<tr><td>Thử nghiệm lexical tiếng Việt sau G09</td><td>Người dùng gõ có dấu lẫn không dấu. Có thể thử bigram âm tiết hoặc tách từ như các biến thể và đo bằng corpus.</td><td>Chỉ làm sau khi sửa “đ” và có corpus giai đoạn 0; không đổi mặc định khi chưa có số.</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="references">
+<h2>11 · Bằng chứng và tài liệu liên quan</h2>
+<p>Các liên kết mã nguồn dùng đường dẫn tương đối, hoạt động khi file HTML được giữ trong thư mục <code>docs</code> của project. Nếu chia sẻ riêng file này, phần nội dung và sơ đồ vẫn đọc được; liên kết repo cần bản sao mã nguồn tương ứng.</p>
+<ul>
+<li><a href="../src/backend/intelligent_core/core.js">Luồng chat chính</a> · <a href="../src/backend/automation/chat_router.js">Chat/workflow router</a> · <a href="../src/backend/intelligent_core/ai_persona_service.js">Persona và system prompt</a></li>
+<li><a href="../src/backend/training_core/response_evaluator.js">Response evaluator</a> · <a href="../src/backend/training_core/sql_evaluator.js">SQL evaluator</a> · <a href="../src/backend/agent_core/harness/completion_policy.js">Completion policy</a></li>
+<li><a href="../src/backend/knowledge_core/services/retrieval_service.js">Retrieval</a> · <a href="../src/backend/knowledge_core/services/library_service.js">Library/parser/chunking</a> · <a href="../src/backend/knowledge_core/services/citation_service.js">Citation</a> · <a href="../src/backend/services/qdrant_service.js">Qdrant</a></li>
+<li><a href="../src/backend/memory_core/memory_router.js">Memory router</a> · <a href="../src/backend/memory_core/topic_detector.js">Topic detector</a> · <a href="../src/backend/memory_core/memory_policy.js">Memory policy</a></li>
+<li><a href="../src/backend/storage/request_stores.js">Request store scope</a> · <a href="../src/backend/storage/postgres/repository.js">PostgreSQL repository</a> · <a href="../server.js">Server/worker lifecycle</a></li>
+<li><a href="RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md">Kế hoạch RAG đã có</a> · <a href="SEMANTIC_QUERY_UNDERSTANDING_PLAN_220926.md">Kế hoạch hiểu truy vấn</a> · <a href="SQL_RELATIONSHIP_JOIN_PLAN_190926.md">Kế hoạch relationship/join</a> · <a href="CHAT_WORKFLOW_ROUTING_UX.md">Routing UX</a> · <a href="NEXT_STEPS_PLAN_180926.md">Next steps hiện có</a> · <a href="CHAT_ROUTING_TOKEN_OPTIMIZATION_PLAN_270926.md">Routing/token</a> · <a href="WORKFLOW_ROLE_AUTHORIZATION_PLAN-091026.md">Phân quyền nghiệp vụ</a> · <a href="BACKEND_HARDCODE_AUDIT_230926.md">Rà soát hardcode</a> · <a href="../README.md">README</a> · <a href="../.agents/rules/coding.md">Quy ước UI</a></li>
+<li><a href="https://www.anthropic.com/engineering/contextual-retrieval" target="_blank" rel="noopener noreferrer">Anthropic — Contextual Retrieval</a>: tham khảo cách thêm ngữ cảnh chunk, BM25 và reranking; hiệu quả trên project phải benchmark riêng.</li>
+<li><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener noreferrer">Anthropic — Building Effective Agents</a>: tham khảo cách dùng các luồng đơn giản, có thể kết hợp, và tăng độ phức tạp dựa trên evaluation.</li></ul><div class="note">
+<p><strong>Phạm vi của file:</strong> tổng hợp toàn bộ đánh giá kiến trúc ở lượt trao đổi này và chuyển thành plan triển khai có phụ thuộc, contract và tiêu chí nghiệm thu. Các tài liệu kế hoạch cũ được liên kết để đối chiếu; trạng thái tính năng cần được xác nhận lại khi bắt đầu triển khai. Bản 1.1 đối chiếu commit <code>f2b16f5</code>; review 1.2 xác nhận baseline test và hiệu chỉnh đề xuất. Mục 00 ghi thay đổi; mục 05–06 là thiết kế/gate chờ review, chưa triển khai.</p></div>
+</section>
+<footer class="footer">KnowledgeHub AI · Architecture Quality Upgrade Plan · 11/10/2026 · Bản đề xuất 1.2 (review contract và gate; chưa triển khai)</footer>
+</main></div>
+<script>
+const box=document.getElementById('diagram-box');
+const svg=document.getElementById('architecture-svg');
+const zoom=document.getElementById('zoom');
+const detailButton=document.getElementById('expand-details');
+document.getElementById('print').addEventListener('click',()=>{document.querySelectorAll('details').forEach(d=>d.open=true);detailButton.textContent='Thu gọn chi tiết';window.print()});
+detailButton.addEventListener('click',()=>{const allOpen=[...document.querySelectorAll('details')].every(d=>d.open);document.querySelectorAll('details').forEach(d=>d.open=!allOpen);detailButton.textContent=allOpen?'Mở toàn bộ chi tiết':'Thu gọn chi tiết'});
+zoom.addEventListener('input',()=>{svg.style.width=zoom.value+'%';document.getElementById('zoom-value').value=zoom.value+'%'});
+document.getElementById('full-diagram').addEventListener('click',()=>{box.classList.add('expanded');document.getElementById('close-diagram').focus()});
+function closeDiagram(){box.classList.remove('expanded');document.getElementById('full-diagram').focus()}
+document.getElementById('close-diagram').addEventListener('click',closeDiagram);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('expanded'))closeDiagram()});
+document.getElementById('download-svg').addEventListener('click',()=>{const copy=svg.cloneNode(true);copy.removeAttribute('style');copy.setAttribute('width','1060');copy.setAttribute('height','810');const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.diagram-title{fill:#17243a;font:600 20px Inter,Arial,sans-serif}.diagram-detail{fill:#52627a;font:400 16px Inter,Arial,sans-serif}.step-number{fill:#225bc4;font:700 14px Inter,Arial,sans-serif}.node{fill:#fff;stroke:#dce3ee;stroke-width:1.5}.focus-node{fill:#edf3ff;stroke:#225bc4;stroke-width:1.5}.arrow{fill:none;stroke:#52627a;stroke-width:2;marker-end:url(#arrow)}';copy.prepend(style);copy.querySelector('marker path').setAttribute('fill','#52627a');const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');bg.setAttribute('width','1060');bg.setAttribute('height','810');bg.setAttribute('fill','#f4f6fa');copy.insertBefore(bg,copy.querySelector('defs').nextSibling);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='knowledgehub-architecture-upgrade.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+</script>
+</body>
+</html>

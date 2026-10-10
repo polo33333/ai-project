@@ -417,7 +417,7 @@ button:disabled { cursor: not-allowed; }
 /* New conversations share the message area's space with a compact welcome. */
 .chat-welcome { display: none; }
 #page-chat-messages-container:not(:has(> *)),
-.chat-main:has(#page-chat-messages-container:not(:has(> *))) #quick-prompts-bar {
+#page-chat-messages-container:not(:has(> *)) + .chat-welcome + .page-chat-composer-area #quick-prompts-bar {
   display: none !important;
 }
 #page-chat-messages-container:not(:has(> *)) + .chat-welcome {
@@ -426,7 +426,8 @@ button:disabled { cursor: not-allowed; }
   min-height: 0;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow-y: auto;
+  align-items: safe center;
   container-type: size;
   padding: 16px 24px;
   background: linear-gradient(180deg, #fbfcff, #f7f9fd);

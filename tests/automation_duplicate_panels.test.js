@@ -5,6 +5,59 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
+for (const staleRestoring of [false, true]) {
+  test(`saved result retry survives rehydration${staleRestoring ? ' with a stale restoring marker' : ''}`, { skip: process.env.KNOWLEDGEHUB_TEST_BROWSER !== '1' }, async t => {
+    const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.tmpdir(), 'knowledgehub-phase1-ui-tools/node_modules/playwright'));
+    const browser = await chromium.launch({ executablePath: process.env.TEST_BROWSER_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+    t.after(() => browser.close());
+    const page = await browser.newPage({ viewport: staleRestoring ? { width: 390, height: 844 } : { width: 1440, height: 1000 } });
+    page.setDefaultTimeout(5000);
+    const failures = []; page.on('pageerror', error => failures.push(error.message));
+    await page.route('http://localhost:12345/**', route => route.fulfill({ contentType: 'text/html', body: '<main></main>' }));
+    await page.goto('http://localhost:12345/');
+    const install = async html => {
+      await page.addStyleTag({ content: fs.readFileSync(path.resolve('src/frontend/css/workflow_plugins.css'), 'utf8') });
+      await page.evaluate(({ html, dark }) => {
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.querySelector('main').innerHTML = html;
+        const completed = { id: 'saved-report', templateId: 'fixture/report', conversationId: 'fixture-chat', name: 'Saved report', status: 'SUCCEEDED', revision: 2, result: { value: 'completed' }, steps: [] };
+        window.reads = 0; window.retryRequests = [];
+        window.fetch = async (url, options = {}) => {
+          if (options.method === 'POST') {
+            const body = JSON.parse(options.body); window.retryRequests.push(body);
+            return { ok: true, json: async () => ({ execution: { ...completed, id: 'retry-report', parentRunId: body.parentRunId, status: 'WAITING_INPUT', result: null,
+              missingInputs: [{ key: 'query', label: 'Identifier', schema: { type: 'string' } }] } }) };
+          }
+          window.reads++;
+          await new Promise(resolve => setTimeout(resolve, 100));
+          return { ok: true, json: async () => ({ execution: completed }) };
+        };
+        // Page chat serializes the bubble synchronously in this event handler.
+        document.querySelector('article').addEventListener('workflow-execution-updated', event => {
+          window.savedReply = event.currentTarget.outerHTML;
+        });
+      }, { html, dark: staleRestoring });
+      await page.addScriptTag({ content: fs.readFileSync(path.resolve('src/frontend/js/modules/workflow_plugins.js'), 'utf8') });
+      await page.evaluate(() => Promise.all([window.restoreWorkflowExecutions(document), window.restoreWorkflowExecutions(document)]));
+    };
+    await install(`<article><div class="workflow-execution-panel" data-automation-run="saved-report"${staleRestoring ? ' data-restoring="true"' : ''}><strong>Saved report</strong><button type="button">Làm lại</button></div></article>`);
+    assert.equal(await page.evaluate(() => window.reads), 1, 'Restoration uses a live request, not a persisted DOM loading marker, and deduplicates concurrent calls');
+    const saved = await page.evaluate(() => window.savedReply);
+    assert.ok(saved && !saved.includes('data-restoring'), 'History must not serialize transient restoration state');
+    await page.reload();
+    await install(saved);
+    await page.getByRole('button', { name: 'Làm lại', exact: true }).click();
+    await page.locator('[data-automation-run="retry-report"] input').waitFor();
+    const requests = await page.evaluate(() => window.retryRequests);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].parentRunId, 'saved-report');
+    assert.equal(requests[0].conversationId, 'fixture-chat');
+    assert.equal(requests[0].templateId, 'fixture/report');
+    assert.ok(requests[0].requestId);
+    assert.deepEqual(failures, []);
+  });
+}
+
 test('repeated messages keep one actionable panel per run and archived panels survive reload', { skip: process.env.KNOWLEDGEHUB_TEST_BROWSER !== '1' }, async t => {
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.tmpdir(), 'knowledgehub-phase1-ui-tools/node_modules/playwright'));
   const browser = await chromium.launch({ executablePath: process.env.TEST_BROWSER_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });

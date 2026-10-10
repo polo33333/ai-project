@@ -3,6 +3,7 @@
   const state = { packages: [], templates: [], runs: [], settings: {}, admin: false, search: '', domain: '', layout: 'grid' };
   const views = new Map();
   const restoringRuns = new Map();
+  const restoringPanels = new WeakSet();
   const chatScrollStates = new WeakMap();
   const observedChatPanels = new WeakSet();
   function followChatPanel(node) {
@@ -1016,7 +1017,22 @@
         caption.prepend(icon);
       }
     };
-    if (schema.enum || schema.type === 'boolean') {
+    if (schema.type === 'boolean') {
+      const group = document.createElement('fieldset'); group.className = 'wp-boolean-field';
+      const legend = document.createElement('legend'); legend.textContent = label; group.appendChild(legend);
+      const choices = document.createElement('div'); choices.className = 'wp-boolean-choices'; group.appendChild(choices);
+      const name = `wp-boolean-${crypto.randomUUID()}`;
+      const values = schema.enum || [true, false];
+      values.forEach(value => {
+        const card = document.createElement('label'); card.className = 'wp-boolean-choice';
+        const input = document.createElement('input'); input.type = 'radio'; input.name = name; input.value = String(value); input.required = required;
+        const caption = document.createElement('span'); caption.textContent = value ? 'Có' : 'Không';
+        card.append(input, caption); choices.appendChild(card);
+      });
+      container.appendChild(group);
+      return () => { const selected = choices.querySelector('input:checked'); return selected ? selected.value === 'true' : undefined; };
+    }
+    if (schema.enum) {
       const wrapper = document.createElement('label'); wrapper.textContent = label;
       const input = document.createElement('select'), values = schema.enum || [true, false];
       input.appendChild(new Option('Chọn…', ''));
@@ -1047,6 +1063,7 @@
     }
     const input = field(container, label, '', { type: schema.format === 'date' ? 'date' : schema.format === 'date-time' ? 'datetime-local' : ['number', 'integer'].includes(schema.type) ? 'number' : 'text' });
     input.required = required;
+    if (['number', 'integer'].includes(schema.type)) input.placeholder = '0';
     decorateLabel(input.parentElement);
     for (const [key, attr] of [['minimum', 'min'], ['maximum', 'max'], ['minLength', 'minLength'], ['maxLength', 'maxLength']]) if (schema[key] !== undefined) input[attr] = schema[key];
     if (schema.type === 'number') input.step = 'any';
@@ -1144,6 +1161,7 @@
   }
   function archivePanel(node, execution, latest) {
     views.delete(node);
+    delete node.dataset.restoring;
     node.dataset.executionArchived = 'true';
     node.replaceChildren();
     const message = document.createElement('span');
@@ -1156,6 +1174,9 @@
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   function mount(node, execution) {
+    // Chat history snapshots this node during workflow-execution-updated.
+    // Loading state belongs to the live request, never to the saved markup.
+    delete node.dataset.restoring;
     const settleScroll = followChatPanel(node);
     node.dataset.automationRun = execution.id || '';
     if (execution.id) {
@@ -1286,7 +1307,10 @@
         if (link) link.onclick = () => focusCurrentPanel(node.dataset.automationRun);
         continue;
       }
-      if (!node.dataset.automationRun || node.dataset.executionArchived || views.has(node) || node.dataset.restoring) continue;
+      // Old saved replies may contain data-restoring="true" without a live
+      // request or click handlers. Only the in-memory set can guard reentry.
+      if (!node.dataset.automationRun || node.dataset.executionArchived || views.has(node) || restoringPanels.has(node)) continue;
+      restoringPanels.add(node);
       node.dataset.restoring = 'true';
       node.setAttribute('aria-busy', 'true');
       node.querySelectorAll('button, input, select, textarea').forEach(control => { control.disabled = true; });
@@ -1300,7 +1324,7 @@
         }
         try { const { execution } = await request; if (node.isConnected) mount(node, execution); }
         catch (_) { if (!node.querySelector('strong')) node.textContent = 'Không thể tải tác vụ đã lưu. Đang thử lại…'; }
-        finally { delete node.dataset.restoring; }
+        finally { restoringPanels.delete(node); delete node.dataset.restoring; }
       })());
     }
     await Promise.all(jobs);

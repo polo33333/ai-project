@@ -709,6 +709,15 @@
 :root[data-theme="dark"] .wp-step-check { color:#4ade80; }
 
 /* Chat workflow forms and data results. */
+.wp-boolean-field { min-width:0; margin:0; padding:0; border:0; }
+.wp-boolean-field > legend { padding:0; margin-bottom:10px; font-size:13px; line-height:1.6; font-weight:500; }
+.wp-boolean-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.workflow-execution-panel .wp-boolean-choice { display:flex; align-items:center; justify-content:center; gap:8px; margin:0; min-height:44px; box-sizing:border-box; padding:8px 12px; border:1px solid var(--border-color,#dbe3ef); border-radius:9px; background:var(--bg-primary,#fff); cursor:pointer; }
+.workflow-execution-panel .wp-boolean-choice:has(input:checked) { border-color:#8b7cf8; background:#f3f0ff; color:#6246db; box-shadow:0 0 0 1px #8b7cf8; }
+.workflow-execution-panel .wp-boolean-choice input[type="radio"] { width:18px; height:18px; margin:0; padding:0; accent-color:#7251e8; flex-shrink:0; }
+.wp-boolean-choice:has(input:focus-visible) { outline:2px solid #a78bfa; outline-offset:3px; }
+:root[data-theme="dark"] .workflow-execution-panel .wp-boolean-choice { background:#1b273b; }
+:root[data-theme="dark"] .workflow-execution-panel .wp-boolean-choice:has(input:checked) { background:#302744; color:#d2c4ff; }
 .wp-execution-header { display:flex; align-items:center; gap:12px; padding-bottom:16px; border-bottom:1px solid var(--border-color,#e8edf4); }
 .wp-execution-icon { display:grid; place-items:center; flex:0 0 38px; height:38px; border-radius:11px; background:#f0edff; color:#7057d9; }
 .wp-execution-title { flex:1; min-width:0; font-size:14px; line-height:1.55; font-weight:600; overflow-wrap:anywhere; }
@@ -723,6 +732,9 @@
 .wp-form-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:18px; }
 .workflow-execution-panel .wp-form-fields > label { margin:0; gap:8px; font-size:13px; font-weight:500; line-height:1.6; align-content:start; grid-template-rows:minmax(24px,auto) 44px auto; }
 .workflow-execution-panel .wp-form-fields > fieldset { grid-column:1 / -1; }
+.workflow-execution-panel .wp-form-fields > .wp-boolean-field { grid-column:auto; border:0; padding:0; margin:0; }
+.workflow-execution-panel .wp-form-fields .wp-boolean-choice input[type="radio"] { width:16px; height:16px; min-height:0; padding:0; border-radius:50%; box-shadow:none; outline:none; }
+.workflow-execution-panel .wp-form-fields .wp-boolean-choice input[type="radio"]:focus { box-shadow:none; outline:none; }
 .workflow-execution-panel .wp-input-caption { display:flex; align-items:flex-start; gap:9px; min-width:0; }
 .workflow-execution-panel .wp-input-icon { display:grid; place-items:center; flex:0 0 28px; height:28px; margin-top:-3px; border-radius:8px; background:var(--primary-light,#eeecff); color:var(--primary,#7057d9); font-size:12px; }
 .workflow-execution-panel .wp-input-control { display:block; position:relative; width:100%; min-width:0; }
