@@ -359,12 +359,12 @@ class QdrantService {
       }
       const vectors = [];
       for (let start = 0; start < chunks.length; start += 32) {
-        vectors.push(...await this.embedTexts(chunks.slice(start, start + 32).map(text => `${document.title}\n${text}`)));
+        vectors.push(...await this.embedTexts(chunks.slice(start, start + 32).map(chunk => `${document.title}\n${typeof chunk === 'string' ? chunk : chunk.text}`)));
       }
-      const points = chunks.map((text, index) => ({
+      const points = chunks.map((chunk, index) => ({
         id: require('crypto').randomUUID(),
         vector: vectors[index],
-        payload: { type: 'document_chunk', documentId: document.id, title: document.title, fileType: document.fileType, category: document.category, chunkIndex: index, fullText: text }
+        payload: { ...(typeof chunk === 'string' ? {} : chunk), type: 'document_chunk', documentId: document.id, title: document.title, fileType: document.fileType, category: document.category, chunkIndex: index, fullText: typeof chunk === 'string' ? chunk : chunk.text }
       }));
       for (let start = 0; start < points.length; start += 100) {
         await this.request(`/collections/${collection}/points?wait=true`, 'PUT', { points: points.slice(start, start + 100) });

@@ -57,6 +57,16 @@ class MemoryService {
 
   persist() { this._save(this.store); }
 
+  setDocumentState(sessionId, accountId, state) {
+    const session = this.getSession(sessionId, Boolean(state), accountId);
+    if (!session) return;
+    if (!state && !session.documentState) return;
+    session.documentState = state;
+    session.updatedAt = new Date().toISOString();
+    this.pruneSessions();
+    this.persist();
+  }
+
   getSession(sessionId, create = false, accountId = null) {
     const id = this.normalizeSessionId(sessionId);
     if (!id) return null;

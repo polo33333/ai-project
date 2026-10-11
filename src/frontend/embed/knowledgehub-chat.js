@@ -163,7 +163,7 @@
       const marker = Number(citation.marker) || 0;
       const chunk = (Number(citation.chunkIndex) || 0) + 1;
       const href = citation.sourceUrl ? new URL(citation.sourceUrl, `${apiBase}/`).href : '';
-      return `<article><div><b>[${marker}] ${escapeHtml(citation.title || 'Tài liệu')}</b><span>Đoạn ${chunk}</span>${href ? `<a href="${escapeHtml(href)}" download>Tải file gốc</a>` : ''}</div><blockquote>${escapeHtml(citation.excerpt || '')}</blockquote></article>`;
+      return `<article><div><b>[${marker}] ${escapeHtml(citation.title || 'Tài liệu')}</b><span>${escapeHtml(citation.locationLabel || `Đoạn ${chunk}`)}</span>${href ? `<a href="${escapeHtml(href)}" download>Tải file gốc</a>` : ''}</div><blockquote>${escapeHtml(citation.excerpt || '')}</blockquote></article>`;
     }).join('');
     const label = verified.length ? 'Đoạn nguồn theo trích dẫn' : 'Các đoạn đã cung cấp cho AI';
     const note = verified.length ? '' : '<p>Model chưa gắn marker; đây là evidence thực tế trong ngữ cảnh.</p>';

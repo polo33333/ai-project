@@ -265,6 +265,94 @@ test('selected knowledge bypasses workflow/schema and excludes old history even 
   assert.equal(flowCalls.mock.callCount(), 2);
 });
 
+test('selected document follow-up persists ordered evidence and resolves it for retrieval and prompt', async t => {
+  const memory = require('../src/backend/memory_core').memoryService;
+  const library = require('../src/backend/knowledge_core/services/library_service');
+  const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+  const selected = { id: 'followup-test', name: 'Knowledge', model: 'test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', () => selected);
+  t.mock.method(providers, 'getActiveProvider', () => selected);
+  t.mock.method(library, 'getDocuments', () => [{ id: 'followup-doc', revision: 'r1' }]);
+  const queries = [];
+  t.mock.method(retrieval, 'search', async (query, options) => {
+    queries.push(query);
+    assert.deepEqual(options.documentIds, ['followup-doc']);
+    return { results: [{ payload: { documentId: 'followup-doc', title: 'Đăng ký', revision: 'r1', chunkId: 'followup-doc:r1:0', chunkIndex: 0,
+      fullText: 'Hồ sơ cần HD001 và HD002. Thiếu HD002 thì bổ sung.' } }], mode: 'hybrid' };
+  });
+  const requests = [];
+  t.mock.method(require('../src/backend/agent_core').defaultHarness, 'run', async request => {
+    requests.push(request);
+    return { replyText: requests.length === 1 ? '1. HD001 [1]\n2. HD002 [1]' : 'Thiếu HD002 thì bổ sung [1]',
+      toolCalls: [], trace: { completionStatus: 'SUCCESS', training: { responseEvaluation: { valid: true } } } };
+  });
+  const options = { providerId: selected.id, knowledgeSourceIds: ['followup-doc'],
+    session: { id: 'followup-quality-session', accountId: 'owner' }, permissions: ['knowledge:read'] };
+  t.after(() => memory.clearSession(options.session.id, 'owner'));
+  await core.chat('Đăng ký cần giấy tờ gì?', options);
+  assert.equal(memory.getSession(options.session.id, false, 'owner').documentState.lists[0][1].ordinal, 2);
+  const result = await core.chat('Cái thứ hai nếu thiếu thì sao?', { ...options, history: [{ role: 'assistant', content: 'OLD_UNVERIFIED_HISTORY' }] });
+  assert.equal(result.question, 'Cái thứ hai nếu thiếu thì sao?');
+  assert.match(queries[1], /HD002/);
+  assert.doesNotMatch(queries[1], /HD001/);
+  assert.match(requests[1].messages[0].content, /Tham chiếu đã giải/);
+  assert.equal(requests[1].messages.length, 2);
+  assert.doesNotMatch(JSON.stringify(requests[1].messages), /OLD_UNVERIFIED_HISTORY/);
+  const ambiguous = await core.chat('Cái thứ năm thì sao?', options);
+  assert.equal(ambiguous.answerDisposition, 'clarify');
+  assert.equal(queries.length, 2);
+  assert.equal(requests.length, 2);
+  await core.chat('Hướng dẫn hủy hồ sơ?', options);
+  assert.equal(queries.at(-1), 'Hướng dẫn hủy hồ sơ?');
+});
+
+for (const pageInfo of [
+  { pageCount: 8, pageCountSource: 'pdf_pages' },
+  { pageCount: 12, pageCountSource: 'word_saved_metadata' }, null
+]) {
+test(`document page-count follow-up resolves the actually cited document (${pageInfo?.pageCountSource || 'unknown'})`, async t => {
+  const memory = require('../src/backend/memory_core').memoryService;
+  const library = require('../src/backend/knowledge_core/services/library_service');
+  const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+  const provider = { id: 'doc-metadata-test', name: 'Knowledge', model: 'test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
+  t.mock.method(providers, 'getProviderForExecution', () => provider);
+  t.mock.method(providers, 'getActiveProvider', () => provider);
+  t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', async () => ({ flow: 'knowledge' }));
+  const docs = [{ id: 'app-manual', title: 'IPMS.docx', revision: 'r1', fileType: 'DOCX' }, { id: 'other', title: 'Other.pdf', revision: 'r2' }];
+  t.mock.method(library, 'getDocuments', () => docs);
+  t.mock.method(library, 'getPageInfo', id => { assert.equal(id, 'app-manual'); return pageInfo; });
+  const search = t.mock.method(retrieval, 'search', async () => ({ results: docs.map(document => ({ payload: {
+    documentId: document.id, title: document.title, revision: document.revision, chunkIndex: 0,
+    chunkId: `${document.id}:${document.revision}:0`, fullText: 'Tải ứng dụng từ Google Play hoặc App Store.'
+  } })), mode: 'hybrid' }));
+  const harness = t.mock.method(require('../src/backend/agent_core').defaultHarness, 'run', async () => ({
+    replyText: '1. Android:\n- Cài từ Google Play [1]\n2. iOS:\n- Cài từ App Store [1]', toolCalls: [],
+    trace: { completionStatus: 'SUCCESS', training: { responseEvaluation: { valid: true } } }
+  }));
+  const options = { providerId: provider.id, session: { id: `page-followup-${pageInfo?.pageCount || 'unknown'}`, accountId: 'owner' }, permissions: ['knowledge:read'] };
+  t.after(() => memory.clearSession(options.session.id, 'owner'));
+  await core.chat('Hướng dẫn tải ứng dụng IPMS', options);
+  // A follow-up must not depend on a model classifier returning knowledge.
+  t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', async () => { throw new Error('Document memory must be checked before flow classification'); });
+  const question = pageInfo?.pageCountSource === 'word_saved_metadata' ? 'tl trên có mấy trang' : 'tài liệu trên có mấy trang';
+  const result = await core.chat(question, options);
+  assert.equal(result.success, true);
+  assert.match(result.replyText, /IPMS\.docx/);
+  assert.notEqual(result.answerDisposition, 'clarify');
+  assert.equal(search.mock.callCount(), 1);
+  assert.equal(harness.mock.callCount(), 1);
+  if (pageInfo) {
+    assert.match(result.replyText, new RegExp(`${pageInfo.pageCount} trang`));
+    assert.equal(result.citations[0].documentId, 'app-manual');
+  } else {
+    assert.equal(result.answerDisposition, 'no_evidence');
+    assert.match(result.replyText, /chưa có thông tin số trang đáng tin cậy/);
+    assert.doesNotMatch(result.replyText, /\d+ trang/);
+  }
+  if (pageInfo?.pageCountSource === 'word_saved_metadata') assert.match(result.replyText, /có thể thay đổi/);
+});
+}
+
 test('early workflow replies include flow selection usage exactly once', async t => {
   const selected = { id: 'usage-test', name: 'Usage', model: 'chat-test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
   t.mock.method(providers, 'getProviderForExecution', () => selected);

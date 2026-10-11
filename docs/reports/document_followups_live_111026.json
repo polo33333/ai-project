@@ -1,0 +1,185 @@
+{
+  "generatedAt": "2026-10-11T12:45:56.685Z",
+  "mode": "live_core",
+  "turns": [
+    {
+      "turn": 1,
+      "question": "Dựa trên kho tri thức, hướng dẫn tải và cài đặt ứng dụng IPMS theo tài liệu TPSOFT_HDSD_IPMS_APP__v1.0.docx.",
+      "passed": true,
+      "completionStatus": "SUCCESS",
+      "answerDisposition": null,
+      "reply": "Chào bạn, tôi là KAI. Dưới đây là hướng dẫn chi tiết cách tải và cài đặt ứng dụng IPMS dựa trên tài liệu của doanh nghiệp:\n\n**Đối với các thiết bị chạy hệ điều hành Android:**\n* Truy cập ứng dụng **Google Play** trên thiết bị, tìm kiếm ứng dụng với tên: **IPMS** hoặc truy cập trực tiếp qua đường dẫn: [Google Play - IPMS](https://play.google.com/store/apps/details?id=com.tpsoft.ipms) [1].\n\n**Đối với các thiết bị chạy hệ điều hành iOS:**\n* Truy cập ứng dụng **App Store** trên thiết bị, tìm kiếm ứng dụng với tên: **IPMS** hoặc truy cập trực tiếp qua đường dẫn: [App Store - IPMS](https://apps.apple.com/us/app/ipms/id6468434643) [1].\n\nSau khi tải và cài đặt thành công, ứng dụng IPMS với biểu tượng tương ứng sẽ xuất hiện trên thiết bị của bạn để bắt đầu sử dụng [1].",
+      "citations": [
+        {
+          "documentId": "lib-1786363759472-471",
+          "title": "TPSOFT_HDSD_IPMS_APP__v1.0.docx"
+        }
+      ],
+      "resolution": {
+        "resolvedQuery": "Dựa trên kho tri thức, hướng dẫn tải và cài đặt ứng dụng IPMS theo tài liệu TPSOFT_HDSD_IPMS_APP__v1.0.docx.",
+        "referencedEvidenceIds": [],
+        "ambiguities": [],
+        "resolutionMethod": "original"
+      },
+      "routingSource": "local_tev1",
+      "durationMs": 3920
+    },
+    {
+      "turn": 2,
+      "question": "tl trên có mấy trang?",
+      "passed": true,
+      "completionStatus": "SUCCESS",
+      "answerDisposition": "answered",
+      "reply": "Tài liệu “TPSOFT_HDSD_IPMS_APP__v1.0.docx” có 8 trang theo thông tin được lưu trong file Word. Số trang có thể thay đổi khi mở bằng bố cục hoặc phông chữ khác. [1]",
+      "citations": [
+        {
+          "documentId": "lib-1786363759472-471",
+          "title": "TPSOFT_HDSD_IPMS_APP__v1.0.docx"
+        }
+      ],
+      "resolution": {
+        "resolvedQuery": "tl trên có mấy trang?\nNgữ cảnh tham chiếu: TPSOFT_HDSD_IPMS_APP__v1.0.docx",
+        "referencedEvidenceIds": [
+          "lib-1786363759472-471:1363aad55cc88d7baad8995c1add5ef58c1adfceda0bf7d96b8a1505309b9d80:1"
+        ],
+        "ambiguities": [],
+        "resolutionMethod": "deterministic",
+        "referencedDocumentIds": [
+          "lib-1786363759472-471"
+        ]
+      },
+      "routingSource": "document_followup",
+      "durationMs": 374
+    },
+    {
+      "turn": 3,
+      "question": "Trong tài liệu đó, cách đăng nhập ứng dụng IPMS như thế nào?",
+      "passed": true,
+      "completionStatus": "SUCCESS",
+      "answerDisposition": null,
+      "reply": "Chào bạn, để đăng nhập ứng dụng IPMS, bạn thực hiện như sau:\n\nTruy cập vào ứng dụng IPMS, tại màn hình xuất hiện, bạn tiến hành đăng nhập bằng tài khoản và mật khẩu do quản trị hệ thống cung cấp [1].",
+      "citations": [
+        {
+          "documentId": "lib-1786363759472-471",
+          "title": "TPSOFT_HDSD_IPMS_APP__v1.0.docx"
+        }
+      ],
+      "resolution": {
+        "resolvedQuery": "Trong tài liệu đó, cách đăng nhập ứng dụng IPMS như thế nào?\nNgữ cảnh tham chiếu: TPSOFT_HDSD_IPMS_APP__v1.0.docx",
+        "referencedEvidenceIds": [
+          "lib-1786363759472-471:1363aad55cc88d7baad8995c1add5ef58c1adfceda0bf7d96b8a1505309b9d80:1"
+        ],
+        "ambiguities": [],
+        "resolutionMethod": "deterministic",
+        "referencedDocumentIds": [
+          "lib-1786363759472-471"
+        ]
+      },
+      "routingSource": "document_followup",
+      "durationMs": 2359
+    },
+    {
+      "turn": 4,
+      "question": "file đó bao nhiêu trang?",
+      "passed": true,
+      "completionStatus": "SUCCESS",
+      "answerDisposition": "answered",
+      "reply": "Tài liệu “TPSOFT_HDSD_IPMS_APP__v1.0.docx” có 8 trang theo thông tin được lưu trong file Word. Số trang có thể thay đổi khi mở bằng bố cục hoặc phông chữ khác. [1]",
+      "citations": [
+        {
+          "documentId": "lib-1786363759472-471",
+          "title": "TPSOFT_HDSD_IPMS_APP__v1.0.docx"
+        }
+      ],
+      "resolution": {
+        "resolvedQuery": "file đó bao nhiêu trang?\nNgữ cảnh tham chiếu: TPSOFT_HDSD_IPMS_APP__v1.0.docx",
+        "referencedEvidenceIds": [
+          "lib-1786363759472-471:1363aad55cc88d7baad8995c1add5ef58c1adfceda0bf7d96b8a1505309b9d80:2"
+        ],
+        "ambiguities": [],
+        "resolutionMethod": "deterministic",
+        "referencedDocumentIds": [
+          "lib-1786363759472-471"
+        ]
+      },
+      "routingSource": "document_followup",
+      "durationMs": 379
+    },
+    {
+      "turn": 5,
+      "question": "Theo kho tri thức, tóm tắt tài liệu Kich_ban_tich_hop_smartca_v4.1_thuong.pdf về tích hợp SmartCA.",
+      "passed": true,
+      "completionStatus": "SUCCESS",
+      "answerDisposition": null,
+      "reply": "Chào bạn, tôi là KAI - Trợ lý Dữ liệu Thông minh. Dưới đây là tóm tắt nội dung tài liệu hướng dẫn tích hợp VNPT SmartCA (`Kich_ban_tich_hop_smartca_v4.1_thuong.pdf`):\n\n**1. Tổng quan về tài liệu**\n* Tài liệu là hướng dẫn dành cho nhà phát triển (3rd Party) để tích hợp hệ thống ký số từ xa VNPT SmartCA theo văn bản 769/QĐ-BTTTT [2]. Phiên bản tài liệu là 4.0 / 4.0.0, được phát hành ngày 03/05/2024 bởi Tổng công ty Dịch vụ Viễn thông VNPT [2, 5].\n\n**2. Quản lý tài khoản**\n* **Tài khoản Nhà phát triển (3rd Party):** Các đơn vị đăng ký thông tin doanh nghiệp sẽ được cấp bộ thông tin kết nối gồm `Client_id` (định danh tài khoản doanh nghiệp) và `Client_secret` (mã bí mật xác thực) qua email [6].\n* **Tài khoản Người dùng cuối:** Cần cung cấp họ tên, số CCCD, email và số điện thoại để đăng ký, sau đó kích hoạt tài khoản thông qua app VNPT SmartCA [6].\n\n**3. Tích hợp ký số với SmartCA thông thường**\n* Phân hệ Gateway API sử dụng giao thức HTTPS và phương thức POST [3].\n* Quy trình tích hợp gồm 8 bước chính: Khách hàng upload tài liệu và yêu cầu ký $\\rightarrow$ Nhập tài khoản trên app $\\rightarrow$ Tạo giao dịch ký $\\rightarrow$ Gửi yêu cầu ký đến SmartCA qua API $\\rightarrow$ Khách hàng xác nhận qua app SmartCA $\\rightarrow$ Yêu cầu tải tài liệu $\\rightarrow$ Lấy thông tin giao dịch dựa vào `tranId` $\\rightarrow$ Xuất file đã ký cho khách hàng [3].\n\n**4. Tích hợp ký số với SmartCA tích hợp (SmartCA TH)**\n* SmartCA TH là loại tài khoản đầy đủ tính năng của SmartCA thông thường, có thêm tính năng **ký tự động mà không cần xác nhận trên app điện thoại** nếu người dùng cung cấp đủ thông tin (tài khoản, mật khẩu, TOTP hoặc OTP) [4].\n* Quy trình gồm 6 bước: Upload tài liệu $\\rightarrow$ Đăng nhập SmartCA (tài khoản, mật khẩu, TOTP/OTP) $\\rightarrow$ Tạo hash của file cần ký $\\rightarrow$ SmartCA TH tạo giao dịch và app gọi API xác nhận giao dịch (`signatures/confirm`) $\\rightarrow$ Nhận chữ ký trả về $\\rightarrow$ Thêm chữ ký vào file để thu được file hoàn chỉnh [4].\n\nNếu bạn cần chi tiết về từng API hoặc sample code cụ thể nào trong tài liệu, vui lòng cho tôi biết nhé!",
+      "citations": [
+        {
+          "documentId": "lib-1786285624502-831",
+          "title": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+        },
+        {
+          "documentId": "lib-1786285624502-831",
+          "title": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+        },
+        {
+          "documentId": "lib-1786285624502-831",
+          "title": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+        },
+        {
+          "documentId": "lib-1786285624502-831",
+          "title": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+        }
+      ],
+      "resolution": {
+        "resolvedQuery": "Theo kho tri thức, tóm tắt tài liệu Kich_ban_tich_hop_smartca_v4.1_thuong.pdf về tích hợp SmartCA.",
+        "referencedEvidenceIds": [],
+        "ambiguities": [],
+        "resolutionMethod": "original"
+      },
+      "routingSource": "local_tev1",
+      "durationMs": 5968
+    },
+    {
+      "turn": 6,
+      "question": "tl trên có bao nhiêu trang?",
+      "passed": true,
+      "completionStatus": "SUCCESS",
+      "answerDisposition": "answered",
+      "reply": "Tài liệu “Kich_ban_tich_hop_smartca_v4.1_thuong.pdf” có 19 trang. [1]",
+      "citations": [
+        {
+          "documentId": "lib-1786285624502-831",
+          "title": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+        }
+      ],
+      "resolution": {
+        "resolvedQuery": "tl trên có bao nhiêu trang?\nNgữ cảnh tham chiếu: Kich_ban_tich_hop_smartca_v4.1_thuong.pdf",
+        "referencedEvidenceIds": [
+          "lib-1786285624502-831:33173133ae3d3014597fcd91020723cae805b65d4e7ab471e3cad8b3d6c2c71a:0",
+          "lib-1786285624502-831:33173133ae3d3014597fcd91020723cae805b65d4e7ab471e3cad8b3d6c2c71a:6",
+          "lib-1786285624502-831:33173133ae3d3014597fcd91020723cae805b65d4e7ab471e3cad8b3d6c2c71a:7",
+          "lib-1786285624502-831:33173133ae3d3014597fcd91020723cae805b65d4e7ab471e3cad8b3d6c2c71a:14"
+        ],
+        "ambiguities": [],
+        "resolutionMethod": "deterministic",
+        "referencedDocumentIds": [
+          "lib-1786285624502-831"
+        ]
+      },
+      "routingSource": "document_followup",
+      "durationMs": 489
+    }
+  ],
+  "sources": [
+    {
+      "id": "lib-1786363759472-471",
+      "title": "TPSOFT_HDSD_IPMS_APP__v1.0.docx"
+    },
+    {
+      "id": "lib-1786285624502-831",
+      "title": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+    }
+  ],
+  "passed": 6,
+  "total": 6
+}

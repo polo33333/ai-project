@@ -1098,8 +1098,8 @@ function typeCopilotThinkingText(element, value, streamKey = null) {
   element._typingTarget = target;
   if (element._typingTimer || !target) return;
   element._typingTimer = setInterval(() => {
-    const remaining = element._typingTarget.length - element._typingIndex;
-    element._typingIndex += streaming ? Math.max(1, Math.ceil(remaining / 30)) : 1;
+    // Keep the same readable pace as the main chat, without backlog acceleration.
+    element._typingIndex += 1;
     const visible = element._typingTarget.slice(0, element._typingIndex);
     element.textContent = streaming && visible.length > 180 ? '…' + visible.slice(-180) : visible;
     if (streaming) element.scrollLeft = element.scrollWidth;
@@ -1107,7 +1107,7 @@ function typeCopilotThinkingText(element, value, streamKey = null) {
       clearInterval(element._typingTimer);
       element._typingTimer = null;
     }
-  }, 14);
+  }, streaming ? 1000 / 120 : 14);
 }
 
 async function fetchCopilotStreamingChat(payload, onProgress, signal = null) {
@@ -1320,7 +1320,7 @@ function renderVerifiedCitations(citations, validation = {}, supportingEvidence 
     const items = evidence.map(item => {
       const chunk = (Number(item.chunkIndex) || 0) + 1;
       const sourceLink = item.sourceUrl ? `<button type="button" class="chat-citation-open" data-document-id="${escapeCopilotHtml(item.documentId || '')}" data-title="${escapeCopilotHtml(item.title || '')}" data-chunk="${chunk}" data-excerpt="${encodeURIComponent(item.excerpt || '')}" data-source-url="${escapeCopilotHtml(item.sourceUrl)}" onclick="openKnowledgeCitation(this)"><i class="fa-solid fa-expand"></i><span>Xem nguồn</span></button>` : '';
-      return `<article class="chat-citation-item is-supporting"><div class="chat-citation-heading"><span class="chat-citation-marker"><i class="fa-solid fa-book-open"></i></span><strong>${escapeCopilotHtml(item.title || 'Tài liệu')}</strong><span>Đoạn ${chunk}</span>${sourceLink}</div><blockquote>${escapeCopilotHtml(item.excerpt || '')}</blockquote></article>`;
+      return `<article class="chat-citation-item is-supporting"><div class="chat-citation-heading"><span class="chat-citation-marker"><i class="fa-solid fa-book-open"></i></span><strong>${escapeCopilotHtml(item.title || 'Tài liệu')}</strong><span>${escapeCopilotHtml(item.locationLabel || `Đoạn ${chunk}`)}</span>${sourceLink}</div><blockquote>${escapeCopilotHtml(item.excerpt || '')}</blockquote></article>`;
     }).join('');
     return `<details class="chat-citations chat-supporting-evidence" open><summary><span><i class="fa-solid fa-book-open"></i>Các đoạn đã cung cấp cho AI</span><span>${evidence.length} đoạn tham khảo</span><i class="fa-solid fa-chevron-down"></i></summary><div class="chat-citation-note">Model chưa gắn marker vào từng nhận định; đây là các đoạn thực tế đã được đưa vào ngữ cảnh.</div><div class="chat-citation-list">${items}</div></details>`;
   }
@@ -1331,7 +1331,7 @@ function renderVerifiedCitations(citations, validation = {}, supportingEvidence 
       ? `<button type="button" class="chat-citation-open" data-document-id="${escapeCopilotHtml(citation.documentId || '')}" data-title="${escapeCopilotHtml(citation.title || '')}" data-chunk="${chunk}" data-excerpt="${encodeURIComponent(citation.excerpt || '')}" data-source-url="${escapeCopilotHtml(citation.sourceUrl)}" onclick="openKnowledgeCitation(this)" title="Xem nội dung nguồn"><i class="fa-solid fa-expand"></i><span>Xem nguồn</span></button>`
       : '';
     return `<article class="chat-citation-item" id="chat-citation-${marker}">
-      <div class="chat-citation-heading"><span class="chat-citation-marker">${marker}</span><strong>${escapeCopilotHtml(citation.title || 'Tài liệu')}</strong><span>Đoạn ${chunk}</span>${sourceLink}</div>
+      <div class="chat-citation-heading"><span class="chat-citation-marker">${marker}</span><strong>${escapeCopilotHtml(citation.title || 'Tài liệu')}</strong><span>${escapeCopilotHtml(citation.locationLabel || `Đoạn ${chunk}`)}</span>${sourceLink}</div>
       <blockquote>${escapeCopilotHtml(citation.excerpt || 'Không có nội dung trích dẫn.')}</blockquote>
     </article>`;
   }).join('');

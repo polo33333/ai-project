@@ -19,6 +19,10 @@ async function handle(req, res, pathname, context) {
     await controller.add(req, res, context);
     return true;
   }
+  if (pathname === '/api/library/reindex' && req.method === 'POST') {
+    await controller.reindex(req, res);
+    return true;
+  }
   if (pathname === '/api/library/delete' && req.method === 'POST') {
     await controller.remove(req, res, context);
     return true;

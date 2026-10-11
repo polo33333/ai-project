@@ -777,8 +777,8 @@ function typeThinkingText(element, value, streamKey = null) {
   element._typingTarget = target;
   if (element._typingTimer || !target) return;
   element._typingTimer = setInterval(() => {
-    const remaining = element._typingTarget.length - element._typingIndex;
-    element._typingIndex += streaming ? Math.max(1, Math.ceil(remaining / 30)) : 1;
+    // Keep a readable pace even when the provider sends a large burst.
+    element._typingIndex += 1;
     const visible = element._typingTarget.slice(0, element._typingIndex);
     element.textContent = streaming && visible.length > 180 ? '…' + visible.slice(-180) : visible;
     if (streaming) element.scrollLeft = element.scrollWidth;
@@ -786,7 +786,7 @@ function typeThinkingText(element, value, streamKey = null) {
       clearInterval(element._typingTimer);
       element._typingTimer = null;
     }
-  }, 14);
+  }, streaming ? 1000 / 120 : 14);
 }
 
 function addThinkingStep(containerId, icon, label, status = 'running', event = {}) {

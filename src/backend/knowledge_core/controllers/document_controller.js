@@ -6,6 +6,22 @@ function sendJson(res, statusCode, payload) {
 }
 
 class DocumentController {
+  async reindex(req, res) {
+    if (this.reindexRunning) {
+      sendJson(res, 409, { status: 'error', message: 'Thư viện đang được tái lập chỉ mục. Vui lòng chờ hoàn tất.' });
+      return;
+    }
+    this.reindexRunning = true;
+    try {
+      const summary = await libraryService.reindexAll();
+      sendJson(res, summary.queued ? 202 : 200, {
+        status: summary.queued ? 'queued' : 'completed', summary, documents: libraryService.getDocuments()
+      });
+    } catch (error) {
+      sendJson(res, 500, { status: 'error', message: error.message });
+    } finally { this.reindexRunning = false; }
+  }
+
   list(req, res) { sendJson(res, 200, libraryService.getDocuments()); }
 
   async add(req, res, context) {

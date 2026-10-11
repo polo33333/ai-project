@@ -11,6 +11,8 @@ const securityGuard     = require('./security_guard');
 const schemaContextService = require('./schema_context_service');
 const retrievalService = require('../knowledge_core/services/retrieval_service');
 const citationService = require('../knowledge_core/services/citation_service');
+const documentConversation = require('../memory_core/document_conversation');
+const libraryService = require('../knowledge_core/services/library_service');
 const sqlConnector = require('../services/sql_connector');
 const { dispatchToProvider } = require('./adapters');
 const { isLocalProvider } = require('../agent_core/harness/provider_classifier');
@@ -129,12 +131,22 @@ class IntelligentCore {
     let provider = routingContext.chatProviderSnapshot;
     const providerCandidates = [provider];
     const executionBudget = routingContext.executionBudget;
-    if (!selectedKnowledgeRequest && knowledgeSearchEnabled && !webSearch) {
+    const documentFollowup = knowledgeSearchEnabled && !webSearch && documentConversation.isDocumentFollowup(userMessage);
+    if (!selectedKnowledgeRequest && documentFollowup) {
+      // Resolve explicit document references before a context-free flow classifier
+      // can send the follow-up to chat/database and discard its document state.
+      documentScopedRequest = true;
+      routingContext.trace.flow = 'knowledge';
+      routingContext.trace.decisionSource = 'document_followup';
+      routingContext.trace.stages.push({ decisionSource: 'document_followup', status: 'resolved', calls: 0,
+        httpRequests: 0, decisionEvaluations: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+    } else if (!selectedKnowledgeRequest && knowledgeSearchEnabled && !webSearch) {
       try {
         const flow = await chatRouter.classifyFlow(userMessage, { ...options, routingContext,
           onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); } });
         documentScopedRequest = flow.flow === 'knowledge';
         if (flow.quickGreeting) {
+          memoryService.setDocumentState(options.session?.id, options.session?.accountId || null, null);
           Object.assign(routingContext.trace, { route: 'chat', quickReplyKind: 'greeting' });
           return { success: true, replyText: 'Chào bạn! Bạn muốn tra cứu thông tin gì?',
             executionMode: 'chat', usedProvider: chatRouter.publicProvider(provider),
@@ -186,6 +198,7 @@ class IntelligentCore {
       onWorkflowUsage: usage => { collectUsage(usage); options.onWorkflowUsage?.(usage); }
     });
     if (workflowResponse) {
+      memoryService.setDocumentState(options.session?.id, options.session?.accountId || null, null);
       // The orchestrator's subtotal starts after flow selection. Add that earlier
       // usage once, rather than adding callbacks that already include routing.
       const workflowUsage = workflowResponse.tokenUsage || {};
@@ -196,11 +209,21 @@ class IntelligentCore {
       return { ...workflowResponse, tokenUsage: combined.available ? withModelTokenUsage(combined, routingContext.trace, provider.model) : null };
     }
     // All response paths carry the same routing trace, including chat errors.
-    const finish = response => ({ ...response,
-      tokenUsage: withModelTokenUsage(response.tokenUsage || (tokenUsage.available ? tokenUsage : null), routingContext.trace, provider.model),
-      trace: { ...(response.trace || {}), workflowRouting: routingContext.trace, executionBudget: executionBudget.snapshot() },
-      ...(response.success === false && tokenUsage.available ? { tokenUsage: withModelTokenUsage(tokenUsage, routingContext.trace, provider.model) } : {})
-    });
+    let documentTurn = null;
+    const finish = response => {
+      if (response.success && documentTurn && response.citations?.length && response.completionStatus === 'SUCCESS') {
+        memoryService.setDocumentState(options.session?.id, options.session?.accountId || null,
+          documentConversation.createState({ ...documentTurn, reply: response.replyText,
+            accountId: options.session?.accountId || null }));
+      } else if (response.success && !documentScopedRequest) {
+        memoryService.setDocumentState(options.session?.id, options.session?.accountId || null, null);
+      }
+      return { ...response,
+        tokenUsage: withModelTokenUsage(response.tokenUsage || (tokenUsage.available ? tokenUsage : null), routingContext.trace, provider.model),
+        trace: { ...(response.trace || {}), workflowRouting: routingContext.trace, executionBudget: executionBudget.snapshot() },
+        ...(response.success === false && tokenUsage.available ? { tokenUsage: withModelTokenUsage(tokenUsage, routingContext.trace, provider.model) } : {})
+      };
+    };
     emitProgress(options.onProgress, { type: 'request_started', label: 'Đang phân tích yêu cầu', status: 'running', icon: 'brain', providerName: provider?.name });
     const providerFallbacks = [];
 
@@ -296,8 +319,45 @@ class IntelligentCore {
     if (shouldSearchKnowledge) {
       emitProgress(options.onProgress, { type: 'knowledge_started', label: 'Đang tìm trong kho tri thức', status: 'running', icon: 'magnifying-glass' });
       contextSelection.knowledgeRouting = { searched: true, reason: knowledgeIntent.reason };
-      const retrieval = await retrievalService.search(userMessage, { limit: 6, documentIds: knowledgeSourceIds,
-        scopeMode: knowledgeSourceIds.length ? 'selected' : 'all_authorized' });
+      const currentScope = retrievalService.resolveScope(knowledgeSourceIds, knowledgeSourceIds.length ? 'selected' : 'all_authorized');
+      const resolution = documentConversation.resolve(userMessage, {
+        state: memoryService.getSession(options.session?.id, false, options.session?.accountId || null)?.documentState,
+        scope: currentScope, documents: libraryService.getDocuments(), accountId: options.session?.accountId || null
+      });
+      contextSelection.referenceResolution = resolution;
+      if (resolution.resolutionMethod === 'original' || resolution.ambiguities.includes('missing_or_stale_reference')) {
+        memoryService.setDocumentState(options.session?.id, options.session?.accountId || null, null);
+      }
+      if (resolution.ambiguities.length) {
+        const response = this._buildSuccessResponse(userMessage,
+          resolution.ambiguities.includes('ambiguous_document')
+            ? 'Câu trả lời trước trích dẫn nhiều tài liệu. Bạn muốn hỏi tài liệu nào? Hãy nêu tên tài liệu để mình tra đúng nguồn.'
+            : 'Bạn muốn hỏi tiếp về mục hoặc tài liệu nào? Hãy nêu tên hoặc trích lại mục đó để mình tra đúng nguồn.',
+          [], provider, tokenUsage, [], contextSelection, { completionStatus: 'PARTIAL' });
+        return finish({ ...response, answerDisposition: 'clarify' });
+      }
+      if (resolution.referencedDocumentIds?.length === 1
+          && documentConversation.isPageCountQuestion(userMessage)) {
+        const document = libraryService.getDocuments().find(item => String(item.id) === resolution.referencedDocumentIds[0]);
+        let pageInfo = null;
+        try { pageInfo = await libraryService.getPageInfo(document.id); } catch (_) { /* Missing original/metadata must not become a guessed count. */ }
+        const title = document.title || 'Tài liệu được trích dẫn';
+        const metadataText = pageInfo
+          ? `Tài liệu “${title}” có ${pageInfo.pageCount} trang${pageInfo.pageCountSource === 'word_saved_metadata' ? ' theo thông tin được lưu trong file Word. Số trang có thể thay đổi khi mở bằng bố cục hoặc phông chữ khác' : ''}.`
+          : `Mình xác định được tài liệu bạn hỏi là “${title}”, nhưng chưa có thông tin số trang đáng tin cậy. ${document.fileType === 'DOCX' ? 'File Word này chưa có số trang được lưu trong metadata; cần mở file gốc trong Word để xem số trang theo bố cục hiện tại.' : 'Cần đọc lại file gốc để xác định số trang.'}`;
+        contextSelection.knowledgeMode = 'document_metadata';
+        contextSelection.documentSources = [title];
+        contextSelection.citationEvidence = pageInfo ? [{ citationIndex: 1, payload: {
+          documentId: document.id, title, revision: document.revision || null,
+          chunkId: `${document.id}:metadata:pages`, fullText: metadataText
+        } }] : [];
+        return finish({ ...this._buildSuccessResponse(userMessage, pageInfo ? `${metadataText} [1]` : metadataText,
+          [], provider, tokenUsage, [], contextSelection, { completionStatus: 'SUCCESS' }),
+          answerDisposition: pageInfo ? 'answered' : 'no_evidence' });
+      }
+      const retrievalDocumentIds = resolution.referencedDocumentIds || knowledgeSourceIds;
+      const retrieval = await retrievalService.search(resolution.resolvedQuery, { limit: 6, documentIds: retrievalDocumentIds,
+        scopeMode: retrievalDocumentIds.length ? 'selected' : 'all_authorized' });
       const relevant = retrieval.results;
       if (relevant.length) {
         const contextWindow = Number(provider?.contextWindow || provider?.numCtx || process.env.LOCAL_MODEL_NUM_CTX || 16384);
@@ -308,6 +368,7 @@ class IntelligentCore {
         documentContext = packed.text;
         const packedHits = packed.selected;
         contextSelection.citationEvidence = packedHits;
+        documentTurn = { question: resolution.resolvedQuery, scope: currentScope, evidence: packedHits };
         contextSelection.documentSources = [...new Set(packedHits.map(hit => hit.payload?.title).filter(Boolean))];
         contextSelection.knowledgeMode = knowledgeSourceIds.length ? 'selected_hybrid' : retrieval.mode;
         contextSelection.graphActivated = retrieval.graphActivated;
@@ -337,6 +398,8 @@ class IntelligentCore {
       contextSelection.schemaContext = '';
     }
     const schemaContext = strictSelectedKnowledge ? '' : (contextSelection.schemaContext || '');
+    const referencePrompt = contextSelection.referenceResolution?.resolutionMethod === 'deterministic'
+      ? `\n\n# Tham chiếu đã giải cho câu hỏi hiện tại\n${contextSelection.referenceResolution.resolvedQuery}\nChỉ trả lời câu hỏi hiện tại; không trả lời lại câu hỏi trước.\n` : '';
     const knowledgePrompt = !documentContext && documentScopedRequest
       ? '\n\nNo matching document passages were found in the selected sources. Explain this in Vietnamese and ask the user to clarify. Do not answer using knowledge outside the selected sources.'
       : documentContext ? `
@@ -418,7 +481,7 @@ ${strictSelectedKnowledge
     const systemPrompt = `${aiPersonaService.buildSystemPrompt(
       schemaContext,
       effectiveUseTools ? toolRegistry.listTools(enabledToolNames) : []
-    )}${knowledgePrompt}${webPrompt}${memorySystemContext && !strictSelectedKnowledge ? `\n\n# Memory hội thoại\n${memorySystemContext}` : ''}`;
+    )}${knowledgePrompt}${referencePrompt}${webPrompt}${memorySystemContext && !strictSelectedKnowledge ? `\n\n# Memory hội thoại\n${memorySystemContext}` : ''}`;
 
     // ── Build messages array (OpenAI-compat) ──────────────────────────────
     let messages = strictSelectedKnowledge
@@ -677,6 +740,7 @@ ${strictSelectedKnowledge
         documentSources: contextSelection.documentSources || [],
         knowledgeMode: contextSelection.knowledgeMode || 'auto',
         knowledgeRouting: contextSelection.knowledgeRouting || null,
+        referenceResolution: contextSelection.referenceResolution || null,
         graphActivated: contextSelection.graphActivated === true,
         retrievalPipeline: contextSelection.retrievalPipeline || null,
         webSearch: contextSelection.webSearch || null,

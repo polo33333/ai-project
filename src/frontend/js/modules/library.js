@@ -1,6 +1,75 @@
 window.libraryDocuments = [];
 window.libraryActiveType = 'all';
 window.libraryViewMode = localStorage.getItem('libraryViewMode') || 'grid';
+let libraryReindexBusy = false;
+let libraryReindexConfirming = false;
+let libraryRefreshTimer = null;
+
+function updateLibraryReindexState() {
+  const pending = window.libraryDocuments.filter(item => ['Đang xử lý', 'Đang chờ thử lại'].includes(item.status)).length;
+  const button = document.getElementById('library-reindex-btn');
+  if (button) {
+    button.disabled = libraryReindexBusy || pending > 0 || !window.libraryDocuments.length;
+    button.setAttribute('aria-busy', String(libraryReindexBusy || pending > 0));
+    button.innerHTML = libraryReindexBusy || pending > 0
+      ? '<i class="fa-solid fa-spinner fa-spin"></i> Đang lập chỉ mục...'
+      : '<i class="fa-solid fa-arrows-rotate"></i> Tái lập chỉ mục';
+  }
+  clearTimeout(libraryRefreshTimer);
+  if (pending > 0) {
+    setLibraryReindexStatus(`Còn ${pending} tài liệu đang xử lý. Danh sách tự cập nhật; bạn có thể tiếp tục sử dụng ứng dụng.`);
+    libraryRefreshTimer = setTimeout(() => {
+      const view = document.getElementById('view-library');
+      if (view && view.style.display !== 'none') fetchLibraryDocuments();
+    }, 3000);
+  } else if (window.libraryReindexQueued) {
+    window.libraryReindexQueued = false;
+    const failed = window.libraryDocuments.filter(item => item.status !== 'Đã lập chỉ mục').length;
+    setLibraryReindexStatus(`Đã xử lý xong: ${window.libraryDocuments.length - failed}/${window.libraryDocuments.length} tài liệu đã lập chỉ mục.${failed ? ` Có ${failed} tài liệu chưa thành công; xem lỗi trên từng tài liệu.` : ''}`);
+  }
+}
+
+function setLibraryReindexStatus(message) {
+  const status = document.getElementById('library-reindex-status');
+  if (status) { status.hidden = !message; status.textContent = message; }
+}
+
+async function reindexLibraryDocuments() {
+  if (libraryReindexBusy || libraryReindexConfirming || !window.libraryDocuments.length
+      || window.libraryDocuments.some(item => ['Đang xử lý', 'Đang chờ thử lại'].includes(item.status))) return;
+  libraryReindexConfirming = true;
+  let confirmed;
+  try {
+    confirmed = await showUiConfirm(
+      `Đọc lại file gốc và tái lập chỉ mục toàn bộ ${window.libraryDocuments.length} tài liệu trong thư viện? Quá trình có thể mất thời gian tùy số lượng và dung lượng tài liệu.`,
+      { title: 'Xác nhận tái lập chỉ mục', confirmText: 'Tái lập chỉ mục', cancelText: 'Hủy', icon: 'fa-arrows-rotate' }
+    );
+  } finally { libraryReindexConfirming = false; }
+  if (!confirmed || libraryReindexBusy || !window.libraryDocuments.length
+      || window.libraryDocuments.some(item => ['Đang xử lý', 'Đang chờ thử lại'].includes(item.status))) return;
+  libraryReindexBusy = true;
+  updateLibraryReindexState();
+  setLibraryReindexStatus(`Đang đọc lại file gốc và tái lập chỉ mục ${window.libraryDocuments.length} tài liệu. Vui lòng chờ...`);
+  try {
+    const response = await fetch('/api/library/reindex', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Không thể tái lập chỉ mục.');
+    window.libraryDocuments = result.documents;
+    window.libraryReindexQueued = result.status === 'queued';
+    renderLibraryDocuments();
+    if (!window.libraryReindexQueued) {
+      const { indexed = 0, total = 0, failed = [] } = result.summary;
+      setLibraryReindexStatus(`Hoàn tất: ${indexed}/${total} tài liệu đã lập chỉ mục.${failed.length ? ` Có ${failed.length} tài liệu lỗi; xem chi tiết trên từng tài liệu.` : ''}`);
+      showToast(failed.length ? 'Một số tài liệu chưa lập chỉ mục được.' : 'Đã tái lập chỉ mục thư viện.', failed.length ? 'warn' : 'success');
+    }
+  } catch (error) {
+    setLibraryReindexStatus(error.message);
+    showToast(error.message, 'error', 'Tái lập chỉ mục');
+  } finally {
+    libraryReindexBusy = false;
+    updateLibraryReindexState();
+  }
+}
 
 function escapeLibraryHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function parseLibrarySize(size) { const m=String(size||'').match(/^([\d.]+)\s*(B|KB|MB|GB)$/i); return m ? Number(m[1])*({B:1,KB:1024,MB:1048576,GB:1073741824}[m[2].toUpperCase()]) : 0; }
@@ -8,9 +77,9 @@ function formatLibraryBytes(bytes) { if(!bytes)return '0 B'; const u=['B','KB','
 function getLibraryFileIcon(type) { return ({PDF:'fa-file-pdf',DOCX:'fa-file-word',XLSX:'fa-file-excel',XLS:'fa-file-excel',CSV:'fa-file-csv',SQL:'fa-database',TXT:'fa-file-lines',MD:'fa-file-code'})[String(type).toUpperCase()]||'fa-file'; }
 function getLibraryRagState(document) { const status=String(document?.status||'').toLowerCase(); if(status.includes('đã lập chỉ mục'))return{level:'ready',icon:'fa-circle-check',label:'Hybrid sẵn sàng'}; if(status.includes('qdrant')||status.includes('tái lập chỉ mục'))return{level:'degraded',icon:'fa-triangle-exclamation',label:Number(document?.chunksCount||0)>0?'Chỉ BM25':'Lỗi lập chỉ mục'}; if(status.includes('lỗi'))return{level:'error',icon:'fa-circle-xmark',label:'Lỗi xử lý'}; return{level:'processing',icon:'fa-clock',label:document?.status||'Đang xử lý'}; }
 
-async function fetchLibraryDocuments() { try { const r=await fetch('/api/library'); const d=await r.json(); if(!r.ok)throw new Error(d.message); window.libraryDocuments=Array.isArray(d)?d:[]; renderLibraryDocuments(); } catch(e) { document.getElementById('library-docs-grid').innerHTML=`<div class="library-empty error">${escapeLibraryHtml(e.message)}</div>`; } }
+async function fetchLibraryDocuments() { try { const r=await fetch('/api/library'); const d=await r.json(); if(!r.ok)throw new Error(d.message); window.libraryDocuments=Array.isArray(d)?d:[]; renderLibraryDocuments(); updateLibraryReindexState(); } catch(e) { document.getElementById('library-docs-grid').innerHTML=`<div class="library-empty error">${escapeLibraryHtml(e.message)}</div>`; } }
 function getFilteredLibraryDocuments() { const q=(document.getElementById('lib-search-input')?.value||'').toLowerCase(); let rows=window.libraryDocuments.filter(x=>(window.libraryActiveType==='all'||String(x.fileType).toUpperCase()===window.libraryActiveType)&&`${x.title} ${x.category}`.toLowerCase().includes(q)); const sort=document.getElementById('library-sort')?.value; if(sort==='name')rows.sort((a,b)=>a.title.localeCompare(b.title,'vi')); else if(sort==='size')rows.sort((a,b)=>(b.sizeBytes||parseLibrarySize(b.size))-(a.sizeBytes||parseLibrarySize(a.size))); else rows.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))); return rows; }
-function renderLibraryDocuments() { const root=document.getElementById('library-docs-grid'); if(!root)return; root.className=`library-docs-grid ${window.libraryViewMode}`; const rows=getFilteredLibraryDocuments(); const state=window.paginationState?.library||{currentPage:1,itemsPerPage:8}; const page=rows.slice((state.currentPage-1)*state.itemsPerPage,state.currentPage*state.itemsPerPage); root.innerHTML=page.length?page.map(x=>{const t=String(x.fileType||'FILE').toUpperCase();const rag=getLibraryRagState(x);return `<article class="library-doc-card" onclick="previewLibraryDocument('${escapeLibraryHtml(x.id)}')"><div class="library-card-preview type-${t.toLowerCase()}"><i class="fa-solid ${getLibraryFileIcon(t)}"></i><p>${escapeLibraryHtml(x.preview||'Bấm để xem nội dung đã trích xuất')}</p></div><div class="library-card-body"><div class="library-card-title"><i class="fa-solid ${getLibraryFileIcon(t)}"></i><strong title="${escapeLibraryHtml(x.title)}">${escapeLibraryHtml(x.title)}</strong><button onclick="event.stopPropagation();deleteLibraryDocument('${escapeLibraryHtml(x.id)}')"><i class="fa-solid fa-trash"></i></button></div><div class="library-card-meta"><span>${escapeLibraryHtml(t)} · ${escapeLibraryHtml(x.size||'-')}</span><span class="rag-${rag.level}" title="${escapeLibraryHtml(x.status||'')}"><i class="fa-solid ${rag.icon}"></i> ${escapeLibraryHtml(rag.label)}</span></div><div class="library-card-footer"><span>${Number(x.chunksCount||0)} chunks</span><span>${escapeLibraryHtml(new Date(x.updatedAt).toLocaleDateString('vi-VN'))}</span></div>${x.error?`<div class="library-card-error" title="${escapeLibraryHtml(x.error)}">${escapeLibraryHtml(x.error)}</div>`:''}</div></article>`}).join(''):'<div class="library-empty"><i class="fa-regular fa-folder-open"></i><strong>Chưa có tài liệu</strong><span>Hãy tải file lên để xây dựng kho tri thức.</span></div>'; updateLibraryStats(); document.getElementById('lib-docs-counter').textContent=`${rows.length} tài liệu`; if(typeof renderPaginationControls==='function')renderPaginationControls('library-pagination','library',rows.length,renderLibraryDocuments); }
+function renderLibraryDocuments() { const root=document.getElementById('library-docs-grid'); if(!root)return; root.className=`library-docs-grid ${window.libraryViewMode}`; const rows=getFilteredLibraryDocuments(); const state=window.paginationState?.library||{currentPage:1,itemsPerPage:8}; const page=rows.slice((state.currentPage-1)*state.itemsPerPage,state.currentPage*state.itemsPerPage); root.innerHTML=page.length?page.map(x=>{const t=String(x.fileType||'FILE').toUpperCase();const rag=getLibraryRagState(x);return `<article class="library-doc-card" onclick="previewLibraryDocument('${escapeLibraryHtml(x.id)}')"><div class="library-card-preview type-${t.toLowerCase()}"><i class="fa-solid ${getLibraryFileIcon(t)}"></i><p>${escapeLibraryHtml(x.preview||'Bấm để xem nội dung đã trích xuất')}</p></div><div class="library-card-body"><div class="library-card-title"><i class="fa-solid ${getLibraryFileIcon(t)}"></i><strong title="${escapeLibraryHtml(x.title)}">${escapeLibraryHtml(x.title)}</strong><button onclick="event.stopPropagation();deleteLibraryDocument('${escapeLibraryHtml(x.id)}')"><i class="fa-solid fa-trash"></i></button></div><div class="library-card-meta"><span>${escapeLibraryHtml(t)} · ${escapeLibraryHtml(x.size||'-')}</span><span class="rag-${rag.level}" title="${escapeLibraryHtml(x.status||'')}"><i class="fa-solid ${rag.icon}"></i> ${escapeLibraryHtml(rag.label)}</span></div><div class="library-card-footer"><span>${Number(x.chunksCount||0)} chunks</span><span>${escapeLibraryHtml(new Date(x.updatedAt).toLocaleDateString('vi-VN'))}</span></div>${x.error?`<div class="library-card-error" title="${escapeLibraryHtml(x.error)}">${escapeLibraryHtml(x.error)}</div>`:''}</div></article>`}).join(''):'<div class="library-empty"><i class="fa-regular fa-folder-open"></i><strong>Chưa có tài liệu</strong><span>Hãy tải file lên để xây dựng kho tri thức.</span></div>'; updateLibraryStats(); updateLibraryReindexState(); document.getElementById('lib-docs-counter').textContent=`${rows.length} tài liệu`; if(typeof renderPaginationControls==='function')renderPaginationControls('library-pagination','library',rows.length,renderLibraryDocuments); }
 function updateLibraryStats(){const d=window.libraryDocuments;const states=d.map(getLibraryRagState);document.getElementById('lib-stat-docs').textContent=d.length;document.getElementById('lib-stat-chunks').textContent=d.reduce((s,x)=>s+Number(x.chunksCount||0),0).toLocaleString('vi-VN');document.getElementById('lib-stat-size').textContent=formatLibraryBytes(d.reduce((s,x)=>s+Number(x.sizeBytes||parseLibrarySize(x.size)),0));document.getElementById('lib-stat-status').textContent=states.some(x=>x.level==='error')?'Có tài liệu lỗi':states.some(x=>x.level==='degraded')?'Một số tài liệu chỉ BM25':'Hybrid RAG sẵn sàng';}
 function filterLibraryDocs(){if(window.paginationState?.library)window.paginationState.library.currentPage=1;renderLibraryDocuments();}
 function filterLibraryCategory(type,button){window.libraryActiveType=type==='all'?'all':type;document.querySelectorAll('.library-tabs > button').forEach(x=>x.classList.remove('active'));button?.classList.add('active');filterLibraryDocs();}
@@ -25,3 +94,4 @@ async function previewLibraryDocument(id){openModal('library-preview-modal');con
 function closeLibraryPreview(){closeModal('library-preview-modal');}function handleLibraryPreviewBackdrop(e){if(e.target.id==='library-preview-modal')closeLibraryPreview();}
 async function deleteLibraryDocument(id){const item=window.libraryDocuments.find(x=>x.id===id);if(!item||!await showUiConfirm(`Xóa tài liệu "${item.title}"?`,{title:'Xóa tài liệu',confirmText:'Xóa tài liệu',tone:'danger'}))return;const r=await fetch('/api/library/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});const d=await r.json();if(!r.ok)return showToast(d.message,'error');window.libraryDocuments=d.documents;renderLibraryDocuments();showToast('Đã xóa tài liệu và vector liên quan.','info');}
 Object.assign(window,{fetchLibraryDocuments,renderLibraryDocuments,filterLibraryDocs,filterLibraryCategory,toggleLibraryView,openUploadLibraryModal,closeLibraryModal,handleLibraryModalBackdrop,handleLibraryFileSelection,submitLibraryDocument,previewLibraryDocument,closeLibraryPreview,handleLibraryPreviewBackdrop,deleteLibraryDocument});
+window.reindexLibraryDocuments = reindexLibraryDocuments;

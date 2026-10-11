@@ -91,6 +91,9 @@
 .library-form-field .form-label { display: block; margin-bottom: 6px; }
 .library-form-field .form-label span { color: #dc2626; }
 .library-upload-note { display: flex; gap: 8px; margin-top: 16px; padding: 10px 12px; border-radius: 9px; background: #eff6ff; color: #1d4ed8; font-size: 12px; line-height: 1.45; }
+#library-reindex-status { margin: 0 0 16px; }
+#library-reindex-status[hidden] { display: none; }
+:root[data-theme="dark"] #library-reindex-status { background: var(--dark-raised); color: var(--text-secondary); }
 .library-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
 @media (max-width: 760px) {

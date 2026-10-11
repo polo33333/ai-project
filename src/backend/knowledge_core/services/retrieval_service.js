@@ -4,7 +4,7 @@ const libraryService = require('./library_service');
 const qdrantService = require('../../services/qdrant_service');
 const { estimateTokens } = require('../../agent_core/harness/context_budget');
 
-const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const normalize = require('../../utils/lexical_normalize');
 const tokenize = value => normalize(value).match(/[a-z0-9_]{2,}/g) || [];
 
 function postJson(url, body, timeoutMs = 30000) {
@@ -44,11 +44,10 @@ class RetrievalService {
     if (!selected.size) return [];
     return libraryService.getDocuments().filter(document => selected.has(String(document.id))).flatMap(document => {
       try {
-        const { content } = libraryService.getContent(document.id);
-        return libraryService.chunkText(content).map((text, chunkIndex) => ({
-          id: `${document.id}:${chunkIndex}`,
-          text,
-          payload: { documentId: document.id, title: document.title, chunkIndex, fullText: text }
+        return libraryService.getChunks(document.id).map(chunk => ({
+          id: `${document.id}:${chunk.chunkIndex}`,
+          text: chunk.text,
+          payload: { ...chunk, documentId: document.id, title: document.title, fullText: chunk.text }
         }));
       } catch (_) { return []; }
     });
@@ -142,7 +141,9 @@ class RetrievalService {
     let usedTokens = 0;
     for (const hit of candidates) {
       const payload = hit.payload || {};
-      const marker = `[Tài liệu ${selected.length + 1}: ${payload.title || 'Không tên'} · đoạn ${Number(payload.chunkIndex || 0) + 1}]`;
+      const location = [payload.page && `trang ${payload.page}`, payload.sheet && `sheet ${payload.sheet}`,
+        payload.section, payload.rowStart && `dòng ${payload.rowStart}–${payload.rowEnd}`].filter(Boolean).join(' · ');
+      const marker = `[Tài liệu ${selected.length + 1}: ${payload.title || 'Không tên'} · đoạn ${Number(payload.chunkIndex || 0) + 1}${location ? ` · ${location}` : ''}]`;
       const content = `${marker}\n${payload.fullText || ''}`;
       const cost = estimateTokens(content) + 4;
       if (cost > tokenBudget - usedTokens) continue;
@@ -160,7 +161,9 @@ class RetrievalService {
     const corpus = this.buildCorpus(scope.documentIds);
     const vectorResults = await qdrantService.searchDocuments(query, candidateLimit, { documentIds: scope.documentIds });
     const allowed = new Set(scope.documentIds);
-    const dense = vectorResults.filter(item => allowed.has(String(item.payload?.documentId)))
+    const revisions = new Map(libraryService.getDocuments().map(document => [String(document.id), document.revision]));
+    const dense = vectorResults.filter(item => allowed.has(String(item.payload?.documentId))
+      && (!revisions.get(String(item.payload?.documentId)) || revisions.get(String(item.payload?.documentId)) === item.payload?.revision))
       .map(item => ({ ...item, id: `${item.payload?.documentId}:${item.payload?.chunkIndex}`, source: 'dense' }));
     const graph = this.graphSearch(query, corpus, candidateLimit);
     const fused = this.fuse([dense, this.bm25(query, corpus, candidateLimit), graph], candidateLimit);

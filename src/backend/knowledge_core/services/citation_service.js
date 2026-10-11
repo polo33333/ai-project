@@ -1,5 +1,12 @@
 const MAX_EXCERPT_CHARS = 520;
 
+function locator(payload) {
+  const label = [payload.page && `Trang ${payload.page}`, payload.sheet && `Sheet ${payload.sheet}`,
+    payload.section, payload.rowStart && `Dòng ${payload.rowStart}–${payload.rowEnd}`].filter(Boolean).join(' · ');
+  return { ...(label ? { locationLabel: label } : {}), ...Object.fromEntries(['page', 'sheet', 'section', 'rowStart', 'rowEnd', 'revision', 'chunkId']
+    .filter(key => payload[key] !== null && payload[key] !== undefined).map(key => [key, payload[key]])) };
+}
+
 function normalizeExcerpt(value, maxChars = MAX_EXCERPT_CHARS) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   if (text.length <= maxChars) return text;
@@ -7,7 +14,7 @@ function normalizeExcerpt(value, maxChars = MAX_EXCERPT_CHARS) {
   return `${shortened}…`;
 }
 
-const normalizeSearch = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+const normalizeSearch = require('../../utils/lexical_normalize');
 const searchTokens = value => [...new Set((normalizeSearch(value).match(/[a-z0-9]{3,}/g) || []))];
 
 function markerContext(replyText, marker) {
@@ -68,22 +75,24 @@ function buildVerifiedCitations(replyText, evidence = [], question = '') {
     const payload = hit?.payload || {};
     return {
       marker,
+      ...locator(payload),
       documentId: String(payload.documentId || ''),
       title: String(payload.title || 'Tài liệu không tên'),
       chunkIndex: Number(payload.chunkIndex || 0),
       excerpt: relevantExcerpt(payload.fullText, question, markerContext(replyText, marker)),
-      sourceUrl: payload.documentId ? `/api/library/${encodeURIComponent(payload.documentId)}/file` : null
+      sourceUrl: payload.documentId ? `/api/library/${encodeURIComponent(payload.documentId)}/file${payload.page ? `#page=${payload.page}` : ''}` : null
     };
   });
   const supportingEvidence = markers.length === 0 ? evidence.map(hit => {
     const payload = hit?.payload || {};
     return {
       marker: Number(hit.citationIndex) || 0,
+      ...locator(payload),
       documentId: String(payload.documentId || ''),
       title: String(payload.title || 'Tài liệu không tên'),
       chunkIndex: Number(payload.chunkIndex || 0),
       excerpt: relevantExcerpt(payload.fullText, question, replyText),
-      sourceUrl: payload.documentId ? `/api/library/${encodeURIComponent(payload.documentId)}/file` : null
+      sourceUrl: payload.documentId ? `/api/library/${encodeURIComponent(payload.documentId)}/file${payload.page ? `#page=${payload.page}` : ''}` : null
     };
   }) : [];
   return {
