@@ -1265,7 +1265,9 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true, ta
     if (record.html === html) return;
     record.html = html;
     const session = window.chatSessions?.find(item => item.messages.includes(record));
-    if (session) { session.updatedAt = Date.now(); saveChatSessions(); }
+    // Restoring or refreshing a workflow card is a presentation update. It
+    // must not move a conversation to the top merely because it was opened.
+    if (session) saveChatSessions();
   });
   window.restoreWorkflowExecutions?.(node);
   if (shouldScroll) container.scrollTop = container.scrollHeight;

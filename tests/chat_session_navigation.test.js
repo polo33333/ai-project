@@ -46,3 +46,23 @@ test('background replies and errors persist only to their owning session without
   assert.equal(a.messages.length, 2);
   assert.equal(saves, 2);
 });
+
+test('restoring workflow cards across sessions preserves activity time and sidebar ordering', () => {
+  const old = {id:'old',updatedAt:100,messages:[]}, latest = {id:'latest',updatedAt:200,messages:[]};
+  const record = {html:'stored workflow markup'};old.messages.push(record);
+  let listener, saves=0;
+  const node={outerHTML:'restored workflow markup',addEventListener(name,fn){listener=fn;},querySelector(){return null;}};
+  const sandbox=vm.createContext({window:{chatSessions:[old,latest]},record,node,saveChatSessions(){saves++;}});
+  const start=source.indexOf("  node.addEventListener('workflow-execution-updated'");
+  const end=source.indexOf('  window.restoreWorkflowExecutions?.(node);',start);
+  vm.runInContext(source.slice(start,end),sandbox);
+  listener({detail:{execution:{status:'WAITING_INPUT'}}});
+  assert.equal(record.html,'restored workflow markup');assert.equal(saves,1);
+  assert.equal(old.updatedAt,100);
+  listener({detail:{execution:{status:'WAITING_INPUT'}}});
+  assert.equal(saves,1);
+  node.outerHTML='workflow result refreshed';
+  listener({detail:{execution:{status:'SUCCEEDED'}}});
+  assert.equal(saves,2);assert.equal(old.updatedAt,100);
+  assert.deepEqual([old,latest].sort((a,b)=>b.updatedAt-a.updatedAt).map(item=>item.id),['latest','old']);
+});

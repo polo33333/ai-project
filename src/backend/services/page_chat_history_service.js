@@ -198,9 +198,11 @@ async function save(owner, {changes=[],deleted=[]}={}) {
           payload.messages.slice(previous.messages.length).some(message=>message.role==='user')) fail('CHAT_SESSION_LIMIT',409);
       if (!previous && (payload.messages.length>HARD_MESSAGES || bytes>HARD_BYTES)) fail('CHAT_SESSION_LIMIT',400);
       const sealed=JSON.stringify(encrypt(payload,context(owner,session.id)));
+      // Persisting restored markup or other metadata is not chat activity.
+      const activityChanged=Number.isFinite(Number(payload.updatedAt)) && Number(payload.updatedAt)>Number(previous?.updatedAt || 0);
       const result=version===0
         ? await client.query('INSERT INTO app.ui_chat_sessions(account_id,id,payload) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING version',[owner,session.id,sealed])
-        : await client.query('UPDATE app.ui_chat_sessions SET payload=$4,version=version+1,updated_at=now() WHERE account_id=$1 AND id=$2 AND version=$3 RETURNING version',[owner,session.id,version,sealed]);
+        : await client.query('UPDATE app.ui_chat_sessions SET payload=$4,version=version+1,updated_at=CASE WHEN $5::boolean THEN now() ELSE updated_at END WHERE account_id=$1 AND id=$2 AND version=$3 RETURNING version',[owner,session.id,version,sealed,activityChanged]);
       if (!result.rowCount) fail('CHAT_HISTORY_CONFLICT',409);
       versions[session.id]=result.rows[0].version;
     }

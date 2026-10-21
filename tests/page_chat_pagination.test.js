@@ -15,6 +15,7 @@ function fixture(options={}) {
   const rows=new Map();
   const key=(owner,id)=>owner+'/'+id;
   const pool={async query(sql,args=[]) {
+    options.onQuery?.(sql,args);
     if(sql.includes('pg_advisory')) return {rows:[]};
     if(sql.startsWith('SELECT')) {
       const values=args.length===2 ? [rows.get(key(...args))].filter(Boolean) : [...rows.values()].filter(row=>row.owner===args[0]);
@@ -48,6 +49,23 @@ function session(count=70) {
   const messages=Array.from({length:count},(_,i)=>({role:i%2?'assistant':'user',content:'message '+i,html:'<div>'+i+'</div>'}));
   return {id:'chat',version:0,title:'Test',messages,history:messages.map(({role,content})=>({role,content}))};
 }
+
+test('saving restored HTML preserves activity order while new messages advance it',async()=>{
+  const updates=[];
+  const api=fixture({onQuery(sql,args){if(sql.startsWith('UPDATE'))updates.push({sql,args});}});
+  const chat={...session(2),createdAt:100,updatedAt:200};
+  await api.save('a',{changes:[chat]});
+  let stored=(await api.list('a'))[0];
+  stored.messages[1].html='<div>Restored workflow card</div>';
+  await api.save('a',{changes:[stored]});
+  assert.equal(updates[0].args[4],false);
+  assert.match(updates[0].sql,/CASE WHEN \$5::boolean THEN now\(\) ELSE updated_at END/);
+  stored=(await api.list('a'))[0];assert.equal(stored.updatedAt,200);
+  stored.messages.push({role:'user',content:'New question',html:'<div>New question</div>'});
+  stored.history.push({role:'user',content:'New question'});stored.updatedAt=300;
+  await api.save('a',{changes:[stored]});
+  assert.equal(updates[1].args[4],true);
+});
 test('20-message pages cover the entire timeline without gaps and enforce account/version isolation',async()=> {
   const api=fixture(); await api.save('a',{changes:[session()]});
   let latest=(await api.list('a',true))[0];
