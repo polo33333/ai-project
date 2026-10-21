@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-ouptput/
 
 # Secrets and local environment (keep the example template)
 .env
@@ -17,6 +16,7 @@ ouptput/
 /ver/
 
 # Build, test and runtime output
+/output/
 /dist/
 /build/
 /coverage/
