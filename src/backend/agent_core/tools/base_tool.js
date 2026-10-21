@@ -11,6 +11,9 @@
  * }
  */
 
+const Ajv = require('ajv');
+const schemaValidator = new Ajv({ allErrors: true, strict: false, validateFormats: false });
+
 class BaseTool {
   /**
    * @param {object} options
@@ -27,7 +30,9 @@ class BaseTool {
     parameters = { type: 'object', properties: {}, required: [] },
     requiredPermissions = [],
     timeoutMs = 30000,
-    isDangerous = false
+    isDangerous = false,
+    outputSchema = null,
+    maxOutputBytes = 2 * 1024 * 1024
   }) {
     if (!name) throw new Error('Tool name is required');
     if (!description) throw new Error(`Description for tool "${name}" is required`);
@@ -38,6 +43,8 @@ class BaseTool {
     this.requiredPermissions = requiredPermissions;
     this.timeoutMs = timeoutMs;
     this.isDangerous = isDangerous;
+    this.outputSchema = outputSchema;
+    this.maxOutputBytes = maxOutputBytes;
   }
 
   /**
@@ -64,45 +71,12 @@ class BaseTool {
    * @returns {{ valid: boolean, errors?: Array<string> }}
    */
   validateArgs(args) {
-    if (!args || typeof args !== 'object') {
-      if (this.parameters?.required && this.parameters.required.length > 0) {
-        return { valid: false, errors: ['Tham số đầu vào phải là một đối tượng JSON hợp lệ.'] };
-      }
-      return { valid: true };
-    }
-
-    if (this.parameters?.required && Array.isArray(this.parameters.required)) {
-      const missing = this.parameters.required.filter(key => args[key] === undefined || args[key] === null || args[key] === '');
-      if (missing.length > 0) {
-        return {
-          valid: false,
-          errors: [`Thiếu tham số bắt buộc: ${missing.join(', ')}`]
-        };
-      }
-    }
-
-    // Kiểm tra kiểu dữ liệu cơ bản nếu có khai báo properties
-    if (this.parameters?.properties) {
-      for (const [propName, propDef] of Object.entries(this.parameters.properties)) {
-        const val = args[propName];
-        if (val !== undefined && val !== null) {
-          if (propDef.type === 'array' && !Array.isArray(val)) {
-            return { valid: false, errors: [`Trường "${propName}" phải là một mảng (Array).`] };
-          }
-          if (propDef.type === 'number' && (typeof val !== 'number' || isNaN(val))) {
-            return { valid: false, errors: [`Trường "${propName}" phải là một số (Number).`] };
-          }
-          if (propDef.type === 'string' && typeof val !== 'string') {
-            return { valid: false, errors: [`Trường "${propName}" phải là chuỗi (String).`] };
-          }
-          if (propDef.enum && Array.isArray(propDef.enum) && !propDef.enum.includes(val)) {
-            return { valid: false, errors: [`Trường "${propName}" nhận giá trị không hợp lệ: "${val}". Cho phép: ${propDef.enum.join(', ')}.`] };
-          }
-        }
-      }
-    }
-
-    return { valid: true };
+    this._validate ||= schemaValidator.compile(this.parameters);
+    const valid = this._validate(args === undefined ? {} : args);
+    return valid ? { valid: true } : {
+      valid: false,
+      errors: this._validate.errors.map(item => (item.instancePath || '/') + ' ' + item.message)
+    };
   }
 
   /**
@@ -112,10 +86,14 @@ class BaseTool {
    */
   async execute(args, context = {}) {
     const startTime = Date.now();
+    if (context.executionBudget?.remainingMs() <= 0) {
+      return { success: false, tool: this.name, result: null, error: 'Request deadline exceeded.',
+        code: 'REQUEST_DEADLINE_EXCEEDED', outcome: 'timeout', retryable: false, effectState: 'none', durationMs: 0 };
+    }
 
     // 1. Kiểm tra quyền thực thi (Security check)
     if (this.requiredPermissions.length > 0) {
-      const perms = context.permissions || [];
+      const perms = Array.isArray(context.permissions) ? context.permissions : [];
       const hasPermission = this.requiredPermissions.every(perm => 
         perms.includes(perm) || perms.includes('*') || perms.includes('admin')
       );
@@ -124,6 +102,7 @@ class BaseTool {
           success: false,
           tool: this.name,
           result: null,
+          outcome: 'denied', retryable: false, effectState: 'none',
           error: `Quyền truy cập bị từ chối: Cần quyền [${this.requiredPermissions.join(', ')}] để sử dụng tool này.`,
           durationMs: Date.now() - startTime
         };
@@ -138,21 +117,42 @@ class BaseTool {
         tool: this.name,
         result: null,
         error: `Tham số không hợp lệ: ${validation.errors.join('; ')}`,
+        outcome: 'invalid_input', retryable: false, effectState: 'none',
         durationMs: Date.now() - startTime
       };
     }
 
     // 3. Thực thi kèm Timeout Guard
     let timeoutHandle;
+    const controller = new AbortController();
+    const abort = () => controller.abort(context.signal.reason);
+    if (context.signal?.aborted) abort();
+    else context.signal?.addEventListener('abort', abort, { once: true });
+    let stop;
+    const cancelled = new Promise((_, reject) => {
+      stop = () => reject(controller.signal.reason || Object.assign(new Error('Request aborted'), { name: 'AbortError' }));
+      if (controller.signal.aborted) stop();
+      else controller.signal.addEventListener('abort', stop, { once: true });
+    });
     try {
-      const resultPromise = this.run(args, context);
+      const resultPromise = controller.signal.aborted ? cancelled : Promise.resolve().then(() => {
+        if (controller.signal.aborted) return cancelled;
+        // Legacy planning tools publish request state back into context. Preserve
+        // that contract while exposing a per-call signal without mutating it.
+        const executionContext = new Proxy(context, {
+          get(target, key, receiver) { return key === 'signal' ? controller.signal : Reflect.get(target, key, receiver); }
+        });
+        return this.run(args, executionContext);
+      });
       const timeoutPromise = new Promise((_, reject) => {
         timeoutHandle = setTimeout(() => {
-          reject(new Error(`Tool "${this.name}" timeout sau ${this.timeoutMs}ms`));
-        }, this.timeoutMs);
+          const error = Object.assign(new Error(`Tool "${this.name}" timeout sau ${this.timeoutMs}ms`), { code: "TOOL_TIMEOUT" });
+          controller.abort(error);
+          reject(error);
+        }, Math.max(1, Math.min(this.timeoutMs, context.executionBudget?.remainingMs() ?? this.timeoutMs)));
       });
 
-      const rawResult = await Promise.race([resultPromise, timeoutPromise]);
+      const rawResult = await Promise.race([resultPromise, timeoutPromise, cancelled]);
       clearTimeout(timeoutHandle);
 
       // Xử lý trường hợp tool cũ hoặc custom run trả về dạng { success: false, error: ... }
@@ -162,6 +162,8 @@ class BaseTool {
           tool: this.name,
           result: null,
           error: rawResult.error || 'Lỗi nghiệp vụ khi thực thi tool',
+          outcome: rawResult.outcome || 'failed', retryable: rawResult.retryable === true,
+          effectState: rawResult.effectState || (this.isDangerous ? 'unknown' : 'none'),
           code: rawResult.code || null,
           details: rawResult,
           durationMs: Date.now() - startTime
@@ -172,11 +174,19 @@ class BaseTool {
       const actualResult = (rawResult && typeof rawResult === 'object' && rawResult.success === true && rawResult.result !== undefined)
         ? rawResult.result
         : rawResult;
+      if (Buffer.byteLength(JSON.stringify(actualResult) || '') > this.maxOutputBytes) throw Object.assign(new Error('Tool output exceeds the permitted size.'), { code: 'TOOL_OUTPUT_TOO_LARGE' });
+      if (this.outputSchema) {
+        this._validateOutput ||= schemaValidator.compile(this.outputSchema);
+        if (!this._validateOutput(actualResult)) throw Object.assign(new Error('Tool output does not match its contract.'), { code: 'TOOL_OUTPUT_INVALID' });
+      }
+      if (this.name === 'export_data') require('../../governance/artifacts').register(actualResult);
 
       return {
         success: true,
         tool: this.name,
         result: actualResult,
+        outcome: Array.isArray(actualResult?.rows) && !actualResult.rows.length ? 'empty' : 'ok',
+        retryable: false, effectState: rawResult?.effectState || (this.isDangerous ? 'unknown' : 'none'),
         error: null,
         durationMs: Date.now() - startTime
       };
@@ -187,11 +197,17 @@ class BaseTool {
         tool: this.name,
         result: null,
         error: error.message || 'Lỗi không xác định khi thực thi tool',
-        code: error.code || null,
+        code: error.code || (controller.signal.aborted ? 'TOOL_CANCELLED' : null),
+        outcome: error.outcome || (error.code === 'TOOL_TIMEOUT' ? 'timeout' : controller.signal.aborted ? 'cancelled' : 'failed'),
+        effectState: error.effectState || error.toolResult?.effectState || (this.isDangerous ? 'unknown' : 'none'),
         details: error.details || null,
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         durationMs: Date.now() - startTime
       };
+    } finally {
+      clearTimeout(timeoutHandle);
+      context.signal?.removeEventListener('abort', abort);
+      controller.signal.removeEventListener('abort', stop);
     }
   }
 

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "knowledgehub_workflows": {
+      "command": "node",
+      "args": [
+        "--env-file=D:/Dev/ai-project/.env.workflow-mcp.local",
+        "D:/Dev/ai-project/scripts/workflow_mcp.js"
+      ]
+    }
+  }
+}

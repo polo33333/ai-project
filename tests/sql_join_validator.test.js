@@ -17,10 +17,29 @@ const plan = {
     { sourceColumn: 'CustomerID', targetColumn: 'ID' }
   ] }]
 };
+test('a primary key does not require reverse joins to every referencing child table',()=> {
+ const reverse={outcome:'ready',purpose:'enrichment',rootTableId:'people',tableRefs:[{tableId:'people',tableName:'People'},{tableId:'orders',tableName:'Orders'}],
+  edges:[{relationshipId:'order_person',fromTableId:'people',toTableId:'orders',reversed:true,cardinality:'one-to-many',businessRole:'Owner',displayColumn:'Name',columnPairs:[{sourceColumn:'ID',targetColumn:'OwnerID'}]}]};
+ assert.equal(validateSqlAgainstJoinPlan('SELECT TOP 1 ID, Name, BirthDate FROM People WHERE BirthDate IS NOT NULL ORDER BY BirthDate DESC',reverse).valid,true);
+});
 
 test('join validator accepts all ordered composite key predicates', () => {
   const result = validateSqlAgainstJoinPlan('SELECT o.ID FROM dbo.Orders o JOIN dbo.Customers c ON o.TenantID = c.TenantID AND o.CustomerID = c.ID', plan);
   assert.equal(result.valid, true);
+});
+test('many-to-one target measures cannot be summed repeatedly per source row',()=>{
+ const p={...plan,edges:[{...plan.edges[0],cardinality:'many-to-one'}]};
+ const join='FROM Orders o JOIN Customers c ON o.TenantID = c.TenantID AND o.CustomerID = c.ID';
+ assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(c.Balance) AS Total '+join,p).code,'JOIN_GRAIN_UNSAFE');
+ assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount) AS Total '+join,p).valid,true);
+ assert.equal(validateSqlAgainstJoinPlan('SELECT COUNT(DISTINCT c.ID) AS Total '+join,p).valid,true);
+});
+test('root aggregates filtered through a mapped relation do not require unrequested display projections',()=>{
+ const p={...plan,purpose:'enrichment',edges:[{...plan.edges[0],cardinality:'many-to-one',businessRole:'Customer',displayColumn:'Name'}]};
+ const join='FROM Orders o LEFT JOIN Customers c ON o.TenantID=c.TenantID AND o.CustomerID=c.ID WHERE c.Code=\'C002\'';
+ assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount) AS InvoiceTotal '+join,p).valid,true);
+ assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(c.Balance) AS RepeatedBalance '+join,p).code,'JOIN_GRAIN_UNSAFE');
+ assert.equal(validateSqlAgainstJoinPlan('SELECT o.ID, c.Name '+join,p).code,'JOIN_PROJECTION_INVALID');
 });
 
 test('join validator rejects a missing composite key predicate', () => {
@@ -192,6 +211,12 @@ test('enrichment validator requires the mapped table when a mapped ID is project
   const result = validateSqlAgainstJoinPlan('SELECT EmployeeName, GenderID FROM M_Employee', enrichmentPlan);
   assert.equal(result.valid, false);
   assert.match(result.error, /M_Constant/);
+  const generalPlan = { ...enrichmentPlan, purpose: 'join' };
+  assert.equal(validateSqlAgainstJoinPlan('SELECT EmployeeName, GenderID FROM M_Employee', generalPlan).valid, false);
+  assert.equal(validateSqlAgainstJoinPlan('SELECT EmployeeName FROM M_Employee', generalPlan).valid, true);
+  const comparison = validateSqlAgainstJoinPlan('SELECT EmployeeName FROM M_Employee', { ...enrichmentPlan, requireMappedProjection: true });
+  assert.equal(comparison.valid, false);
+  assert.equal(comparison.code, 'JOIN_PROJECTION_INVALID');
 });
 
 test('enrichment validator rejects wildcard projections that expose mapped IDs', () => {

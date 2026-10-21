@@ -43,7 +43,7 @@ async function callOllama(provider, messages, tools, signal, options = {}) {
   const body = {
     model: provider.model || 'qwen2.5-coder',
     messages: convertMessagesToOllama(messages),
-    stream: typeof options.onReasoning === 'function',
+    stream: (typeof options.onReasoning === 'function'||typeof options.onAnswer === 'function')&&provider.supportsStreaming!==false,
     options: {
       temperature: Number(provider.temperature ?? process.env.LOCAL_MODEL_TEMPERATURE ?? 0.1),
       ...(Number(provider.numCtx || process.env.LOCAL_MODEL_NUM_CTX) > 0 ? { num_ctx: Number(provider.numCtx || process.env.LOCAL_MODEL_NUM_CTX) } : {}),
@@ -91,7 +91,9 @@ async function callOllama(provider, messages, tools, signal, options = {}) {
     let done = false;
     await readJsonStream(res, chunk => {
       final = chunk;
+      if(chunk.message?.tool_calls?.length)options.onToolCall?.();
       message.content += chunk.message?.content || '';
+      if(chunk.message?.content)options.onAnswer?.(chunk.message.content);
       message.thinking += chunk.message?.thinking || '';
       emit(chunk.message?.thinking);
       if (chunk.message?.tool_calls) message.tool_calls.push(...chunk.message.tool_calls);

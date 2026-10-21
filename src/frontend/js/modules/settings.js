@@ -26,6 +26,9 @@
     const panel = root.querySelector('.settings-panel');
     if (panel) panelToggle(panel, panel.querySelector('.settings-toolbar'), [...panel.children].filter(node => !node.matches('.settings-toolbar')));
     const qdrant = root.querySelector('.settings-qdrant-card');
+    root.querySelectorAll('.settings-governance-card').forEach(card => {
+      panelToggle(card, card.querySelector('.settings-governance-heading'), [card.querySelector('.settings-governance-body')]);
+    });
     if (qdrant) panelToggle(qdrant, qdrant.querySelector('.settings-qdrant-main'), [...qdrant.children].filter(node => !node.matches('.settings-qdrant-main,.settings-qdrant-icon')));
     const search = el('settings-search')?.closest('.settings-search-wrap');
     const content = root.querySelector('.settings-content');
@@ -143,7 +146,7 @@
       renderSettings(data); showMessage('Có thể chỉnh sửa các thuộc tính bên dưới. Các thay đổi sẽ có hiệu lực sau khi khởi động lại.', 'success');
       window.checkSettingsConnection(true);
       window.loadStorageBackups();
-    } catch (error) { el('settings-fields')?.replaceChildren(); showMessage(error.message, 'error'); }
+    } catch (error) { el('settings-fields')?.replaceChildren(); showMessage(error.message, 'error'); return false; }
     finally { loading = false; }
   };
 
@@ -233,11 +236,11 @@
       const response = await fetch('/api/qdrant/status', { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`); const data = await response.json();
       await minimumAnimation;
-      card.dataset.state = data.connected ? 'online' : 'offline';
-      el('settings-qdrant-state').textContent = data.connected ? 'Đã kết nối' : 'Mất kết nối';
+      card.dataset.state = data.disabled ? 'disabled' : data.connected ? 'online' : 'offline';
+      el('settings-qdrant-state').textContent = data.disabled ? 'Không sử dụng' : data.connected ? 'Đã kết nối' : 'Mất kết nối';
       el('settings-qdrant-collection').textContent = data.collectionName || '—';
       el('settings-qdrant-points').textContent = Number.isFinite(Number(data.pointsCount)) ? Number(data.pointsCount).toLocaleString('vi-VN') : '—';
-      el('settings-qdrant-message').textContent = data.connected ? `Dịch vụ phản hồi bình thường tại ${data.url || 'URL đã cấu hình'}.` : `Không thể truy cập ${data.url || 'Qdrant'}. ${data.error || 'Kiểm tra dịch vụ và cấu hình.'}`;
+      el('settings-qdrant-message').textContent = data.disabled ? 'Embedding đang tắt. Schema và tài liệu được tìm bằng từ khóa; không cần kết nối Qdrant cho tìm kiếm.' : data.connected ? `Dịch vụ phản hồi bình thường tại ${data.url || 'URL đã cấu hình'}.` : `Không thể truy cập ${data.url || 'Qdrant'}. ${data.error || 'Kiểm tra dịch vụ và cấu hình.'}`;
     } catch (error) {
       await minimumAnimation;
       card.dataset.state = 'offline'; el('settings-qdrant-state').textContent = 'Kiểm tra thất bại';

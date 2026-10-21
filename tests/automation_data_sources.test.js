@@ -17,7 +17,7 @@ function bundle() {
   const result=structuredClone(require('../src/backend/automation/pilot.json'));
   result.manifest.id='source_pipeline'; result.templates=[result.templates[0]];
   const template=result.templates[0]; template.allowedCapabilities=['data.transform','data.read'];
-  template.bindings={remote:{type:'api',url:'https://example.com/data',query:{code:'{{steps.prepare.code}}'},dataPath:'records'},inherited:{type:'previous',reference:'{{steps.remote.rows}}'}};
+  template.bindings={remote:{type:'api',effects:'read',url:'https://example.com/data',query:{code:'{{steps.prepare.code}}'},dataPath:'records'},inherited:{type:'previous',reference:'{{steps.remote.rows}}'}};
   template.workflow.steps=[{id:'prepare',type:'transform',config:{mapping:{code:'{{input.code}}'}}},{id:'remote',type:'source',config:{bindingRef:'remote'}},{id:'inherit',type:'source',config:{bindingRef:'inherited'}}];
   template.output.mapping={code:'{{steps.inherit.rows.0.code}}',source:'{{steps.inherit.rows.0.source}}'};
   template.fixtures=[{input:{code:'A001'},stepResults:{remote:{rows:[{code:'A001',source:'api'}]}},expected:{code:'A001',source:'api'}}];
@@ -78,7 +78,7 @@ test('API rejects redirects, malformed JSON and DNS resolving to private address
       const response=Readable.from([Buffer.from(body)]);response.statusCode=status;callback(response);
     });return request;
   });
-  const execute=()=>sources.executeSource({type:'api',url:'https://example.com'},{input:{},steps:{}},{permissions:['knowledge:read']});
+  const execute=()=>sources.executeSource({type:'api',effects:'read',url:'https://example.com'},{input:{},steps:{}},{permissions:['knowledge:read']});
   await assert.rejects(execute(),/HTTP 302/);
   status=200;body='<html>error</html>';await assert.rejects(execute(),/JSON/);
   checkDns=true;await assert.rejects(execute(),/nội bộ/);

@@ -23,6 +23,7 @@ async function fetchDbSources() {
     await updateDashboardSqlMetrics();
   } catch (err) {
     console.error("Lỗi nạp DB Sources:", err);
+    return false;
   }
 }
 
@@ -115,6 +116,7 @@ async function setDefaultDbSource(id) {
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('sql');
     await fetchDbSources();
     if (typeof showToast === 'function') showToast('Đã đặt nguồn CSDL mặc định.', 'success');
   } catch (err) {
@@ -186,6 +188,7 @@ async function deleteDbSource(id) {
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('sql');
     await fetchDbSources();
     if (typeof showToast === 'function') showToast('Đã xóa nguồn CSDL.', 'success');
   } catch (err) {
@@ -219,6 +222,7 @@ async function submitPageSchemaIngestion() {
     const data = await res.json();
     if (data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     cancelEditDbSource();
+    window.invalidateRelatedTabData?.('sql');
     await fetchDbSources();
     if (typeof fetchDataDictionary === 'function') await fetchDataDictionary();
     if (typeof showToast === 'function') showToast(`Đã nạp ${data.tablesCount || 0} bảng từ ${config.dbName}.`, 'success', 'Kết nối thành công');

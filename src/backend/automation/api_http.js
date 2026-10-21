@@ -69,7 +69,29 @@ async function requestBody(binding,state) {
   chunks.push(Buffer.from(`--${boundary}--\r\n`));return {buffer:Buffer.concat(chunks),contentType:`multipart/form-data; boundary=${boundary}`};
 }
 async function readApi(binding,state,signal) {
+  const startedAt = Date.now();
+  const dangerous = hasWriteEffect({ ...binding, type: 'api' });
+  let dispatched = false;
+  const normalize = execution => require('../agent_core/tools/tool_result').createToolResult({
+    tool: 'http_api', durationMs: Date.now() - startedAt, ...execution
+  }, {}, { isDangerous: dangerous });
+  try {
+    if (signal?.aborted) throw Object.assign(new Error('Request aborted'), { name: 'AbortError' });
+    const result = await executeApi(binding,state,signal,()=>{ dispatched = true; });
+    return { ...result, envelope: normalize({ success: true, result, effectState: dangerous ? 'unknown' : 'none' }) };
+  } catch (failure) {
+    if (dispatched) failure.apiRequestStarted = true;
+    failure.toolResult = normalize({ success: false, error: failure.message, code: failure.code || null,
+      outcome: failure.name === 'AbortError' ? 'cancelled' : failure.code === 'API_TIMEOUT' ? 'timeout'
+        : failure.code === 'READ_ONLY_POLICY_DENIED' ? 'denied' : 'failed',
+      retryable: false, effectState: dangerous && failure.apiRequestStarted ? 'unknown' : 'none' });
+    throw failure;
+  }
+}
+async function executeApi(binding,state,signal,onDispatch) {
+  require('./read_only_policy').assertSourceAllowed({ ...binding, type: 'api' });
   validateApi(binding);const url=apiUrl(binding.url,state),method=binding.method || 'GET',headers={accept:'application/json'};
+  await require('../governance/context').refresh(`api:${url.origin}`);
   for(const [key,value] of Object.entries(resolve(binding.query || {},state))) {
     const values=Array.isArray(value)?value:[value];url.searchParams.delete(key);values.forEach(item=>{ensure(item!==undefined && item!==null && ['string','number','boolean'].includes(typeof item),`Tham số API ${key} cần giá trị đơn.`);url.searchParams.append(key,String(item));});
   }
@@ -87,6 +109,7 @@ async function readApi(binding,state,signal) {
   const deadline=Date.now()+(binding.timeoutMs || 30000);
   for(let redirects=0;;redirects++) {
     ensure(deadline>Date.now(),'API hết thời gian chờ.');
+    onDispatch?.();
     const response=await perform(current,currentMethod,currentHeaders,currentBody,signal,deadline-Date.now());
     if([301,302,303,307,308].includes(response.status) && response.headers.location) {
       ensure(redirects<(binding.maxRedirects || 0),`API trả HTTP ${response.status}: vượt quá số redirect được cho phép.`);
@@ -121,8 +144,9 @@ function perform(url,method,headers,body,signal,timeout) {
       response.on('end',()=>{clearTimeout(alarm);done({status:response.statusCode,headers:response.headers || {},buffer:Buffer.concat(chunks)});});
     };
     const request=method==='GET' && !body?transport.get(url,options,receive):transport.request(url,options,receive);
-    alarm=setTimeout(()=>request.destroy(error('API hết thời gian chờ.')),timeout);
-    request.on('timeout',()=>request.destroy(error('API hết thời gian chờ.')));request.on('error',failure=>{clearTimeout(alarm);reject(Object.assign(failure,{apiRequestStarted:true}));});request.on('close',()=>clearTimeout(alarm));
+    const timeoutError=()=>Object.assign(error('API hết thời gian chờ.'),{code:'API_TIMEOUT'});
+    alarm=setTimeout(()=>request.destroy(timeoutError()),timeout);
+    request.on('timeout',()=>request.destroy(timeoutError()));request.on('error',failure=>{clearTimeout(alarm);reject(Object.assign(failure,{apiRequestStarted:true}));});request.on('close',()=>clearTimeout(alarm));
     if(method!=='GET' || body)request.end(body || undefined);
   });
 }

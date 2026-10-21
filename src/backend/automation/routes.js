@@ -6,11 +6,16 @@ const { requireAdmin } = require('./registry');
 const metadata = template => ({ id: template.id, name: template.name, description: template.description, examples: template.examples, inputs: template.inputs, domain: template.domain, tags: template.tags, packageId: template.packageId, packageVersion: template.packageVersion, overlayVersion: template.overlayVersion });
 async function handle(req, res, pathname, account, readBody) {
   if (!/^\/api\/(workflow-plugins|question-templates|automation-runs)(\/|$)/.test(pathname)) return false;
-  const context = { accountId: account?.id, tenantId: account?.tenantId, permissions: account?.role === 'admin' ? ['admin'] : ['sql:read', 'knowledge:read'] };
+  const context = { accountId: account?.id, tenantId: account?.tenantId, permissions: account?.role === 'admin' ? ['admin'] : account?.permissions || ['sql:read', 'knowledge:read'] };
   const send = (value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
   try {
     if (!context.accountId) throw error('Cần đăng nhập.', 401);
     const config = await automation.settings();
+    if (pathname === '/api/workflow-plugins/authoring-context' && req.method === 'GET') {
+      requireAdmin(context);
+      send(require('./authoring_context').authoringContext(require('../services/sql_connector'), require('../services/dictionary_service')));
+      return true;
+    }
     if (pathname === '/api/workflow-plugins/settings') {
       if (req.method === 'GET') send(config);
       else if (req.method === 'PUT') send(await automation.configure(await readBody(req), context));
@@ -87,6 +92,20 @@ async function handle(req, res, pathname, account, readBody) {
       const id = decodeURIComponent(run[1]), action = run[2];
       if (req.method === 'GET') {
         const owned = await automation.runtime.owned(id, context);
+        const principal=require('../governance/context').current()&&require('../governance/context').principal();
+        if (principal?.role!=='admin' && principal?.dataAccess) {
+          for (const binding of Object.values(owned.definition.bindings||{})) {
+            if (binding.dbSourceId) {
+              const source=require('../services/sql_connector').dbSources.find(s=>s.id===binding.dbSourceId);
+              if (!source) throw error('Nguồn dữ liệu không còn khả dụng.',403);
+              require('../governance/context').read(source,'sql');
+            } else if (binding.documentId) {
+              const document=require('../knowledge_core/services/library_service').documents.find(d=>d.id===binding.documentId);
+              if (!document) throw error('Tài liệu không còn khả dụng.',403);
+              require('../governance/context').read(document,'document');
+            }
+          }
+        }
         if (!action) send({ execution: automation.runtime.view(owned) });
         else if (action === 'events') {
           const after = Number(req.headers['last-event-id'] || new URL(req.url, 'http://localhost').searchParams.get('after') || 0);

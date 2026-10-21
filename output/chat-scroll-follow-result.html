@@ -1,0 +1,18 @@
+﻿<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{font:14px Arial;background:#111;color:#eee}#messages{width:340px;height:240px;overflow:auto;border:1px solid #888}#thread{height:400px}
+</style></head><body><div id="messages"><div id="thread" style="height: 1800px;">Answer and delayed table</div></div><pre id="result">{"followed":true,"keptReaderPosition":true,"afterGrowth":{"top":960,"height":1200,"following":true}}</pre>
+<script src="../src/frontend/embed/chat-stream.js"></script><script>
+(async()=>{
+ const messages=document.getElementById('messages'),thread=document.getElementById('thread');
+ const settle=()=>new Promise(resolve=>setTimeout(resolve,120));
+ messages.scrollTop=messages.scrollHeight;const tracker=ChatStream.followResponse(messages);await settle();
+ thread.style.height='1200px';await settle();
+ const afterGrowth={top:messages.scrollTop,height:messages.scrollHeight,following:tracker.following};
+ const followed=Math.abs(messages.scrollHeight-messages.clientHeight-messages.scrollTop)<2;
+ messages.dispatchEvent(new WheelEvent('wheel',{deltaY:-100}));messages.scrollTop=100;messages.dispatchEvent(new Event('scroll'));await settle();
+ thread.style.height='1800px';await settle();
+ document.getElementById('result').textContent=JSON.stringify({followed,keptReaderPosition:messages.scrollTop===100,afterGrowth});
+})();
+</script>
+</body></html>

@@ -10,6 +10,21 @@ const { getDomain, hasReferencePronoun, isShortContextualFollowup } = require('.
 const { buildContextualQuery } = require('../src/backend/services/web_search_service');
 const { fitOptionalMessages } = require('../src/backend/agent_core/harness/context_budget');
 
+test('one-row SQL entity and dataset resolve to the same previous employee', () => {
+  const { deriveReferences } = require('../src/backend/memory_core/reference_store');
+  const now = Date.now();
+  const refs = deriveReferences({ currentPlan: { table: 'M_Employee', dbSourceId: 'ipms', identityColumns: ['EmployeeCode', 'EmployeeName'] },
+    toolCalls: [{ toolName: 'execute_sql_query', success: true, result: { rows: [{ EmployeeCode: 'NV004', EmployeeName: 'Yen Duy' }] } }], now: new Date(now).toISOString() });
+  const decision = routeMemory({ question: 'nv trên có địa chỉ gì', currentPlan: { dbSourceId: 'ipms' },
+    session: { id: 's', references: refs, activeScope: 'employee', lastPlan: { table: 'M_Employee', dbSourceId: 'ipms' } }, now });
+  assert.equal(decision.mode, 'reference'); assert.equal(decision.reference.type, 'lastEntity');
+  assert.equal(decision.reference.data.filters.EmployeeCode, 'NV004');
+  delete refs.lastDataset.rowCount;
+  assert.equal(resolveReference('nv trên có địa chỉ gì', refs, now).type, 'lastEntity');
+  refs.lastDataset.updatedAt = new Date(now - 1000).toISOString();
+  assert.equal(resolveReference('nv trên có địa chỉ gì', refs, now).reason, 'ambiguous_reference');
+});
+
 function plan(table, overrides = {}) {
   return {
     intent: 'list', table, requiredColumns: ['Name'], metric: null, timeColumn: null,
@@ -20,6 +35,19 @@ function plan(table, overrides = {}) {
 function service(store = { sessions: {} }) {
   return new MemoryService({ store, save: () => {} });
 }
+
+test('a newer incomplete turn cannot resolve to an older workflow dataset as the latest entity', t => {
+  const previous = process.env.MEMORY_PENDING_TURN_ENABLED;
+  process.env.MEMORY_PENDING_TURN_ENABLED = 'true';
+  t.after(() => { if (previous === undefined) delete process.env.MEMORY_PENDING_TURN_ENABLED; else process.env.MEMORY_PENDING_TURN_ENABLED = previous; });
+  const memory = service();
+  const session = memory.getSession('pending-ref', true);
+  session.references.lastDataset = { runId: 'old-run', rowCount: 1, updatedAt: new Date(Date.now() - 2000).toISOString() };
+  session.pendingTurn = { question: 'list records', updatedAt: new Date(Date.now() - 1000).toISOString(), completionStatus: 'PARTIAL' };
+  const context = memory.getResolutionContext({ sessionId: 'pending-ref' });
+  assert.equal(context.candidates.some(candidate => candidate.data.runId === 'old-run'), false);
+  assert.ok(context.recent.some(message => message.content === 'list records'));
+});
 
 test('legacy sessions are migrated in memory with structured defaults', () => {
   const memory = service({ sessions: { old: { id: 'old', messages: [{ role: 'user', content: 'hi' }] } } });

@@ -44,9 +44,11 @@ function buildModel(documents, { recordId, runtime = false } = {}) {
   const rows = Object.fromEntries(tables.map(table => [table, []]));
   const files = [];
   const warnings = [];
+  const identities = new Map(tables.map(table => [table, new Set()]));
   function add(table, id, payload, ordinal, extra = {}) {
     id = String(id);
-    if (rows[table].some(row => row.id === id)) throw new Error(`Duplicate identity in ${table} at ordinal ${ordinal}; import refused.`);
+    if (identities.get(table).has(id)) throw new Error(`Duplicate identity in ${table} at ordinal ${ordinal}; import refused.`);
+    identities.get(table).add(id);
     const rawTime = payload?.timestamp ?? payload?.createdAt ?? payload?.startedAt;
     const created_at = timestamp(rawTime);
     if (rawTime && !created_at) warnings.push({ table, ordinal, reason: 'UNPARSED_TIMESTAMP_PRESERVED' });
@@ -98,8 +100,8 @@ function buildModel(documents, { recordId, runtime = false } = {}) {
         for (const field of fields) if (Object.hasOwn(payload, field)) { memory[field] = payload[field]; delete payload[field]; }
         add('memory_states', id, memory, 0, { parent_id: String(id) });
         // Unowned legacy memory is quarantined by scope, never assigned to a user.
-        row.owner_scope = payload.accountId ? `account:${payload.accountId}` :
-          runtime && payload.embedId ? `embed:${payload.embedId}` : `legacy-unowned:${id}`;
+        row.owner_scope = runtime && payload.embedId && String(payload.accountId || '').startsWith(`embed:${payload.embedId}:`) ? `embed:${payload.embedId}` :
+          payload.accountId ? `account:${payload.accountId}` : `legacy-unowned:${id}`;
         row.client_session_id = payload.id || String(id);
         row.account_id = payload.accountId || null;
         if (!payload.accountId) warnings.push({ table: source.table, ordinal, reason: 'LEGACY_UNOWNED_MEMORY' });
@@ -128,7 +130,8 @@ function buildModel(documents, { recordId, runtime = false } = {}) {
     const ids = new Set(rows[parent].map(row => row.id));
     for (const row of rows[table]) if (row[field] && !ids.has(String(row[field]))) {
       warnings.push({ table, ordinal: row.ordinal, reason: `ORPHAN_${field.toUpperCase()}_PRESERVED` });
-      if (table === 'chat_sessions') row.owner_scope = `legacy-unowned:${row.id}`;
+      if (table === 'chat_sessions' && !(runtime && row.payload.embedId &&
+          String(row[field]).startsWith(`embed:${row.payload.embedId}:`))) row.owner_scope = `legacy-unowned:${row.id}`;
       row[field] = null;
     }
   }
@@ -137,13 +140,24 @@ function buildModel(documents, { recordId, runtime = false } = {}) {
 
 function reconstruct(model) {
   const result = new Map();
+  const childRows = new Map();
+  for (const child of Object.values(children).flat()) {
+    const byParent = new Map();
+    for (const row of model.rows[child.table]) {
+      if (!byParent.has(row.parent_id)) byParent.set(row.parent_id, []);
+      byParent.get(row.parent_id).push(row);
+    }
+    for (const rows of byParent.values()) rows.sort((a,b) => a.ordinal - b.ordinal);
+    childRows.set(child.table, byParent);
+  }
+  const memoryByParent = new Map(model.rows.memory_states.map(row => [row.parent_id, row]));
   for (const source of model.files) {
     const records = [...model.rows[source.table]].sort((a, b) => a.ordinal - b.ordinal).map(row => {
       const payload = structuredClone(row.payload);
       for (const child of children[source.table] || []) if ((row.child_fields || []).includes(child.field)) {
-        setAt(payload, child.field, model.rows[child.table].filter(item => item.parent_id === row.id).sort((a,b) => a.ordinal - b.ordinal).map(item => item.payload));
+        setAt(payload, child.field, (childRows.get(child.table).get(row.id) || []).map(item => item.payload));
       }
-      if (source.table === 'chat_sessions') Object.assign(payload, model.rows.memory_states.find(item => item.parent_id === row.id)?.payload || {});
+      if (source.table === 'chat_sessions') Object.assign(payload, memoryByParent.get(row.id)?.payload || {});
       let key = row.source_key;
       if (source.table === 'auth_sessions') { key = payload._legacyToken; delete payload._legacyToken; }
       return [key, source.shape === 'aliases' ? payload.aliases : payload];

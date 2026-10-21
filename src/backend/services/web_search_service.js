@@ -82,6 +82,7 @@ async function search(query, { signal = null } = {}) {
   const timeoutMs = Number(process.env.WEB_SEARCH_TIMEOUT_MS || process.env.AI_DEFAULT_TIMEOUT_MS);
   const limit = Math.max(1, Math.min(10, Number(process.env.WEB_SEARCH_MAX_RESULTS) || 5));
   if (!endpoint) throw new Error('WEB_SEARCH_ENDPOINT chưa được cấu hình.');
+  await require('../governance/context').refresh(`web:${new URL(endpoint).origin}`);
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (signal?.aborted) controller.abort(); else signal?.addEventListener('abort', abort, { once: true });

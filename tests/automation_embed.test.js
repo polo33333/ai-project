@@ -45,4 +45,18 @@ test('embed workflow credentials isolate sessions and support inputs, result, re
  assert.equal(response.status,200);
  assert.deepEqual(response.body.toolCalls,[{name:'search_schema',success:true,rowCount:9,error:null,durationMs:180}]);
  assert.equal(JSON.stringify(response.body.toolCalls).includes('must-not-leak'),false);
+ t.mock.method(core,'chat',async(_question,options)=>{
+   options.onProgress?.({type:'model_started',label:'Đang phân tích yêu cầu',status:'running'});
+   options.onProgress?.({type:'reasoning_delta',delta:'private reasoning must not leak'});
+   options.onProgress?.({type:'tool_started',label:'Đang tra cứu dữ liệu',toolName:'search_schema',status:'running',args:{secret:'must-not-leak'}});
+   return {success:true,replyText:'Streaming complete',toolCalls:[],trace:{completionStatus:'PARTIAL'}};
+ });
+ const stream=await fetch(`http://127.0.0.1:${server.address().port}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://widget.test'},body:JSON.stringify({embedId:config.id,sessionId:'stream-ui-session',question:'Stream progress',stream:true})});
+ assert.match(stream.headers.get('content-type'),/text\/event-stream/);
+ const frames=await stream.text();
+ assert.match(frames,/event: progress/);assert.match(frames,/Đang tra cứu dữ liệu/);assert.match(frames,/event: result/);assert.match(frames,/Streaming complete/);
+ assert.doesNotMatch(frames,/private reasoning|must-not-leak/);
+ t.mock.method(core,'chat',async()=>{throw Object.assign(new Error('Expected stream failure'),{code:'TEST_STREAM_ERROR'});});
+ const failure=await fetch(`http://127.0.0.1:${server.address().port}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://widget.test'},body:JSON.stringify({embedId:config.id,sessionId:'stream-failure-session',question:'Stream failure',stream:true})});
+ assert.match(await failure.text(),/event: error\ndata: .*Expected stream failure/);
 });

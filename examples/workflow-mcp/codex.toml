@@ -1,0 +1,6 @@
+# Merge this block into your Codex config.toml. Adjust absolute paths.
+[mcp_servers.knowledgehub_workflows]
+command = "node"
+args = ["--env-file=D:/Dev/ai-project/.env.workflow-mcp.local", "D:/Dev/ai-project/scripts/workflow_mcp.js"]
+startup_timeout_sec = 15
+tool_timeout_sec = 90

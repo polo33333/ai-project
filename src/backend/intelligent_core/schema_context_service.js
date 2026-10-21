@@ -60,6 +60,7 @@ function domainText(domain) {
 
 function tableText(table) {
   return [table.tableName, table.dbName, table.domain, domainText(table.domain), table.tableDescription,
+    table.semanticModel?.entity, table.semanticModel?.grain, ...(table.semanticModel?.aliases || []), ...(table.semanticModel?.segments || []).map(s=>s.label),
     table.defaultMetric, table.defaultTimeColumn, table.defaultAggregation,
     ...(table.columns || []).filter(column => column.isVisible !== false).flatMap(column => [column.columnName, column.description, column.dataType])
   ].filter(Boolean).join(' ');
@@ -83,6 +84,7 @@ function isGeneralConversation(query, queryTokens, tables, hasGlossaryExpansion 
   // SQL types and generic output formats are not evidence of a database request.
   const hasSchemaMatch = tables.some(table => lexicalScore(queryTokens, [
     table.tableName, table.domain, domainText(table.domain), table.tableDescription,
+    table.semanticModel?.entity, ...(table.semanticModel?.aliases || []),
     ...(table.columns || []).filter(column => column.isVisible !== false)
       .flatMap(column => [column.columnName, column.displayName, column.description])
   ].filter(Boolean).join(' ')) >= 4);
@@ -97,9 +99,10 @@ function isGeneralConversation(query, queryTokens, tables, hasGlossaryExpansion 
 }
 
 function expandWithGlossary(query) {
+  query = require('../utils/entity_list_query')(query);
   const normalizedQuery = ` ${normalize(query)} `;
   const expansions = dictionaryService.getGlossary()
-    .filter(item => normalizedQuery.includes(` ${normalize(item.term)} `))
+    .filter(item => item.isActive !== false && normalizedQuery.includes(` ${normalize(item.term)} `))
     .flatMap(item => [item.term, item.fullMeaning]);
   return [query, ...expansions].filter(Boolean).join(' ');
 }
@@ -115,13 +118,17 @@ function selectColumns(table, expandedQuery, vectorColumnNames = new Set()) {
   return ranked.slice(0, MAX_COLUMNS_PER_TABLE).map(item => item.column);
 }
 
-function automaticEnrichmentRelations(rootTable, activeTables) {
+function automaticEnrichmentRelations(rootTable, activeTables, options = {}) {
   if (!rootTable || process.env.SQL_JOIN_PLANNER_ENABLED !== 'true') return [];
   const limit = Math.max(0, Number(process.env.SQL_AUTO_ENRICH_MAX_RELATIONSHIPS || 6));
+  if (options.operation === 'list' && !options.attributes?.length) return [];
   return dictionaryService.getTableRelationships()
     .filter(relation => relation.isActive !== false && relation.status === 'verified')
     .filter(relation => relation.sourceTableId === tableIdentity(rootTable))
     .filter(relation => ['many-to-one', 'one-to-one'].includes(relation.cardinality || relation.relationType))
+    .filter(relation => !options.attributes?.length || options.attributes.some(attribute =>
+      [relation.businessRole, relation.displayColumn, ...(relation.columnPairs || []).map(pair=>pair.sourceColumn)]
+        .some(value=>value&&normalize(value)===normalize(attribute))))
     .filter(relation => activeTables.some(table => tableIdentity(table) === relation.targetTableId))
     .filter(relation => (relation.columnPairs || []).length > 0 && relation.columnPairs.every(pair => {
       const column = (rootTable.columns || []).find(item => item.columnName === pair.sourceColumn);
@@ -130,19 +137,48 @@ function automaticEnrichmentRelations(rootTable, activeTables) {
     .slice(0, limit);
 }
 
+function expandBusinessPaths(selected, activeTables, query, options = {}) {
+  if(!selected.length||process.env.SQL_JOIN_PLANNER_ENABLED!=='true')return;
+  const service=require('../services/relationship_service'),padded=` ${normalize(query)} `;
+  const targets=[...new Set(service.verifiedRelationships(options).filter(relation=>relation.businessRole
+    && (padded.includes(` ${normalize(relation.businessRole)} `)||(options.attributes||[]).some(attribute=>normalize(attribute)===normalize(relation.businessRole))))
+    .map(relation=>relation.targetTableId))];
+  for(const target of targets) {
+    if(selected.some(table=>tableIdentity(table)===target))continue;
+    const paths=service.findPaths(tableIdentity(selected[0]),target,{...options,maxEdges:JOIN_MAX_EDGES});
+    if(paths.length!==1)continue;
+    const needed=[...new Set(paths[0].flatMap(edge=>[edge.fromTableId,edge.toTableId]))]
+      .filter(id=>!selected.some(table=>tableIdentity(table)===id)).map(id=>activeTables.find(table=>tableIdentity(table)===id));
+    if(needed.some(table=>!table)||selected.length+needed.length>MAX_TABLES)continue;
+    selected.push(...needed);
+  }
+}
+
+function matchExplicitTable(query, tables) {
+  const padded = ` ${normalize(query)} `;
+  // Domain keywords describe a family of tables, never a table identity.
+  const tiers = [
+    table => [table.tableName, `${table.schemaName || 'dbo'}.${table.tableName}`],
+    table => [table.semanticModel?.entity, ...(table.semanticModel?.aliases || [])]
+  ];
+  for (const names of tiers) {
+    const matches = tables.filter(table => names(table).some(term => normalize(term) && padded.includes(` ${normalize(term)} `)));
+    if (matches.length) return matches.length === 1 ? matches[0] : null;
+  }
+  return null;
+}
+
 function explicitListTable(query, options = {}) {
+  query = require('../utils/entity_list_query')(query);
   if (!isSimpleEntityListRequest(query)) return null;
-  const aliases = domainAliasService.getDomainAliases();
-  const padded = ` ${normalize(expandWithGlossary(query))} `;
-  const matches = dictionaryService.getGroupedTables().filter(table => table.isActive
+  const tables = dictionaryService.getGroupedTables().filter(table => table.isActive
     && (!options.dbName || table.dbName === options.dbName)
-    && (!options.dbSourceId || !table.dbSourceId || table.dbSourceId === options.dbSourceId)
-    && [table.tableName, table.domain, ...(aliases[table.domain] || [])]
-      .some(term => normalize(term) && padded.includes(` ${normalize(term)} `)));
-  return matches.length === 1 ? matches[0] : null;
+    && (!options.dbSourceId || !table.dbSourceId || table.dbSourceId === options.dbSourceId));
+  return matchExplicitTable(query, tables) || matchExplicitTable(expandWithGlossary(query), tables);
 }
 
 async function buildSchemaContext(query, options = {}) {
+  query = require('../utils/entity_list_query')(query);
   const dbName = options.dbName || null;
   const dbSourceId = options.dbSourceId || null;
   const activeTables = dictionaryService.getGroupedTables().filter(table => table.isActive
@@ -150,17 +186,13 @@ async function buildSchemaContext(query, options = {}) {
     && (!dbSourceId || !table.dbSourceId || table.dbSourceId === dbSourceId));
   const expandedQuery = expandWithGlossary(query);
   const queryTokens = tokens(expandedQuery);
-  if (isGeneralConversation(query, queryTokens, activeTables, normalize(expandedQuery) !== normalize(query))) {
+  if (!options.forceRetrieval && isGeneralConversation(query, queryTokens, activeTables, normalize(expandedQuery) !== normalize(query))) {
     return { mode: 'general', schemaContext: '', selectedTables: [], useTools: false };
   }
 
   const expandedTokens = tokens(expandedQuery);
-  const paddedQuery = ` ${normalize(expandedQuery)} `;
-  const configuredAliases = domainAliasService.getDomainAliases();
-  const directListTables = isSimpleEntityListRequest(query) ? activeTables.filter(table =>
-    [table.tableName, table.domain, ...(configuredAliases[table.domain] || [])]
-      .some(phrase => normalize(phrase) && paddedQuery.includes(` ${normalize(phrase)} `))) : [];
-  const directListTable = directListTables.length === 1 ? directListTables[0] : null;
+  const directListTable = isSimpleEntityListRequest(query)
+    ? matchExplicitTable(query, activeTables) || matchExplicitTable(expandedQuery, activeTables) : null;
   const lexicalScores = new Map(activeTables.map(table => [tableIdentity(table), lexicalScore(expandedTokens, tableText(table))]));
   if (directListTable) {
     for (const table of activeTables) lexicalScores.set(tableIdentity(table), table === directListTable ? 1000 : 0);
@@ -169,7 +201,9 @@ async function buildSchemaContext(query, options = {}) {
   const vectorColumnNames = new Set();
   let vectorResults = [];
   let semanticSearch = { status: 'ok', errorCode: null };
-  if (directListTable) {
+  if (!require('../services/embedding_policy').enabled()) {
+    semanticSearch = { status: 'skipped', errorCode: null, reason: 'embedding_disabled' };
+  } else if (directListTable) {
     semanticSearch = { status: 'skipped', errorCode: null, reason: 'explicit_list_entity' };
   } else try {
     const result = await qdrantService.searchSchema(expandedQuery, Math.max(12, MAX_TABLES * 3), { detailed: true });
@@ -205,6 +239,13 @@ async function buildSchemaContext(query, options = {}) {
     ? rankedTables.filter(item => (lexicalScores.get(tableIdentity(item.table)) || 0) >= strongLexicalThreshold)
     : rankedTables;
   const selected = tablePool.slice(0, MAX_TABLES).map(item => item.table);
+  const primary = activeTables.find(table => table.tableName === options.primaryTable);
+  if (primary) {
+    const index = selected.indexOf(primary);
+    if (index >= 0) selected.splice(index, 1);
+    selected.unshift(primary);
+    selected.splice(MAX_TABLES);
+  }
   const semanticCandidates = [];
   const seenSemantic = new Set();
   for (const result of vectorResults) {
@@ -225,12 +266,15 @@ async function buildSchemaContext(query, options = {}) {
       selected.push(candidate);
     }
   }
+  expandBusinessPaths(selected,activeTables,[expandedQuery,options.question&&expandWithGlossary(options.question)].filter(Boolean).join(' '),{...options,dbSourceId});
   const selectedNames = new Set(selected.map(table => table.tableName));
   const requestedIds = selected.slice(0, MAX_TABLES).map(table => tableIdentity(table));
   const parallelRelationshipIds = dictionaryService.getTableRelationships()
     .filter(relation => relation.isActive !== false && relation.status === 'verified'
       && relationshipRelevant(expandedTokens, relation, activeTables)).map(relation => relation.id);
-  const enrichmentRelations = selected.length === 1 ? automaticEnrichmentRelations(selected[0], activeTables) : [];
+  const rootMappings = automaticEnrichmentRelations(selected[0], activeTables, options);
+  const enrichmentRelations = selected.slice(1).every(table => rootMappings.some(relation => relation.targetTableId === tableIdentity(table)))
+    ? rootMappings : [];
   let joinPlan = enrichmentRelations.length
     ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
     : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && requestedIds.length > 1
@@ -254,6 +298,9 @@ async function buildSchemaContext(query, options = {}) {
   } else {
     relationships = relationships.filter(relation => relationshipRelevant(expandedTokens, relation, activeTables));
   }
+  // A semantic candidate unrelated to the root must not erase its verified
+  // display mappings from the exposed schema.
+  for (const relation of rootMappings) if (!relationships.some(item => item.id === relation.id)) relationships.push(relation);
   for (const relation of relationships) {
     for (const relatedId of [relation.sourceTableId, relation.targetTableId]) {
       if (!selected.some(table => tableIdentity(table) === relatedId) && selected.length < MAX_TABLES) {
@@ -275,7 +322,8 @@ async function buildSchemaContext(query, options = {}) {
     }
   }
 
-  const lines = [];
+  for (const relation of rootMappings) if (!relationships.some(item => item.id === relation.id)) relationships.push(relation);
+  const lines = [require('../agent_core/tools/join_path').instruction];
   const requiredColumns = new Map();
   const relationshipMappedColumns = new Set();
   relationships.forEach(relation => (relation.columnPairs || []).forEach(pair => {
@@ -311,7 +359,12 @@ async function buildSchemaContext(query, options = {}) {
     selectedTableIds: selected.map(table => tableIdentity(table)),
     useTools: true,
     joinPlan,
-    retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length, semanticSearch },
+    mappedRelationships: relationships.filter(relation => relation.businessRole && relation.displayColumn).map(relation => ({
+      sourceTable: relation.sourceTable, targetTable: relation.targetTable,
+      businessRole: relation.businessRole, displayColumn: relation.displayColumn, columnPairs: relation.columnPairs
+    })),
+    retrieval: { vectorMatches: vectorResults.length, activeTableCount: activeTables.length, semanticSearch,
+      candidateIds: [...new Set([...tablePool.map(item => tableIdentity(item.table)), ...semanticCandidates.map(tableIdentity), ...selected.map(tableIdentity)])] },
     needsModelSelection: maxLexicalScore < 4,
     tableCatalog: activeTables.map(table => `${table.tableName}${table.domain ? ` [domain: ${table.domain}]` : ''}${table.tableDescription ? ` — ${table.tableDescription}` : ''}`).join('\n').slice(0, 12000)
   };
@@ -326,8 +379,11 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   const requested = new Set(requestedTableNames.map(name => String(name).toLowerCase()));
   const selected = activeTables.filter(table => requested.has(table.tableName.toLowerCase())).slice(0, MAX_TABLES);
   if (selected.length === 0) return null;
+  expandBusinessPaths(selected,activeTables,[query,options.question&&expandWithGlossary(options.question)].filter(Boolean).join(' '),{...options,dbSourceId});
   const selectedNames = new Set(selected.map(table => table.tableName));
-  const enrichmentRelations = selected.length === 1 ? automaticEnrichmentRelations(selected[0], activeTables) : [];
+  const rootMappings = automaticEnrichmentRelations(selected[0], activeTables, options);
+  const enrichmentRelations = selected.slice(1).every(table => rootMappings.some(relation => relation.targetTableId === tableIdentity(table)))
+    ? rootMappings : [];
   const joinPlan = enrichmentRelations.length
     ? joinPlannerService.planEnrichment(tableIdentity(selected[0]), enrichmentRelations, { dbSourceId })
     : process.env.SQL_JOIN_PLANNER_ENABLED === 'true' && selected.length > 1
@@ -359,7 +415,7 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
       }
     }
   }
-  const lines = [];
+  const lines = [require('../agent_core/tools/join_path').instruction];
   const requiredColumns = new Map();
   const relationshipMappedColumns = new Set();
   relationships.forEach(relation => (relation.columnPairs || []).forEach(pair => {

@@ -1,0 +1,50 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const settings = require('../src/backend/services/tool_settings_service');
+const registry = require('../src/backend/intelligent_core/tool_registry');
+
+test('disabled tool disappears from model definitions and cannot execute through either gateway', async t => {
+  const name = 'calculate_expression';
+  t.after(() => settings.setEnabled(name, true, false, 'test'));
+  settings.setEnabled(name, false, true, 'test');
+  assert.ok(!registry.listTools().some(tool => tool.name === name));
+  assert.ok(registry.listTools(null, { includeDisabled: true }).some(tool => tool.name === name));
+  const legacy = t.mock.method(registry, 'executeLegacyTool', async () => { throw new Error('must not dispatch'); });
+  const direct = await registry.executeTool(name, { expression: '1+1' });
+  assert.equal(direct.code, 'TOOL_DISABLED');
+  assert.equal(direct.envelope.status, 'denied');
+  assert.equal(legacy.mock.callCount(), 0);
+  const manager = require('../src/backend/agent_core').defaultToolManager;
+  assert.ok(!manager.getToolDefinitions({ permissions: ['admin'] }).some(tool => tool.function.name === name));
+  assert.equal((await manager.executeTool(name, { expression: '1+1' }, { permissions: ['admin'] })).code, 'TOOL_DISABLED');
+  const { execFileSync } = require('node:child_process');
+  assert.equal(execFileSync(process.execPath, ['-e', `process.stdout.write(String(require('./src/backend/services/tool_settings_service').isEnabled('${name}')))`], { cwd: require('node:path').resolve(__dirname, '..'), env: process.env }).toString(), 'false');
+  assert.throws(() => settings.setEnabled(name, true, true, 'other'), error => error.statusCode === 409);
+});
+
+test('tool state API validates permissions, names, types and stale state', async t => {
+  assert.ok(require('../src/backend/storage/request_stores').requestStores({ method: 'GET', url: '/api/tools' }).includes('tool_settings.json'));
+  process.env.BOOTSTRAP_ADMIN_PASSWORD = 'isolated-tool-test';
+  const auth = require('../src/backend/services/auth_service');
+  let role = 'user';
+  t.mock.method(auth, 'getAccountBySession', () => ({ id: 'tool-test-admin', username: 'tester', role }));
+  const { handleRequest } = require('../src/backend/routes/router');
+  const server = require('node:http').createServer((req, res) => handleRequest(req, res).catch(error => { res.writeHead(500); res.end(error.message); }));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const post = body => fetch(url + '/api/tools/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const state = { toolName: 'calculate_expression', enabled: false, expectedEnabled: true };
+  assert.equal((await post(state)).status, 403);
+  role = 'admin';
+  assert.equal((await post({ ...state, toolName: 'missing_tool' })).status, 404);
+  assert.equal((await post({ ...state, enabled: 'false' })).status, 400);
+  assert.equal((await post(state)).status, 200);
+  assert.equal((await post(state)).status, 409);
+  const catalog = await (await fetch(url + '/api/tools')).json();
+  assert.equal(catalog.canManage, true);
+  assert.equal(catalog.tools.find(tool => tool.name === state.toolName).enabled, false);
+  assert.equal((await post({ ...state, enabled: true, expectedEnabled: false })).status, 200);
+  assert.equal(settings.isEnabled(state.toolName), true);
+});

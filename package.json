@@ -12,6 +12,7 @@
     "test": "node --require ./tests/helpers/setup_isolated_data.js --test \"tests/*.test.js\"",
     "test:ci": "npm test && npm run eval:local && npm run eval:sql",
     "eval:sql": "node --test tests/sql_security_corpus.test.js",
+    "eval:governed:replay": "node scripts/evaluate_governed_replay.js",
     "eval:workflows": "node --require ./tests/helpers/setup_isolated_data.js --test tests/automation_*.test.js",
     "eval:routing": "node --require ./tests/helpers/setup_isolated_data.js scripts/evaluate_chat_routing.js",
     "index:workflows": "node scripts/index_workflow_routing.js",
@@ -49,6 +50,7 @@
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "ajv": "8.20.0",
     "csv-parse": "^6.1.0",
     "mammoth": "^1.9.1",
     "node-sql-parser": "^5.4.0",

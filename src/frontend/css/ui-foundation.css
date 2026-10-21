@@ -1,0 +1,80 @@
+/* Shared UI guardrails. Keep feature-specific layouts in their own stylesheets. */
+:root { --ui-focus:#6250dc; --ui-focus-halo:#6250dc22; --ui-control-radius:8px; --text-muted:#667085; }
+:root[data-theme="dark"] { --ui-focus:#bcadff; --ui-focus-halo:#bcadff33; }
+html { scroll-padding-top:80px; }
+button,input,select,textarea { font-family:inherit; }
+button { touch-action:manipulation; }
+:where(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
+  outline:2px solid var(--ui-focus) !important;
+  outline-offset:3px;
+}
+:where(input,select,textarea):focus-visible { outline-offset:1px; box-shadow:0 0 0 3px var(--ui-focus-halo); }
+:where(button,input,select,textarea):disabled { cursor:not-allowed; }
+.ui-skip-link { position:fixed; left:16px; top:12px; z-index:10000; padding:10px 16px; border-radius:var(--ui-control-radius); background:var(--bg-card,#fff); color:var(--text-primary,#172033); transform:translateY(-160%); box-shadow:0 4px 16px #0002; }
+.ui-skip-link:focus { transform:translateY(0); }
+/* Opacity alone leaves closed dialogs in keyboard/accessibility navigation. */
+.modal-backdrop:not(.show),.side-drawer-panel:not(.active) { visibility:hidden; }
+.modal-backdrop.show,.side-drawer-panel.active { visibility:visible; }
+.modal-backdrop.show { overflow-y:auto; overscroll-behavior:contain; }
+.modal-backdrop :is(.modal-dialog,.workflow-dialog,.copilot-modal-dialog) { max-height:calc(100dvh - 32px); }
+:where(.system-tools-page,.content-card) :is(.form-group,.input-group,.form-field) { min-width:0; }
+:where(.system-tools-page,.content-card) :is(label,.form-label) { line-height:1.5; }
+:where(.system-tools-page,.content-card) :is(input,select,textarea) { max-width:100%; }
+.data-table-container,.table-scroll,.chat-table-scroll { overscroll-behavior-inline:contain; }
+/* Readable catalog labels without expanding every administration component. */
+#view-system-tools { --tools-muted:#667085; }
+#view-system-tools .system-tool-identity h3 { font-size:15px; }
+#view-system-tools .system-tool-identity code { font-size:12px; }
+#view-system-tools .system-tool-item > p { font-size:13px; }
+#view-system-tools .system-tool-tags span { font-size:11px; }
+#view-system-tools .system-tool-state { font-size:12px; }
+#view-system-tools .system-tool-foot button { min-height:32px; }
+#view-system-tools .system-tools-filters button { min-height:36px; }
+#view-system-tools .system-tool-availability { width:44px; height:28px; }
+#view-system-tools .system-tool-availability::after { width:22px; height:22px; }
+#view-system-tools .system-tool-availability::before { content:''; position:absolute; inset:-8px -4px; }
+#view-system-tools .system-tool-availability.is-available::after { left:19px; }
+@container main-content (max-width:1100px) { #view-system-tools .system-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@container main-content (max-width:680px) {
+  #view-system-tools .system-tools-grid { grid-template-columns:minmax(0,1fr); }
+  #view-system-tools .system-tools-catalog-header { align-items:flex-start; }
+  #view-system-tools .system-tools-filters { width:100%; flex-wrap:nowrap; overflow-x:auto; }
+  #view-system-tools .system-tools-filters button { flex:none; white-space:nowrap; }
+  #view-system-tools .system-tools-search { flex-basis:100%; }
+}
+@media(max-width:700px) {
+  :is(#page-chat-user-input,#chat-user-input) { font-size:16px !important; }
+  .login-page :is(input,select,textarea) { font-size:16px; }
+  .modal-backdrop.show { padding:12px; box-sizing:border-box; }
+}
+@media(pointer:coarse) {
+  :is(.page-chat-option-btn,.page-chat-compact-action,.chat-answer-actions button,.chat-session-more,.theme-toggle) { min-width:44px; min-height:44px; }
+}
+@media(max-width:400px) {
+  #view-system-tools .system-tool-head { column-gap:8px; padding-inline:14px; }
+  #view-system-tools .system-tool-icon { width:36px; height:36px; }
+  #view-system-tools .system-tool-identity h3 { white-space:normal; }
+  #view-system-tools .system-tool-foot { flex-wrap:wrap; }
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+}
+
+/* Single-choice selects share an inset chevron; listboxes keep native affordances. */
+:root { --ui-select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%2364748b' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+:root[data-theme="dark"] { --ui-select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%23cbd5e1' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+select:not([multiple]):not([size]), select:not([multiple])[size="1"] {
+  appearance:none !important;
+  -webkit-appearance:none !important;
+  padding-inline-end:38px !important;
+  background-image:var(--ui-select-chevron) !important;
+  background-repeat:no-repeat !important;
+  background-position:right 12px center !important;
+  background-size:12px 12px !important;
+}
+@media(forced-colors:active) {
+  select:not([multiple]):not([size]), select:not([multiple])[size="1"] { appearance:auto !important; -webkit-appearance:auto !important; background-image:none !important; }
+}
+
+/* Chat composers already expose focus on their outer frame. */
+#page-chat-user-input:focus-visible, #chat-user-input:focus-visible { outline:none !important; box-shadow:none !important; }

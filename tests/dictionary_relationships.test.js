@@ -206,8 +206,141 @@ test('relationship profiling stores aggregate evidence without source values', a
     ? [{ totalRows: 10, nullKeyRows: 2, orphanRows: 1 }]
     : [{ duplicateKeys: 0 }]);
   const profiled = await service.profileTableRelationship(relation.id, 1);
-  assert.deepEqual({ ...profiled.evidence.profile, checkedAt: 'ignored' }, {
+  assert.match(profiled.evidence.profile.signature, /^[a-f0-9]{64}$/);
+  assert.deepEqual({ ...profiled.evidence.profile, signature: 'ignored', checkedAt: 'ignored' }, {
+    signature: 'ignored',
     scope: 'full', checkedAt: 'ignored', totalRows: 10, nullKeyRows: 2, orphanRows: 1, duplicateTargetKeys: 0
   });
   assert.equal(profiled.revision, 2);
+});
+
+test('metadata writes cannot forge lifecycle, foreign key provenance or profiling evidence', async () => {
+  const service = serviceFixture();
+  const [source, target] = service.tablesStore;
+  target.columns.forEach(c => { c.isPrimaryKey = false; });
+  const forged = { status: 'verified', origin: 'foreign_key', verifiedBy: 'admin',
+    evidence: { profile: { duplicateTargetKeys: 0 } } };
+  const relation = await service.addTableRelationship({ ...forged, sourceTableId: source.tableId,
+    targetTableId: target.tableId, columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }] });
+  assert.equal(relation.status, 'suggested');
+  assert.equal(relation.origin, 'manual');
+  assert.equal(relation.evidence, undefined);
+  await service.updateTableRelationship(relation.id, { ...forged, id: 'replacement', revision: 100 });
+  assert.equal(relation.status, 'suggested');
+  assert.equal(relation.origin, 'manual');
+  assert.equal(relation.revision, 2);
+  assert.notEqual(relation.id, 'replacement');
+  await assert.rejects(service.setTableRelationshipStatus(relation.id, 'verified', 2), { code: 'JOIN_CARDINALITY_UNCONFIRMED' });
+});
+
+test('composite, filtered and disabled indexes do not prove individual-column uniqueness', () => {
+  const service = serviceFixture();
+  const table = { columns: [{ columnName: 'A', isUnique: true }, { columnName: 'B', isUnique: true }],
+    uniqueConstraints: [{ columnNames: ['A', 'B'] }, { columnNames: ['A'], hasFilter: true },
+      { columnNames: ['B'], isDisabled: true }] };
+  assert.equal(service.tableColumnsAreUnique(table, ['A']), false);
+  assert.equal(service.tableColumnsAreUnique(table, ['B']), false);
+  assert.equal(service.tableColumnsAreUnique(table, ['A', 'B']), true);
+  delete table.uniqueConstraints;
+  assert.equal(service.tableColumnsAreUnique(table, ['A']), false);
+});
+
+test('only an explicit FK snapshot retires removed constraints and prevents re-verification', async () => {
+  const service = serviceFixture();
+  const [source] = service.tablesStore;
+  const fk = { constraintName: 'FK_Test', targetTable: 'Departments',
+    columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }] };
+  service.saveDictionaryItems([{ ...source, foreignKeys: [fk] }]);
+  const relation = service.tableRelationships[0];
+  service.saveDictionaryItems([{ ...source }]); // Partial DDL has no FK inventory.
+  assert.equal(relation.status, 'verified');
+  service.saveDictionaryItems([{ ...source, foreignKeys: [] }]);
+  assert.equal(relation.status, 'stale');
+  assert.equal(relation.evidence.missing, true);
+  await assert.rejects(service.setTableRelationshipStatus(relation.id, 'verified', relation.revision), { code: 'JOIN_FOREIGN_KEY_UNTRUSTED' });
+  const revision = relation.revision;
+  service.saveDictionaryItems([{ ...source, foreignKeys: [] }]);
+  assert.equal(relation.revision, revision);
+});
+
+test('complete refresh retires missing tables only in the selected source and preserves descriptions', () => {
+  const service = serviceFixture();
+  const [source, target, other] = service.tablesStore;
+  source.columns[0].description = 'Tenant do người dùng mô tả';
+  service.saveDictionaryItems([{ ...source, columns: source.columns.map(c => ({ ...c, description: 'Generated' })) }],
+    { completeSourceId: source.dbSourceId });
+  assert.equal(target.schemaMissing, true);
+  assert.equal(target.isActive, false);
+  assert.equal(other.schemaMissing, undefined);
+  assert.equal(source.columns[0].description, 'Tenant do người dùng mô tả');
+});
+
+test('profiling uses source counts without JOIN fanout and invalidates evidence after structure changes', async t => {
+  const service = serviceFixture();
+  const [source, target] = service.tablesStore;
+  target.columns.forEach(c => { c.isPrimaryKey = false; });
+  const relation = await service.addTableRelationship({ sourceTableId: source.tableId, targetTableId: target.tableId,
+    columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }] });
+  const original = sqlConnector.executeSqlQuery;
+  t.after(() => { sqlConnector.executeSqlQuery = original; });
+  const queries = [];
+  sqlConnector.executeSqlQuery = async sql => {
+    queries.push(sql);
+    return sql.includes('AS totalRows') ? [{ totalRows: 5, nullKeyRows: 1, orphanRows: 1 }] : [{ duplicateKeys: 0 }];
+  };
+  await service.profileTableRelationship(relation.id, relation.revision);
+  assert.match(queries[0], /NOT EXISTS/);
+  assert.doesNotMatch(queries[0], /LEFT JOIN/);
+  await service.setTableRelationshipStatus(relation.id, 'verified', relation.revision);
+  await service.updateTableRelationship(relation.id, { columnPairs: [{ sourceColumn: 'TenantID', targetColumn: 'TenantID' }] });
+  assert.equal(relation.status, 'stale');
+  assert.equal(relation.evidence.profile, undefined);
+  await assert.rejects(service.setTableRelationshipStatus(relation.id, 'verified', relation.revision), { code: 'JOIN_CARDINALITY_UNCONFIRMED' });
+});
+
+test('expired profiling cannot verify a relation and async profiling rejects concurrent edits', async t => {
+  const service = serviceFixture();
+  const [source, target] = service.tablesStore;
+  target.columns.forEach(c => { c.isPrimaryKey = false; });
+  const relation = await service.addTableRelationship({ sourceTableId: source.tableId, targetTableId: target.tableId,
+    columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }] });
+  relation.evidence = { profile: { signature: service.profileSignature(relation),
+    checkedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), duplicateTargetKeys: 0 } };
+  await assert.rejects(service.setTableRelationshipStatus(relation.id, 'verified', relation.revision), { code: 'JOIN_CARDINALITY_UNCONFIRMED' });
+  const original = sqlConnector.executeSqlQuery;
+  t.after(() => { sqlConnector.executeSqlQuery = original; });
+  let changed = false;
+  sqlConnector.executeSqlQuery = async () => {
+    if (!changed) { changed = true; await service.updateTableRelationship(relation.id, { businessRole: 'new' }); }
+    return [{ totalRows: 1, duplicateKeys: 0 }];
+  };
+  await assert.rejects(service.profileTableRelationship(relation.id, relation.revision), { statusCode: 409 });
+});
+
+test('legacy mutations reject ambiguous names and accept exact table identities', async () => {
+  const service = serviceFixture();
+  const [, first, second] = service.tablesStore;
+  await assert.rejects(service.toggleTableActive('Departments', false), /tableId/);
+  await assert.rejects(service.updateColumnDescription('Departments', 'DepartmentID', 'New'), /tableId/);
+  await assert.rejects(service.deleteTable('Departments'), /tableId/);
+  await service.toggleTableActive('Departments', false, second.tableId);
+  assert.notEqual(first.isActive, false);
+  assert.equal(second.isActive, false);
+  await service.updateColumnDescription('Departments', 'DepartmentID', 'Second source', '', second.tableId);
+  assert.equal(second.columns[0].description, 'Second source');
+  assert.notEqual(first.columns[1].description, 'Second source');
+});
+
+test('incomplete profiling results cannot become uniqueness evidence', async t => {
+  const service = serviceFixture();
+  const [source, target] = service.tablesStore;
+  const relation = await service.addTableRelationship({ sourceTableId: source.tableId, targetTableId: target.tableId,
+    columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }] });
+  const original = sqlConnector.executeSqlQuery;
+  t.after(() => { sqlConnector.executeSqlQuery = original; });
+  sqlConnector.executeSqlQuery = async sql => sql.includes('AS totalRows')
+    ? [{ totalRows: 10, nullKeyRows: 0, orphanRows: 0 }] : [];
+  await assert.rejects(service.profileTableRelationship(relation.id, 1), { code: 'JOIN_PROFILE_INCOMPLETE' });
+  assert.equal(relation.evidence, undefined);
+  assert.equal(relation.revision, 1);
 });

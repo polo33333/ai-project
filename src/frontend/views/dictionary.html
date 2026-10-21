@@ -7,20 +7,38 @@
         Lược đồ CSDL & Quan hệ bảng
       </div>
       <p class="card-subtitle">
-        Quản lý bảng, cột, khóa và quan hệ trong CSDL; lựa chọn cấu trúc được phép đưa vào ngữ cảnh truy vấn của AI.
+        Chọn dữ liệu AI được sử dụng và giúp AI hiểu đúng ý nghĩa, mối liên kết giữa các bảng.
       </p>
     </div>
     <div class="dictionary-header-actions">
       <button class="btn-secondary-sm" onclick="switchMainTab('sql')">
-        <i class="fa-solid fa-plus"></i> Nạp nguồn DB mới
+        <i class="fa-solid fa-plus"></i> Thêm nguồn dữ liệu
       </button>
+      <div id="dictionary-sync-status" class="dictionary-sync-status" role="status" aria-live="polite" hidden></div>
     </div>
   </section>
 
   <section class="system-tools-card dictionary-content-card">
+  <details class="dictionary-quality" id="dictionary-quality-panel">
+    <summary class="dictionary-quality-header">
+      <span class="dictionary-quality-icon"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i></span>
+      <span class="dictionary-quality-heading"><strong>Kiểm tra cấu hình cho AI</strong><span id="dictionary-quality-summary">Đang tải kết quả…</span></span>
+      <span class="dictionary-quality-expand">Xem chi tiết <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+    </summary>
+    <div class="dictionary-quality-body">
+      <p class="dictionary-quality-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Chỉ kiểm tra quan hệ giữa các bảng và cột đang bật cho AI. Mỗi quan hệ hiển thị một lần; chọn “Xem quan hệ” để mở liên kết cần kiểm tra.</p>
+      <div class="dictionary-quality-toolbar">
+        <label class="dictionary-quality-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="dictionary-quality-search" type="search" placeholder="Tìm bảng, cột hoặc vai trò liên kết…" aria-label="Tìm cảnh báo cấu hình" oninput="filterDictionaryQuality()"></label>
+        <label><span class="sr-only">Loại cảnh báo</span><select id="dictionary-quality-kind" onchange="filterDictionaryQuality()"><option value="all">Tất cả vấn đề</option><option value="relationship">Quan hệ bảng</option><option value="configuration">Cấu hình bảng / cột</option><option value="error">Chỉ lỗi cấu hình</option></select></label>
+        <label><span class="sr-only">Lọc theo bảng</span><select id="dictionary-quality-table" onchange="filterDictionaryQuality()"><option value="">Tất cả bảng</option></select></label>
+      </div>
+      <div id="dictionary-quality-results" role="region" aria-label="Danh sách quan hệ và cấu hình cần kiểm tra" tabindex="0"></div>
+      <div class="dictionary-quality-footer"><span id="dictionary-quality-count" role="status" aria-live="polite"></span><div><button type="button" id="dictionary-quality-prev" onclick="pageDictionaryQuality(-1)" aria-label="Trang cảnh báo trước"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><span id="dictionary-quality-page"></span><button type="button" id="dictionary-quality-next" onclick="pageDictionaryQuality(1)" aria-label="Trang cảnh báo sau"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div>
+    </div>
+  </details>
   <div class="dictionary-overview-strip" aria-label="Tổng quan lược đồ">
-    <div><span class="dictionary-overview-icon green"><i class="fa-solid fa-circle-check"></i></span><strong id="dict-stat-active">0</strong><small>bảng active</small></div>
-    <div><span class="dictionary-overview-icon indigo"><i class="fa-solid fa-layer-group"></i></span><strong id="dict-stat-domains">0</strong><small>domain nghiệp vụ</small></div>
+    <div><span class="dictionary-overview-icon green"><i class="fa-solid fa-circle-check"></i></span><strong id="dict-stat-active">0</strong><small>bảng đang bật</small></div>
+    <div><span class="dictionary-overview-icon indigo"><i class="fa-solid fa-layer-group"></i></span><strong id="dict-stat-domains">0</strong><small>lĩnh vực nghiệp vụ</small></div>
     <div><span class="dictionary-overview-icon amber"><i class="fa-solid fa-circle-question"></i></span><strong id="dict-stat-unassigned">0</strong><small>chưa phân loại</small></div>
   </div>
   <div class="dictionary-controls">
@@ -30,25 +48,19 @@
         <input type="text" class="search-input" id="dict-search-input" placeholder="Tìm tên bảng hoặc cột..." oninput="filterDictionaryTables()">
       </div>
       <div class="dictionary-filter-group" id="dictionary-status-filters">
-        <button class="btn-secondary-sm active" id="btn-filter-all" onclick="filterTableStatus('all')">Tất cả bảng</button>
-        <button class="btn-secondary-sm" id="btn-filter-active" onclick="filterTableStatus('active')">
-          <i class="fa-solid fa-circle-check"></i> Đang Active
+        <button class="btn-secondary-sm" id="btn-filter-all" onclick="filterTableStatus('all')">Tất cả bảng</button>
+        <button class="btn-secondary-sm active" id="btn-filter-active" onclick="filterTableStatus('active')">
+          <i class="fa-solid fa-circle-check"></i> Đang bật
         </button>
         <button class="btn-secondary-sm" id="btn-filter-inactive" onclick="filterTableStatus('inactive')">Đã tắt</button>
       </div>
       <div class="dictionary-view-switch" role="group" aria-label="Chế độ hiển thị">
-        <button class="btn-secondary-sm" id="btn-dict-view-graph" onclick="setDictionaryView('graph')"><i class="fa-solid fa-share-nodes"></i> Graph</button>
+        <button class="btn-secondary-sm" id="btn-dict-view-graph" onclick="setDictionaryView('graph')"><i class="fa-solid fa-share-nodes"></i> Sơ đồ</button>
         <button class="btn-secondary-sm active" id="btn-dict-view-list" onclick="setDictionaryView('list')"><i class="fa-solid fa-list"></i> Danh sách</button>
       </div>
     </div>
     <div class="dictionary-controls-right">
       <div class="dictionary-controls-actions">
-        <button class="btn-secondary-sm" onclick="openBusinessDomainsModal()">
-          <i class="fa-solid fa-layer-group"></i> Domain nghiệp vụ
-        </button>
-        <button class="btn-secondary-sm" onclick="openRelationshipDiagram()">
-          <i class="fa-solid fa-diagram-project"></i> Sơ đồ quan hệ
-        </button>
         <button id="relationship-discovery-button" class="btn-secondary-sm" onclick="discoverDictionaryRelationships()" hidden disabled aria-disabled="true">
           <i class="fa-solid fa-wand-magic-sparkles"></i> Khám phá quan hệ
         </button>
@@ -61,14 +73,14 @@
   </div>
 
   <div id="dictionary-graph-panel" class="dictionary-graph-panel" hidden>
-    <div class="dictionary-graph-help"><i class="fa-regular fa-lightbulb"></i> Lăn chuột để zoom; chọn bảng để xem chi tiết và làm nổi bật quan hệ.</div>
+      <div class="dictionary-graph-help"><i class="fa-regular fa-lightbulb"></i> Cuộn để thu phóng. Chọn bảng để xem cấu trúc và các bảng liên quan.</div>
     <div id="dictionary-graph-viewport" class="dictionary-graph-viewport">
       <div id="dictionary-domain-graph" class="dictionary-domain-graph">
         <svg id="dictionary-domain-edges" class="dictionary-domain-edges" aria-hidden="true"></svg>
         <div id="dictionary-db-root" class="dictionary-db-root"></div>
         <div id="dictionary-domain-groups"></div>
       </div>
-      <div id="dictionary-graph-empty" class="dictionary-graph-empty" hidden><i class="fa-solid fa-share-nodes"></i><strong>Chưa có bảng active phù hợp</strong><span>Hãy bật bảng cho AI hoặc thay đổi từ khóa tìm kiếm.</span></div>
+      <div id="dictionary-graph-empty" class="dictionary-graph-empty" hidden><i class="fa-solid fa-share-nodes"></i><strong>Chưa có bảng đang bật phù hợp</strong><span>Hãy bật bảng cho AI hoặc thay đổi từ khóa tìm kiếm.</span></div>
     </div>
     <div class="dictionary-graph-controls" aria-label="Điều khiển graph">
       <button onclick="zoomDictionaryGraph(-0.1)" title="Thu nhỏ"><i class="fa-solid fa-minus"></i></button>
@@ -102,7 +114,7 @@
       <div class="dictionary-drawer-section dictionary-status-panel">
         <div>
           <div class="dictionary-section-label">Trạng thái AI</div>
-          <p>Bảng active sẽ được đưa vào ngữ cảnh schema khi AI tạo truy vấn.</p>
+          <p>Cho phép AI tra cứu các cột được chọn trong bảng này.</p>
         </div>
         <label class="switch">
           <input type="checkbox" id="dict-drawer-active-toggle">
@@ -111,19 +123,58 @@
       </div>
 
       <div class="dictionary-drawer-section">
-        <div class="dictionary-section-label">Mô tả bảng cho AI</div>
-        <label class="dictionary-domain-label" for="dict-drawer-table-domain">Domain nghiệp vụ</label>
-        <select class="form-control" id="dict-drawer-table-domain">
-          <option value="">Chưa gán nhóm nghiệp vụ</option>
+        <div class="dictionary-section-label"><i class="fa-solid fa-compass" aria-hidden="true"></i> Ngữ cảnh của bảng</div>
+        <label class="dictionary-domain-label" for="dict-drawer-table-domain">Lĩnh vực nghiệp vụ</label>
+        <div class="dictionary-domain-picker">
+        <select class="form-control" id="dict-drawer-table-domain" aria-describedby="dict-domain-hint">
+          <option value="">Chưa gán lĩnh vực nghiệp vụ</option>
         </select>
+        <button type="button" class="btn-secondary-sm" onclick="openBusinessDomainsModal()" title="Quản lý lĩnh vực nghiệp vụ dùng chung"><i class="fa-solid fa-sliders"></i> Quản lý lĩnh vực</button>
+        </div>
+        <p class="dictionary-defaults-hint" id="dict-domain-hint">Phân loại bảng theo lĩnh vực. Từ khóa lĩnh vực hỗ trợ tìm các bảng liên quan, không tự xác định một bảng cụ thể.</p>
+        <label class="dictionary-domain-label dictionary-important-label" for="dict-drawer-table-description">Mô tả nội dung <span class="dictionary-ai-badge"><i class="fa-solid fa-star" aria-hidden="true"></i> Quan trọng cho AI</span></label>
+        <textarea class="form-control dictionary-table-description" id="dict-drawer-table-description" rows="3" placeholder="Bảng lưu thông tin gì, phục vụ nghiệp vụ nào?" aria-describedby="dict-description-hint"></textarea>
+        <p class="dictionary-defaults-hint" id="dict-description-hint">Giải thích ý nghĩa và phạm vi dữ liệu; không cần liệt kê lại cột hay quy tắc truy vấn.</p>
+      </div>
+
+      <div class="dictionary-drawer-section dictionary-ai-rules-section">
+        <details class="dictionary-semantic-settings">
+          <summary><span class="dictionary-semantic-icon"><i class="fa-solid fa-brain" aria-hidden="true"></i></span><span class="dictionary-semantic-heading"><strong>Quy tắc hiểu và truy vấn dữ liệu</strong><small>Định nghĩa đối tượng và cách đọc dữ liệu riêng cho bảng này</small></span><span class="dictionary-ai-badge"><i class="fa-solid fa-star" aria-hidden="true"></i> Quan trọng cho AI</span><i class="fa-solid fa-chevron-down dictionary-semantic-chevron"></i></summary>
+          <div class="dictionary-semantic-content">
+          <p class="dictionary-defaults-hint">Giúp AI nhận diện bảng và đọc đúng dữ liệu. Không cần lặp lại mô tả bảng hoặc từ khóa lĩnh vực.</p>
+          <p class="dictionary-ai-priority-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>Nên điền các mục có dấu sao trước. Quy tắc chỉ được áp dụng khi có tên đối tượng dữ liệu.</span></p>
+          <div class="dictionary-defaults-grid">
+            <label><span class="dictionary-priority-field"><i class="fa-solid fa-star" aria-hidden="true"></i> Tên đối tượng dữ liệu <span class="sr-only">— Quan trọng cho AI</span></span><input class="form-control" id="dict-semantic-entity" placeholder="VD: Khách hàng"></label>
+            <label>Vai trò bảng<select class="form-control" id="dict-semantic-kind"><option value="entity">Thực thể</option><option value="transaction">Chứng từ</option><option value="detail">Chi tiết chứng từ</option><option value="lookup">Danh mục</option></select></label>
+            <label><span class="dictionary-priority-field"><i class="fa-solid fa-star" aria-hidden="true"></i> Một dòng dữ liệu đại diện cho <span class="sr-only">— Quan trọng cho AI</span></span><input class="form-control" id="dict-semantic-grain" placeholder="VD: Một khách hàng"></label>
+            <label><span class="dictionary-priority-field"><i class="fa-solid fa-star" aria-hidden="true"></i> Cột định danh <span class="sr-only">— Quan trọng cho AI</span></span><input class="form-control" id="dict-semantic-identities" placeholder="CustomerID, CustomerCode"></label>
+            <label><span class="dictionary-priority-field"><i class="fa-solid fa-star" aria-hidden="true"></i> Cột hiển thị trong danh sách <span class="sr-only">— Quan trọng cho AI</span></span><input class="form-control" id="dict-semantic-summary" placeholder="CustomerCode, CustomerName"></label>
+          </div>
+          <label>Tên gọi khác của đối tượng<input class="form-control" id="dict-semantic-aliases" placeholder="Khách hàng, doanh nghiệp"></label>
+          <div class="dictionary-defaults-grid">
+            <label>Đơn vị tiền mặc định<input class="form-control" id="dict-semantic-currency" placeholder="VNĐ"></label>
+            <label>Các cột tiền<input class="form-control" id="dict-semantic-money-fields" placeholder="PreAmount, VATAmount, FinalAmount"></label>
+          </div>
+          <details class="dictionary-semantic-advanced"><summary>Cấu hình nâng cao <span>Bộ lọc và chỉ tiêu dạng JSON</span></summary>
+          <label>Phân nhóm dữ liệu theo điều kiện (JSON)<textarea class="form-control" id="dict-semantic-segments" rows="4" spellcheck="false" placeholder='[{"id":"van_hanh","label":"Chi phí vận hành","column":"HoUID","value":21}]'></textarea></label>
+          <label>Chỉ tiêu, đơn vị và quy tắc dữ liệu trống (JSON nâng cao)<textarea class="form-control" id="dict-semantic-measures" rows="4" spellcheck="false" placeholder='[{"column":"FinalAmount","aggregation":"SUM","unit":"VND","nullRule":"exclude","taxBasis":"after_tax"}]'></textarea></label>
+          </details>
+          <p class="dictionary-defaults-hint">Cột phải tồn tại và được bật. Bộ lọc cố định được áp dụng khi chọn phân nhóm dữ liệu tương ứng. Đơn vị tiền dùng để hiển thị, không tự quy đổi số tiền. Để trống tên đối tượng nếu chưa sử dụng cấu hình này.</p>
+          </div>
+        </details>
+      </div>
+
+      <details class="dictionary-drawer-section dictionary-query-defaults">
+        <summary class="dictionary-section-row"><span class="dictionary-section-label"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Thiết lập truy vấn mặc định</span><span class="dictionary-optional-badge">Tùy chọn <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span></summary>
+        <label>Bộ lọc bắt buộc (JSON)<textarea class="form-control" id="dict-required-filters" rows="3" spellcheck="false" placeholder='[{"column":"IsDeleted","operator":"eq","value":false}]'></textarea></label>
+        <p class="dictionary-defaults-hint">Chỉ khai báo điều kiện nghiệp vụ đã xác nhận. Hỗ trợ eq, is_null, is_not_null; cột phải được bật. Khi nguồn có bộ lọc bắt buộc, phiên bản hiện tại chỉ cho phép SELECT một bảng; JOIN, CTE, UNION và truy vấn lồng bị chặn. Để [] nếu chưa cấu hình; không tự suy ra từ tên cột.</p>
+        <p class="dictionary-defaults-hint">Bổ sung giá trị mặc định khi câu hỏi chưa chỉ rõ chỉ tiêu hoặc thời gian; không thay thế yêu cầu cụ thể của người dùng.</p>
         <div class="dictionary-defaults-grid">
-          <label>Metric mặc định<select class="form-control" id="dict-drawer-default-metric"><option value="">Tự động nhận diện</option></select></label>
+          <label>Chỉ tiêu mặc định<select class="form-control" id="dict-drawer-default-metric"><option value="">Tự động nhận diện</option></select></label>
           <label>Cột thời gian<select class="form-control" id="dict-drawer-default-time"><option value="">Tự động nhận diện</option></select></label>
           <label>Phép tổng hợp<select class="form-control" id="dict-drawer-default-aggregation"><option value="SUM">SUM — Tổng</option><option value="AVG">AVG — Trung bình</option><option value="MIN">MIN — Nhỏ nhất</option><option value="MAX">MAX — Lớn nhất</option><option value="COUNT">COUNT — Đếm</option></select></label>
         </div>
-        <p class="dictionary-defaults-hint"><i class="fa-regular fa-lightbulb"></i> Dùng khi câu hỏi không gọi tên rõ metric hoặc cột thời gian.</p>
-        <textarea class="form-control dictionary-table-description" id="dict-drawer-table-description" rows="4" placeholder="Mô tả ý nghĩa nghiệp vụ của bảng này..."></textarea>
-      </div>
+      </details>
 
       <div class="dictionary-drawer-section">
         <div class="dictionary-section-row">
@@ -132,6 +183,8 @@
             <p id="dict-drawer-columns-count">0 cột thuộc tính</p>
           </div>
         </div>
+        <label class="dictionary-column-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input type="search" id="dict-column-search" placeholder="Tìm cột hoặc tên hiển thị…" aria-label="Tìm cột trong bảng" oninput="filterDictionaryColumns()"></label>
+        <p id="dict-column-search-empty" class="dictionary-column-search-empty" hidden>Không tìm thấy cột phù hợp. Thử tên cột hoặc tên hiển thị khác.</p>
         <div id="dict-drawer-columns" class="dictionary-columns-list"></div>
       </div>
       <div class="dictionary-drawer-actions dictionary-drawer-actions-bottom">
@@ -149,27 +202,27 @@
     <div class="domain-manager-header">
       <div class="domain-manager-heading">
         <span class="domain-manager-heading-icon"><i class="fa-solid fa-layer-group"></i></span>
-        <div><h3 id="business-domains-title">Nhóm nghiệp vụ cho AI</h3><p>Quản lý từ khóa giúp AI nhận diện và chọn đúng bảng dữ liệu.</p></div>
+        <div><h3 id="business-domains-title">Lĩnh vực nghiệp vụ cho AI</h3><p>Quản lý lĩnh vực và từ khóa dùng chung để tìm các bảng liên quan. Tên đối tượng riêng trong từng bảng được dùng để xác định bảng cụ thể.</p></div>
       </div>
       <button class="modal-close-btn" onclick="closeBusinessDomainsModal()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="domain-manager-body">
       <button class="domain-manager-form-backdrop" type="button" onclick="resetBusinessDomainForm()" aria-label="Đóng biểu mẫu" tabindex="-1"></button>
       <div class="domain-manager-form" id="domain-manager-form" aria-hidden="true">
-        <div class="domain-manager-form-title"><span class="domain-manager-form-icon"><i class="fa-solid fa-plus"></i></span><div><strong id="domain-form-title">Thêm nhóm mới</strong><small id="domain-form-subtitle">Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện</small></div><button class="domain-manager-form-close" type="button" onclick="resetBusinessDomainForm()" aria-label="Đóng biểu mẫu"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="domain-manager-form-title"><span class="domain-manager-form-icon"><i class="fa-solid fa-plus"></i></span><div><strong id="domain-form-title">Thêm lĩnh vực mới</strong><small id="domain-form-subtitle">Tạo một lĩnh vực nghiệp vụ và bộ từ khóa tìm kiếm dùng chung</small></div><button class="domain-manager-form-close" type="button" onclick="resetBusinessDomainForm()" aria-label="Đóng biểu mẫu"><i class="fa-solid fa-xmark"></i></button></div>
         <input type="hidden" id="domain-old-key">
-        <label>Mã nghiệp vụ<input class="form-control" id="domain-key-input" placeholder="Ví dụ: contract"></label>
-        <label>Từ khóa và từ đồng nghĩa<textarea class="form-control" id="domain-aliases-input" rows="4" placeholder="hợp đồng, thỏa thuận, giao kèo"></textarea></label>
+        <label>Mã lĩnh vực<input class="form-control" id="domain-key-input" placeholder="Ví dụ: contract"></label>
+        <label>Từ khóa tìm kiếm lĩnh vực<textarea class="form-control" id="domain-aliases-input" rows="4" placeholder="hợp đồng, thỏa thuận, giao kèo"></textarea></label>
         <div class="domain-manager-hint"><i class="fa-regular fa-lightbulb"></i><span>Mỗi từ khóa cách nhau bằng dấu phẩy hoặc xuống dòng.</span></div>
         <div class="domain-manager-actions">
           <button class="btn-secondary-sm" id="domain-cancel-button" onclick="resetBusinessDomainForm()">Hủy</button>
-          <button class="btn-primary" onclick="saveBusinessDomain()"><i class="fa-solid fa-floppy-disk"></i> Lưu nhóm</button>
+          <button class="btn-primary" onclick="saveBusinessDomain()"><i class="fa-solid fa-floppy-disk"></i> Lưu lĩnh vực</button>
         </div>
       </div>
       <div class="domain-manager-content">
         <div class="domain-manager-toolbar">
           <div><strong>Danh sách nghiệp vụ</strong><span id="business-domains-count">0 nhóm</span></div>
-          <div class="domain-manager-toolbar-actions"><button class="btn-primary domain-manager-add-button" type="button" onclick="openNewBusinessDomainForm()"><i class="fa-solid fa-plus"></i> Thêm nhóm</button><div class="domain-manager-search"><i class="fa-solid fa-magnifying-glass"></i><input id="business-domains-search" placeholder="Tìm nghiệp vụ..." oninput="renderBusinessDomains()"></div></div>
+          <div class="domain-manager-toolbar-actions"><button class="btn-primary domain-manager-add-button" type="button" onclick="openNewBusinessDomainForm()"><i class="fa-solid fa-plus"></i> Thêm lĩnh vực</button><div class="domain-manager-search"><i class="fa-solid fa-magnifying-glass"></i><input id="business-domains-search" placeholder="Tìm lĩnh vực..." oninput="renderBusinessDomains()"></div></div>
         </div>
         <div id="business-domains-list" class="domain-manager-list"></div>
       </div>

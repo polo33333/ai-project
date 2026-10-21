@@ -57,11 +57,11 @@ async function ready() {
   if (!enabled()) return { backend: 'json', ready: true };
   if (!pool || closing) throw Object.assign(new Error('STORAGE_NOT_READY'), { statusCode: 503 });
   const result = await pool.query(`SELECT
-    (SELECT count(*) FROM app.schema_migrations WHERE name='003_page_chat_history.sql')::int AS schema_ready,
+    (SELECT count(*) FROM app.schema_migrations WHERE name='005_scoped_memory.sql')::int AS schema_ready,
     (SELECT mode FROM app.storage_state WHERE singleton=true) AS mode,
     EXISTS(SELECT 1 FROM app.accounts) AS has_accounts`);
   if (result.rows[0]?.schema_ready !== 1 || result.rows[0]?.mode !== 'live' || !result.rows[0]?.has_accounts) throw Object.assign(new Error('POSTGRES_SCHEMA_OR_CUTOVER_NOT_READY'), { statusCode: 503 });
-  return { backend: 'postgres', ready: true, schema: 3 };
+  return { backend: 'postgres', ready: true, schema: 5 };
 }
 
 async function run(operation, { independent = false, files } = {}) {
@@ -174,21 +174,24 @@ async function close() {
   pool = null; repository = null;
 }
 
-async function lease(key, operation, { ttlMs = 120000 } = {}) {
-  if (!enabled()) return operation();
+async function lease(key, operation, { ttlMs = 120000, pool: leasePool = pool } = {}) {
+  if (!leasePool) {
+    if (enabled()) throw new Error('STORAGE_NOT_READY');
+    return operation();
+  }
   const owner = crypto.randomUUID();
-  const acquire = await pool.query(`INSERT INTO app.worker_leases(key, owner, expires_at) VALUES($1,$2,now()+$3*interval '1 millisecond')
+  const acquire = await leasePool.query(`INSERT INTO app.worker_leases(key, owner, expires_at) VALUES($1,$2,now()+$3*interval '1 millisecond')
     ON CONFLICT(key) DO UPDATE SET owner=excluded.owner, expires_at=excluded.expires_at
     WHERE app.worker_leases.expires_at<now() RETURNING owner`, [key, owner, ttlMs]);
   if (!acquire.rowCount) return { skipped: true, reason: 'lease_held' };
   let lost = false;
   const timer = setInterval(detach(() => {
-    pool.query("UPDATE app.worker_leases SET expires_at=now()+$3*interval '1 millisecond' WHERE key=$1 AND owner=$2 RETURNING owner", [key,owner,ttlMs])
+    leasePool.query("UPDATE app.worker_leases SET expires_at=now()+$3*interval '1 millisecond' WHERE key=$1 AND owner=$2 RETURNING owner", [key,owner,ttlMs])
       .then(result => { if (!result.rowCount) lost = true; }).catch(() => { lost = true; });
   }), Math.max(1000, Math.floor(ttlMs / 3)));
   timer.unref();
   try { const result = await operation(); if (lost) throw new Error('WORKER_LEASE_LOST'); return result; }
-  finally { clearInterval(timer); await pool.query('DELETE FROM app.worker_leases WHERE key=$1 AND owner=$2', [key, owner]); }
+  finally { clearInterval(timer); await leasePool.query('DELETE FROM app.worker_leases WHERE key=$1 AND owner=$2', [key, owner]); }
 }
 
 module.exports = { enabled, loadEnvironment, bootstrapStorage, run, flush, read, write, bind, enqueue, receipt, afterCommit, detach, ready, close, lease, getPool: () => pool };

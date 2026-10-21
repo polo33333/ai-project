@@ -6,27 +6,78 @@
   const script = document.currentScript;
   const embedId = script?.dataset.embedId || '';
   const apiBase = (script?.dataset.apiBase || new URL(script.src).origin).replace(/\/$/, '');
+  let attachmentsApiPromise;
+  const attachmentsApi=()=>{
+    if(window.ChatAttachments)return Promise.resolve(window.ChatAttachments);
+    if(!attachmentsApiPromise)attachmentsApiPromise=new Promise((resolve,reject)=>{
+      const helper=document.createElement('script');helper.src=apiBase+'/embed/chat-attachments.js?v=20261020-preview';
+      helper.onload=()=>resolve(window.ChatAttachments);helper.onerror=()=>{attachmentsApiPromise=null;reject(new Error('Không tải được chức năng đính kèm.'));};document.head.appendChild(helper);
+    });
+    return attachmentsApiPromise;
+  };
   const title = script?.dataset.title || 'Trợ lý AI';
   const greeting = script?.dataset.greeting || 'Xin chào! Tôi có thể giúp gì cho bạn?';
   const primary = script?.dataset.color || '#4f46e5';
   const position = script?.dataset.position === 'left' ? 'left' : 'right';
   const isPreview = script?.dataset.preview === 'true';
   const requestedTheme = ['light', 'dark'].includes(script?.dataset.theme) ? script.dataset.theme : 'auto';
+  let streamApiPromise;
+  function streamApi(){
+    if(window.ChatStream)return Promise.resolve(window.ChatStream);
+    if(!streamApiPromise)streamApiPromise=new Promise((resolve,reject)=>{const helper=document.createElement('script');helper.src=apiBase+'/embed/chat-stream.js?v=20261021-workflow-submit';helper.onload=()=>resolve(window.ChatStream);helper.onerror=()=>{streamApiPromise=null;reject(new Error('Không tải được trình đọc phản hồi.'));};document.head.appendChild(helper);});
+    return streamApiPromise;
+  }
+  let lastIdentityKey;
+  async function identityToken() {
+    const provider = window.KnowledgeHubIdentity?.getToken;
+    const token = typeof provider === 'function' ? await provider(embedId) : undefined;
+    // This key only detects account changes for local UI reset. The server verifies the token.
+    let key = 'guest';
+    if (token) {
+      try { const claims=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); key=JSON.stringify([claims.iss,claims.sub]); }
+      catch (_) { key='invalid'; }
+    }
+    let previous=lastIdentityKey;
+    if (previous === undefined) try { previous=sessionStorage.getItem(workflowStorageKey+':identity'); } catch (_) {}
+    if ((previous !== null && previous !== undefined && previous !== key) || (!previous && token && workflowToken)) {
+      resetConversation();
+    }
+    try { sessionStorage.setItem(workflowStorageKey+':identity',key); } catch (_) {}
+    lastIdentityKey=key;
+    return token;
+  }
   const history = [];
   let sessionId = createSessionId();
   let workflowToken = '', workflowRuns = [];
   const workflowPanels = new Map();
   const workflowExecutions = new Map();
+  const workflowPollTimers = new WeakMap();
   const workflowStorageKey = `knowledgehub-workflows:${apiBase}:${embedId}:${location.pathname}${location.search}`;
   const restoreSession = performance.getEntriesByType('navigation')[0]?.type === 'reload' && !window.KnowledgeHubEmbedInitialized;
   window.KnowledgeHubEmbedInitialized = true;
   try { const saved=restoreSession ? JSON.parse(sessionStorage.getItem(workflowStorageKey)||'null') : null; if(saved) {sessionId=saved.sessionId;workflowToken=saved.token;workflowRuns=saved.runs||[];} } catch (_) {}
+  async function sendPresence() {
+    if (document.visibilityState === 'hidden') return;
+    try {
+      const token = await identityToken();
+      await fetch(apiBase + '/api/embed/chat', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,presence:true,identityToken:token})});
+    } catch (_) { /* Next heartbeat retries without interrupting chat. */ }
+  }
+  let presenceTimer;
+  const onPresenceVisibility = () => { if (document.visibilityState === 'visible') sendPresence(); };
   const saveWorkflow = () => { try { sessionStorage.setItem(workflowStorageKey,JSON.stringify({sessionId,token:workflowToken,runs:workflowRuns})); } catch (_) {} };
   saveWorkflow();
   let activeRequest = null;
   let conversationVersion = 0;
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  function renderAnswerStatus(envelope) {
+    if (envelope?.schemaVersion !== '1') return '';
+    const labels = { answered: 'Đã trả lời', partial: 'Kết quả một phần', clarify: 'Cần làm rõ', no_evidence: 'Chưa có bằng chứng phù hợp', denied: 'Không đủ quyền truy cập', pending: 'Đang chờ xử lý', cancelled: 'Đã dừng', error: 'Chưa thể hoàn tất' };
+    const label = labels[envelope.disposition] || labels.error;
+    const limitations = Array.isArray(envelope.limitations) ? envelope.limitations.filter(value => typeof value === 'string') : [];
+    return `<div role="status" style="font-size:12px;line-height:1.5;opacity:.85;margin-bottom:10px"><strong>${escapeHtml(label)}</strong>${limitations.length ? `<ul>${limitations.map(value => `<li>${escapeHtml(value)}</li>`).join('')}</ul>` : ''}</div>`;
+  }
   const isBooleanDisplayColumn = (columnName = '') => {
     const normalized = String(columnName).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
     return /^(?:is|has|can|should|allow|enable|active|inactive|deleted|locked|verified|approved|visible)/.test(normalized)
@@ -93,7 +144,17 @@
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>');
-  const markdownCells = line => String(line).trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+  const markdownCells = line => {
+    const text = String(line || '').trim();
+    const cells = []; let cell = '', delimiter = false;
+    for (let index = text.startsWith('|') ? 1 : 0; index < text.length; index++) {
+      if (text[index] === '\\' && text[index + 1] === '|') { cell += '|'; index++; delimiter = false; }
+      else if (text[index] === '|') { cells.push(cell.trim()); cell = ''; delimiter = true; }
+      else { cell += text[index]; delimiter = false; }
+    }
+    if (!delimiter) cells.push(cell.trim());
+    return cells;
+  };
   const renderRichText = value => {
     const lines = normalizeDownloadLinks(value).split(/\r?\n/);
     const output = [];
@@ -104,7 +165,7 @@
     };
     for (let index = 0; index < lines.length; index += 1) {
       const separator = lines[index + 1];
-      if (lines[index].includes('|') && separator && /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(separator)) {
+      if (lines[index].includes('|') && separator && /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(separator)) {
         flushProse();
         const headers = markdownCells(lines[index]);
         const rows = [];
@@ -114,7 +175,9 @@
           index += 1;
         }
         index -= 1;
-        output.push(`<div class="kh-embed-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${renderText(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((header, cellIndex) => `<td>${renderText(formatDisplayValue(row[cellIndex] ?? '', header))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        const widths = headers.map((header, i) => Math.max(100, Math.min(320, Math.max(String(header).length, ...rows.map(row => String(row[i] ?? "").length)) * 7 + 24)));
+        const columns = widths.map(width => `<col style="width:${width}px">`).join("");
+        output.push(`<div class="kh-embed-table-wrap"><table class="kh-embed-markdown-table" style="--chat-table-width:${widths.reduce((sum, width) => sum + width, 0)}px"><colgroup>${columns}</colgroup><thead><tr>${headers.map(cell => `<th>${renderText(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((header, cellIndex) => `<td>${renderText(formatDisplayValue(row[cellIndex] ?? '', header))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
       } else prose.push(lines[index]);
     }
     flushProse();
@@ -174,6 +237,8 @@
   const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>';
   const sendIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/></svg>';
   const resetIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/></svg>';
+  const expandIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>';
+  const collapseIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h5V3M21 8h-5V3M16 21v-5h5M8 21v-5H3"/></svg>';
   function createSessionId() { return `embed_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`; }
 
   const style = document.createElement('style');
@@ -182,8 +247,19 @@
     .kh-embed-root *{box-sizing:border-box}.kh-embed-root svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .kh-embed-toggle{position:relative;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:50%;color:#fff;background:linear-gradient(145deg,var(--kh-primary),#7c3aed);box-shadow:0 12px 30px rgba(79,70,229,.38),inset 0 1px rgba(255,255,255,.22);cursor:pointer;transition:transform .2s ease,box-shadow .2s ease}
     .kh-embed-toggle:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 16px 36px rgba(79,70,229,.44)}.kh-embed-toggle .kh-icon-close{display:none}.kh-embed-root.open .kh-embed-toggle .kh-icon-chat{display:none}.kh-embed-root.open .kh-embed-toggle .kh-icon-close{display:block}
+    .kh-toggle-status{display:none;position:absolute;right:-2px;top:-2px;width:20px;height:20px;box-sizing:border-box;border:2px solid #fff;border-radius:50%;background:#10b981;color:#fff;font:700 12px/16px system-ui}
+    .kh-embed-root:not(.open) .kh-embed-toggle[data-state="done"] .kh-toggle-status{display:block}
+    .kh-embed-root:not(.open) .kh-embed-toggle[data-state="busy"] .kh-toggle-status{display:block;background:#6366f1;border-color:#ddd6fe;border-top-color:#fff;animation:kh-toggle-spin .8s linear infinite}
+    @keyframes kh-toggle-spin{to{transform:rotate(360deg)}}
+    @media(prefers-reduced-motion:reduce){.kh-toggle-status{animation:none!important}}
     .kh-embed-panel{position:absolute;${position}:0;bottom:72px;display:flex;flex-direction:column;width:min(450px,calc(100vw - 32px));height:min(650px,calc(100vh - 105px));overflow:hidden;border:1px solid rgba(148,163,184,.5);border-radius:18px;background:#fff;box-shadow:0 22px 56px rgba(15,23,42,.2),0 3px 10px rgba(15,23,42,.06);opacity:0;visibility:hidden;transform:translateY(14px) scale(.97);transform-origin:bottom ${position};pointer-events:none;transition:opacity .2s ease,transform .2s ease,visibility .2s}
     .kh-embed-root.open .kh-embed-panel{opacity:1;visibility:visible;transform:translateY(0) scale(1);pointer-events:auto}
+    .kh-embed-root.expanded .kh-embed-panel{position:fixed;left:50vw;right:auto;top:50vh;bottom:auto;width:min(760px,calc(100vw - 32px));height:min(700px,82vh);height:min(700px,82dvh);max-height:calc(100dvh - 32px);transform:translate(-50%,-50%);transform-origin:center}
+    .kh-embed-root.expanded .kh-embed-head{cursor:grab;touch-action:none;user-select:none}
+    .kh-embed-root.expanded.dragging .kh-embed-head{cursor:grabbing}
+    .kh-embed-root.expanded.dragged .kh-embed-panel{left:var(--kh-drag-left);top:var(--kh-drag-top);transform:none;transition:none}
+    .kh-embed-expand{display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:9px;color:#fff;background:rgba(255,255,255,.1);cursor:pointer}.kh-embed-expand:hover{background:rgba(255,255,255,.2)}.kh-embed-expand:focus-visible{outline:2px solid #fff;outline-offset:2px}.kh-embed-expand svg{width:18px;height:18px}
+    @media(max-width:520px){.kh-embed-root.expanded .kh-embed-panel{width:calc(100vw - 24px);height:calc(100vh - 24px);height:calc(100dvh - 24px);max-height:calc(100dvh - 24px)}}
     .kh-embed-head{position:relative;display:flex;align-items:center;gap:11px;padding:15px 17px;color:#fff;background:linear-gradient(135deg,#3730a3,var(--kh-primary) 62%,#6d28d9)}.kh-embed-head::after{content:"";position:absolute;inset:auto 0 0;height:1px;background:rgba(15,23,42,.12)}
     .kh-embed-avatar{display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(255,255,255,.3);border-radius:12px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px rgba(255,255,255,.18)}.kh-embed-avatar svg{width:21px;height:21px}
     .kh-embed-identity{flex:1;min-width:0}.kh-embed-identity strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:800}.kh-embed-status{display:flex;align-items:center;gap:5px;margin-top:3px;color:rgba(255,255,255,.78);font-size:10.5px}.kh-embed-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,.16)}
@@ -192,8 +268,16 @@
     .kh-embed-welcome{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px}.kh-embed-mini-avatar{display:grid;place-items:center;flex:0 0 26px;width:26px;height:26px;border-radius:8px;color:var(--kh-primary);background:#eef2ff}.kh-embed-mini-avatar svg{width:15px;height:15px}
     .kh-embed-message{width:fit-content;max-width:88%;margin:0 0 11px;padding:11px 13px;border-radius:12px;font-size:12.8px;line-height:1.58;overflow-wrap:anywhere;box-shadow:0 1px 3px rgba(15,23,42,.035)}.kh-embed-message.ai{border:1px solid #dfe5ee;border-radius:5px 12px 12px;background:#fff;color:#334155}.kh-embed-message.user{margin-left:auto;border-radius:12px 12px 5px;color:#fff;background:var(--kh-primary);box-shadow:0 3px 9px rgba(79,70,229,.15)}.kh-embed-message code{padding:2px 4px;border-radius:4px;color:#4338ca;background:#eef2ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px}.kh-embed-link{display:inline-flex;align-items:center;margin:5px 0;padding:7px 10px;border-radius:7px;color:#fff!important;background:var(--kh-primary);font-weight:750;text-decoration:none;box-shadow:0 2px 6px rgba(79,70,229,.14)}.kh-embed-link:hover{filter:brightness(1.04);text-decoration:none}
     .kh-embed-message.kh-embed-has-table{width:100%;max-width:100%}
+    .kh-embed-root.expanded .kh-embed-message.ai.kh-workflow{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+    .kh-embed-root.expanded .kh-workflow .kh-embed-table-wrap{width:100%;min-width:0;box-sizing:border-box}
+    .kh-embed-root.expanded .kh-workflow .kh-embed-table-wrap table{width:100%}
+    .kh-embed-root.expanded .kh-workflow .kh-embed-chart{width:100%;min-width:0;box-sizing:border-box}
+    .kh-embed-answer-actions{display:flex;align-items:center;gap:6px;margin:-5px 0 12px;padding-left:2px}.kh-embed-answer-actions button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:7px;background:transparent;color:#718096;cursor:pointer}.kh-embed-answer-actions button:hover{color:var(--kh-primary);background:rgba(99,102,241,.08)}.kh-embed-answer-actions button:focus-visible{outline:2px solid var(--kh-primary);outline-offset:2px}.kh-embed-answer-actions button:disabled{opacity:.4;cursor:wait}.kh-embed-answer-actions svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.dark .kh-embed-answer-actions button{color:#a9b6cc}.dark .kh-embed-answer-actions button:hover{color:#c4b5fd;background:#29264b}
     .kh-embed-table-wrap{width:100%;margin-top:9px;overflow-x:auto;border:1px solid #dbe3ef;border-radius:10px;background:#fff}.kh-embed-table-wrap table{width:100%;border-collapse:collapse;font-size:11px;line-height:1.4}.kh-embed-table-wrap th,.kh-embed-table-wrap td{padding:8px 9px;border-right:1px solid #e8edf4;border-bottom:1px solid #e8edf4;white-space:nowrap;text-align:left;vertical-align:top}.kh-embed-table-wrap th{color:#334155;background:#f5f7fb;font-weight:750}.kh-embed-table-wrap tr:last-child td{border-bottom:0}.kh-embed-table-wrap th:last-child,.kh-embed-table-wrap td:last-child{border-right:0}.kh-embed-table-wrap tbody tr:nth-child(even){background:#fafbfe}
-    .kh-embed-thinking{display:flex;align-items:center;gap:8px;color:#64748b}
+    .kh-embed-table-wrap{max-width:100%;min-width:0}.kh-embed-table-wrap table.kh-embed-markdown-table{width:max(100%,var(--chat-table-width,520px));table-layout:fixed}.kh-embed-table-wrap .kh-embed-markdown-table td{white-space:normal;overflow-wrap:anywhere}
+    .kh-embed-message.kh-embed-thinking{display:flex;align-items:center;gap:12px;color:#64748b;width:320px;max-width:100%;min-width:0;box-sizing:border-box;overflow:hidden}
+    .kh-thinking-copy{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;min-width:0;flex:1;overflow:hidden}.kh-thinking-copy strong{font-size:12px;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kh-thinking-copy span{display:block;font-size:11px;line-height:1.5;height:1.5em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kh-thinking-elapsed{flex:0 0 5ch;text-align:right;font-size:10px;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .kh-thinking-orb{display:block;width:22px;height:22px;flex:0 0 22px}
     .kh-embed-spinner{width:14px;height:14px;position:relative;display:inline-block;flex-shrink:0}
     .kh-embed-spinner::before,.kh-embed-spinner::after{content:"";position:absolute;inset:0;border-radius:50%;border:1.5px dotted var(--kh-primary);box-shadow:0 0 5px rgba(99,102,241,.3);animation:khspin 3s linear infinite}
     .kh-embed-spinner::after{animation-direction:reverse;transform:scale(.7) rotate(45deg);border-color:#8b5cf6}
@@ -207,7 +291,21 @@
     .kh-embed-root.dark .kh-embed-table-wrap{border-color:#3a4961;background:#172235;scrollbar-color:#66758e transparent}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-track{background:transparent}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-thumb{background:#66758e;background-clip:padding-box}.kh-embed-root.dark .kh-embed-table-wrap::-webkit-scrollbar-thumb:hover{background:#8290a8}.kh-embed-root.dark .kh-embed-table-wrap th{color:#e2e8f0;background:#222f44}.kh-embed-root.dark .kh-embed-table-wrap th,.kh-embed-root.dark .kh-embed-table-wrap td{border-color:#344258}.kh-embed-root.dark .kh-embed-table-wrap tbody tr:nth-child(even){background:#1b293d}
     .kh-embed-root.dark .kh-embed-thinking{color:#9eabc0}.kh-embed-root.dark .kh-embed-footer{border-color:#303e54;background:#121d2d}.kh-embed-root.dark .kh-embed-form{border-color:#3b4a62;background:#172337}.kh-embed-root.dark .kh-embed-form:focus-within{border-color:#766ce0;box-shadow:0 0 0 2px rgba(118,108,224,.14)}.kh-embed-root.dark .kh-embed-input{color:#e6edf7}.kh-embed-root.dark .kh-embed-input::placeholder{color:#718099}
     .kh-embed-root.dark .kh-embed-brand{color:#718099}.kh-embed-root.dark .kh-embed-brand b{color:#9eabc0}.kh-embed-root.dark .kh-embed-error{color:#fecaca!important;border-color:#7f1d1d!important;background:#3a1c25!important}.kh-embed-root.dark .kh-embed-data,.kh-embed-root.dark .kh-embed-chart,.kh-embed-root.dark .kh-embed-citations{color:#d4deed;border-color:#344258;background:#172337}.kh-embed-root.dark .kh-embed-data th,.kh-embed-root.dark .kh-embed-data td{border-color:#344258}.kh-embed-root.dark .kh-embed-citations summary{color:#dbe5f3}.kh-embed-root.dark .kh-embed-citations article{border-color:#344258;background:#1d2a3e}.kh-embed-root.dark .kh-embed-citations article span,.kh-embed-root.dark .kh-embed-citations blockquote{color:#aebbd0}.kh-embed-root.dark .kh-embed-citation-warning{color:#e5c783;border-color:#66522a;background:#342d20}.kh-embed-root.dark .kh-embed-chart>strong{color:#dbe5f3}.kh-embed-root.dark .kh-chart-grid line{stroke:#344258}.kh-embed-root.dark .kh-chart-grid text,.kh-embed-root.dark .kh-chart-labels text{fill:#9eabc0}.kh-embed-root.dark .kh-pie.doughnut::after{background:#172337}
+    .kh-embed-message.ai{width:100%;max-width:100%;box-sizing:border-box;padding:8px 0 14px;border:0;border-radius:0;background:transparent;box-shadow:none;line-height:1.8}
+    .kh-embed-root.dark .kh-embed-message.ai{border:0;background:transparent;box-shadow:none}
+    .kh-embed-message.user{border:1px solid #bfd6f5;border-radius:20px;box-shadow:none;background:#eff6ff;color:#102a43}
+    .kh-embed-root.dark .kh-embed-message.user{background:#315b92;border:1px solid #527bb0;color:#fff;box-shadow:none}
+    .kh-embed-messages{background:#fff}.kh-embed-message.ai{color:#172b46}
+    .kh-embed-root.dark .kh-embed-messages{background:#111827}.kh-embed-root.dark .kh-embed-message.ai{color:#e6edf7}
     @media(max-width:520px){.kh-embed-root{${position}:12px;bottom:12px}.kh-embed-panel{width:calc(100vw - 24px);height:calc(100vh - 94px);border-radius:15px}.kh-embed-head{padding:13px 14px}.kh-embed-messages{padding:15px 13px}}
+  `;
+  style.textContent += `
+    .kh-embed-root :is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--kh-primary);outline-offset:3px}
+    .kh-embed-root .kh-embed-input:focus-visible{outline:none!important;box-shadow:none!important}
+    .kh-embed-root.dark :is(button,a,input,select,textarea,summary):focus-visible{outline-color:#c4b5fd}
+    @media(max-width:700px){.kh-embed-input{font-size:16px}.kh-embed-send{width:44px;height:44px;flex-basis:44px}}
+    @media(pointer:coarse){.kh-embed-answer-actions button,.kh-embed-expand{min-width:44px;min-height:44px}}
+    @media(prefers-reduced-motion:reduce){.kh-embed-root *,.kh-embed-root *::before,.kh-embed-root *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
   `;
   // Render inside Shadow DOM so host-page styles cannot break the widget.
   const host = document.createElement('div');
@@ -228,6 +326,9 @@
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   systemTheme.addEventListener?.('change', applyTheme);
   host.destroyEmbed = () => {
+    clearInterval(presenceTimer);
+    document.removeEventListener('visibilitychange', onPresenceVisibility);
+    window.removeEventListener('resize', clampExpandedPosition);
     activeRequest?.abort();
     messageResizeObserver.disconnect();
     themeObserver.disconnect();
@@ -235,16 +336,53 @@
     host.remove();
     window.KnowledgeHubEmbedLoaded = false;
   };
-  root.innerHTML = `<section class="kh-embed-panel" role="dialog" aria-label="${escapeHtml(title)}"><header class="kh-embed-head"><span class="kh-embed-avatar">${botIcon}</span><div class="kh-embed-identity"><strong>${escapeHtml(title)}</strong><span class="kh-embed-status">Đang trực tuyến</span></div><div class="kh-embed-head-actions"><button class="kh-embed-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới">${resetIcon}</button><button class="kh-embed-close" aria-label="Đóng">${closeIcon}</button></div></header><div class="kh-embed-messages"></div><footer class="kh-embed-footer"><form class="kh-embed-form"><input class="kh-embed-input" placeholder="Nhập câu hỏi..." autocomplete="off" aria-label="Câu hỏi"><button class="kh-embed-send" aria-label="Gửi">${sendIcon}</button></form><div class="kh-embed-brand">Powered by <b>KnowledgeHub AI</b></div></footer></section><button class="kh-embed-toggle" aria-label="Mở trợ lý AI"><span class="kh-icon-chat">${chatIcon}</span><span class="kh-icon-close">${closeIcon}</span></button>`;
+  root.innerHTML = `<section class="kh-embed-panel" role="dialog" aria-label="${escapeHtml(title)}"><header class="kh-embed-head"><span class="kh-embed-avatar">${botIcon}</span><div class="kh-embed-identity"><strong>${escapeHtml(title)}</strong><span class="kh-embed-status">Đang trực tuyến</span></div><div class="kh-embed-head-actions"><button class="kh-embed-expand" type="button" aria-pressed="false">${expandIcon}</button><button class="kh-embed-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới">${resetIcon}</button><button class="kh-embed-close" aria-label="Đóng">${closeIcon}</button></div></header><div class="kh-embed-messages"></div><footer class="kh-embed-footer"><form class="kh-embed-form"><input class="kh-embed-input" placeholder="Nhập câu hỏi..." autocomplete="off" aria-label="Câu hỏi"><button class="kh-embed-send" aria-label="Gửi">${sendIcon}</button></form><div class="kh-embed-brand">Powered by <b>KnowledgeHub AI</b></div></footer></section><button class="kh-embed-toggle" aria-label="Mở trợ lý AI"><span class="kh-icon-chat">${chatIcon}</span><span class="kh-icon-close">${closeIcon}</span></button>`;
   shadow.append(style, root);
   document.body.appendChild(host);
 
   const messages = root.querySelector('.kh-embed-messages');
   const input = root.querySelector('.kh-embed-input');
   const sendButton = root.querySelector('.kh-embed-send');
+  style.textContent+='\n.kh-embed-thinking.has-answer-preview{display:block;color:inherit;font-size:13px}.kh-embed-thinking.has-answer-preview>:is(canvas,.kh-thinking-copy,time){display:none!important}';
+  const scrollActivity=document.createElement('button');scrollActivity.type='button';scrollActivity.className='kh-scroll-activity';scrollActivity.hidden=true;
+  scrollActivity.title='AI đang trả lời · Về cuối hội thoại';scrollActivity.setAttribute('aria-label',scrollActivity.title);scrollActivity.innerHTML='<span aria-hidden="true"><i></i><i></i><i></i></span>';
+  root.querySelector('.kh-embed-form').before(scrollActivity);
+  scrollActivity.onclick=()=>messages.scrollTo({top:messages.scrollHeight,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+  style.textContent+='\n.kh-scroll-activity{display:grid;place-items:center;width:32px;height:32px;margin:0 auto 8px;padding:0;border:1px solid #dce2ed;border-radius:50%;color:#778096;background:transparent;cursor:pointer}.kh-scroll-activity[hidden]{display:none!important}.kh-scroll-activity span{display:flex;gap:3px}.kh-scroll-activity i{width:3px;height:3px;border-radius:50%;background:currentColor;animation:kh-activity-dot 1.2s ease-in-out infinite}.kh-scroll-activity i:nth-child(2){animation-delay:.16s}.kh-scroll-activity i:nth-child(3){animation-delay:.32s}.dark .kh-scroll-activity{border-color:#454955;color:#a8afbf}@keyframes kh-activity-dot{0%,70%,100%{opacity:.35}35%{opacity:1}}@media(prefers-reduced-motion:reduce){.kh-scroll-activity i{animation:none}}';
+  let pendingAttachments=[];
+  const filePicker=document.createElement('input');filePicker.type='file';filePicker.multiple=true;filePicker.hidden=true;
+  const attachButton=document.createElement('button');attachButton.type='button';attachButton.className='kh-embed-attach';attachButton.title='Đính kèm tài liệu hoặc ảnh';attachButton.setAttribute('aria-label',attachButton.title);
+  attachButton.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2M5 16 15 6"/></svg>';
+  const filePreview=document.createElement('div');filePreview.className='kh-embed-files';filePreview.setAttribute('aria-live','polite');
+  root.querySelector('.kh-embed-form').prepend(attachButton,filePicker);
+  root.querySelector('.kh-embed-footer').prepend(filePreview);
+  style.textContent+='\n.kh-embed-attach{flex:0 0 30px;width:30px;border:0;background:transparent;color:var(--kh-primary);cursor:pointer;display:grid;place-items:center}.kh-embed-files{display:flex;flex-wrap:wrap;gap:8px;max-height:210px;overflow:auto;padding-bottom:8px}.kh-embed-files:empty{display:none}';
+  function renderFilePreview(){if(!window.ChatAttachments){filePreview.replaceChildren();return;}window.ChatAttachments.render(filePreview,pendingAttachments,{onRemove:index=>{if(activeRequest||input.disabled)return;pendingAttachments.splice(index,1);renderFilePreview();}});}
+  attachButton.onclick=async()=>{if(activeRequest||input.disabled)return;try{const helper=await attachmentsApi();filePicker.accept=helper.accept;filePicker.click();}catch(error){append(escapeHtml(error.message),'ai','kh-embed-error');}};
+  filePicker.onchange=async()=>{try{const helper=await attachmentsApi();pendingAttachments=helper.add(pendingAttachments,Array.from(filePicker.files||[]),message=>append(escapeHtml(message),'ai','kh-embed-error'));renderFilePreview();}finally{filePicker.value='';}};
   const toggleButton = root.querySelector('.kh-embed-toggle');
-  const append = (content, role, extra = '') => { const node = document.createElement('div'); node.className = `kh-embed-message ${role} ${extra}`; node.innerHTML = content; messages.appendChild(node); followMessages=true; messages.scrollTo({top:messages.scrollHeight,behavior:'instant'}); return node; };
+  let unreadResult = false;
+  const toggleStatus = document.createElement('span');
+  toggleStatus.className = 'kh-toggle-status';
+  toggleStatus.setAttribute('aria-hidden', 'true');
+  toggleButton.appendChild(toggleStatus);
+  function updateToggleStatus(completed = false) {
+    scrollActivity.hidden=!activeRequest||messages.scrollHeight-messages.scrollTop-messages.clientHeight<=48;
+    const open = root.classList.contains('open');
+    if (open) unreadResult = false;
+    else if (completed) unreadResult = true;
+    const busy = Boolean(activeRequest) || [...workflowExecutions.values()]
+      .some(run => ['READY', 'RUNNING', 'QUEUED'].includes(run.status));
+    const state = busy ? 'busy' : unreadResult ? 'done' : '';
+    toggleButton.dataset.state = state;
+    toggleStatus.textContent = state === 'done' ? '✓' : '';
+    const label = open ? 'Đóng trợ lý AI' : busy ? 'Trợ lý AI đang xử lý' : unreadResult ? 'Trợ lý AI có kết quả mới' : 'Mở trợ lý AI';
+    toggleButton.setAttribute('aria-label', label);
+    toggleButton.title = label;
+  }
+  const append = (content, role, extra = '') => { const node = document.createElement('div'); node.className = `kh-embed-message ${role} ${extra}`; node.innerHTML = content; messages.appendChild(node); if(role!=='ai')followMessages=true; messageResizeObserver.observe(node); if(followMessages)messages.scrollTo({top:messages.scrollHeight,behavior:'instant'}); return node; };
   let followMessages = true, scrollScheduled = false;
+  messages.addEventListener('scroll',()=>updateToggleStatus(),{passive:true});
   messages.addEventListener('scroll',()=>{if(!scrollScheduled)followMessages=messages.scrollHeight-messages.scrollTop-messages.clientHeight<60;},{passive:true});
   const settleMessageScroll=()=>{if(!followMessages||scrollScheduled)return;scrollScheduled=true;requestAnimationFrame(()=>{if(messages.isConnected)messages.scrollTo({top:messages.scrollHeight,behavior:'instant'});scrollScheduled=false;});};
   const messageResizeObserver=new ResizeObserver(settleMessageScroll);
@@ -328,7 +466,7 @@
     }
   `;
   const workflowApi = async body => {
-    const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,workflowToken,...body})});
+    const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identityToken:await identityToken(),embedId,sessionId,preview:isPreview,workflowToken,...body})});
     const data=await response.json();if(!response.ok||data.status!=='success')throw new Error(data.message||`HTTP ${response.status}`);return data;
   };
   function decorateWorkflowTable(wrapper,rows,keys) {
@@ -366,7 +504,27 @@
     control.required=required;for(const [key,attr]of [['minimum','min'],['maximum','max'],['minLength','minLength'],['maxLength','maxLength']])if(schema[key]!==undefined)control[attr]=schema[key];if(schema.type==='number')control.step='any';
     group.appendChild(control);const hint=document.createElement('span');hint.className='kh-workflow-hint';hint.textContent=schema.minimum!==undefined&&schema.maximum!==undefined?`Từ ${schema.minimum} đến ${schema.maximum}`:required?'Bắt buộc':'';if(hint.textContent)group.appendChild(hint);return ()=>choices?(control.value===''?undefined:choices[Number(control.value)]):control.value===''?undefined:['number','integer'].includes(schema.type)?Number(control.value):control.value;
   }
+  function scheduleWorkflowPoll(node,execution){
+    clearTimeout(workflowPollTimers.get(node));workflowPollTimers.delete(node);
+    if(!['READY','QUEUED','RUNNING'].includes(execution.status)&&!execution.retryWaitingInput)return;
+    const version=conversationVersion;
+    workflowPollTimers.set(node,setTimeout(async()=>{
+      if(version!==conversationVersion||!node.isConnected||workflowPanels.get(execution.id)!==node)return;
+      try{
+        const data=await workflowApi({workflowAction:'get',runId:execution.id});
+        if(version===conversationVersion&&workflowPanels.get(execution.id)===node)mountWorkflow(node,data.execution);
+      }catch{
+        if(version===conversationVersion&&node.isConnected)scheduleWorkflowPoll(node,execution);
+      }
+    },1500));
+  }
   function mountWorkflow(node,execution) {
+    if(window.ChatStream?.holdWorkflowUpdate(node,execution)){
+      const previous=workflowExecutions.get(execution.id);
+      if(!previous||execution.revision>=previous.revision)workflowExecutions.set(execution.id,execution);
+      scheduleWorkflowPoll(node,workflowExecutions.get(execution.id)||execution);
+      return;
+    }
     messageResizeObserver.observe(node);
     if(execution.id) {
       const previous=workflowPanels.get(execution.id);
@@ -380,7 +538,9 @@
         } else return;
       }
       workflowPanels.set(execution.id,node);delete node.dataset.workflowArchived;
+      const previousStatus = workflowExecutions.get(execution.id)?.status;
       workflowExecutions.set(execution.id,execution);
+      updateToggleStatus(previousStatus !== execution.status && !['READY','RUNNING','QUEUED'].includes(execution.status));
     }
     if(execution.id&&!workflowRuns.includes(execution.id)){workflowRuns.push(execution.id);workflowRuns=workflowRuns.slice(-20);saveWorkflow();}
     node.replaceChildren();node.classList.add('kh-workflow');node.dataset.status=execution.status;const heading=document.createElement('strong');const states={READY:'Đang chờ chạy',RUNNING:'Đang xử lý',WAITING_INPUT:'Chờ bổ sung',SUCCEEDED:'Hoàn thành',FAILED:'Không thành công',CANCELLED:'Đã hủy',NEEDS_REVIEW:'Cần kiểm tra'};heading.textContent=execution.name||'Chọn nghiệp vụ';const header=document.createElement('div');header.className='kh-workflow-header';const badge=document.createElement('span');badge.className='kh-workflow-status';badge.textContent=states[execution.status]||execution.status;header.append(heading,badge);node.appendChild(header);
@@ -396,7 +556,36 @@
       progress.innerHTML=`<div class="kh-processing-graphic" aria-hidden="true"><span class="kh-processing-source">${workflowIcon('data')}</span><span class="kh-processing-flow"><b></b><b></b><b></b></span><span class="kh-processing-core">${workflowIcon('layers')}</span><span class="kh-processing-flow"><b></b><b></b><b></b></span><span class="kh-processing-source">${workflowIcon('file')}</span></div><div class="kh-processing-copy"><strong>Đang xử lý thông tin</strong><span>Kết quả sẽ hiển thị khi hoàn tất.</span></div>`;node.appendChild(progress);
     }
     const actions=document.createElement('div');actions.className='kh-workflow-actions';
-    const action=(text,body,primary=false)=>{const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';button.onclick=async()=>{if(button.disabled)return;const version=conversationVersion;button.disabled=true;const originalText=button.textContent;const payload=typeof body==='function'?null:body;if(payload?.parentRunId)button.textContent='Đang mở form…';try{const data=await workflowApi(payload||body());if(version!==conversationVersion||!node.isConnected)return;if(body.workflowAction==='create'){if(body.parentRunId)mountWorkflow(node,{...execution,retryRunId:data.execution.id,retryWaitingInput:data.execution.status==='WAITING_INPUT'});const next=append('','ai');mountWorkflow(next,data.execution);next.scrollIntoView({block:'start',behavior:'smooth'});next.querySelector('input,select,textarea')?.focus({preventScroll:true});}else mountWorkflow(node,data.execution);}catch(e){if(version===conversationVersion)append(escapeHtml(e.message),'ai','kh-embed-error');}finally{button.disabled=false;button.textContent=originalText;}};actions.appendChild(button);return button;};
+    const action=(text,body,primary=false)=>{
+      const button=document.createElement('button');button.type='button';button.textContent=text;if(primary)button.className='primary';
+      button.onclick=async()=>{
+        if(button.disabled)return;
+        const version=conversationVersion,originalText=button.textContent;let pending,form;
+        button.disabled=true;
+        try{
+          if(typeof body==='function')form=node.querySelector('form');
+          const payload=typeof body==='function'?body():body;
+          if(payload.workflowAction==='inputs'){
+            form=node.querySelector('form');form.querySelector('.workflow-input-error')?.remove();
+            const ui=await streamApi();if(version!==conversationVersion||!node.isConnected)return;
+            // Capture the enabled state before the shared helper locks controls.
+            button.disabled=false;pending=ui.beginWorkflowSubmission(node,form,button,execution);button.disabled=true;
+          }else if(payload.parentRunId)button.textContent='Đang mở form…';
+          const data=await workflowApi(payload);pending?.received();
+          if(version!==conversationVersion||!node.isConnected){pending?.release();return;}
+          if(payload.workflowAction==='create'){
+            if(payload.parentRunId)mountWorkflow(node,{...execution,retryRunId:data.execution.id,retryWaitingInput:data.execution.status==='WAITING_INPUT'});
+            const next=append('','ai');mountWorkflow(next,data.execution);next.scrollIntoView({block:'start',behavior:'smooth'});next.querySelector('input,select,textarea')?.focus({preventScroll:true});
+          }else mountWorkflow(node,data.execution);
+        }catch(e){
+          pending?.release();
+          if(version===conversationVersion){
+            if(form&&node.contains(form)){const error=document.createElement('p');error.className='workflow-input-error';error.setAttribute('role','alert');error.textContent=e.message;form.appendChild(error);}
+            else append(escapeHtml(e.message),'ai','kh-embed-error');
+          }
+        }finally{if(!pending){button.disabled=false;button.textContent=originalText;}}
+      };actions.appendChild(button);return button;
+    };
     if(execution.status==='SELECT_TEMPLATE')for(const candidate of execution.candidates||[])action(candidate.name,{workflowAction:'create',templateId:candidate.id,requestId:createSessionId()});
     if(execution.status==='WAITING_INPUT'){const form=document.createElement('form');form.className='kh-workflow-form';node.appendChild(form);const reads=(execution.missingInputs||[]).map(slot=>[slot.key,workflowInput(form,slot.schema,slot.ask||slot.label,slot.required!==false)]);const submit=action('Bổ sung và tiếp tục',()=>{if(!form.reportValidity())throw new Error('Vui lòng hoàn thiện thông tin bắt buộc.');return {workflowAction:'inputs',runId:execution.id,revision:execution.revision,inputs:Object.fromEntries(reads.map(([key,read])=>[key,read()]))};},true);form.onsubmit=event=>{event.preventDefault();submit.click();};}
     for(const [key,value] of Object.entries(execution.result||{})){
@@ -413,7 +602,7 @@
       download.onclick=async()=>{
         download.disabled=true;
         try {
-          const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,workflowToken,workflowAction:'artifact',runId:execution.id,artifactId:artifact.id})});
+          const response=await fetch(`${apiBase}/api/embed/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identityToken:await identityToken(),embedId,sessionId,preview:isPreview,workflowToken,workflowAction:'artifact',runId:execution.id,artifactId:artifact.id})});
           if(!response.ok){const error=await response.json();throw new Error(error.message||'Không tải được file.');}
           const url=URL.createObjectURL(await response.blob());const link=document.createElement('a');link.href=url;link.download=artifact.filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
         }catch(error){append(escapeHtml(error.message),'ai','kh-embed-error');}finally{download.disabled=false;}
@@ -429,7 +618,7 @@
     node.appendChild(actions);
     settleMessageScroll();
     if(execution.parentRunId){const parent=workflowExecutions.get(execution.parentRunId),parentNode=workflowPanels.get(execution.parentRunId);if(parent&&parentNode?.isConnected&&parent.retryRunId===execution.id&&parent.retryWaitingInput!==(execution.status==='WAITING_INPUT'))mountWorkflow(parentNode,{...parent,retryWaitingInput:execution.status==='WAITING_INPUT'});}
-    if(processing||execution.retryWaitingInput){const version=conversationVersion;setTimeout(async()=>{if(version!==conversationVersion||!node.isConnected||workflowPanels.get(execution.id)!==node)return;try{const data=await workflowApi({workflowAction:'get',runId:execution.id});if(version===conversationVersion&&workflowPanels.get(execution.id)===node)mountWorkflow(node,data.execution);}catch(e){if(workflowPanels.get(execution.id)===node)node.appendChild(document.createTextNode(e.message));}},4000);}
+    scheduleWorkflowPoll(node,execution);
   }
   // Keep host-page keyboard shortcuts (Space, arrows, etc.) away from chat input.
   // Do not preventDefault here: the input must retain its native text behavior.
@@ -442,7 +631,9 @@
     activeRequest?.abort(); activeRequest = null;
     history.splice(0, history.length); sessionId = createSessionId();
     workflowToken='';workflowRuns=[];workflowPanels.clear();workflowExecutions.clear();messageResizeObserver.disconnect();followMessages=true;saveWorkflow();
+    unreadResult = false; updateToggleStatus();
     input.value = ''; input.disabled = false; sendButton.disabled = false;
+    pendingAttachments=[];renderFilePreview();
     renderWelcome(); input.focus();
   };
   renderWelcome();
@@ -461,48 +652,234 @@
     root.classList.toggle('open');
     const isOpen = root.classList.contains('open');
     toggleButton.setAttribute('aria-label', isOpen ? 'Đóng trợ lý AI' : 'Mở trợ lý AI');
+    updateToggleStatus();
     if (isOpen) setTimeout(() => input.focus(), 50);
   };
-  root.querySelector('.kh-embed-close').onclick = () => { root.classList.remove('open'); toggleButton.setAttribute('aria-label', 'Mở trợ lý AI'); toggleButton.focus(); };
+  root.querySelector('.kh-embed-close').onclick = () => { root.classList.remove('open'); updateToggleStatus(); toggleButton.focus(); };
   root.querySelector('.kh-embed-reset').onclick = resetConversation;
-  root.querySelector('form').onsubmit = async event => {
+  const expandButton = root.querySelector('.kh-embed-expand');
+  const dragHeader = root.querySelector('.kh-embed-head');
+  const dragPanel = root.querySelector('.kh-embed-panel');
+  let dragState = null;
+  function placeExpandedPanel(left, top) {
+    const rect = dragPanel.getBoundingClientRect();
+    const margin = 8;
+    const x = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    const y = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
+    root.style.setProperty('--kh-drag-left', `${x}px`);
+    root.style.setProperty('--kh-drag-top', `${y}px`);
+    root.classList.add('dragged');
+  }
+  function clampExpandedPosition() {
+    if (!root.classList.contains('expanded') || !root.classList.contains('dragged')) return;
+    const rect = dragPanel.getBoundingClientRect();
+    placeExpandedPanel(rect.left, rect.top);
+  }
+  function stopDragging() {
+    const pointerId = dragState?.pointerId;
+    dragState = null;
+    root.classList.remove('dragging');
+    if (pointerId != null && dragHeader.hasPointerCapture(pointerId)) dragHeader.releasePointerCapture(pointerId);
+  }
+  dragHeader.addEventListener('pointerdown', event => {
+    if (!root.classList.contains('expanded') || !event.isPrimary || event.button !== 0
+      || event.target.closest('button,a,input,select,textarea')) return;
+    const rect = dragPanel.getBoundingClientRect();
+    dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    placeExpandedPanel(rect.left, rect.top);
+    root.classList.add('dragging');
+    dragHeader.setPointerCapture(event.pointerId);
     event.preventDefault();
-    const question = input.value.trim();
-    if (!question) return;
+  });
+  dragHeader.addEventListener('pointermove', event => {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    placeExpandedPanel(dragState.left + event.clientX - dragState.x, dragState.top + event.clientY - dragState.y);
+  });
+  dragHeader.addEventListener('pointerup', stopDragging);
+  dragHeader.addEventListener('pointercancel', stopDragging);
+  dragHeader.addEventListener('lostpointercapture', stopDragging);
+  window.addEventListener('resize', clampExpandedPosition);
+  function setExpanded(expanded) {
+    stopDragging();
+    if (!expanded) {
+      root.classList.remove('dragged');
+      root.style.removeProperty('--kh-drag-left');
+      root.style.removeProperty('--kh-drag-top');
+    }
+    root.classList.toggle('expanded', expanded);
+    const label = expanded ? 'Thu gọn khung chat' : 'Mở rộng khung chat';
+    expandButton.setAttribute('aria-pressed', String(expanded));
+    expandButton.setAttribute('aria-label', label);
+    expandButton.title = label;
+    expandButton.innerHTML = expanded ? collapseIcon : expandIcon;
+    if (followMessages) requestAnimationFrame(() => messages.scrollTo({ top: messages.scrollHeight, behavior: 'instant' }));
+  }
+  setExpanded(false);
+  expandButton.onclick = () => setExpanded(!root.classList.contains('expanded'));
+  root.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && root.classList.contains('expanded')) {
+      event.preventDefault(); event.stopPropagation(); setExpanded(false); expandButton.focus();
+    }
+  });
+  root.addEventListener('click', async event => {
+    const button = event.target.closest('[data-kh-export]'); if (!button) return;
+    event.preventDefault(); button.disabled = true;
+    try {
+      const response = await fetch(`${apiBase}/api/embed/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identityToken:await identityToken(), embedId, sessionId, workflowToken, workflowAction: 'export_artifact', filename: button.dataset.khExport, preview: isPreview }) });
+      if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Không tải được file.'); }
+      const url = URL.createObjectURL(await response.blob()), link = document.createElement('a');
+      link.href = url; link.download = button.dataset.khExport; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { append(escapeHtml(error.message), 'ai', 'kh-embed-error'); }
+    finally { button.disabled = false; }
+  });
+  function animateThinkingOrb(canvas) {
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return () => {};
+    let frame = null, stopped = false;
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    function draw() {
+      if (stopped || !canvas.isConnected) return;
+      const now = reduced ? 0 : Date.now() * 0.001;
+      const cx = canvas.width / 2, cy = canvas.height / 2, radius = Math.min(cx, cy) - 2;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const points = [];
+      for (let i = 0; i < 40; i++) {
+        const phi = Math.acos(1 - 2 * (i + 0.5) / 40);
+        const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+        const r = radius * (1 + 0.18 * Math.sin(phi * 2.5 + now * 3.5) * Math.cos(theta * 1.5 + now * 2.5));
+        const x = r * Math.sin(phi) * Math.cos(theta), y = r * Math.sin(phi) * Math.sin(theta), z = r * Math.cos(phi);
+        const x1 = x * Math.cos(now * 1.2) - z * Math.sin(now * 1.2);
+        const z1 = x * Math.sin(now * 1.2) + z * Math.cos(now * 1.2);
+        points.push({ x: x1, y: y * Math.cos(now * 0.7) - z1 * Math.sin(now * 0.7), z: y * Math.sin(now * 0.7) + z1 * Math.cos(now * 0.7) });
+      }
+      points.sort((a, b) => a.z - b.z);
+      for (const p of points) {
+        const depth = (p.z + radius * 1.2) / (radius * 2.4);
+        ctx.beginPath();
+        ctx.arc(cx + p.x, cy + p.y, 0.7 + 1.3 * depth, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${Math.floor(139 - 40 * depth)},${Math.floor(92 + 10 * depth)},${Math.floor(246 - 5 * depth)},${0.25 + 0.75 * depth})`;
+        ctx.fill();
+      }
+      if (!reduced) frame = requestAnimationFrame(draw);
+    }
+    frame = requestAnimationFrame(draw);
+    return () => { stopped = true; if (frame !== null) cancelAnimationFrame(frame); };
+  }
+
+  async function readChatResponse(response, onProgress, onAnswer) {
+    return (await streamApi()).read(response,{onProgress,onAnswer});
+  }
+
+  function addAnswerActions(node, question, copyText = null) {
+    const actions = document.createElement('div');
+    actions.className = 'kh-embed-answer-actions';
+    actions.setAttribute('aria-label', 'Thao tác với câu trả lời');
+    actions.innerHTML = '<button type="button" title="Sao chép" aria-label="Sao chép câu trả lời"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="12" height="14" rx="2"/><path d="M16 17v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1h4"/></svg></button><button type="button" title="Thử lại" aria-label="Yêu cầu AI trả lời lại câu hỏi này"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg></button>';
+    const [copy, retry] = actions.querySelectorAll('button');
+    copy.onclick = async () => {
+      try {
+        const content = node.cloneNode(true);
+        content.querySelectorAll('button,form').forEach(item => item.remove());
+        await navigator.clipboard.writeText(copyText ?? (content.innerText || content.textContent || ''));
+        copy.title = 'Đã sao chép';
+        copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+        setTimeout(() => { if (copy.isConnected) { copy.title = 'Sao chép'; copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="12" height="14" rx="2"/><path d="M16 17v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1h4"/></svg>'; } }, 1500);
+      } catch (_) { copy.title = 'Không thể sao chép. Vui lòng kiểm tra quyền clipboard của trình duyệt.'; }
+    };
+    retry.onclick = async () => {
+      if (activeRequest || input.disabled) return;
+      retry.disabled = true;
+      try { await submitEmbedQuestion(question, true); } finally { retry.disabled = false; }
+    };
+    node.after(actions);
+    if (followMessages) messages.scrollTo({ top: messages.scrollHeight, behavior: 'instant' });
+  }
+
+  async function submitEmbedQuestion(question, isRetry = false) {
+    if (activeRequest || input.disabled) return;
+    const attachedFiles=isRetry?[]:[...pendingAttachments];
+    if (!question&&!attachedFiles.length) return;
+    if(!question)question='Đã gửi tệp đính kèm';
     if (!embedId) return append('Widget chưa được cấu hình Embed ID.', 'ai', 'kh-embed-error');
-    input.value = ''; input.disabled = true; sendButton.disabled = true;
-    append(escapeHtml(question), 'user');
-    const thinking = append('<span class="kh-embed-spinner"></span><span>Đang suy nghĩ...</span>', 'ai', 'kh-embed-thinking');
+    if (!isRetry) input.value = '';
+    input.disabled = true; sendButton.disabled = true;
+    let requestIdentityToken;
+    try { requestIdentityToken = await identityToken(); }
+    catch (error) {
+      input.disabled=false; sendButton.disabled=false;
+      return append(escapeHtml(error.message), 'ai', 'kh-embed-error');
+    }
+    input.disabled=true; sendButton.disabled=true;
+    const userNode=append(escapeHtml(question), 'user');
+    const sentFileGallery=attachedFiles.length?document.createElement('div'):null;
+    if(sentFileGallery){userNode.append(sentFileGallery);(await attachmentsApi()).render(sentFileGallery,attachedFiles);}
+    const thinking = append('<canvas class="kh-thinking-orb" width="22" height="22" aria-hidden="true"></canvas><div class="kh-thinking-copy"><strong>Đang xử lý yêu cầu</strong><span>Đang kết nối trợ lý…</span></div><time class="kh-thinking-elapsed">0s</time>', 'ai', 'kh-embed-thinking');
+    const stopOrb = animateThinkingOrb(thinking.querySelector('canvas'));
+    thinking.setAttribute('role', 'status');
+    const startedAt = Date.now();
+    const elapsedTimer = setInterval(() => { thinking.querySelector('time').textContent = `${Math.floor((Date.now() - startedAt) / 1000)}s`; }, 1000);
     const requestVersion = conversationVersion;
     activeRequest = new AbortController();
+    updateToggleStatus();
+    let answerPreview;
     try {
-      const response = await fetch(`${apiBase}/api/embed/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: activeRequest.signal, body: JSON.stringify({ embedId, question, sessionId,workflowToken, history: history.slice(-20), preview: isPreview }) });
-      const data = await response.json();
+      if(attachedFiles.length){
+        const helper=await attachmentsApi();
+        const data=await helper.submit(attachedFiles,{identityToken:requestIdentityToken,embedId,sessionId,preview:isPreview,question},activeRequest.signal,apiBase+'/api/embed/chat');
+        if(requestVersion!==conversationVersion)return;
+        helper.render(sentFileGallery,helper.describe(data.attachments,data.batchId),{loader:async file=>{
+          const response=await fetch(apiBase+'/api/embed/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identityToken:await identityToken(),embedId,sessionId,preview:isPreview,attachmentAction:'file',batchId:file.batchId,fileId:file.id})});
+          const payload=await response.json();if(!response.ok)throw new Error(payload.message||'Không mở được tệp.');
+          return new Blob([Uint8Array.from(atob(payload.base64),char=>char.charCodeAt(0))],{type:payload.type});
+        }});
+        pendingAttachments=[];renderFilePreview();thinking.remove();append(escapeHtml(data.reply),'ai');
+        history.push({role:'user',content:question},{role:'assistant',content:data.reply});return;
+      }
+      const streamUI=await streamApi();
+      if(requestVersion!==conversationVersion)return;
+      answerPreview=streamUI.createPreview(thinking);
+      const response = await fetch(`${apiBase}/api/embed/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: activeRequest.signal, body: JSON.stringify({ identityToken:requestIdentityToken, embedId, question, sessionId,workflowToken, history: history.slice(-20), preview: isPreview, stream: true }) });
+      const data = await readChatResponse(response, progress => {
+        if (requestVersion !== conversationVersion) return;
+        const label = thinking.querySelector('.kh-thinking-copy span');
+        label.textContent = progress.label || 'Đang xử lý yêu cầu…';
+        label.title = label.textContent;
+      },event=>{if(requestVersion===conversationVersion)return answerPreview.update(event);});
+      answerPreview.dispose();
       if (!response.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${response.status}`);
       if (requestVersion !== conversationVersion) return;
       if(data.workflowToken){workflowToken=data.workflowToken;saveWorkflow();}
-      if(data.execution){thinking.remove();const node=append('','ai');mountWorkflow(node,data.execution);return;}
+      if(data.execution){thinking.remove();const node=append('','ai');mountWorkflow(node,data.execution);addAnswerActions(node,question);return;}
       const replyWithoutDownloadLink = stripInlineDownloadLink(data.reply || '', data.downloadUrl);
       const hasMarkdownTable = replyWithoutDownloadLink.includes('|') && /\|?\s*:?-+:?\s*\|/.test(replyWithoutDownloadLink);
       let result = hasMarkdownTable ? renderRichText(replyWithoutDownloadLink) : renderText(replyWithoutDownloadLink);
       if (data.downloadUrl) {
-        const downloadHref = new URL(data.downloadUrl, `${apiBase}/`).href;
-        result += `<br><a class="kh-embed-link" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener noreferrer">Tải file kết quả</a>`;
+        const filename = decodeURIComponent(String(data.downloadUrl).split('/').at(-1));
+        result += `<br><button type="button" class="kh-embed-link" data-kh-export="${escapeHtml(filename)}">Tải file kết quả</button>`;
       }
       result += renderEmbedChart(data.chartSpec);
-      result += renderEmbedCitations(data.citations, data.citationValidation, data.supportingEvidence);
       if (!hasMarkdownTable && data.toolResult?.rows?.length) {
         const head = data.toolResult.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('');
         const rows = data.toolResult.rows.slice(0, 20).map(row => `<tr>${row.map((cell, cellIndex) => `<td>${escapeHtml(formatDisplayValue(cell, data.toolResult.columns[cellIndex]))}</td>`).join('')}</tr>`).join('');
         result += `<details class="kh-embed-data"><summary style="padding:7px 8px;cursor:pointer">Xem dữ liệu (${data.toolResult.rows.length} dòng)</summary><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></details>`;
       }
-      thinking.remove(); append(result, 'ai', hasMarkdownTable ? 'kh-embed-has-table' : '');
+      thinking.remove(); const answerNode = append(result, 'ai', hasMarkdownTable ? 'kh-embed-has-table' : '');
+      addAnswerActions(answerNode, question, replyWithoutDownloadLink);
       if (data.completionStatus === 'SUCCESS') {
         history.push({ role: 'user', content: question }, { role: 'assistant', content: data.reply || '' });
       }
     } catch (error) {
       if (error.name === 'AbortError' || requestVersion !== conversationVersion) return;
-      thinking.remove(); append(escapeHtml(error.message), 'ai', 'kh-embed-error');
-    } finally { if (requestVersion === conversationVersion) { activeRequest = null; input.disabled = false; sendButton.disabled = false; input.focus(); } }
+      thinking.remove(); const errorNode = append(escapeHtml(error.message), 'ai', 'kh-embed-error');
+      addAnswerActions(errorNode, question, error.message);
+    } finally { answerPreview?.dispose();stopOrb(); clearInterval(elapsedTimer); if (requestVersion === conversationVersion) { activeRequest = null; input.disabled = false; sendButton.disabled = false; updateToggleStatus(true); if (root.classList.contains('open')) input.focus(); } }
+  }
+  root.querySelector('form').onsubmit = event => {
+    event.preventDefault();
+    return submitEmbedQuestion(input.value.trim());
   };
+  presenceTimer = setInterval(sendPresence, 30000);
+  document.addEventListener('visibilitychange', onPresenceVisibility);
+  sendPresence();
 })();

@@ -1,0 +1,106 @@
+/* Scoped schema workspace: uses the application's light/dark theme tokens. */
+/* Consistent, keyboard-accessible checkbox treatment for tables and columns. */
+#view-dictionary .dictionary-column-visible { width:30px; height:42px; }
+#view-dictionary .dictionary-column-visible input[type="checkbox"],
+#view-dictionary .dictionary-quick-active input+span { width:20px; height:20px; box-sizing:border-box; border:1.5px solid #a6b1c2; border-radius:5px; background:var(--dict-surface,#fff); box-shadow:0 1px 2px #0f172a08; transition:background .15s,border-color .15s,box-shadow .15s; }
+#view-dictionary .dictionary-column-visible input[type="checkbox"] { appearance:none; -webkit-appearance:none; display:block; margin:0; cursor:pointer; }
+#view-dictionary .dictionary-column-visible input:checked,
+#view-dictionary .dictionary-quick-active input:checked+span { border-color:#7561d1; background-color:#7561d1; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 10 3.2 3.2L15 6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-size:18px; background-position:center; background-repeat:no-repeat; }
+#view-dictionary .dictionary-quick-active input+span>i { display:none; }
+#view-dictionary .dictionary-column-visible input:hover,
+#view-dictionary .dictionary-quick-active:hover input+span { border-color:#7561d1; box-shadow:0 0 0 3px #7561d112; }
+#view-dictionary .dictionary-column-visible input:focus-visible,
+#view-dictionary .dictionary-quick-active input:focus-visible+span { outline:2px solid var(--dict-accent); outline-offset:3px; }
+#view-dictionary .dictionary-column-visible input:disabled,
+#view-dictionary .dictionary-quick-active input:disabled+span { opacity:.45; cursor:not-allowed; box-shadow:none; }
+#view-dictionary { --dict-surface:#fff; --dict-subtle:#f7f8fb; --dict-accent:#7561d1; --dict-tint:color-mix(in srgb,var(--dict-accent) 8%,var(--dict-surface)); gap:20px; }
+#view-dictionary .dictionary-page-hero { padding:24px 28px; border:0; border-radius:16px; background:var(--dict-surface); box-shadow:none; gap:18px; }
+#view-dictionary .dictionary-hero-icon { width:48px; height:48px; border-radius:14px; background:var(--dict-tint); color:var(--dict-accent); box-shadow:none; }
+#view-dictionary .card-title { font-size:22px; font-weight:650; letter-spacing:-.5px; }
+#view-dictionary .card-subtitle { max-width:680px; font-size:13px; line-height:1.7; margin-top:6px; }
+#view-dictionary .dictionary-content-card { padding:24px; border-radius:16px; box-shadow:none; border:1px solid var(--border-color); }
+#view-dictionary .dictionary-overview-strip { gap:12px; padding:0; margin:0 0 20px; border:0; background:transparent; }
+#view-dictionary .dictionary-overview-strip>div { flex:1; padding:15px 18px; border:1px solid var(--border-color); border-radius:12px; background:var(--dict-surface); }
+#view-dictionary .dictionary-overview-strip strong { font-size:23px; font-weight:650; font-variant-numeric:tabular-nums; }
+#view-dictionary .dictionary-quality { border-radius:12px; margin-bottom:20px; background:var(--dict-surface); }
+#view-dictionary .dictionary-quality-header { padding:14px 18px; }
+#view-dictionary .dictionary-quality-icon { width:35px; height:35px; font-size:16px; background:var(--dict-tint); color:var(--dict-accent); }
+#view-dictionary .dictionary-quality-heading { gap:3px; }
+#view-dictionary .dictionary-quality-heading strong { font-size:13px; }
+#view-dictionary .dictionary-controls { gap:14px; padding:0 0 18px; margin-bottom:0; align-items:center; border:0; background:transparent; }
+#view-dictionary .dictionary-controls-left { gap:12px; flex:1; flex-wrap:wrap; }
+#view-dictionary .dictionary-search { flex:1 1 240px; max-width:380px; }
+#view-dictionary .dictionary-search input { height:40px; border-radius:10px; }
+#view-dictionary :is(.dictionary-filter-group,.dictionary-view-switch) { padding:3px; gap:2px; border:1px solid var(--border-color); border-radius:10px; background:var(--dict-subtle); }
+#view-dictionary :is(.dictionary-filter-group,.dictionary-view-switch) button { border:0; border-radius:7px; background:transparent; box-shadow:none; padding:8px 11px; font-weight:500; }
+#view-dictionary :is(.dictionary-filter-group,.dictionary-view-switch) button.active { background:var(--dict-surface); color:var(--dict-accent); box-shadow:0 1px 4px #0000000d; }
+#view-dictionary .dictionary-counter { font-size:12px; color:var(--text-secondary); }
+#view-dictionary .dictionary-catalog { border:1px solid var(--border-color); border-radius:12px; overflow:hidden; }
+#view-dictionary .dictionary-catalog th { padding:13px 16px; background:var(--dict-subtle); font-size:11px; font-weight:600; }
+#view-dictionary .dictionary-catalog td { padding:16px; transition:background .15s ease; }
+#view-dictionary .dictionary-catalog-copy strong { font-size:13px; letter-spacing:.1px; }
+#view-dictionary .dictionary-catalog-copy>span { font-size:12px; margin-top:5px; }
+#view-dictionary .dictionary-catalog tbody tr:hover td { background:var(--dict-tint); }
+#view-dictionary .dictionary-catalog-action button { border:0; background:transparent; color:var(--dict-accent); }
+#view-dictionary .dictionary-catalog-domain { border:0; border-radius:6px; background:var(--dict-subtle); padding:5px 9px; }
+#view-dictionary .dictionary-drawer { border-radius:20px; border-color:var(--border-color); background:var(--dict-surface); box-shadow:0 24px 100px #00000026; }
+#view-dictionary .dictionary-drawer-header { padding:22px 26px; background:var(--dict-surface); border-color:var(--border-color); }
+#view-dictionary .dictionary-drawer-header h3 { font-size:23px; letter-spacing:-.5px; }
+#view-dictionary .dictionary-drawer-kicker { font-weight:500; color:var(--text-secondary); text-transform:none; letter-spacing:0; margin-bottom:8px; }
+#view-dictionary .dictionary-drawer-body { padding:20px 24px 0; background:var(--dict-subtle); scrollbar-gutter:stable; overscroll-behavior:contain; }
+#view-dictionary .dictionary-drawer-section { border:1px solid var(--border-color); background:var(--dict-surface); padding:20px; border-radius:12px; margin-bottom:16px; }
+#view-dictionary .dictionary-section-label { font-size:13px; font-weight:600; letter-spacing:0; text-transform:none; color:var(--text-primary); }
+#view-dictionary .dictionary-column-card { background:var(--dict-surface); border-color:var(--border-color); border-radius:10px; padding:14px; }
+#view-dictionary .dictionary-column-fields label>span { font-size:11px; font-weight:500; text-transform:none; letter-spacing:0; color:var(--text-secondary); }
+#view-dictionary .dictionary-column-row[hidden] { display:none!important; }
+#view-dictionary .dictionary-column-search { display:flex; align-items:center; gap:10px; margin:16px 0; padding:0 12px; height:40px; border:1px solid var(--border-color); border-radius:9px; color:var(--text-muted); background:var(--dict-subtle); }
+#view-dictionary .dictionary-column-search input { flex:1; min-width:0; height:100%; background:transparent; border:0; outline:0; font:inherit; font-size:13px; color:var(--text-primary); }
+#view-dictionary .dictionary-column-search:focus-within { outline:2px solid var(--dict-accent); outline-offset:2px; }
+#view-dictionary .dictionary-column-search-empty { padding:20px 4px; text-align:center; }
+#view-dictionary .dictionary-query-defaults>summary { cursor:pointer; list-style:none; margin:0; }
+#view-dictionary .dictionary-query-defaults>summary::-webkit-details-marker { display:none; }
+#view-dictionary .dictionary-query-defaults[open]>summary { margin-bottom:16px; }
+#view-dictionary .dictionary-query-defaults[open]>summary i.fa-chevron-down { transform:rotate(180deg); }
+#view-dictionary .dictionary-drawer-actions-bottom { position:sticky; bottom:0; z-index:3; margin:0 -24px; padding:16px 24px; background:var(--dict-surface); border-top:1px solid var(--border-color); box-shadow:0 -4px 16px #00000004; }
+#view-dictionary :is(button,a,input,select,textarea):focus-visible { outline:2px solid var(--dict-accent); outline-offset:3px; }
+#view-dictionary .dictionary-graph-viewport { border-radius:12px; background-color:var(--dict-subtle); background-image:radial-gradient(var(--border-color) 1px,transparent 1px); background-size:20px 20px; }
+@media(max-width:800px) { #view-dictionary .dictionary-page-hero { padding:18px; flex-wrap:wrap; } #view-dictionary .dictionary-content-card { padding:16px; } #view-dictionary .card-title { font-size:19px; } #view-dictionary .dictionary-overview-strip { flex-wrap:wrap; } #view-dictionary .dictionary-overview-strip>div { min-width:140px; padding:12px; } #view-dictionary .dictionary-controls-right { width:100%; } #view-dictionary .dictionary-drawer-section { padding:14px; } #view-dictionary .dictionary-drawer-body { padding:14px 14px 0; } #view-dictionary .dictionary-drawer-actions-bottom { margin:0 -14px; padding:12px 14px; gap:12px; } #view-dictionary .dictionary-drawer-actions-bottom>span { display:none; } }
+@media(prefers-reduced-motion:reduce) { #view-dictionary *,#view-dictionary *::before,#view-dictionary *::after { transition:none!important; scroll-behavior:auto!important; } }
+
+:root[data-theme="dark"] #view-dictionary { --dict-surface:#172131; --dict-subtle:#111b2b; --dict-accent:#b3a0ed; }
+#view-dictionary .dictionary-semantic-settings>summary { background:#ede8fc; }
+#view-dictionary .dictionary-ai-rules-section { border-color:#d6ccef; }
+#view-dictionary .dictionary-semantic-settings>summary:hover { background:#e5ddf8; }
+#view-dictionary .dictionary-semantic-settings>summary .dictionary-semantic-icon { background:#ded4f6; color:#6950b8; }
+:root[data-theme="dark"] #view-dictionary .dictionary-ai-rules-section { border-color:#554572; }
+:root[data-theme="dark"] #view-dictionary .dictionary-semantic-settings>summary { background:#302840; }
+:root[data-theme="dark"] #view-dictionary .dictionary-semantic-settings>summary:hover { background:#3a304d; }
+:root[data-theme="dark"] #view-dictionary .dictionary-semantic-settings>summary .dictionary-semantic-icon { background:#493861; color:#d1baff; }
+#view-dictionary .dictionary-drawer-actions-bottom { background:var(--dict-surface)!important; }
+#view-dictionary .dictionary-catalog td { background:var(--dict-surface); }
+#view-dictionary .dictionary-quality { background:var(--dict-surface); }
+#view-dictionary .dictionary-page-hero>div { min-width:0; }
+#view-dictionary { min-width:0!important; max-width:100%; }
+@media(max-width:800px) { #view-dictionary .dictionary-page-hero { display:flex; } #view-dictionary .dictionary-page-hero>div:nth-child(2) { flex:1; } #view-dictionary .dictionary-header-actions { flex-basis:100%; } #view-dictionary .dictionary-controls-left { min-width:0; } #view-dictionary .dictionary-search { max-width:100%; } }
+#view-dictionary .dictionary-drawer-section.dictionary-ai-rules-section { padding:0; }
+#view-dictionary .dictionary-ai-rules-section>.dictionary-semantic-settings>summary { padding:16px 20px; border-radius:0; gap:10px; }
+#view-dictionary .dictionary-semantic-content { padding:14px 20px 18px; }
+#view-dictionary .dictionary-semantic-content>.dictionary-defaults-hint { line-height:1.6; font-size:12px; }
+#view-dictionary .dictionary-semantic-content>.dictionary-ai-priority-note { margin:12px 0 16px; padding:9px 11px; background:var(--dict-tint); border:0; border-radius:8px; line-height:1.6; }
+#view-dictionary .dictionary-semantic-content .dictionary-defaults-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; margin:12px 0; align-items:start; }
+#view-dictionary .dictionary-semantic-content .dictionary-defaults-grid label:has(#dict-semantic-grain) { grid-column:1 / -1; }
+#view-dictionary .dictionary-semantic-content label { font-size:12px; font-weight:500; color:var(--text-secondary); gap:7px; }
+#view-dictionary .dictionary-semantic-content .form-control { min-height:38px; border-radius:8px; font-size:13px; }
+#view-dictionary .dictionary-semantic-content .dictionary-priority-field { display:flex; align-items:center; gap:6px; min-height:18px; }
+#view-dictionary .dictionary-priority-field i { color:#b88624; margin:0; width:12px; text-align:center; font-size:10px; }
+#view-dictionary .dictionary-semantic-icon { background:var(--dict-tint); color:var(--dict-accent); width:30px; height:30px; border-radius:8px; font-size:15px; }
+#view-dictionary .dictionary-section-label { display:flex; align-items:center; gap:9px; min-height:30px; }
+#view-dictionary .dictionary-section-label>i { display:inline-grid; place-items:center; width:30px; height:30px; flex:0 0 30px; border-radius:8px; font-size:14px; color:#0d9488; background:#0d948812; }
+#view-dictionary .dictionary-query-defaults .dictionary-section-label>i { color:#64748b; background:#64748b14; }
+#view-dictionary .dictionary-ai-badge { background:var(--dict-tint); color:var(--dict-accent); }
+#view-dictionary .dictionary-semantic-advanced { margin-top:16px; padding-top:14px; }
+:root[data-theme="dark"] #view-dictionary .dictionary-priority-field i { color:#dfb860; }
+:root[data-theme="dark"] #view-dictionary .dictionary-section-label>i { color:#5bd4c2; background:#0d948824; }
+:root[data-theme="dark"] #view-dictionary .dictionary-query-defaults .dictionary-section-label>i { color:#a6b8d0; background:#64748b24; }
+@media(max-width:600px) { #view-dictionary .dictionary-ai-rules-section>.dictionary-semantic-settings>summary { padding:14px; } #view-dictionary .dictionary-semantic-content { padding:12px 14px 16px; } #view-dictionary .dictionary-semantic-content .dictionary-defaults-grid { grid-template-columns:1fr; } #view-dictionary .dictionary-ai-rules-section .dictionary-ai-badge { margin-left:40px; } }
+@media(forced-colors:active) { #view-dictionary .dictionary-column-visible input[type="checkbox"] { appearance:auto; } #view-dictionary .dictionary-quick-active input:checked+span>i { display:block; color:HighlightText; } #view-dictionary .dictionary-quick-active input:checked+span { background:Highlight; } }

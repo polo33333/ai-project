@@ -18,6 +18,27 @@ class RequestExecutionBudget {
     this.modelCalls = 0;
     this.sqlAttempts = 0;
     this.repairAttempts = 0;
+    this.maxTokens = positiveNumber(options.maxTokens, positiveNumber(process.env.GOVERNED_REQUEST_MAX_TOKENS, 128000));
+    this.finalizeTokens = Math.min(this.maxTokens, positiveNumber(options.finalizeTokens, 2048));
+    this.maxCost = positiveNumber(options.maxCost, positiveNumber(process.env.GOVERNED_REQUEST_MAX_COST, Infinity));
+    this.tokens = 0; this.cost = 0; this.reservations = new Map(); this.nextReservation = 0;
+  }
+
+  reserveUsage({ tokens = 0, cost = 0, purpose = 'work' } = {}) {
+    this.assertTimeRemaining();
+    if (!Number.isFinite(tokens) || tokens < 0 || !Number.isFinite(cost) || cost < 0) throw new Error('INVALID_USAGE_RESERVATION');
+    const pending = [...this.reservations.values()].reduce((sum, item) => ({ tokens: sum.tokens + item.tokens, cost: sum.cost + item.cost }), { tokens: 0, cost: 0 });
+    if (this.tokens + pending.tokens + tokens > this.maxTokens - (purpose === 'finalize' ? 0 : this.finalizeTokens)) throw Object.assign(new Error('Token budget exhausted.'), { code: 'TOKEN_BUDGET_EXCEEDED' });
+    if (this.cost + pending.cost + cost > this.maxCost) throw Object.assign(new Error('Estimated cost budget exhausted.'), { code: 'COST_BUDGET_EXCEEDED' });
+    const id = ++this.nextReservation; this.reservations.set(id, { tokens, cost }); return id;
+  }
+
+  reconcileUsage(id, actual = {}) {
+    const estimate = this.reservations.get(id);
+    if (!estimate) throw new Error('UNKNOWN_USAGE_RESERVATION');
+    this.reservations.delete(id);
+    this.tokens += Number.isFinite(actual.tokens) && actual.tokens >= 0 ? actual.tokens : estimate.tokens;
+    this.cost += Number.isFinite(actual.cost) && actual.cost >= 0 ? actual.cost : estimate.cost;
   }
 
   remainingMs(now = Date.now()) {
@@ -81,6 +102,8 @@ class RequestExecutionBudget {
       maxSqlAttempts: this.maxSqlAttempts,
       repairAttempts: this.repairAttempts,
       toolCalls: this.toolCalls, maxToolCalls: this.maxToolCalls
+      , tokens: this.tokens, maxTokens: this.maxTokens, cost: this.cost, maxCost: Number.isFinite(this.maxCost) ? this.maxCost : null,
+      pendingReservations: this.reservations.size, finalizeTokens: this.finalizeTokens
     };
   }
 }

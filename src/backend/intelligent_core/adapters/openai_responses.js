@@ -26,7 +26,9 @@ async function callOpenAIResponses(provider, messages, tools, signal, options = 
   const emit = reasoningEmitter(options.onReasoning);
   let response;
   await readJsonStream(res, event => {
+    if(event.type==='response.output_item.added'&&event.item?.type==='function_call')options.onToolCall?.();
     if (event.type === 'response.reasoning_summary_text.delta') emit(event.delta);
+    if (event.type === 'response.output_text.delta') options.onAnswer?.(event.delta);
     if (event.type === 'response.completed' || event.type === 'response.incomplete') response = event.response;
     if (event.type === 'response.failed' || event.type === 'error') throw new Error(event.response?.error?.message || event.message || 'OpenAI response failed');
   }, true);

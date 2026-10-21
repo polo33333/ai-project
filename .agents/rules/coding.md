@@ -9,3 +9,4 @@ trigger: always_on
 # Font chữ sử dụng Inter (Google Fonts) hỗ trợ UTF-8 tiếng Việt chuẩn hóa, hiện đại và giống mẫu dashboard nhất
 # không có giả lập dữ liệu liên quan đến sql đã kết nối
 # Không tự restart lại project , để nguồn dùng quyết định có build, restart ứng dụng
+# Không hard code kiểu regex,

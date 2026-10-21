@@ -59,6 +59,7 @@ class PluginRegistry {
       for (const table of binding.tables) {
         ensure(require('./sql').tableAvailable(binding, table, connector), `Binding không tồn tại trong catalog hoặc đã tắt: ${table}`);
       }
+      require('./sql').validateResultMapping(binding);
     }
     return { valid: true, hash: hash(record.draft), templates: record.draft.templates.length };
   }
@@ -74,11 +75,11 @@ class PluginRegistry {
   async test(id, context) {
     requireAdmin(context); const record = await this.repository.get('catalog', id);
     if (!record) throw error('Gói không tồn tại.', 404);
-    const report = await this.testBundle(record.draft);
+    const report = await this.testBundle(record.draft, { validateMappings: true });
     await this.repository.put('catalog', { ...record, testedHash: report.passed ? hash(record.draft) : null, lastTest: report }, record.revision);
     return report;
   }
-  async testBundle(bundle) {
+  async testBundle(bundle, { validateMappings = false } = {}) {
     validatePackage(bundle); const results = [];
     for (const template of bundle.templates) for (const [index, fixture] of template.fixtures.entries()) {
       try {
@@ -87,6 +88,8 @@ class PluginRegistry {
           if (!condition(step.when, state)) continue;
           let output;
           if (step.type === 'sql' || (step.type === 'source' && require('./data_sources').kind(template.bindings[step.config.bindingRef]) !== 'previous')) {
+            const binding = template.bindings[step.config.bindingRef];
+            if (validateMappings && require('./data_sources').kind(binding) === 'sql' && binding.resultMapping?.length) require('./sql').validateResultMapping(binding);
             ensure(Object.hasOwn(fixture.stepResults || {}, step.id), 'Nguồn dữ liệu ngoài cần dữ liệu giả lập stepResults.');
             output = fixture.stepResults[step.id];
           } else if (step.type === 'source') output = await require('./data_sources').executeSource(template.bindings[step.config.bindingRef],state);
@@ -100,7 +103,7 @@ class PluginRegistry {
         results.push({ templateId: template.id, fixture: index + 1, passed: true });
       } catch (failure) { results.push({ templateId: template.id, fixture: index + 1, passed: false, error: failure.message }); }
     }
-    return { passed: results.every(item => item.passed), results, at: new Date().toISOString() };
+    return { passed: results.every(item => item.passed), results, bindingMappingValidation: validateMappings ? 'checked' : 'not_checked', at: new Date().toISOString() };
   }
   async publish(id, context, revision) {
     requireAdmin(context); const record = await this.repository.get('catalog', id);

@@ -5,7 +5,7 @@ const DATA_INTENTS = new Set(['list', 'record_lookup', 'aggregate', 'aggregate_t
 function getRequestPolicy(plan = {}, context = {}) {
   const outputs = plan.outputs || {};
   const informational = plan.codeOnly === true || context.webSearch === true || context.knowledgeGrounding?.required === true
-    || (!plan.workflowReference && ['general', 'knowledge'].includes(context.mode));
+    || (!plan.workflowReference && (context.mode === 'knowledge' || (context.mode === 'general' && !outputs.chart && !outputs.export)));
   const chartRequired = !informational && outputs.chart === true;
   const exportRequired = !informational && outputs.export === true;
   const dataRequired = !plan.workflowReference && !informational && (outputs.data === true

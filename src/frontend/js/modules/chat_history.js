@@ -70,7 +70,7 @@ function getChatSource(item) {
   const payload = item.requestPayload || item.aiRequestData || item.payload || {};
   const endpoint = String(payload.endpoint || '');
   if (endpoint === '/api/embed/chat' || payload.embedId) {
-    return { label: 'Embed Chat', icon: 'fa-window-restore', tone: 'embed', detail: payload.embedId || '' };
+    return { label: 'Embed Chat', icon: 'fa-window-restore', tone: 'embed', detail: (payload.visitorIdentity?.verified ? `${payload.visitorIdentity.name} · ${payload.visitorIdentity.subject}` : `Khách · ${payload.sessionId || ''}`) + ` · ${payload.origin || payload.embedId || ''}` };
   }
   if (endpoint.startsWith('/api/intelligent-core/chat')) {
     return { label: 'Page Chat', icon: 'fa-comments', tone: 'page', detail: '' };

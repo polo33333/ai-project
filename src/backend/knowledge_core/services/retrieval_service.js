@@ -107,6 +107,7 @@ class RetrievalService {
   async rerank(query, candidates, limit) {
     const baseUrl = String(process.env.RERANKER_BASE_URL || '').replace(/\/$/, '');
     if (!baseUrl || (process.env.RERANKER_ENABLED || 'false') !== 'true') return candidates.slice(0, limit);
+    await require('../../governance/context').refresh('reranker', /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(baseUrl));
     try {
       const maxCandidates = Math.max(limit, Number(process.env.RERANKER_MAX_CANDIDATES || 20));
       const maxDocumentChars = Math.max(200, Number(process.env.RERANKER_MAX_DOCUMENT_CHARS || 1600));
@@ -159,7 +160,8 @@ class RetrievalService {
     if (!scope.documentIds.length) return { results: [], mode: 'empty_scope', graphActivated: false, scope };
     const candidateLimit = Math.max(limit, Number(process.env.RETRIEVAL_CANDIDATE_LIMIT || 30));
     const corpus = this.buildCorpus(scope.documentIds);
-    const vectorResults = await qdrantService.searchDocuments(query, candidateLimit, { documentIds: scope.documentIds });
+    const embeddingEnabled = require('../../services/embedding_policy').enabled();
+    const vectorResults = embeddingEnabled ? await qdrantService.searchDocuments(query, candidateLimit, { documentIds: scope.documentIds }) : [];
     const allowed = new Set(scope.documentIds);
     const revisions = new Map(libraryService.getDocuments().map(document => [String(document.id), document.revision]));
     const dense = vectorResults.filter(item => allowed.has(String(item.payload?.documentId))
@@ -167,7 +169,9 @@ class RetrievalService {
       .map(item => ({ ...item, id: `${item.payload?.documentId}:${item.payload?.chunkIndex}`, source: 'dense' }));
     const graph = this.graphSearch(query, corpus, candidateLimit);
     const fused = this.fuse([dense, this.bm25(query, corpus, candidateLimit), graph], candidateLimit);
-    return { results: await this.rerank(query, fused, limit), mode: graph.length ? 'hybrid_graph' : 'hybrid', graphActivated: graph.length > 0, scope };
+    const results = await this.rerank(query, fused, limit);
+    return { results, candidateIds: fused.map(item => String(item.id)),
+      mode: embeddingEnabled ? (graph.length ? 'hybrid_graph' : 'hybrid') : (graph.length ? 'lexical_graph' : 'lexical'), graphActivated: graph.length > 0, scope };
   }
 }
 

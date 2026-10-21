@@ -7,6 +7,24 @@ const StorageHelper = require('../utils/storage_helper');
 const crypto = require('node:crypto');
 const { withIdentity, sameTable } = require('./schema_identity');
 
+// Lifecycle and evidence are owned by the server, never by metadata forms.
+const relationshipFields = ['sourceTableId', 'targetTableId', 'sourceTable', 'targetTable',
+  'columnPairs', 'sourceColumn', 'targetColumn', 'cardinality', 'relationType',
+  'businessRole', 'displayColumn', 'preferred', 'isActive', 'description', 'defaultJoinType'];
+const editableRelationship = data => Object.fromEntries(relationshipFields
+  .filter(field => Object.hasOwn(data, field)).map(field => [field, data[field]]));
+const relationshipStructure = relation => JSON.stringify([relation.sourceTableId, relation.targetTableId,
+  relation.columnPairs, relation.cardinality]);
+
+function invalidateRelationship(relation) {
+  if (relation.status === 'verified') relation.status = 'stale';
+  relation.revision = (relation.revision || 1) + 1;
+  relation.verifiedBy = null;
+  relation.verifiedAt = null;
+  delete relation.evidence?.profile;
+  delete relation.evidence?.cardinalityStatus;
+}
+
 class DictionaryService {
   constructor() {
     StorageHelper.bind(this, 'tablesStore', 'dictionary.json', [], value => value.map(withIdentity));
@@ -20,7 +38,7 @@ class DictionaryService {
     StorageHelper.saveJson('table_relationships.json', this.tableRelationships);
   }
 
-  saveDictionaryItems(tables) {
+  saveDictionaryItems(tables, { completeSourceId = null } = {}) {
     tables.forEach(t => {
       const identified = withIdentity(t);
       const existing = this.tablesStore.find(tbl => sameTable(tbl, identified));
@@ -35,17 +53,20 @@ class DictionaryService {
         ordinalPosition: c.ordinalPosition,
         displayName: c.displayName ?? prior?.displayName ?? '',
         isVisible: c.isVisible !== undefined ? c.isVisible !== false : prior?.isVisible !== false,
-        description: c.description || prior?.description || `Cột ${c.columnName} thuộc bảng ${t.tableName}`
+        description: prior?.description ?? c.description ?? `Cột ${c.columnName} thuộc bảng ${t.tableName}`
       }); });
 
       if (existing) {
         const priorColumns = existing.columns || [];
+        const priorKeys = JSON.stringify(existing.uniqueConstraints);
         Object.assign(existing, withIdentity({ ...existing, ...identified, columns: formattedCols }));
         existing.dbName = t.dbName || existing.dbName;
         if (t.domain !== undefined) existing.domain = this.normalizeDomain(t.domain);
         if (existing.defaultMetric && !formattedCols.some(column => column.columnName === existing.defaultMetric)) delete existing.defaultMetric;
         if (existing.defaultTimeColumn && !formattedCols.some(column => column.columnName === existing.defaultTimeColumn)) delete existing.defaultTimeColumn;
-        this.markChangedRelationshipsStale(existing.tableId, priorColumns, formattedCols);
+        this.markChangedRelationshipsStale(existing.tableId, priorColumns, formattedCols,
+          priorKeys !== JSON.stringify(existing.uniqueConstraints));
+        delete existing.schemaMissing;
       } else {
         this.tablesStore.push(withIdentity({
           tableName: t.tableName,
@@ -54,33 +75,41 @@ class DictionaryService {
           schemaName: t.schemaName || 'dbo',
           domain: this.normalizeDomain(t.domain),
           isActive: true,
+          ...(Array.isArray(t.uniqueConstraints) ? { uniqueConstraints: t.uniqueConstraints } : {}),
           tableDescription: `Bảng dữ liệu ${t.tableName} thuộc CSDL ${t.dbName || ''}`,
           columns: formattedCols
         }));
       }
     });
+    // Only a complete live snapshot may declare a table absent. DDL imports are partial.
+    if (completeSourceId) {
+      const present = new Set(tables.map(table => withIdentity(table).tableId));
+      for (const table of this.tablesStore) {
+        if (table.dbSourceId !== completeSourceId || present.has(table.tableId) || table.schemaMissing) continue;
+        table.schemaMissing = true;
+        table.isActive = false;
+        for (const relation of this.tableRelationships) {
+          if ([relation.sourceTableId, relation.targetTableId].includes(table.tableId)) invalidateRelationship(relation);
+        }
+      }
+    }
     this.importForeignKeyRelationships(tables);
     this.persist();
     return this.tablesStore;
   }
 
-  markChangedRelationshipsStale(tableId, before = [], after = []) {
+  markChangedRelationshipsStale(tableId, before = [], after = [], keysChanged = false) {
     const signature = columns => new Map(columns.map(column => [column.columnName, `${column.dataType}|${!!column.isPrimaryKey}|${!!column.isUnique}`]));
     const oldMap = signature(before);
     const newMap = signature(after);
     this.tableRelationships.forEach(relation => {
       if (relation.sourceTableId !== tableId && relation.targetTableId !== tableId) return;
       const pairs = relation.columnPairs || [];
-      const affected = pairs.some(pair => {
-        const name = relation.sourceTableId === tableId ? pair.sourceColumn : pair.targetColumn;
-        return !newMap.has(name) || oldMap.get(name) !== newMap.get(name);
-      });
-      if (affected && relation.status === 'verified') {
-        relation.status = 'stale';
-        relation.revision = (relation.revision || 1) + 1;
-        relation.verifiedBy = null;
-        relation.verifiedAt = null;
-      }
+      const names = pairs.flatMap(pair => [
+        ...(relation.sourceTableId === tableId ? [pair.sourceColumn] : []),
+        ...(relation.targetTableId === tableId ? [pair.targetColumn] : [])]);
+      const affected = keysChanged || names.some(name => !newMap.has(name) || oldMap.get(name) !== newMap.get(name));
+      if (affected) invalidateRelationship(relation);
     });
   }
 
@@ -88,6 +117,15 @@ class DictionaryService {
     for (const rawTable of tables) {
       const source = this.tablesStore.find(table => table.tableId === withIdentity(rawTable).tableId);
       if (!source) continue;
+      if (Array.isArray(rawTable.foreignKeys)) {
+        const names = new Set(rawTable.foreignKeys.map(fk => fk.constraintName));
+        for (const relation of this.tableRelationships) {
+          if (relation.origin !== 'foreign_key' || relation.sourceTableId !== source.tableId
+            || names.has(relation.constraintName) || relation.evidence?.missing) continue;
+          invalidateRelationship(relation);
+          relation.evidence = { ...relation.evidence, missing: true };
+        }
+      }
       for (const fk of rawTable.foreignKeys || []) {
         const target = this.tablesStore.find(table => table.dbName === source.dbName
           && (table.dbSourceId || null) === (source.dbSourceId || null)
@@ -101,7 +139,7 @@ class DictionaryService {
         const unchanged = existing && existing.targetTableId === target.tableId
           && JSON.stringify(existing.columnPairs) === JSON.stringify(pairs)
           && !!existing.evidence?.disabled === !!fk.isDisabled && !!existing.evidence?.untrusted === !!fk.isNotTrusted
-          && existing.status === status;
+          && !existing.evidence?.missing && existing.status === status;
         if (unchanged) continue;
         const next = this.normalizeRelationship({ ...(existing || {}), id: existing?.id || crypto.randomUUID(),
           sourceTableId: source.tableId, targetTableId: target.tableId, sourceTable: source.tableName, targetTable: target.tableName,
@@ -116,7 +154,10 @@ class DictionaryService {
   }
 
   getGroupedTables() {
-    return this.tablesStore;
+    const governance=require('../governance/context'), scope=governance.current();
+    if(!scope?.principal?.permissions||scope.principal.role==='admin') return this.tablesStore;
+    const sources=require('./sql_connector').dbSources.filter(source=>governance.canRead(source,'sql'));
+    return this.tablesStore.filter(table=>sources.some(source=>source.id===table.dbSourceId));
   }
 
   normalizeDomain(value) {
@@ -125,7 +166,11 @@ class DictionaryService {
   }
 
   getTableRelationships() {
-    return this.tableRelationships;
+    const governance=require('../governance/context'), scope=governance.current();
+    if(!scope?.principal?.permissions||scope.principal.role==='admin') return this.tableRelationships;
+    const tables=this.getGroupedTables();
+    return this.tableRelationships.filter(relation=>['source','target'].every(side=>tables.some(table=>
+      relation[side+'TableId']?table.tableId===relation[side+'TableId']:table.tableName===relation[side+'Table']&&(!relation.dbSourceId||relation.dbSourceId===table.dbSourceId))));
   }
 
   findTable(tableId, tableName) {
@@ -202,6 +247,9 @@ class DictionaryService {
       throw Object.assign(new Error('Loại quan hệ không hợp lệ.'), { statusCode: 400 });
     }
     if (cardinality === 'many-to-many') throw Object.assign(new Error('Quan hệ N:N phải được cấu hình qua bảng trung gian thành hai quan hệ.'), { statusCode: 400 });
+    if (data.defaultJoinType && !['LEFT', 'INNER', 'LEFT OUTER'].includes(data.defaultJoinType)) {
+      throw Object.assign(new Error('Kiểu JOIN chỉ hỗ trợ LEFT hoặc INNER.'), { statusCode: 400 });
+    }
     const duplicate = this.tableRelationships.some(relation => relation.id !== currentId
       && relation.sourceTableId === sourceTable.tableId && relation.targetTableId === targetTable.tableId
       && JSON.stringify(relation.columnPairs) === JSON.stringify(pairs));
@@ -211,26 +259,49 @@ class DictionaryService {
 
   tableColumnsAreUnique(table, columnNames = []) {
     const names = new Set(columnNames);
-    const columns = (table?.columns || []).filter(column => names.has(column.columnName));
-    if (columns.some(column => column.isUnique)) return true;
+    // Legacy isUnique flags included composite and INCLUDE columns.
+    if (Array.isArray(table?.uniqueConstraints)) return table.uniqueConstraints.some(constraint => {
+      const columns = constraint.columnNames || constraint.columns || [];
+      return !constraint.isDisabled && !constraint.hasFilter && !constraint.filterDefinition
+        && columns.length > 0 && columns.every(name => names.has(name));
+    });
     const primaryKeyColumns = (table?.columns || []).filter(column => column.isPrimaryKey).map(column => column.columnName);
     if (primaryKeyColumns.length && primaryKeyColumns.every(name => names.has(name))) return true;
-    return (table?.uniqueConstraints || []).some(constraint => {
-      const constrained = new Set(constraint.columnNames || constraint.columns || []);
-      return constrained.size > 0 && [...constrained].every(name => names.has(name));
-    });
+    return false;
+  }
+
+  profileSignature(relationship) {
+    return crypto.createHash('sha256').update(JSON.stringify({
+      structure: relationshipStructure(relationship),
+      tables: [relationship.sourceTableId, relationship.targetTableId].map(id => {
+        const table = this.findTable(id);
+        return table && [id, table.columns.map(c => [c.columnName, c.dataType, c.isPrimaryKey]), table.uniqueConstraints];
+      })
+    })).digest('hex');
   }
 
   assertCardinalityEvidence(relationship) {
-    if (relationship.origin === 'foreign_key') return;
+    this.validateRelationship(relationship, relationship.id);
+    if (relationship.cardinality === 'unknown') throw Object.assign(new Error('Cần chọn cardinality trước khi xác minh quan hệ.'), {
+      statusCode: 409, code: 'JOIN_CARDINALITY_UNCONFIRMED'
+    });
+    if (relationship.origin === 'foreign_key' && relationship.evidence?.foreignKey
+      && !relationship.evidence.disabled && !relationship.evidence.untrusted && !relationship.evidence.missing
+      && relationship.cardinality === 'many-to-one') return;
+    if (relationship.origin === 'foreign_key') throw Object.assign(new Error('Khóa ngoại đã mất hoặc chưa được tin cậy; hãy đồng bộ lại nguồn.'), {
+      statusCode: 409, code: 'JOIN_FOREIGN_KEY_UNTRUSTED'
+    });
     const source = this.findTable(relationship.sourceTableId, relationship.sourceTable);
     const target = this.findTable(relationship.targetTableId, relationship.targetTable);
     const pairs = relationship.columnPairs || [];
-    const profile = relationship.evidence?.profile || {};
+    const storedProfile = relationship.evidence?.profile;
+    const age = Date.now() - Date.parse(storedProfile?.checkedAt);
+    const profile = storedProfile?.signature === this.profileSignature(relationship)
+      && age >= 0 && age <= 24 * 60 * 60 * 1000 ? storedProfile : {};
     const cardinality = relationship.cardinality || relationship.relationType;
     const mismatch = (['many-to-one', 'one-to-one'].includes(cardinality) && profile.duplicateTargetKeys > 0)
       || (['one-to-many', 'one-to-one'].includes(cardinality) && profile.duplicateSourceKeys > 0);
-    if (mismatch || relationship.evidence?.cardinalityStatus === 'mismatch') {
+    if (mismatch) {
       throw Object.assign(new Error('Dữ liệu profiling mâu thuẫn với cardinality đã chọn; hãy sửa chiều/loại quan hệ trước khi xác minh.'), {
         statusCode: 409, code: 'JOIN_CARDINALITY_MISMATCH', details: { cardinality }
       });
@@ -252,7 +323,7 @@ class DictionaryService {
 
   async addTableRelationship(data, options = {}) {
     const { sourceTable, targetTable, pairs, cardinality } = this.validateRelationship(data);
-    const relationship = this.normalizeRelationship({ ...data, id: crypto.randomUUID(), sourceTableId: sourceTable.tableId,
+    const relationship = this.normalizeRelationship({ ...editableRelationship(data), id: crypto.randomUUID(), sourceTableId: sourceTable.tableId,
       targetTableId: targetTable.tableId, sourceTable: sourceTable.tableName, targetTable: targetTable.tableName,
       columnPairs: pairs, cardinality, relationType: cardinality, origin: 'manual', source: 'manual', status: 'suggested', revision: 1 });
     this.tableRelationships.push(relationship);
@@ -296,19 +367,27 @@ class DictionaryService {
     if (data.expectedRevision !== undefined && Number(data.expectedRevision) !== relationship.revision) {
       throw Object.assign(new Error('Quan hệ đã được thay đổi bởi phiên làm việc khác.'), { statusCode: 409 });
     }
-    const beforeStructure = JSON.stringify({ sourceTableId: relationship.sourceTableId, targetTableId: relationship.targetTableId,
-      columnPairs: relationship.columnPairs, cardinality: relationship.cardinality });
-    const merged = { ...relationship, ...data };
+    const beforeStructure = relationshipStructure(relationship);
+    const updates = editableRelationship(data);
+    if (updates.relationType && !updates.cardinality) updates.cardinality = updates.relationType;
+    if (!updates.columnPairs && (updates.sourceColumn || updates.targetColumn)) updates.columnPairs = [{
+      sourceColumn: updates.sourceColumn || relationship.sourceColumn,
+      targetColumn: updates.targetColumn || relationship.targetColumn
+    }];
+    const merged = { ...relationship, ...updates };
     const { sourceTable, targetTable, pairs, cardinality } = this.validateRelationship(merged, id);
     Object.assign(relationship, this.normalizeRelationship({ ...merged, sourceTableId: sourceTable.tableId,
       targetTableId: targetTable.tableId, sourceTable: sourceTable.tableName, targetTable: targetTable.tableName,
       columnPairs: pairs, cardinality, relationType: cardinality, revision: relationship.revision + 1 }));
-    const afterStructure = JSON.stringify({ sourceTableId: relationship.sourceTableId, targetTableId: relationship.targetTableId,
-      columnPairs: relationship.columnPairs, cardinality: relationship.cardinality });
-    if (wasVerified && beforeStructure !== afterStructure) {
-      relationship.status = 'stale';
+    const afterStructure = relationshipStructure(relationship);
+    if (beforeStructure !== afterStructure) {
+      if (wasVerified) relationship.status = 'stale';
       relationship.verifiedBy = null;
       relationship.verifiedAt = null;
+      relationship.evidence = {};
+      relationship.origin = 'manual';
+      relationship.source = 'manual';
+      delete relationship.constraintName;
     }
     if (!options.deferPersistence) {
       this.persist();
@@ -375,20 +454,23 @@ class DictionaryService {
     const source = this.findTable(relationship.sourceTableId, relationship.sourceTable);
     const target = this.findTable(relationship.targetTableId, relationship.targetTable);
     if (!source || !target || !source.dbSourceId) throw Object.assign(new Error('Quan hệ không thuộc nguồn SQL live có thể profiling.'), { statusCode: 400 });
+    this.validateRelationship(relationship, id);
+    const revision = relationship.revision;
+    const signature = this.profileSignature(relationship);
     const quote = value => `[${String(value).replace(/]/g, ']]')}]`;
     const pairs = relationship.columnPairs || [];
     const on = pairs.map(pair => `s.${quote(pair.sourceColumn)} = t.${quote(pair.targetColumn)}`).join(' AND ');
     const sourceNull = pairs.map(pair => `s.${quote(pair.sourceColumn)} IS NULL`).join(' OR ');
-    const targetMissing = pairs.map(pair => `t.${quote(pair.targetColumn)} IS NULL`).join(' AND ');
     const targetColumns = pairs.map(pair => quote(pair.targetColumn)).join(', ');
     const sourceColumns = pairs.map(pair => quote(pair.sourceColumn)).join(', ');
     const sourceName = `${quote(source.schemaName || 'dbo')}.${quote(source.tableName)}`;
     const targetName = `${quote(target.schemaName || 'dbo')}.${quote(target.tableName)}`;
     const sqlConnector = require('./sql_connector');
     const coverageRows = await sqlConnector.executeSqlQuery(`SELECT COUNT_BIG(*) AS totalRows,
-      SUM(CASE WHEN ${sourceNull} THEN 1 ELSE 0 END) AS nullKeyRows,
-      SUM(CASE WHEN NOT (${sourceNull}) AND ${targetMissing} THEN 1 ELSE 0 END) AS orphanRows
-      FROM ${sourceName} s LEFT JOIN ${targetName} t ON ${on}`, source.dbSourceId);
+      COALESCE(SUM(CASE WHEN ${sourceNull} THEN CAST(1 AS bigint) ELSE CAST(0 AS bigint) END), 0) AS nullKeyRows,
+      (SELECT COUNT_BIG(*) FROM ${sourceName} s WHERE NOT (${sourceNull})
+        AND NOT EXISTS (SELECT 1 FROM ${targetName} t WHERE ${on})) AS orphanRows
+      FROM ${sourceName} s`, source.dbSourceId);
     const duplicateRows = await sqlConnector.executeSqlQuery(`SELECT COUNT_BIG(*) AS duplicateKeys FROM (
       SELECT ${targetColumns} FROM ${targetName} WHERE ${pairs.map(pair => `${quote(pair.targetColumn)} IS NOT NULL`).join(' AND ')}
       GROUP BY ${targetColumns} HAVING COUNT_BIG(*) > 1
@@ -398,11 +480,25 @@ class DictionaryService {
       SELECT ${sourceColumns} FROM ${sourceName} WHERE ${pairs.map(pair => `${quote(pair.sourceColumn)} IS NOT NULL`).join(' AND ')}
       GROUP BY ${sourceColumns} HAVING COUNT_BIG(*) > 1
     ) duplicate_groups`, source.dbSourceId) : [{ duplicateKeys: null }];
+    if (revision !== relationship.revision || signature !== this.profileSignature(relationship)) {
+      throw Object.assign(new Error('Quan hệ đã thay đổi trong lúc profiling; hãy chạy lại.'), { statusCode: 409 });
+    }
+    const count = (value) => {
+      const number = Number(value);
+      if (value === null || value === undefined || !Number.isSafeInteger(number) || number < 0) {
+        throw Object.assign(new Error('Kết quả profiling thiếu hoặc vượt giới hạn số đếm; chưa thể xác minh.'), {
+          statusCode: 409, code: 'JOIN_PROFILE_INCOMPLETE'
+        });
+      }
+      return number;
+    };
+    const counts = { totalRows: count(coverageRows[0]?.totalRows), nullKeyRows: count(coverageRows[0]?.nullKeyRows),
+      orphanRows: count(coverageRows[0]?.orphanRows), duplicateTargetKeys: count(duplicateRows[0]?.duplicateKeys),
+      ...(needsSourceUnique ? { duplicateSourceKeys: count(duplicateSourceRows[0]?.duplicateKeys) } : {}) };
+    const wasVerified = relationship.status === 'verified';
     relationship.evidence ||= {};
     relationship.evidence.profile = { scope: 'full', checkedAt: new Date().toISOString(),
-      totalRows: Number(coverageRows[0]?.totalRows || 0), nullKeyRows: Number(coverageRows[0]?.nullKeyRows || 0),
-      orphanRows: Number(coverageRows[0]?.orphanRows || 0), duplicateTargetKeys: Number(duplicateRows[0]?.duplicateKeys || 0) };
-    if (needsSourceUnique) relationship.evidence.profile.duplicateSourceKeys = Number(duplicateSourceRows[0]?.duplicateKeys || 0);
+      signature, ...counts };
     const profile = relationship.evidence.profile;
     const cardinality = relationship.cardinality || relationship.relationType;
     const mismatch = (['many-to-one', 'one-to-one'].includes(cardinality) && profile.duplicateTargetKeys > 0)
@@ -415,12 +511,14 @@ class DictionaryService {
     }
     relationship.revision += 1;
     this.persist();
+    if (wasVerified && relationship.status !== 'verified') await this.syncToQdrant();
     return relationship;
   }
 
-  async toggleTableActive(tableName, isActive) {
-    const table = this.tablesStore.find(t => t.tableName === tableName);
+  async toggleTableActive(tableName, isActive, tableId = null) {
+    const table = this.findTable(tableId, tableName);
     if (table) {
+      if (isActive && table.schemaMissing) throw Object.assign(new Error('Bảng đã mất ở nguồn; hãy đồng bộ lại trước khi bật.'), { statusCode: 409 });
       table.isActive = isActive;
       this.persist();
       await this.syncToQdrant();
@@ -433,33 +531,10 @@ class DictionaryService {
     return this.updateTableMetadata(tableName, { description: newDesc });
   }
 
-  async updateTableMetadata(tableName, updates = {}) {
-    const table = this.tablesStore.find(t => t.tableName === tableName);
+  async updateTableMetadata(tableName, updates = {}, tableId = null) {
+    const table = this.findTable(tableId, tableName);
     if (table) {
-      if (updates.description !== undefined) table.tableDescription = String(updates.description || '');
-      if (updates.domain !== undefined) table.domain = this.normalizeDomain(updates.domain);
-      const column = name => (table.columns || []).find(item => item.columnName === String(name || ''));
-      if (updates.defaultMetric !== undefined) {
-        const value = String(updates.defaultMetric || '');
-        if (value && !column(value)) throw Object.assign(new Error('Cột metric mặc định không tồn tại trong bảng.'), { statusCode: 400 });
-        if (value && !/^(?:tinyint|smallint|int|bigint|decimal|numeric|float|real|money|smallmoney)$/i.test(column(value)?.dataType || '')) {
-          throw Object.assign(new Error('Metric mặc định phải là cột kiểu số.'), { statusCode: 400 });
-        }
-        if (value) table.defaultMetric = value; else delete table.defaultMetric;
-      }
-      if (updates.defaultTimeColumn !== undefined) {
-        const value = String(updates.defaultTimeColumn || '');
-        if (value && !column(value)) throw Object.assign(new Error('Cột thời gian mặc định không tồn tại trong bảng.'), { statusCode: 400 });
-        if (value && !/date|time/i.test(column(value)?.dataType || '')) throw Object.assign(new Error('Cột thời gian mặc định phải có kiểu ngày/giờ.'), { statusCode: 400 });
-        if (value) table.defaultTimeColumn = value; else delete table.defaultTimeColumn;
-      }
-      if (updates.defaultAggregation !== undefined) {
-        const value = String(updates.defaultAggregation || '').toUpperCase();
-        if (value && !['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'].includes(value)) throw Object.assign(new Error('Phép tổng hợp mặc định không hợp lệ.'), { statusCode: 400 });
-        if (value) table.defaultAggregation = value; else delete table.defaultAggregation;
-      }
-      this.persist();
-      await this.syncToQdrant();
+      await this.saveTableConfiguration({ tableId: table.tableId, tableName, table: updates });
       return true;
     }
     return false;
@@ -480,8 +555,8 @@ class DictionaryService {
     return updatedCount;
   }
 
-  async updateColumnDescription(tableName, columnName, newDesc, displayName) {
-    const table = this.tablesStore.find(t => t.tableName === tableName);
+  async updateColumnDescription(tableName, columnName, newDesc, displayName, tableId = null) {
+    const table = this.findTable(tableId, tableName);
     if (table) {
       const col = table.columns.find(c => c.columnName === columnName);
       if (col) {
@@ -502,6 +577,10 @@ class DictionaryService {
     const relationshipsSnapshot = structuredClone(this.tableRelationships);
     try {
     const metadata = data.table || {};
+    if (metadata.isActive && table.schemaMissing) throw Object.assign(new Error('Bảng đã mất ở nguồn; hãy đồng bộ lại trước khi bật.'), { statusCode: 409 });
+    const disabledColumns = (Array.isArray(data.columns) ? data.columns : []).filter(update=>update.isVisible === false).map(update=>update.columnName);
+    let configurationAdjustments = [];
+    if (metadata.requiredFilters !== undefined) table.requiredFilters = structuredClone(metadata.requiredFilters);
     if (metadata.description !== undefined) table.tableDescription = String(metadata.description || '');
     if (metadata.domain !== undefined) table.domain = this.normalizeDomain(metadata.domain);
     if (metadata.isActive !== undefined) table.isActive = metadata.isActive !== false;
@@ -524,14 +603,30 @@ class DictionaryService {
       if (update.displayName !== undefined) target.displayName = String(update.displayName || '').trim();
       if (update.isVisible !== undefined) target.isVisible = update.isVisible !== false;
     }
+    if (metadata.semanticModel !== undefined) {
+      if (metadata.semanticModel === null) delete table.semanticModel;
+      else {
+        const semantic = require('./semantic_model');
+        const reconciled = semantic.reconcileVisibility(metadata.semanticModel, disabledColumns);
+        configurationAdjustments = reconciled.adjustments;
+        table.semanticModel = semantic.validateModel(reconciled.model, table);
+      }
+    } else if (table.semanticModel) {
+      const semantic = require('./semantic_model');
+      const reconciled = semantic.reconcileVisibility(table.semanticModel, disabledColumns);
+      configurationAdjustments = reconciled.adjustments;
+      table.semanticModel = semantic.validateModel(reconciled.model, table);
+    }
+    require('./schema_quality').validateConfiguration(table);
+    if (table.requiredFilters !== undefined) require('./required_filters').validate(table.requiredFilters, table);
     for (const change of Array.isArray(data.relationships) ? data.relationships : []) {
       if (change.operation === 'many-to-many') await this.addManyToManyRelationship(change.payload || {}, { deferPersistence: true });
       else if (change.id) await this.updateTableRelationship(change.id, { ...(change.payload || {}), expectedRevision: change.expectedRevision }, { deferPersistence: true });
       else await this.addTableRelationship(change.payload || {}, { deferPersistence: true });
     }
     this.persist();
-    await this.syncToQdrant();
-    return { table, tables: this.getGroupedTables(), relationships: this.getTableRelationships() };
+    const vectorSync = await this.syncToQdrant();
+    return { table, tables: this.getGroupedTables(), relationships: this.getTableRelationships(), vectorSync, configurationAdjustments };
     } catch (error) {
       this.tablesStore = tablesSnapshot;
       this.tableRelationships = relationshipsSnapshot;
@@ -539,8 +634,11 @@ class DictionaryService {
     }
   }
 
-  async deleteTable(tableName) {
-    this.tablesStore = this.tablesStore.filter(t => t.tableName !== tableName);
+  async deleteTable(tableName, tableId = null) {
+    const table = this.findTable(tableId, tableName);
+    if (!table) return false;
+    this.tablesStore = this.tablesStore.filter(t => t.tableId !== table.tableId);
+    this.tableRelationships = this.tableRelationships.filter(r => r.sourceTableId !== table.tableId && r.targetTableId !== table.tableId);
     this.persist();
     await this.syncToQdrant();
     return true;
@@ -598,7 +696,8 @@ class DictionaryService {
 
   async syncToQdrant({ defer = true } = {}) {
     const storage = require('../storage');
-    if (defer && storage.enabled() && storage.afterCommit('dictionary-qdrant-sync', () => this.syncToQdrant({ defer: false }))) {
+    if (defer && storage.enabled()) {
+      storage.enqueue('dictionary.sync', 'dictionary-schema');
       return { success: true, scheduled: true };
     }
     const qdrantService = require('./qdrant_service');

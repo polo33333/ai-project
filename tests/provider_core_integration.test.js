@@ -1,4 +1,6 @@
 'use strict';
+// Compatibility regression for the pre-controller routing path.
+process.env.GOVERNED_CONTROLLER_MODE = 'legacy';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../src/backend/intelligent_core/core');
@@ -54,6 +56,7 @@ test(`ds kh avoids embedding and model retries (database available: ${databaseAv
   const dictionary = require('../src/backend/services/dictionary_service');
   const automation = require('../src/backend/automation');
   const table = require('../src/backend/services/schema_identity').withIdentity({ dbSourceId: 'test-db', dbName: 'Fixture', schemaName: 'sales', tableName: 'M_Customer', domain: 'customer', isActive: true,
+    semanticModel: { version: 1, entity: 'Khách hàng', grain: 'Một khách hàng', identityFields: ['CustomerID'], summaryFields: ['CustomerID', 'CustomerName'], segments: [] },
     columns: [{ columnName: 'CustomerID', dataType: 'INT', isPrimaryKey: true }, { columnName: 'CustomerName', dataType: 'NVARCHAR' }, { columnName: 'Password', dataType: 'NVARCHAR' }] });
   t.mock.method(dictionary, 'getGroupedTables', () => [table]);
   t.mock.method(dictionary, 'getTableRelationships', () => []);
@@ -186,7 +189,7 @@ test('core preserves workflow routing usage alongside verified provider data and
     options.onWorkflowUsage({ inputTokens: 100, outputTokens: 20, totalTokens: 120, calls: 2 });
     return null;
   });
-  const provider = { id: 'integration', name: 'Fixture cloud', model: 'fixture', apiFormat: 'openai', executionClass: 'remote', supportsToolCalling: true, baseUrl: 'https://test.invalid' };
+  const provider = { id: 'integration', name: 'Fixture cloud', model: 'fixture', contextWindow: 65536, apiFormat: 'openai', executionClass: 'remote', supportsToolCalling: true, baseUrl: 'https://test.invalid' };
   t.mock.method(providers, 'getActiveProvider', () => provider);
   t.mock.method(providers, 'getProvidersForExecution', () => [provider]);
   t.mock.method(schema, 'buildSchemaContext', async () => ({ mode: 'data', useTools: true, selectedTables: ['T_Contract'], schemaContext: 'T_Contract(ContractID int, ContractNo varchar)' }));

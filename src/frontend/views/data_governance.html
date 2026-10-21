@@ -1,0 +1,74 @@
+<section id="view-data-governance" class="system-tools-page" data-display="grid" style="display:none">
+  <header class="system-tools-hero">
+    <div class="system-tools-hero-icon"><i class="fa-solid fa-shield-halved"></i></div>
+    <div><div class="card-title">Quản trị dữ liệu</div><p>Quản lý quyền truy cập, phạm vi xử lý và các chỉ tiêu SQL được phê duyệt.</p></div>
+    <span class="metric-tag purple">Chỉ dành cho admin</span>
+  </header>
+  <section class="settings-governance-card" aria-labelledby="governance-title">
+    <header class="settings-governance-heading">
+      <span class="settings-governance-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+      <div class="settings-governance-heading-copy"><span class="settings-governance-kicker">BẢO VỆ DỮ LIỆU</span><h3 id="governance-title">Quyền truy cập và xử lý dữ liệu</h3><p>Chọn nguồn để quản lý người được đọc và nơi được phép xử lý dữ liệu.</p></div>
+      <span id="governance-mode" class="settings-governance-badge" role="status">Đang tải chính sách…</span>
+    </header>
+    <div class="settings-governance-body">
+      <div class="settings-governance-source"><label for="governance-resource"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Nguồn dữ liệu</label><div><select class="form-control" id="governance-resource" onchange="selectGovernanceResource()" aria-describedby="governance-source-help"></select><p id="governance-source-help" class="settings-governance-hint">Chính sách chỉ áp dụng cho nguồn đang chọn. Câu hỏi dữ liệu nghiệp vụ cần cấp quyền cho nguồn SQL tương ứng.</p></div></div>
+      <form id="governance-form" onsubmit="saveGovernanceResource(event)">
+        <div class="settings-governance-grid">
+          <fieldset class="settings-governance-pane">
+            <legend><i class="fa-solid fa-users" aria-hidden="true"></i> Quyền đọc nguồn</legend>
+            <p class="settings-governance-hint">Xác định tài khoản và widget có thể sử dụng nguồn này.</p>
+            <label>Phạm vi truy cập<select class="form-control" id="governance-visibility"><option value="shared">Tài khoản đã đăng nhập</option><option value="restricted">Chỉ tài khoản / vai trò được chỉ định</option></select></label>
+            <label>Tài khoản được đọc<input class="form-control" id="governance-subjects" placeholder="account:ID, account:ID" aria-describedby="governance-subjects-help"><small id="governance-subjects-help">Nhập mã tài khoản, phân cách bằng dấu phẩy.</small></label>
+            <div class="settings-governance-pair">
+              <label>Vai trò được đọc<input class="form-control" id="governance-roles" placeholder="user, admin"></label>
+              <label>Widget được đọc<input class="form-control" id="governance-embedIds" placeholder="Embed ID"></label>
+            </div>
+          </fieldset>
+          <fieldset class="settings-governance-pane">
+            <legend><i class="fa-solid fa-lock" aria-hidden="true"></i> Phạm vi xử lý</legend>
+            <p class="settings-governance-hint">Quyền đọc không tự cấp quyền gửi dữ liệu ra ngoài.</p>
+            <label>Mức độ nhạy cảm<select class="form-control" id="governance-sensitivity"><option value="internal">Nội bộ</option><option value="restricted">Hạn chế</option><option value="public">Công khai</option></select></label>
+            <label>Đích xử lý được phép<input class="form-control" id="governance-modelDestinations" list="governance-providers" placeholder="Chọn hoặc nhập mã đích xử lý" aria-describedby="governance-destination-help"><small id="governance-destination-help">Để trống: nguồn nội bộ chỉ dùng model cục bộ; nguồn hạn chế cần cấp đích riêng.</small></label><datalist id="governance-providers"></datalist>
+            <details class="settings-governance-help"><summary>Hướng dẫn nhập đích xử lý</summary><p>Dùng Provider ID, <code>embedding:tên-model</code>, <code>reranker</code>, <code>mcp:ID</code>, <code>api:origin</code> hoặc <code>web:origin</code>. Nhiều đích phân cách bằng dấu phẩy.</p></details>
+            <div class="settings-governance-pair">
+              <label>Bảng SQL được phép<input class="form-control" id="governance-allowedTables" placeholder="dbo.Table"><small>Để trống để dùng phạm vi của nguồn.</small></label>
+              <label>Cột SQL bị chặn<input class="form-control" id="governance-blockedColumns" placeholder="Tên cột"><small>Chặn cả SELECT * khi có cột hạn chế.</small></label>
+            </div>
+          </fieldset>
+        </div>
+        <footer class="settings-governance-footer"><p id="governance-message" role="status" aria-live="polite"></p><button class="btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu chính sách</button></footer>
+      </form>
+    </div>
+  </section>
+  <section class="settings-governance-card settings-metrics-card" aria-labelledby="metric-editor-title">
+    <header class="settings-governance-heading">
+      <span class="settings-governance-icon"><i class="fa-solid fa-chart-column" aria-hidden="true"></i></span>
+      <div class="settings-governance-heading-copy"><span class="settings-governance-kicker">CHỈ TIÊU NGHIỆP VỤ</span><h3 id="metric-editor-title">Chỉ tiêu SQL được phê duyệt</h3><p>Quản lý định nghĩa, đơn vị và thời gian tính chỉ tiêu theo từng nguồn SQL.</p></div>
+      <span class="settings-governance-badge">Chỉ dùng chỉ tiêu đã duyệt</span>
+    </header>
+    <div class="settings-governance-body">
+      <div class="settings-metrics-selectors">
+        <label for="metric-source">Nguồn SQL<select id="metric-source" class="form-control" onchange="loadGovernedMetrics()"></select></label>
+        <label for="metric-existing">Chỉ tiêu<select id="metric-existing" class="form-control" onchange="selectGovernedMetric()"><option value="">Tạo mới</option></select></label>
+      </div>
+      <form onsubmit="saveGovernedMetric(event)">
+        <div class="settings-metrics-editor">
+          <div class="settings-metrics-editor-heading"><label for="metric-definition">Định nghĩa chỉ tiêu</label><span>JSON</span></div>
+          <textarea id="metric-definition" class="form-control" rows="16" spellcheck="false" aria-describedby="metric-help"></textarea>
+        </div>
+        <details class="settings-governance-help settings-metrics-help" open><summary>Quy tắc tính và phê duyệt</summary><ul id="metric-help"><li>Ngày bắt đầu được bao gồm; ngày kết thúc không bao gồm. Cột thời gian phải khớp múi giờ đã khai báo.</li><li>Hỗ trợ một bảng, không join. Chỉ phân nhóm theo các trường trong <code>dimensions</code> được duyệt.</li><li>Đặt <code>approved: true</code> khi chủ nghiệp vụ đã duyệt định nghĩa. Bản nháp chưa xuất hiện trong công cụ AI.</li></ul></details>
+        <footer class="settings-governance-footer"><p id="metric-message" role="status" aria-live="polite"></p><button type="submit" class="btn-primary"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu phiên bản chỉ tiêu</button></footer>
+      </form>
+    </div>
+  </section>
+
+
+  <section class="settings-governance-card agent-operations" aria-labelledby="operations-title">
+    <header class="settings-governance-heading">
+      <span class="settings-governance-icon"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i></span>
+      <div class="settings-governance-heading-copy"><h3 id="operations-title">Chất lượng và vận hành Agent</h3><p>Tổng hợp các lượt đã lưu; không hiển thị nội dung hội thoại.</p></div>
+      <button id="operations-refresh" class="btn-secondary-sm" type="button" onclick="loadAgentOperations()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button>
+    </header>
+    <div class="settings-governance-body"><dl id="operations-summary" class="operations-summary"></dl><ul id="operations-alerts" aria-live="polite"></ul><p id="operations-message" role="status"></p></div>
+  </section>
+</section>

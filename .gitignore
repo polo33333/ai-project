@@ -11,6 +11,7 @@ node_modules/
 # Local application data, generated artifacts and backup archives
 /data/
 /artifacts/
+/uploads/chat/
 /backups/
 /ver/
 
@@ -170,3 +171,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Local credentials used by the workflow-authoring MCP bridge.
+.env.workflow-mcp.local

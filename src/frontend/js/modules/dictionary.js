@@ -3,7 +3,7 @@
  */
 
 window.groupedTablesData = [];
-window.dictActiveFilter = 'all';
+window.dictActiveFilter = 'active';
 window.selectedDictionaryTableName = null;
 window.selectedDictionaryTableId = null;
 window.tableRelationshipsData = [];
@@ -60,24 +60,159 @@ function findDictionaryTable(tableNameOrId) {
   return getDictionaryTables().find(t => t.tableId === tableNameOrId) || getDictionaryTables().find(t => t.tableName === tableNameOrId);
 }
 
-async function fetchDataDictionary() {
+let dictionaryWorkspaceRequest = null;
+function fetchDataDictionary() {
+  if (dictionaryWorkspaceRequest) return dictionaryWorkspaceRequest;
+  dictionaryWorkspaceRequest = loadDictionaryWorkspace().finally(() => { dictionaryWorkspaceRequest = null; });
+  return dictionaryWorkspaceRequest;
+}
+async function loadDictionaryWorkspace() {
   try {
-    const [res, domainsRes, relationshipsRes] = await Promise.all([
-      fetch('/api/dictionary'),
-      fetch('/api/dictionary/domains'),
-      fetch('/api/dictionary/relationships')
-    ]);
+    const res = await fetch('/api/dictionary/workspace', { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (domainsRes.ok) window.businessDomainsData = await domainsRes.json();
-    if (relationshipsRes.ok) window.tableRelationshipsData = await relationshipsRes.json();
-    window.groupedTablesData = Array.isArray(data) ? data : (data.tables || []);
+    if (!Array.isArray(data.tables) || !Array.isArray(data.relationships) || !data.domains || typeof data.domains !== 'object' || Array.isArray(data.domains))
+      throw new Error('INVALID_DICTIONARY_WORKSPACE');
+    window.businessDomainsData = data.domains;
+    window.tableRelationshipsData = data.relationships;
+    window.groupedTablesData = data.tables;
+    renderDictionaryQuality(data.quality);
     renderDictionaryDomainOptions();
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
   } catch (err) {
     console.error('Lỗi nạp Lược đồ CSDL:', err);
     if (typeof showToast === 'function') showToast('Không thể nạp Lược đồ CSDL.', 'error');
+    return false;
+  }
+}
+
+const dictionaryQualityState = { rows: [], page: 1, pageSize: 6 };
+
+function buildDictionaryQualityRows(quality, tables, relationships) {
+  const byId = new Map(tables.map(table => [table.tableId, table]));
+  const relations = new Map(relationships.map(relation => [relation.id, relation]));
+  const rows = new Map();
+  for (const table of quality?.tables || []) for (const issue of table.issues || []) {
+    const isRelation = String(issue.field || '').startsWith('relationships.');
+    const relationId = isRelation ? issue.field.slice('relationships.'.length) : null;
+    const relation = relations.get(relationId);
+    const sourceTable = byId.get(relation?.sourceTableId), targetTable = byId.get(relation?.targetTableId);
+    if (relation && (relation.isActive === false || sourceTable?.isActive === false || targetTable?.isActive === false
+      || (relation.columnPairs || []).some(pair => sourceTable?.columns?.find(column => column.columnName === pair.sourceColumn)?.isVisible === false
+        || targetTable?.columns?.find(column => column.columnName === pair.targetColumn)?.isVisible === false)
+      || (relation.displayColumn && targetTable?.columns?.find(column => column.columnName === relation.displayColumn)?.isVisible === false))) continue;
+    const key = isRelation ? `relation:${relationId}` : JSON.stringify([table.tableId, issue.code, issue.field]);
+    if (rows.has(key)) {
+      const row = rows.get(key);
+      if (!row.issues.some(item => item.code === issue.code)) row.issues.push(issue);
+      if (issue.severity === 'error') row.severity = 'error';
+      continue;
+    }
+    const source = byId.get(relation?.sourceTableId) || (!relation ? byId.get(table.tableId) : null);
+    rows.set(key, { relationId, relation, source, target: byId.get(relation?.targetTableId), table, issues: [issue],
+      kind: isRelation ? 'relationship' : 'configuration', severity: issue.severity });
+  }
+  return [...rows.values()].sort((a,b) => (a.severity === 'error' ? 0 : 1) - (b.severity === 'error' ? 0 : 1)
+    || String(a.source?.tableName || a.table.tableName).localeCompare(String(b.source?.tableName || b.table.tableName), 'vi')
+    || String(a.target?.tableName || '').localeCompare(String(b.target?.tableName || ''), 'vi'));
+}
+
+function renderDictionaryQuality(quality) {
+  const summary = document.getElementById('dictionary-quality-summary');
+  if (!summary) return;
+  dictionaryQualityState.rows = buildDictionaryQualityRows(quality, getDictionaryTables(), window.tableRelationshipsData || []);
+  const rows = dictionaryQualityState.rows;
+  summary.textContent = quality
+    ? `${rows.filter(row => row.kind === 'relationship').length} quan hệ cần kiểm tra · ${rows.filter(row => row.kind !== 'relationship').length} vấn đề bảng / cột · ${quality.activeTables} bảng đang bật`
+    : 'Chưa có kết quả kiểm tra — hãy tải lại dữ liệu';
+  const select = document.getElementById('dictionary-quality-table');
+  if (select) {
+    const previous = select.value;
+    const involved = new Map();
+    for (const row of rows) for (const table of [row.source, row.target]) if (table?.tableId) involved.set(table.tableId, table);
+    select.innerHTML = '<option value="">Tất cả bảng</option>' + [...involved.values()].sort((a,b)=>a.tableName.localeCompare(b.tableName)).map(table =>
+      `<option value="${escapeDictHtml(table.tableId)}">${escapeDictHtml(`${table.schemaName || 'dbo'}.${table.tableName}`)}${table.dbName ? ' · ' + escapeDictHtml(table.dbName) : ''}</option>`).join('');
+    select.value = involved.has(previous) ? previous : '';
+  }
+  filterDictionaryQuality();
+}
+
+function filterDictionaryQuality() {
+  dictionaryQualityState.page = 1;
+  renderDictionaryQualityPage();
+}
+function pageDictionaryQuality(direction) {
+  dictionaryQualityState.page += direction;
+  renderDictionaryQualityPage();
+  const results = document.getElementById('dictionary-quality-results');
+  if (results) results.scrollTop = 0;
+}
+function renderDictionaryQualityPage() {
+  const container = document.getElementById('dictionary-quality-results');
+  if (!container) return;
+  const normalize = value => String(value || '').normalize('NFD').split('').filter(char => char.charCodeAt(0) < 0x300 || char.charCodeAt(0) > 0x36f).join('').toLowerCase().replaceAll('đ','d');
+  const search = normalize(document.getElementById('dictionary-quality-search')?.value).trim();
+  const kind = document.getElementById('dictionary-quality-kind')?.value || 'all';
+  const tableId = document.getElementById('dictionary-quality-table')?.value || '';
+  const rows = dictionaryQualityState.rows.map((row,index)=>({...row,index})).filter(row =>
+    (kind === 'all' || row.kind === kind || kind === 'error' && row.severity === 'error')
+    && (!tableId || row.source?.tableId === tableId || row.target?.tableId === tableId)
+    && (!search || normalize([row.source?.tableName,row.source?.semanticModel?.entity,row.target?.tableName,row.target?.semanticModel?.entity,
+      row.relation?.businessRole,...(row.relation?.columnPairs || []).flatMap(pair=>[pair.sourceColumn,pair.targetColumn]),...row.issues.map(issue=>issue.message)].join(' ')).includes(search)));
+  const pages = Math.max(1, Math.ceil(rows.length / dictionaryQualityState.pageSize));
+  dictionaryQualityState.page = Math.max(1, Math.min(pages, dictionaryQualityState.page));
+  const start = (dictionaryQualityState.page - 1) * dictionaryQualityState.pageSize;
+  const statusLabels = { suggested: 'Chờ xác minh', stale: 'Cần xác minh lại', rejected: 'Đã từ chối', verified: 'Cấu hình liên kết có lỗi' };
+  const cardinality = { 'many-to-one':'Nhiều → Một', 'one-to-many':'Một → Nhiều', 'one-to-one':'Một → Một', 'many-to-many':'Nhiều → Nhiều' };
+  const tableLabel = (table, fallback) => `<span class="dictionary-quality-table-name"><strong>${escapeDictHtml(table?.tableName || fallback || 'Bảng không còn trong danh mục')}</strong><small>${escapeDictHtml(table?.semanticModel?.entity || (table ? `${table.schemaName || 'dbo'} · ${table.dbName || ''}` : 'Không thể xác định bảng'))}</small></span>`;
+  container.innerHTML = rows.slice(start,start + dictionaryQualityState.pageSize).map(row => {
+    const relation = row.relation;
+    const title = row.kind === 'relationship'
+      ? `<div class="dictionary-quality-path">${tableLabel(row.source,relation?.sourceTable)}<i class="fa-solid fa-arrow-right" aria-hidden="true"></i>${tableLabel(row.target,relation?.targetTable)}</div>`
+      : `<div class="dictionary-quality-path">${tableLabel(row.source,row.table.tableName)}</div>`;
+    const pairs = (relation?.columnPairs || []).map(pair=>`<span><code>${escapeDictHtml(pair.sourceColumn)}</code><span aria-label="liên kết với"> → </span><code>${escapeDictHtml(pair.targetColumn)}</code></span>`).join('');
+    const field = {semanticModel:'Quy tắc nghiệp vụ',tableDescription:'Mô tả bảng',defaultMetric:'Chỉ tiêu mặc định',defaultTimeColumn:'Cột thời gian',defaultAggregation:'Phép tổng hợp',requiredFilters:'Bộ lọc bắt buộc'};
+    const reason = row.kind === 'relationship'
+      ? row.issues.filter(issue=>issue.code !== 'RELATIONSHIP_UNVERIFIED').map(issue=>issue.message).join(' ') || (relation?.status === 'stale' ? 'Cấu trúc đã thay đổi. Cần kiểm tra lại cặp khóa trước khi dùng cho AI.' : 'AI chưa dùng liên kết này. Cần kiểm tra cặp khóa và ý nghĩa nghiệp vụ.')
+      : row.issues.map(issue=>`${field[issue.field] || (issue.field.startsWith('columns.') ? 'Cột ' + issue.field.slice(8) : 'Cấu hình nghiệp vụ')}: ${issue.message}`).join(' ');
+    return `<article class="dictionary-quality-row ${row.severity === 'error' ? 'has-error' : ''}">
+      <div class="dictionary-quality-row-main">${title}
+        ${pairs ? `<div class="dictionary-quality-pairs">${pairs}</div>` : ''}
+        ${relation?.businessRole ? `<div class="dictionary-quality-role">Vai trò: ${escapeDictHtml(relation.businessRole)}</div>` : ''}
+        <p class="dictionary-quality-reason">${escapeDictHtml(reason)}</p>
+      </div>
+      <div class="dictionary-quality-row-status"><span class="dictionary-quality-badge ${row.severity === 'error' ? 'is-error' : ''}"><i class="fa-solid ${row.severity === 'error' ? 'fa-circle-exclamation' : 'fa-clock'}" aria-hidden="true"></i>${escapeDictHtml(row.kind === 'relationship' ? statusLabels[relation?.status] || 'Cần kiểm tra' : row.severity === 'error' ? 'Lỗi cấu hình' : 'Cần bổ sung')}</span>${relation ? `<small>${escapeDictHtml(cardinality[relation.cardinality || relation.relationType] || 'Chưa rõ số lượng liên kết')}</small>` : ''}</div>
+      <button type="button" class="dictionary-quality-open" data-quality-index="${row.index}" ${!row.source ? 'disabled' : ''}>${row.kind === 'relationship' && relation ? 'Xem quan hệ' : 'Xem bảng'} <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></button>
+    </article>`;
+  }).join('') || '<div class="dictionary-quality-empty"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><strong>Không có mục phù hợp</strong><span>Thử đổi bộ lọc hoặc tìm theo tên bảng, cột liên kết.</span></div>';
+  container.onclick = event => {
+    const button = event.target.closest('[data-quality-index]');
+    if (button && container.contains(button)) openDictionaryQualityItem(Number(button.dataset.qualityIndex));
+  };
+  const count = document.getElementById('dictionary-quality-count');
+  if (count) count.textContent = rows.length ? `${start + 1}–${Math.min(start + dictionaryQualityState.pageSize,rows.length)} / ${rows.length} mục · đã gộp quan hệ trùng` : '0 mục';
+  const page = document.getElementById('dictionary-quality-page');
+  if (page) page.textContent = `${dictionaryQualityState.page} / ${pages}`;
+  const prev = document.getElementById('dictionary-quality-prev'), next = document.getElementById('dictionary-quality-next');
+  if (prev) prev.disabled = dictionaryQualityState.page <= 1;
+  if (next) next.disabled = dictionaryQualityState.page >= pages;
+}
+
+function openDictionaryQualityItem(index) {
+  const row = dictionaryQualityState.rows[index];
+  if (!row?.source) return;
+  openDictionaryDrawer(encodeURIComponent(row.source.tableId || row.source.tableName));
+  if (row.relation) {
+    const column = row.relation.columnPairs?.[0]?.sourceColumn;
+    if (column && row.source.columns?.some(item=>item.columnName === column)) {
+      const content = getFieldRelationshipEditor(column)?.closest('.dictionary-field-relation-content');
+      if (content?.hidden) toggleFieldRelationshipEditor(encodeURIComponent(column), content.parentElement?.querySelector('.dictionary-relation-toggle'));
+      editFieldRelationship(encodeURIComponent(row.relation.id),encodeURIComponent(column));
+      const editor = getFieldRelationshipEditor(column);
+      editor?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      editor?.querySelector('[data-role="target-table"]')?.focus({ preventScroll: true });
+    } else if (typeof showToast === 'function') showToast('Cột liên kết không còn tồn tại. Đã mở bảng nguồn để bạn kiểm tra cấu hình.', 'warn');
   }
 }
 
@@ -87,7 +222,7 @@ function renderDictionaryDomainOptions(selectedValue) {
   const current = selectedValue !== undefined ? selectedValue : select.value;
   const keys = Object.keys(window.businessDomainsData || {}).sort((a, b) => a.localeCompare(b));
   if (current && !keys.includes(current)) keys.push(current);
-  select.innerHTML = '<option value="">Chưa gán nhóm nghiệp vụ</option>' + keys
+  select.innerHTML = '<option value="">Chưa gán lĩnh vực nghiệp vụ</option>' + keys
     .map(key => `<option value="${escapeDictHtml(key)}">${escapeDictHtml(key)}</option>`).join('');
   select.value = current || '';
 }
@@ -158,38 +293,37 @@ function renderDataDictionary() {
   const startIndex = (state.currentPage - 1) * state.itemsPerPage;
   const paginatedTables = tables.slice(startIndex, startIndex + state.itemsPerPage);
 
-  container.innerHTML = paginatedTables.map(table => {
+  container.innerHTML = `<table class="dictionary-catalog" aria-label="Danh sách bảng dữ liệu">
+    <thead><tr><th scope="col" class="dictionary-catalog-toggle">Active</th><th scope="col">Bảng dữ liệu</th><th scope="col">Lĩnh vực nghiệp vụ</th><th scope="col" class="dictionary-catalog-count">Số cột</th><th scope="col">Trạng thái</th><th scope="col"><span class="dictionary-catalog-action-heading">Cấu trúc</span></th></tr></thead>
+    <tbody>${paginatedTables.map(table => {
     const cols = table.columns || [];
     const isActive = !!table.isActive;
-    const encodedName = encodeURIComponent(table.tableName || '');
     const encodedId = encodeURIComponent(table.tableId || table.tableName || '');
-    return `
-      <div class="dictionary-table-row ${isActive ? 'is-active' : 'is-inactive'}">
-        <label class="quick-active-checkbox dictionary-quick-active" title="Bật/tắt nhanh cho AI" onclick="event.stopPropagation()">
-          <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleDictionaryTableActiveFromList('${encodedName}', this)">
+    return `<tr class="${isActive ? 'is-active' : 'is-inactive'}">
+      <td class="dictionary-catalog-toggle">
+        <label class="quick-active-checkbox dictionary-quick-active" title="Bật/tắt bảng cho AI">
+          <input type="checkbox" aria-label="Cho phép AI sử dụng bảng ${escapeDictHtml(table.tableName)}" ${isActive ? 'checked' : ''} onchange="toggleDictionaryTableActiveFromList('${encodedId}', this)">
           <span><i class="fa-solid fa-check"></i></span>
         </label>
-        <div class="dictionary-row-main" onclick="openDictionaryDrawer('${encodedId}')" role="button" tabindex="0">
-         
-          <div>
-            <strong>${escapeDictHtml(table.tableName)}</strong>
-            <p>${escapeDictHtml(table.tableDescription || `Bảng dữ liệu ${table.tableName}`)}</p>
-          </div>
-        </div>
-        <div class="dictionary-row-meta" onclick="openDictionaryDrawer('${encodedId}')" role="button">
-          <span>${cols.length} cột thuộc tính</span>
-          ${table.domain ? `<span class="metric-tag">${escapeDictHtml(table.domain)}</span>` : ''}
-          <span class="metric-tag ${isActive ? 'green' : 'orange'}">${isActive ? 'Active cho AI' : 'Tắt'}</span>
-          <i class="fa-solid fa-chevron-right"></i>
-        </div>
-      </div>
-    `;
-  }).join('');
+      </td>
+      <td class="dictionary-catalog-name"><button type="button" class="dictionary-catalog-open" onclick="openDictionaryDrawer('${encodedId}')">
+        <span class="dictionary-catalog-copy"><strong>${escapeDictHtml(table.tableName)}</strong><span title="${escapeDictHtml(table.tableDescription || '')}">${escapeDictHtml(table.tableDescription || 'Chưa có mô tả nội dung')}</span></span>
+      </button></td>
+      <td data-label="Lĩnh vực nghiệp vụ">${table.domain ? `<span class="dictionary-catalog-domain">${escapeDictHtml(table.domain)}</span>` : '<span class="dictionary-catalog-unassigned">Chưa gán lĩnh vực</span>'}</td>
+      <td class="dictionary-catalog-count" data-label="Số cột">${cols.length}</td>
+      <td data-label="Trạng thái"><span class="dictionary-catalog-status ${isActive ? 'enabled' : 'disabled'}"><i class="fa-solid fa-circle"></i>${isActive ? 'Đang bật' : 'Đã tắt'}</span></td>
+      <td class="dictionary-catalog-action"><button type="button" class="btn-secondary-sm" onclick="openDictionaryDrawer('${encodedId}')" aria-label="Xem cấu trúc bảng ${escapeDictHtml(table.tableName)}">Chi tiết <i class="fa-solid fa-chevron-right"></i></button></td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
 
   renderPaginationControls('dict-pagination', 'dictionary', tables.length, renderDataDictionary);
 }
 
 function renderDictionaryDrawer(table) {
+  const columnSearch = document.getElementById('dict-column-search');
+  if (columnSearch) columnSearch.value = '';
+  const columnEmpty = document.getElementById('dict-column-search-empty');
+  if (columnEmpty) columnEmpty.hidden = true;
   const nameEl = document.getElementById('dict-drawer-table-name');
   const metaEl = document.getElementById('dict-drawer-table-meta');
   const descEl = document.getElementById('dict-drawer-table-description');
@@ -206,6 +340,16 @@ function renderDictionaryDrawer(table) {
   if (nameEl) nameEl.textContent = table.tableName || '-';
   if (metaEl) metaEl.textContent = `${table.dbName || 'SQLServer_DB'} • ${cols.length} cột thuộc tính`;
   if (descEl) descEl.value = table.tableDescription || '';
+  const semantic = table.semanticModel || {};
+  const requiredFiltersInput = document.getElementById('dict-required-filters');
+  if (requiredFiltersInput) requiredFiltersInput.value = JSON.stringify(table.requiredFilters || [], null, 2);
+  const currencyInput=document.getElementById('dict-semantic-currency');if(currencyInput)currencyInput.value=semantic.defaultCurrency||'VNĐ';
+  const moneyInput=document.getElementById('dict-semantic-money-fields');if(moneyInput)moneyInput.value=(semantic.monetaryFields||[]).join(', ');
+  const kindInput=document.getElementById('dict-semantic-kind');if(kindInput)kindInput.value=semantic.kind||'entity';
+  const measuresInput=document.getElementById('dict-semantic-measures');if(measuresInput)measuresInput.value=JSON.stringify(semantic.measures||[],null,2);
+  for (const [id,value] of Object.entries({entity:semantic.entity||'',grain:semantic.grain||'',identities:(semantic.identityFields||[]).join(', '),summary:(semantic.summaryFields||[]).join(', '),aliases:(semantic.aliases||[]).join(', '),segments:JSON.stringify(semantic.segments||[],null,2)})) {
+    const input=document.getElementById('dict-semantic-'+id);if(input)input.value=value;
+  }
   renderDictionaryDomainOptions(table.domain || '');
   const numericType = /^(?:tinyint|smallint|int|bigint|decimal|numeric|float|real|money|smallmoney)$/i;
   if (metricEl) metricEl.innerHTML = '<option value="">Tự động nhận diện</option>' + cols.filter(col => col.isVisible !== false && numericType.test(col.dataType) && !/id$/i.test(col.columnName)).map(col => `<option value="${escapeDictHtml(col.columnName)}">${escapeDictHtml(col.columnName)}</option>`).join('');
@@ -225,7 +369,7 @@ function renderDictionaryDrawer(table) {
     return `
       <div class="dictionary-column-row ${col.isVisible === false ? 'is-excluded' : ''}">
         <div class="dictionary-column-visible" title="Đưa cột vào schema AI, truy vấn và vector Qdrant">
-          <input type="checkbox" data-role="column-visible" data-column="${escapeDictHtml(col.columnName)}" ${col.isVisible !== false ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleDictionaryColumnVisibility(this)">
+          <input type="checkbox" data-role="column-visible" data-column="${escapeDictHtml(col.columnName)}" aria-label="Cho phép AI sử dụng cột ${escapeDictHtml(col.columnName)}" ${col.isVisible !== false ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleDictionaryColumnVisibility(this)">
         </div>
       <div class="dictionary-column-card">
         <div class="dictionary-column-meta">
@@ -249,7 +393,7 @@ function renderDictionaryDrawer(table) {
           </button>
           <div class="dictionary-field-relation-content" hidden>
           <div class="dictionary-field-relation-list">
-            ${relationships.map(relation => `<div class="dictionary-field-relation-chip" role="button" tabindex="0" onclick="editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}')" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}'); }">
+            ${relationships.map(relation => `<div class="dictionary-field-relation-chip" data-relationship-id="${escapeDictHtml(relation.id)}" role="button" tabindex="0" onclick="editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}')" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); editFieldRelationship('${encodeURIComponent(relation.id)}', '${encodedCol}'); }">
               <div class="dictionary-relation-chip-info">
                 <span class="dictionary-relation-path">${escapeDictHtml((relation.columnPairs || [{ sourceColumn: relation.sourceColumn, targetColumn: relation.targetColumn }]).map(pair => `${pair.sourceColumn} → ${pair.targetColumn}`).join(', '))} <strong>${escapeDictHtml(relation.targetTable)}</strong></span>
                 ${relation.displayColumn ? `<span class="dictionary-relation-display"><i class="fa-regular fa-eye"></i>${escapeDictHtml(relation.displayColumn)}</span>` : ''}
@@ -257,8 +401,8 @@ function renderDictionaryDrawer(table) {
               </div>
               <div class="dictionary-relation-chip-actions">
                 ${relation._pending ? `<button type="button" class="relation-action delete" onclick="event.stopPropagation(); discardPendingFieldRelationship('${encodeURIComponent(relation.id)}')" title="Bỏ thay đổi"><i class="fa-solid fa-trash-can"></i></button>` : `
-                ${relation.status !== 'verified' ? `<button type="button" class="relation-action verify" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'verified')" title="Xác minh"><i class="fa-solid fa-check"></i></button>` : ''}
-                ${relation.status !== 'rejected' ? `<button type="button" class="relation-action reject" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'rejected')" title="Từ chối"><i class="fa-solid fa-ban"></i></button>` : ''}
+                ${relation.status !== 'verified' ? `<button type="button" class="relation-action verify" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'verified', this)" title="Xác minh" aria-label="Xác minh quan hệ"><i class="fa-solid fa-check"></i></button>` : ''}
+                ${relation.status !== 'rejected' ? `<button type="button" class="relation-action reject" onclick="event.stopPropagation(); setFieldRelationshipStatus('${encodeURIComponent(relation.id)}', 'rejected', this)" title="Từ chối" aria-label="Từ chối quan hệ"><i class="fa-solid fa-ban"></i></button>` : ''}
                 <button type="button" class="relation-action delete" onclick="event.stopPropagation(); deleteFieldRelationship('${encodeURIComponent(relation.id)}')" title="Xóa"><i class="fa-solid fa-trash-can"></i></button>`}
               </div>
             </div>`).join('')}
@@ -295,6 +439,20 @@ function renderDictionaryDrawer(table) {
       </div>
     `;
   }).join('');
+}
+
+function filterDictionaryColumns() {
+  const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+  const query = normalize(document.getElementById('dict-column-search')?.value.trim());
+  let visible = 0;
+  document.querySelectorAll('#dict-drawer-columns > .dictionary-column-row').forEach(row => {
+    const label = row.querySelector('.dictionary-column-display-name');
+    const text = [row.querySelector('.dictionary-column-meta strong')?.textContent, label?.value || label?.textContent].join(' ');
+    row.hidden = Boolean(query && !normalize(text).includes(query));
+    if (!row.hidden) visible++;
+  });
+  const empty = document.getElementById('dict-column-search-empty');
+  if (empty) empty.hidden = visible > 0 || !query;
 }
 
 function formatRelationshipCardinality(value) {
@@ -373,7 +531,7 @@ function updateFieldRelationshipColumns(select, selectedColumn = '') {
   });
   const displaySelect = editor.querySelector('[data-role="display-column"]');
   if (displaySelect) {
-    const desired = displaySelect.dataset.selected || displaySelect.value;
+    const desired = Object.hasOwn(displaySelect.dataset, 'selected') ? displaySelect.dataset.selected : displaySelect.value;
     displaySelect.innerHTML = '<option value="">Chọn cột trả về</option>' + (table?.columns || []).filter(column => column.isVisible !== false).map(column =>
       `<option value="${escapeDictHtml(column.columnName)}">${escapeDictHtml(column.columnName)} (${escapeDictHtml(column.dataType || '-')})</option>`).join('');
     displaySelect.value = desired;
@@ -426,6 +584,22 @@ function cancelFieldRelationship(encodedColumnName) {
   const compositeOptions = editor.querySelector('.dictionary-composite-key-options');
   if (compositeOptions) compositeOptions.open = false;
   editor.hidden = true;
+  editor.dataset.initialState = readFieldRelationshipState(editor);
+}
+
+function readFieldRelationshipState(editor) {
+  return JSON.stringify(Array.from(editor.querySelectorAll('input[data-role], select[data-role]')).map(input =>
+    [input.dataset.role, input.type === 'checkbox' ? input.checked : input.value]));
+}
+
+function stageDirtyFieldRelationships(columns = []) {
+  const disabled = new Set(columns.filter(column=>column.isVisible === false).map(column=>column.columnName));
+  for (const editor of document.querySelectorAll('#dictionary-drawer .dictionary-field-relation-editor')) {
+    if (disabled.has(editor.dataset.column) || (!editor.dataset.initialState && editor.hidden)) continue;
+    if (editor.dataset.initialState === readFieldRelationshipState(editor)) continue;
+    if (!saveFieldRelationship(encodeURIComponent(editor.dataset.column), { silent: true })) return false;
+  }
+  return true;
 }
 
 function editFieldRelationship(encodedId, encodedColumnName) {
@@ -449,9 +623,10 @@ function editFieldRelationship(encodedId, encodedColumnName) {
   toggleManyToManyFields(editor.querySelector('[data-role="cardinality"]'));
   editor.querySelector('[data-role="business-role"]').value = relation.businessRole || '';
   editor.querySelector('[data-role="preferred"]').checked = relation.preferred === true;
+  editor.dataset.initialState = readFieldRelationshipState(editor);
 }
 
-async function saveFieldRelationship(encodedColumnName) {
+function saveFieldRelationship(encodedColumnName, options = {}) {
   const columnName = decodeURIComponent(encodedColumnName);
   const sourceTable = findDictionaryTable(window.selectedDictionaryTableId || window.selectedDictionaryTableName);
   const editor = getFieldRelationshipEditor(columnName);
@@ -531,10 +706,21 @@ async function saveFieldRelationship(encodedColumnName) {
   const previewIndex = window.pendingDictionaryRelationshipPreviews.findIndex(item => item.id === localId);
   if (previewIndex >= 0) window.pendingDictionaryRelationshipPreviews[previewIndex] = preview;
   else window.pendingDictionaryRelationshipPreviews.push(preview);
-  renderDictionaryDrawer(sourceTable);
+  editor.querySelector('[data-role="relationship-id"]').value = localId;
+  editor.dataset.initialState = readFieldRelationshipState(editor);
+  if (!options.silent) {
+    const list = editor.closest('.dictionary-field-relation-content')?.querySelector('.dictionary-field-relation-list');
+    if (list) {
+      const chip = Array.from(list.querySelectorAll('[data-relationship-id]')).find(item=>item.dataset.relationshipId === localId || item.dataset.relationshipId === editorRelationshipId);
+      const markup = `<div class="dictionary-field-relation-chip" data-relationship-id="${escapeDictHtml(localId)}" role="button" tabindex="0" onclick="editFieldRelationship('${encodeURIComponent(localId)}', '${encodedColumnName}')" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();editFieldRelationship('${encodeURIComponent(localId)}', '${encodedColumnName}');}"><div class="dictionary-relation-chip-info"><span class="dictionary-relation-path">${escapeDictHtml(columnPairs.map(pair=>`${pair.sourceColumn} → ${pair.targetColumn}`).join(', '))} <strong>${escapeDictHtml(preview.targetTable)}</strong></span>${preview.displayColumn ? `<span class="dictionary-relation-display"><i class="fa-regular fa-eye"></i>${escapeDictHtml(preview.displayColumn)}</span>` : ''}<small>Chờ lưu thay đổi</small></div></div>`;
+      if (chip) chip.outerHTML = markup; else list.insertAdjacentHTML('beforeend', markup);
+    }
+    editor.hidden = true;
+  }
   const saveAllButton = document.getElementById('dictionary-save-all-button');
   if (saveAllButton) saveAllButton.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi (${window.pendingDictionaryRelationships.length} quan hệ)`;
-  showToast?.('Đã thêm quan hệ vào danh sách thay đổi. Nhấn “Lưu tất cả thay đổi” để áp dụng.', 'info');
+  if (!options.silent) showToast?.('Đã thêm quan hệ vào danh sách thay đổi. Nhấn “Lưu tất cả thay đổi” để áp dụng.', 'info');
+  return true;
 }
 
 function discardPendingFieldRelationship(encodedId) {
@@ -550,11 +736,28 @@ function discardPendingFieldRelationship(encodedId) {
   }
 }
 
-async function setFieldRelationshipStatus(encodedId, status) {
+const pendingRelationshipStatuses = new Set();
+async function setFieldRelationshipStatus(encodedId, status, button = null) {
   const id = decodeURIComponent(encodedId);
+  if (pendingRelationshipStatuses.has(id)) return;
   const relation = (window.tableRelationshipsData || []).find(item => item.id === id);
   const sourceTable = findDictionaryTable(window.selectedDictionaryTableId || window.selectedDictionaryTableName);
   if (!relation || !sourceTable) return;
+  pendingRelationshipStatuses.add(id);
+  const buttons = Array.from(document.querySelectorAll('.dictionary-field-relation-chip[data-relationship-id]'))
+    .filter(chip=>chip.dataset.relationshipId === id).flatMap(chip=>Array.from(chip.querySelectorAll('.relation-action')));
+  if (button && !buttons.includes(button)) buttons.push(button);
+  const previous = buttons.map(node=>({node,disabled:node.disabled}));
+  const buttonState = button ? {html:button.innerHTML,title:button.title,label:button.getAttribute('aria-label')} : null;
+  previous.forEach(({node})=>{node.disabled=true;});
+  if (button) {
+    const label = status === 'verified' ? 'Đang xác minh…' : 'Đang xử lý…';
+    button.innerHTML = `<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>${label}</span>`;
+    button.classList.add('is-processing');
+    button.setAttribute('aria-busy','true');
+    button.setAttribute('aria-label',label);
+    button.title=label;
+  }
   try {
     const res = await fetch('/api/dictionary/relationships/status', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, status, expectedRevision: relation.revision || 1 }) });
@@ -563,8 +766,19 @@ async function setFieldRelationshipStatus(encodedId, status) {
     window.tableRelationshipsData = data.relationships || [];
     renderDictionaryDrawer(sourceTable);
     showToast?.(status === 'verified' ? 'Đã xác minh quan hệ để AI có thể sử dụng.' : 'Đã từ chối quan hệ.', 'success');
+    await fetchDataDictionary();
   } catch (err) {
     showToast?.(`Không thể cập nhật trạng thái: ${err.message}`, 'error');
+  } finally {
+    pendingRelationshipStatuses.delete(id);
+    previous.forEach(({node,disabled})=>{node.disabled=disabled;});
+    if (button) {
+      button.innerHTML=buttonState.html;
+      button.title=buttonState.title;
+      button.classList.remove('is-processing');
+      button.removeAttribute('aria-busy');
+      if (buttonState.label === null) button.removeAttribute('aria-label'); else button.setAttribute('aria-label',buttonState.label);
+    }
   }
 }
 
@@ -584,6 +798,7 @@ async function deleteFieldRelationship(encodedId) {
     renderRelationshipDiagram();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     showToast?.('Đã xóa quan hệ.', 'success');
+    await fetchDataDictionary();
   } catch (err) {
     showToast?.(`Không thể xóa quan hệ: ${err.message}`, 'error');
   }
@@ -604,6 +819,7 @@ async function profileFieldRelationship(encodedId) {
     renderDictionaryDrawer(sourceTable);
     const profile = data.relationship?.evidence?.profile || {};
     showToast?.(`Kiểm tra xong: ${profile.orphanRows || 0} orphan, ${profile.duplicateTargetKeys || 0} khóa đích trùng.`, 'success');
+    await fetchDataDictionary();
   } catch (err) {
     showToast?.(`Không thể kiểm tra dữ liệu: ${err.message}`, 'error');
   }
@@ -621,7 +837,7 @@ async function openBusinessDomainsModal() {
     resetBusinessDomainForm();
     if (typeof openModal === 'function') openModal('business-domains-modal');
   } catch (err) {
-    if (typeof showToast === 'function') showToast(`Không thể tải nhóm nghiệp vụ: ${err.message}`, 'error');
+    if (typeof showToast === 'function') showToast(`Không thể tải lĩnh vực nghiệp vụ: ${err.message}`, 'error');
   }
 }
 
@@ -660,14 +876,14 @@ function renderBusinessDomains() {
       <div class="domain-manager-item-icon"><i class="fa-solid fa-cubes-stacked"></i></div>
       <div class="domain-manager-item-info">
         <div class="domain-manager-item-title"><strong>${escapeDictHtml(domain)}</strong><span><i class="fa-solid fa-table"></i> ${tableCount} bảng</span></div>
-        <div class="domain-alias-chips">${aliasChips || '<span class="domain-alias-empty">Chưa có từ khóa nhận diện</span>'}</div>
+        <div class="domain-alias-chips">${aliasChips || '<span class="domain-alias-empty">Chưa có từ khóa tìm kiếm</span>'}</div>
       </div>
       <div class="domain-manager-item-actions">
         <button class="icon-action-btn" onclick="editBusinessDomain('${encodeURIComponent(domain)}')" title="Chỉnh sửa"><i class="fa-solid fa-pen"></i></button>
         <button class="icon-action-btn danger-soft" onclick="deleteBusinessDomain('${encodeURIComponent(domain)}')" title="Xóa"><i class="fa-regular fa-trash-can"></i></button>
       </div>
     </div>`;
-  }).join('') : '<div class="dictionary-empty"><strong>Chưa có nhóm nghiệp vụ.</strong></div>';
+  }).join('') : '<div class="dictionary-empty"><strong>Chưa có lĩnh vực nghiệp vụ.</strong></div>';
 }
 
 function editBusinessDomain(encodedDomain) {
@@ -677,7 +893,7 @@ function editBusinessDomain(encodedDomain) {
   document.getElementById('domain-aliases-input').value = (window.businessDomainsData[domain] || []).join(', ');
   document.getElementById('domain-cancel-button').hidden = false;
   document.getElementById('domain-form-title').textContent = `Chỉnh sửa ${domain}`;
-  document.getElementById('domain-form-subtitle').textContent = 'Cập nhật mã nhóm hoặc từ khóa nhận diện';
+  document.getElementById('domain-form-subtitle').textContent = 'Cập nhật mã lĩnh vực hoặc từ khóa tìm kiếm dùng chung';
   const formIcon = document.querySelector('.domain-manager-form-icon i');
   if (formIcon) formIcon.className = 'fa-solid fa-pen';
   setBusinessDomainFormOpen(true);
@@ -695,8 +911,8 @@ function resetBusinessDomainForm() {
   if (cancel) cancel.hidden = true;
   const title = document.getElementById('domain-form-title');
   const subtitle = document.getElementById('domain-form-subtitle');
-  if (title) title.textContent = 'Thêm nhóm mới';
-  if (subtitle) subtitle.textContent = 'Tạo một nhóm nghiệp vụ và bộ từ khóa nhận diện';
+  if (title) title.textContent = 'Thêm lĩnh vực mới';
+  if (subtitle) subtitle.textContent = 'Tạo một lĩnh vực nghiệp vụ và bộ từ khóa tìm kiếm dùng chung';
   const formIcon = document.querySelector('.domain-manager-form-icon i');
   if (formIcon) formIcon.className = 'fa-solid fa-plus';
   setBusinessDomainFormOpen(false);
@@ -716,17 +932,17 @@ async function saveBusinessDomain() {
     renderDictionaryDomainOptions();
     if (typeof fetchDataDictionary === 'function') await fetchDataDictionary();
     resetBusinessDomainForm();
-    showToast?.('Đã lưu nhóm nghiệp vụ và đồng bộ cho AI.', 'success');
+    showToast?.('Đã lưu lĩnh vực nghiệp vụ và đồng bộ cho AI.', 'success');
   } catch (err) {
-    showToast?.(`Không thể lưu nhóm nghiệp vụ: ${err.message}`, 'error');
+    showToast?.(`Không thể lưu lĩnh vực nghiệp vụ: ${err.message}`, 'error');
   }
 }
 
 async function deleteBusinessDomain(encodedDomain) {
   const domain = decodeURIComponent(encodedDomain);
   const usedCount = getDictionaryTables().filter(table => table.domain === domain).length;
-  const warning = usedCount ? `Nhóm "${domain}" đang được ${usedCount} bảng sử dụng. Chỉ xóa bộ từ khóa, domain trên bảng vẫn được giữ. Tiếp tục?` : `Xóa nhóm nghiệp vụ "${domain}"?`;
-  if (!await showUiConfirm(warning, { title: 'Xóa nhóm nghiệp vụ', confirmText: 'Xóa nhóm', tone: 'danger' })) return;
+  const warning = usedCount ? `Nhóm "${domain}" đang được ${usedCount} bảng sử dụng. Chỉ xóa bộ từ khóa, domain trên bảng vẫn được giữ. Tiếp tục?` : `Xóa lĩnh vực nghiệp vụ "${domain}"?`;
+  if (!await showUiConfirm(warning, { title: 'Xóa lĩnh vực nghiệp vụ', confirmText: 'Xóa lĩnh vực', tone: 'danger' })) return;
   try {
     const res = await fetch('/api/dictionary/domains/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain }) });
     const data = await res.json();
@@ -735,9 +951,9 @@ async function deleteBusinessDomain(encodedDomain) {
     renderBusinessDomains();
     renderDictionaryDomainOptions();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
-    showToast?.('Đã xóa nhóm nghiệp vụ.', 'success');
+    showToast?.('Đã xóa lĩnh vực nghiệp vụ.', 'success');
   } catch (err) {
-    showToast?.(`Không thể xóa nhóm nghiệp vụ: ${err.message}`, 'error');
+    showToast?.(`Không thể xóa lĩnh vực nghiệp vụ: ${err.message}`, 'error');
   }
 }
 
@@ -777,16 +993,17 @@ document.addEventListener('keydown', (event) => {
 
 async function toggleSelectedDictionaryTableActive(isActive) {
   const tableName = window.selectedDictionaryTableName;
+  const tableId = window.selectedDictionaryTableId;
   if (!tableName) return;
   try {
     const res = await fetch('/api/dictionary/toggle-active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableName, isActive })
+      body: JSON.stringify({ tableId, tableName, isActive })
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    const table = findDictionaryTable(tableName);
+    const table = findDictionaryTable(tableId || tableName);
     if (table) table.isActive = isActive;
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
@@ -800,18 +1017,19 @@ async function toggleSelectedDictionaryTableActive(isActive) {
 }
 
 async function toggleDictionaryTableActiveFromList(encodedTableName, checkbox) {
-  const tableName = decodeURIComponent(encodedTableName);
+  const table = findDictionaryTable(decodeURIComponent(encodedTableName));
+  if (!table) return;
+  const { tableId, tableName } = table;
   const isActive = checkbox.checked;
   checkbox.disabled = true;
   try {
     const res = await fetch('/api/dictionary/toggle-active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableName, isActive })
+      body: JSON.stringify({ tableId, tableName, isActive })
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    const table = findDictionaryTable(tableName);
     if (table) table.isActive = isActive;
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
@@ -823,7 +1041,25 @@ async function toggleDictionaryTableActiveFromList(encodedTableName, checkbox) {
   }
 }
 
+function reconcileDictionaryPresentation(model, columns) {
+  if (!model) return [];
+  const originalSummary = model.summaryFields;
+  const disabled = new Set(columns.filter(column=>column.isVisible === false).map(column=>column.columnName));
+  const removed = [];
+  for (const field of ['summaryFields','monetaryFields']) {
+    if (!Array.isArray(model[field])) continue;
+    removed.push(...model[field].filter(name=>disabled.has(name)));
+    model[field] = model[field].filter(name=>!disabled.has(name));
+  }
+  if (!model.summaryFields?.length && removed.length) {
+    const identities = (model.identityFields || []).filter(name=>!disabled.has(name));
+    model.summaryFields = identities.length ? identities : originalSummary;
+  }
+  return [...new Set(removed)];
+}
+
 async function saveSelectedTableDescription() {
+  if (window.dictionarySavePending) return;
   const tableName = window.selectedDictionaryTableName;
   const tableId = window.selectedDictionaryTableId;
   if (!tableName) return;
@@ -836,6 +1072,18 @@ async function saveSelectedTableDescription() {
     isActive: document.getElementById('dict-drawer-active-toggle')?.checked !== false
   };
   const current = findDictionaryTable(tableId || tableName);
+  try { table.requiredFilters = JSON.parse(document.getElementById('dict-required-filters')?.value || '[]'); }
+  catch { showToast('Bộ lọc bắt buộc chưa đúng định dạng JSON.', 'error'); return; }
+  const semanticEntity = document.getElementById('dict-semantic-entity')?.value.trim();
+  if (semanticEntity) {
+    const values = id => (document.getElementById('dict-semantic-'+id)?.value||'').split(',').map(v=>v.trim()).filter(Boolean);
+    try {
+      table.semanticModel = {version:1,entity:semanticEntity,kind:document.getElementById('dict-semantic-kind')?.value||'entity',grain:document.getElementById('dict-semantic-grain')?.value.trim()||'',
+        defaultCurrency:document.getElementById('dict-semantic-currency')?.value.trim()||'VNĐ',monetaryFields:values('money-fields'),
+        identityFields:values('identities'),summaryFields:values('summary'),aliases:values('aliases'),
+        segments:JSON.parse(document.getElementById('dict-semantic-segments')?.value||'[]'),measures:JSON.parse(document.getElementById('dict-semantic-measures')?.value||'[]')};
+    } catch { showToast('Cấu hình nhóm hoặc chỉ tiêu chưa đúng định dạng JSON.', 'error'); return; }
+  } else if (current?.semanticModel) table.semanticModel = null;
   const columns = (current?.columns || []).map(column => {
     const description = Array.from(document.querySelectorAll('.dictionary-column-description')).find(el => el.dataset.column === column.columnName);
     const displayName = Array.from(document.querySelectorAll('.dictionary-column-display-name')).find(el => el.dataset.column === column.columnName);
@@ -843,8 +1091,13 @@ async function saveSelectedTableDescription() {
     return { columnName: column.columnName, description: description?.value.trim() || '',
       displayName: typeof displayName?.value === 'string' ? displayName.value.trim() : (column.displayName || ''), isVisible: visible?.checked !== false };
   });
+  const presentationAdjustments = reconcileDictionaryPresentation(table.semanticModel, columns);
+  if (!stageDirtyFieldRelationships(columns)) return;
   const button = document.getElementById('dictionary-save-all-button');
+  const controls = [...document.querySelectorAll('#dictionary-drawer .dictionary-drawer-body input, #dictionary-drawer .dictionary-drawer-body select, #dictionary-drawer .dictionary-drawer-body textarea, #dictionary-drawer .dictionary-drawer-body button')].map(node => ({ node, disabled: node.disabled }));
   try {
+    window.dictionarySavePending = true;
+    controls.forEach(({ node }) => { node.disabled = true; });
     if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...'; }
     const res = await fetch('/api/dictionary/save-table-configuration', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tableId, tableName, table, columns, relationships: window.pendingDictionaryRelationships || [] }) });
@@ -852,39 +1105,50 @@ async function saveSelectedTableDescription() {
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     window.groupedTablesData = Array.isArray(data.tables) ? data.tables : getDictionaryTables();
     window.tableRelationshipsData = Array.isArray(data.relationships) ? data.relationships : window.tableRelationshipsData;
-    window.pendingDictionaryRelationships = [];
-    window.pendingDictionaryRelationshipPreviews = [];
+    renderDictionaryQuality(data.quality);
+    window.invalidateRelatedTabData?.('schema');
+    window.refreshDictionarySyncStatus?.();
+    const stillSelected = (window.selectedDictionaryTableId || window.selectedDictionaryTableName) === (tableId || tableName);
+    if (stillSelected) {
+      window.pendingDictionaryRelationships = [];
+      window.pendingDictionaryRelationshipPreviews = [];
+    }
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
-    renderDictionaryDrawer(findDictionaryTable(tableId || tableName));
-    showToast?.('Đã lưu cấu hình bảng, cột và quan hệ; Qdrant được đồng bộ một lần.', 'success');
+    if (stillSelected) renderDictionaryDrawer(findDictionaryTable(tableId || tableName));
+    const vectorMessage = data.vectorSync?.scheduled ? 'Đã lưu cấu hình. Đồng bộ vector đã được xếp hàng.' : data.vectorSync?.success === false ? 'Đã lưu cấu hình; đồng bộ vector chưa thành công.' : 'Đã lưu cấu hình bảng, cột và quan hệ.';
+    const adjustedColumns = [...new Set([...presentationAdjustments,...(data.configurationAdjustments || []).flatMap(item=>item.columns || [])])];
+    showToast?.(vectorMessage + (adjustedColumns.length ? ` Đã bỏ ${adjustedColumns.join(', ')} khỏi cấu hình hiển thị vì cột đã tắt.` : ''), data.vectorSync?.success === false ? 'warn' : 'success');
   } catch (err) {
-    showToast?.(`Không thể lưu cấu hình: ${err.message}`, 'error');
+    showToast?.(err.message === 'DATA_CONFLICT' ? 'Dữ liệu vừa được cập nhật ở thao tác khác. Thay đổi của bạn chưa được lưu; hãy tải lại và kiểm tra trước khi lưu lại.' : `Không thể lưu cấu hình: ${err.message}`, 'error');
   } finally {
+    window.dictionarySavePending = false;
+    controls.forEach(({ node, disabled }) => { if (node.isConnected) node.disabled = disabled; });
     if (button?.isConnected) { button.disabled = false; button.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Lưu tất cả thay đổi'; }
   }
 }
 
 async function saveDictionaryColumnDescription(encodedColumnName) {
   const tableName = window.selectedDictionaryTableName;
+  const tableId = window.selectedDictionaryTableId;
   const columnName = decodeURIComponent(encodedColumnName);
   const input = Array.from(document.querySelectorAll('.dictionary-column-description'))
     .find(el => el.dataset.column === columnName);
   const displayInput = Array.from(document.querySelectorAll('.dictionary-column-display-name'))
     .find(el => el.dataset.column === columnName);
   const description = input?.value.trim() || '';
-  const currentColumn = findDictionaryTable(tableName)?.columns?.find(c => c.columnName === columnName);
+  const currentColumn = findDictionaryTable(tableId || tableName)?.columns?.find(c => c.columnName === columnName);
   const displayName = displayInput ? displayInput.value.trim() : (currentColumn?.displayName || '');
   if (!tableName || !columnName) return;
   try {
     const res = await fetch('/api/dictionary/update-column', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableName, columnName, description, displayName })
+      body: JSON.stringify({ tableId, tableName, columnName, description, displayName })
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    const table = findDictionaryTable(tableName);
+    const table = findDictionaryTable(tableId || tableName);
     const col = table?.columns?.find(c => c.columnName === columnName);
     if (col) col.description = description;
     if (col) col.displayName = displayName;
@@ -913,15 +1177,18 @@ function filterTableStatus(status) {
 }
 
 async function triggerAiGenerateDictionary() {
+  if (window.dictionarySyncSubmitting) return;
+  window.dictionarySyncSubmitting = true;
   if (typeof showToast === 'function') showToast('Đang đồng bộ Lược đồ CSDL vào Qdrant...', 'info');
   try {
     const res = await fetch('/api/qdrant/sync', { method: 'POST' });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    if (typeof showToast === 'function') showToast('Đã đồng bộ Lược đồ CSDL cho AI.', 'success');
+    if (typeof showToast === 'function') showToast(data.data?.scheduled ? 'Đã xếp hàng đồng bộ Lược đồ CSDL.' : 'Đã đồng bộ Lược đồ CSDL cho AI.', 'success');
+    window.refreshDictionarySyncStatus?.();
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể đồng bộ Lược đồ CSDL: ${err.message}`, 'error');
-  }
+  } finally { window.dictionarySyncSubmitting = false; }
 }
 
 function getActiveDictionaryTables() {
@@ -1486,3 +1753,36 @@ window.toggleDictionaryColumnVisibility = toggleDictionaryColumnVisibility;
 window.setFieldRelationshipStatus = setFieldRelationshipStatus;
 window.profileFieldRelationship = profileFieldRelationship;
 window.previewRelationshipPlan = previewRelationshipPlan;
+
+let dictionarySyncTimer = null;
+let dictionarySyncRequest = null;
+window.refreshDictionarySyncStatus = function () {
+  if (dictionarySyncRequest) return dictionarySyncRequest;
+  clearTimeout(dictionarySyncTimer);
+  dictionarySyncRequest = (async () => {
+    const panel = document.getElementById('dictionary-sync-status');
+    if (!panel) return;
+    try {
+      const response = await fetch('/api/dictionary/sync-status', { cache: 'no-store' });
+      if (!response.ok) throw new Error('STATUS_UNAVAILABLE');
+      const state = await response.json();
+      const messages = {
+        pending: Number(state.attempts) > 0 ? 'Cấu hình đã lưu. Đồng bộ vector đang chờ thử lại.' : 'Cấu hình đã lưu. Đồng bộ vector đang chờ xử lý.',
+        running: 'Cấu hình đã lưu. Đang đồng bộ vector…',
+        failed: 'Cấu hình đã lưu; đồng bộ vector chưa thành công. Hãy kiểm tra nhật ký hệ thống.',
+        disabled: 'Tìm kiếm từ khóa đang được sử dụng; embedding đang tắt.'
+      };
+      panel.hidden = !messages[state.status];
+      panel.textContent = messages[state.status] || '';
+      panel.dataset.state = state.status;
+      if (['pending', 'running'].includes(state.status) && document.getElementById('view-dictionary')?.style.display !== 'none') {
+        dictionarySyncTimer = setTimeout(() => window.refreshDictionarySyncStatus(), 3000);
+      }
+    } catch {
+      panel.hidden = false;
+      panel.textContent = 'Chưa thể kiểm tra trạng thái đồng bộ vector.';
+      panel.dataset.state = 'unavailable';
+    }
+  })().finally(() => { dictionarySyncRequest = null; });
+  return dictionarySyncRequest;
+};

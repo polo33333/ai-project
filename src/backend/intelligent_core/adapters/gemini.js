@@ -100,13 +100,13 @@ async function callGemini(provider, messages, tools, signal, options = {}) {
       functionDeclarations: tools.map(t => ({
         name: t.function?.name || t.name,
         description: t.function?.description || t.description,
-        parameters: t.function?.parameters || t.parameters
+        parametersJsonSchema: t.function?.parameters || t.parameters
       }))
     }];
     body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } };
   }
 
-  const streaming = typeof options.onReasoning === 'function' && provider.supportsStreaming !== false;
+  const streaming = (typeof options.onReasoning === 'function'||typeof options.onAnswer === 'function') && provider.supportsStreaming !== false;
   const emit = reasoningEmitter(options.onReasoning);
   if (streaming && /^gemini-(?:2\.5|3)/.test(model)) {
     body.generationConfig.thinkingConfig = { includeThoughts: true };
@@ -146,9 +146,11 @@ async function callGemini(provider, messages, tools, signal, options = {}) {
     let usageMetadata;
     await readJsonStream(res, chunk => {
       const candidate = chunk.candidates?.[0];
+      if(candidate?.content?.parts?.some(part=>part.functionCall))options.onToolCall?.();
       for (const part of candidate?.content?.parts || []) {
         parts.push(part);
         if (part.thought) emit(part.text);
+        else if(part.text)options.onAnswer?.(part.text);
       }
       if (candidate?.finishReason) finishReason = candidate.finishReason;
       if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;

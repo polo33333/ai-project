@@ -15,9 +15,13 @@ function trainingFailureLabel(code) {
   return labels[code] || code;
 }
 
-window.fetchTrainingReport = async function fetchTrainingReport() {
+window.fetchTrainingReport = function fetchTrainingReport() {
+  if (window.trainingReportPending) return window.trainingReportPending;
+  window.trainingReportPending = (async () => {
   const root = document.getElementById('training-cases');
-  if (root) root.innerHTML = '<div class="training-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang phân tích lịch sử và feedback...</div>';
+  const summary = document.getElementById('training-summary');
+  if (summary) { summary.setAttribute('aria-busy','true'); summary.innerHTML = Array.from({length:5}, () => '<article class="training-stat"><span class="tab-skeleton-line training-skeleton-icon" aria-hidden="true"></span><div aria-hidden="true"><span class="tab-skeleton-line training-skeleton-number"></span><span class="tab-skeleton-line training-skeleton-caption"></span></div></article>').join(''); }
+  if (root) { root.setAttribute('aria-busy','true'); root.innerHTML = '<span class="tab-loading-label" role="status">Đang tải báo cáo…</span><div class="training-skeleton-grid" aria-hidden="true">' + Array.from({length:6}, () => '<div class="training-skeleton-case"><span class="tab-skeleton-line"></span><span class="tab-skeleton-line"></span><span class="tab-skeleton-line"></span></div>').join('') + '</div>'; }
   try {
     const response = await fetch('/api/training-report', { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -25,7 +29,11 @@ window.fetchTrainingReport = async function fetchTrainingReport() {
     renderTrainingReport();
   } catch (error) {
     if (root) root.innerHTML = `<div class="training-empty"><i class="fa-solid fa-triangle-exclamation"></i> Không tải được báo cáo: ${escapeTrainingHtml(error.message)}</div>`;
-  }
+    if (summary) summary.replaceChildren();
+    return false;
+  } finally { root?.removeAttribute('aria-busy'); summary?.removeAttribute('aria-busy'); }
+  })().finally(() => { window.trainingReportPending = null; });
+  return window.trainingReportPending;
 };
 
 window.refreshTrainingView = function refreshTrainingView() {
@@ -47,7 +55,9 @@ window.setTrainingPageTab = function setTrainingPageTab(tab) {
 
 window.fetchSkillEditorData = async function fetchSkillEditorData() {
   const list = document.getElementById('skill-editor-items');
-  if (list) list.innerHTML = '<div class="training-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải skills...</div>';
+  if (list) { list.setAttribute('aria-busy','true'); list.innerHTML = window.tabSkeletonMarkup('list'); }
+  const form = document.querySelector('.skill-editor-form');
+  const release = form ? window.beginTabPanelLoading(form) : () => {};
   try {
     const response = await fetch('/api/training/skills', { cache: 'no-store' });
     const data = await response.json();
@@ -57,7 +67,8 @@ window.fetchSkillEditorData = async function fetchSkillEditorData() {
     renderSkillEditor();
   } catch (error) {
     if (list) list.innerHTML = `<div class="training-empty"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeTrainingHtml(error.message)}</div>`;
-  }
+    return false;
+  } finally { release(); list?.removeAttribute('aria-busy'); }
 };
 
 window.selectSkillForEditing = function selectSkillForEditing(skillId) {

@@ -74,7 +74,8 @@ class WatchFolderService {
       const buffer = fs.readFileSync(resolved);
       const fingerprint = crypto.createHash('sha256').update(buffer).digest('hex');
       const existing = libraryService.findBySourcePath(resolved) || libraryService.claimLegacyWatchDocument(resolved, path.basename(resolved));
-      if (existing?.sourceFingerprint === fingerprint && existing.status === 'Đã lập chỉ mục') {
+      if (existing?.sourceFingerprint === fingerprint && ['Đã lập chỉ mục', 'Sẵn sàng · Tìm kiếm từ khóa'].includes(existing.status)
+        && (!require('../../services/embedding_policy').enabled() || existing.indexMode !== 'lexical')) {
         this.updateStats(folder);
         return;
       }

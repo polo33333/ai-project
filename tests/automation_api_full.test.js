@@ -1,4 +1,6 @@
 'use strict';
+// Legacy write connector/reconciliation compatibility; governed mode has its own denial suite.
+process.env.GOVERNED_READ_ONLY = 'false';
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const https=require('node:https');
@@ -27,9 +29,30 @@ test('all REST methods send resolved bodies, query, headers and encoded URL path
     const binding={type:'api',url:'https://example.com/items/{{steps.previous.id}}',method,query:{tag:['one','two']},headers:{'X-Trace':'{{steps.previous.id}}'},auth:{type:'bearer',token:'{{steps.previous.token}}'}};
     if(!['GET','HEAD'].includes(method)){binding.bodyFormat='json';binding.body='{{steps.previous.payload}}';}
     const result=await api.readApi(binding,state);
+    assert.equal(result.envelope.status,'succeeded');
+    assert.equal(result.envelope.effectState,['GET','HEAD','OPTIONS'].includes(method)?'none':'unknown');
     assert.equal(result.response.status,200);const call=calls.at(-1);assert.equal(call.options.method,method);assert.equal(call.url.pathname,'/items/A%2FB');assert.deepEqual(call.url.searchParams.getAll('tag'),['one','two']);assert.equal(call.options.headers.authorization,'Bearer node-token');assert.equal(call.options.headers['x-trace'],'A/B');
     if(binding.body)assert.deepEqual(JSON.parse(call.body.toString()),{count:3});
   }
+});
+
+test('HTTP API failures preserve dispatch marker and effect uncertainty without retry',async t=>{
+  const failure=Object.assign(new Error('timeout after dispatch'),{code:'API_TIMEOUT'});
+  const calls=mockTransport(t,[{error:failure}]);
+  await assert.rejects(api.readApi({type:'api',url:'https://example.com',method:'POST',bodyFormat:'json',body:{code:'A'}},{input:{},steps:{}}),error=>{
+    assert.equal(error,failure);
+    assert.equal(error.apiRequestStarted,true);
+    assert.equal(error.toolResult.status,'timeout');
+    assert.equal(error.toolResult.effectState,'unknown');
+    assert.equal(error.toolResult.error.retryable,false);
+    return true;
+  });
+  assert.equal(calls.length,1);
+  const controller=new AbortController();controller.abort();
+  await assert.rejects(api.readApi({type:'api',url:'https://example.com',method:'POST'},{},controller.signal),error=>{
+    assert.equal(error.toolResult.status,'cancelled');assert.equal(error.toolResult.effectState,'none');return true;
+  });
+  assert.equal(calls.length,1);
 });
 test('Basic and API key resolve server-side credentials; invalid headers and missing credentials fail',async t=>{
   const calls=mockTransport(t,[]);process.env.WORKFLOW_UNIT_PASSWORD='unit-password';process.env.WORKFLOW_UNIT_API_KEY='unit-key';t.after(()=>{delete process.env.WORKFLOW_UNIT_PASSWORD;delete process.env.WORKFLOW_UNIT_API_KEY;});
@@ -70,4 +93,23 @@ test('write API is not retried after failure or recovered automatically after in
   let calls=0;const runtime=new AutomationRuntime(repository,registry,{enabled:()=>true,authorizeContext:async()=>admin,executeSource:async()=>{calls++;throw Object.assign(new Error('network interrupted'),{apiRequestStarted:true});}});
   let run=await runtime.create('api_write/lookup',{code:'A001'},admin,{conversationId:'write-fail'});await runtime.process(run.id);run=await runtime.owned(run.id,admin);assert.equal(run.status,'NEEDS_REVIEW');assert.equal(calls,1);
   let second=await runtime.create('api_write/lookup',{code:'A001'},admin,{conversationId:'write-recovery'});second=await runtime.owned(second.id,admin);second.status='RUNNING';second.lease={expiresAt:0};await repository.put('runs',second,second.revision);await runtime.process(second.id);assert.equal((await runtime.owned(second.id,admin)).status,'NEEDS_REVIEW');assert.equal(calls,1);
+  runtime.executeSource=async()=>{calls++;return {data:{code:'A001'},large:'x'.repeat(1024*1024)};};
+  const third=await runtime.create('api_write/lookup',{code:'A001'},admin,{conversationId:'write-output-size'});
+  await runtime.process(third.id);assert.equal((await runtime.owned(third.id,admin)).status,'NEEDS_REVIEW');assert.equal(calls,2);
+  runtime.executeSource=async()=>{calls++;return {data:{code:'A001'}};};
+  const fourth=await runtime.create('api_write/lookup',{code:'A001'},admin,{conversationId:'write-receipt-failure'});
+  const originalPut=repository.put.bind(repository);let failReceipt=true;
+  repository.put=async(kind,document,revision)=>{if(failReceipt && kind==='runs' && document.id===fourth.id && document.nextIndex===1 && document.status==='RUNNING'){failReceipt=false;throw new Error('Receipt store unavailable');}return originalPut(kind,document,revision);};
+  await runtime.process(fourth.id);assert.equal((await runtime.owned(fourth.id,admin)).status,'NEEDS_REVIEW');assert.equal(calls,3);
+  // Real local HTTP delivery with a lost acknowledgement; never contact a business endpoint.
+  let received=0;const server=require('node:http').createServer((request,response)=>{request.resume();request.on('end',()=>{received++;response.destroy();});});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>{server.closeAllConnections();return new Promise(resolve=>server.close(resolve));});
+  const origin=`http://127.0.0.1:${server.address().port}`,previousOrigins=process.env.WORKFLOW_API_ALLOWED_ORIGINS;
+  process.env.WORKFLOW_API_ALLOWED_ORIGINS=origin;t.after(()=>{if(previousOrigins===undefined)delete process.env.WORKFLOW_API_ALLOWED_ORIGINS;else process.env.WORKFLOW_API_ALLOWED_ORIGINS=previousOrigins;});
+  runtime.executeSource=async()=>api.readApi({type:'api',url:origin,method:'POST',bodyFormat:'json',body:{probe:'receipt-check'}},{input:{},steps:{}});
+  const fifth=await runtime.create('api_write/lookup',{code:'A001'},admin,{conversationId:'real-http-ack-loss',requestId:'receipt-check'});
+  await runtime.process(fifth.id);assert.equal((await runtime.owned(fifth.id,admin)).status,'NEEDS_REVIEW');
+  const repeated=await runtime.create('api_write/lookup',{code:'A001'},admin,{conversationId:'real-http-ack-loss',requestId:'receipt-check'});
+  assert.equal(repeated.id,fifth.id);await runtime.process(fifth.id);assert.equal(received,1);
 });

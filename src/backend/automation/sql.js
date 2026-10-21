@@ -11,6 +11,15 @@ function validateBinding(binding) {
   try { const parser = new Parser(); ast = parser.astify(neutral, { database: 'TransactSQL' }); tables = parser.tableList(neutral, { database: 'TransactSQL' }); } catch (_) { throw error('SQL binding không phân tích được.'); }
   const statements = Array.isArray(ast) ? ast : [ast];
   if (statements.length !== 1 || statements[0].type !== 'select' || statements[0].into?.position) throw error('Chỉ cho phép một SELECT đọc.');
+  const projected = new Set((statements[0].columns || []).map(column => String(column.as || column.expr?.column || '').toLowerCase()));
+  const mappingKeys = new Set();
+  for (const mapping of binding.resultMapping || []) {
+    if (![mapping.key, mapping.tableId, mapping.columnName].every(value => typeof value === 'string' && value.trim()))
+      throw error(`Mapping kết quả ${mapping.key || '(chưa đặt tên)'} thiếu bảng nguồn hoặc cột nguồn.`, 409);
+    const key = mapping.key.toLowerCase();
+    if (mappingKeys.has(key) || !projected.has(key)) throw error(`Mapping kết quả ${mapping.key} không khớp cột/bí danh SELECT hoặc bị trùng.`, 409);
+    mappingKeys.add(key);
+  }
   for (const table of tables) {
     const [, database, name] = table.split('::');
     const qualified = `${database === 'null' ? 'dbo' : database}.${name}`.toLowerCase();
@@ -35,7 +44,7 @@ async function executeBinding(binding, input, { signal, permissions = [], state 
   for (const table of binding.tables) {
     if (!tableAvailable(binding, table, connector)) throw error('Bảng binding không còn trong catalog hoặc đã tắt.', 409);
   }
-  for (const mapping of binding.resultMapping || []) { const dictionary = require('../services/dictionary_service'); const table = dictionary.tablesStore.find(t=>t.tableId===mapping.tableId && t.dbSourceId===binding.dbSourceId && t.isActive!==false); if (!table || !require('./column_mapping').mappedColumns(table,dictionary).some(c=>c.column.columnName===mapping.columnName && (c.relation?.id||null)===(mapping.relationId||null))) throw error('Mapping cột hoặc quan hệ đã thay đổi. Cần cập nhật SQL của mẫu.',409); }
+  validateResultMapping(binding);
   const parameters = Object.entries(binding.parameters || {}).map(([name, mapping]) => {
     const value = Object.hasOwn(mapping,'value') ? require('./contract').resolve(mapping.value,state) : input[mapping.slot] ?? null;
     if (Object.hasOwn(mapping,'value')) {
@@ -48,4 +57,11 @@ async function executeBinding(binding, input, { signal, permissions = [], state 
   return { rows, rowCount: rows.length, source: binding.dbSourceId, retrievedAt: new Date().toISOString(), empty: rows.length === 0 };
 }
 function ensureParameter(value,schema) { if (value === undefined || require('./contract').validateValue(value,schema).length) throw error('Giá trị tham số từ bước trước không đúng kiểu dữ liệu.'); }
-module.exports = { validateBinding, executeBinding, tableAvailable };
+function validateResultMapping(binding, dictionary = require('../services/dictionary_service')) {
+  for (const mapping of binding.resultMapping || []) {
+    const table = dictionary.tablesStore.find(item => item.tableId === mapping.tableId && item.dbSourceId === binding.dbSourceId && item.isActive !== false);
+    if (!table || !require('./column_mapping').mappedColumns(table, dictionary).some(item => item.column.columnName === mapping.columnName
+      && (item.relation?.id || null) === (mapping.relationId || null))) throw error(`Mapping kết quả ${mapping.key}: cột nguồn hoặc quan hệ đã thay đổi. Cần cập nhật SQL của mẫu.`, 409);
+  }
+}
+module.exports = { validateBinding, executeBinding, tableAvailable, validateResultMapping };

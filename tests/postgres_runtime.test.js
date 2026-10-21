@@ -62,6 +62,11 @@ test('PostgreSQL runtime stores app mutations and protects concurrent chat write
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM app.chat_runs')).rows[0].n,1);
       assert.equal(fs.readdirSync(temp).filter(name => name.endsWith('.json')).length,0);
     });
+    await t.test('writing a system log needs no chat stores and leaves audit revisions untouched', async () => {
+      const before=(await pool.query("SELECT revision FROM app.domain_stores WHERE file='chat_history.json'")).rows;
+      await storage.run(()=>logger.addLog('INFO','Performance','Scoped log'),{files:['logs.json']});
+      assert.deepEqual((await pool.query("SELECT revision FROM app.domain_stores WHERE file='chat_history.json'")).rows,before);
+    });
     await t.test('scoped page reads load only requested domains and refuse accidental unloaded access',async()=>{
       const repo=new(require('../src/backend/storage/postgres/repository').PostgresRepository)(pool);
       const snapshot=await repo.snapshot(['accounts.json','sessions.json']);
@@ -213,6 +218,21 @@ test('PostgreSQL runtime stores app mutations and protects concurrent chat write
       const protectedView=await fetch(base+'/views/page_chat.html',{redirect:'manual'});assert.ok([302,401].includes(protectedView.status));
     });
     const post=(url,body)=>fetch(base+url,{method:'POST',headers:{'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify(body)});
+    await t.test('scoped provider and dictionary HTTP saves preserve unrelated chat history', async () => {
+      const before=(await pool.query('SELECT id,version FROM app.chat_runs ORDER BY id')).rows;
+      for (const [route,body] of [
+        ['/api/ai-providers/update',{providerId:'p',name:'Scoped provider'}],
+        ['/api/dictionary/save-table-configuration',{tableName:'Contracts',table:{description:'Scoped description'}}]
+      ]) {
+        const response=await post(route,body);
+        assert.equal(response.status,200,route+': '+await response.text());
+      }
+      assert.deepEqual((await pool.query('SELECT id,version FROM app.chat_runs ORDER BY id')).rows,before);
+      assert.equal((await pool.query("SELECT data_source_id FROM app.dictionary_tables WHERE table_name='Contracts'")).rows[0].data_source_id,'source');
+      assert.equal((await pool.query("SELECT count(*)::int AS n FROM app.outbox_jobs WHERE kind='dictionary.sync'")).rows[0].n,1);
+      // Leave the independent document-worker test's queue empty.
+      await pool.query("DELETE FROM app.outbox_jobs WHERE kind='dictionary.sync'");
+    });
     await t.test('HTTP and SSE responses arrive after persisted audit, with PARTIAL gate intact', async () => {
       const normal=await post('/api/intelligent-core/chat',{question:'HTTP question',sessionId:'http-session'});
       assert.equal(normal.status,200); const data=await normal.json();

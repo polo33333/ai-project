@@ -69,14 +69,15 @@ function showToast(message, type = 'success', title = '') {
 
 // Universal Pagination State Manager
 window.paginationState = {
-  dictionary: { currentPage: 1, itemsPerPage: 8 },
+  accounts: { currentPage: 1, itemsPerPage: 10 },
+  dictionary: { currentPage: 1, itemsPerPage: 10 },
   glossary: { currentPage: 1, itemsPerPage: 10 },
   ai_providers: { currentPage: 1, itemsPerPage: 10 },
   sql_sources: { currentPage: 1, itemsPerPage: 10 },
   chat_history: { currentPage: 1, itemsPerPage: 10 },
   chat_feedback: { currentPage: 1, itemsPerPage: 10 },
   system_logs: { currentPage: 1, itemsPerPage: 10 },
-  library: { currentPage: 1, itemsPerPage: 8 },
+  library: { currentPage: 1, itemsPerPage: 10 },
   watchfolder_logs: { currentPage: 1, itemsPerPage: 10 }
 };
 
@@ -119,7 +120,7 @@ window.renderPaginationControls = function renderPaginationControls(containerId,
     `;
   });
 
-  const pageSizeOptions = [8, 10, 20, 50, 100];
+  const pageSizeOptions = [10, 20, 50, 100];
   container.innerHTML = `
     <div class="pagination-summary">
       Hiển thị <strong>${startItem} - ${endItem}</strong> trên tổng số <strong>${totalItems}</strong> mục
@@ -252,13 +253,34 @@ async function loadCurrentAccount() {
     const roleEl = document.getElementById('account-role-label');
     const settingsButton = document.getElementById('account-settings-btn');
     window.currentAccountRole = data.account?.role || 'user';
+    window.currentAccountPermissions = data.account?.permissions || null;
+    if (data.account?.role !== 'admin' && Array.isArray(data.account?.permissions)) {
+      const navPermissions={'nav-dashboard':'dashboard.read','nav-page-chat':'chat.use','nav-data-dictionary':'schema.read','nav-sql-connector':'sources.read','nav-library':'library.read','nav-glossary':'glossary.read','nav-workflows':'workflows.use','nav-chat-history':'history.read','nav-chat-feedback':'feedback.read','nav-cost-tracker':'analytics.read','nav-memory':'memory.use'};
+      for(const [id,permission] of Object.entries(navPermissions)) {const node=document.getElementById(id);if(node)node.hidden=node.dataset.featureHidden==='true'||!data.account.permissions.includes(permission);}
+      for(const id of ['nav-watchfolder','nav-ai-providers','nav-system-tools','nav-training-core','nav-system-logs','nav-mcp-sources','nav-api-docs']) {const node=document.getElementById(id);if(node)node.hidden=true;}
+    }
     if (settingsButton) settingsButton.hidden = data.account?.role !== 'admin';
+    const governanceNav = document.getElementById('nav-data-governance');
+    if (governanceNav) governanceNav.hidden = data.account?.role !== 'admin';
+    const accountsNav = document.getElementById('nav-accounts');
+    if (accountsNav) accountsNav.hidden = data.account?.role !== 'admin';
+    const administrationSection = document.getElementById('nav-administration-section');
+    if (administrationSection) administrationSection.hidden = data.account?.role !== 'admin';
+    window.refreshSidebarGroups();
+    const copilotButton=document.getElementById('btn-open-copilot');
+    if(copilotButton)copilotButton.hidden=data.account?.role!=='admin'&&Array.isArray(data.account?.permissions)&&!data.account.permissions.includes('chat.use');
     if (nameEl) nameEl.textContent = data.account?.displayName || data.account?.username || 'Admin AI';
-    if (roleEl) roleEl.textContent = data.account?.role === 'admin' ? 'Quản trị viên' : 'Thành viên';
+    if (roleEl) roleEl.textContent = data.account?.roleLabel || (data.account?.role === 'admin' ? 'Quản trị viên' : 'Thành viên');
   } catch {
     window.location.href = '/login.html';
   }
 }
+
+window.refreshSidebarGroups = function refreshSidebarGroups() {
+  document.querySelectorAll('#app-sidebar .nav-section').forEach(section=>{
+    section.hidden=![...section.querySelectorAll('.nav-item')].some(item=>!item.hidden&&item.style.display!=='none');
+  });
+};
 
 function selectAccountTab(tab) {
   document.querySelectorAll('[data-account-panel]').forEach(panel=>{panel.hidden=panel.dataset.accountPanel!==tab;});
@@ -300,7 +322,7 @@ async function openChangePassword() {
   try {
     const response=await fetch('/api/auth/me',{cache:'no-store'});const data=await response.json();if(!response.ok||!data.account)throw new Error('Không tải được tài khoản. Hãy đăng nhập lại.');
     document.getElementById('account-profile-username').textContent='@'+data.account.username;
-    document.getElementById('account-profile-role').textContent=data.account.role==='admin'?'Quản trị viên':'Người dùng';
+    document.getElementById('account-profile-role').textContent=data.account.roleLabel||(data.account.role==='admin'?'Quản trị viên':'Người dùng');
     document.getElementById('account-profile-name').value=data.account.displayName||'';document.getElementById('account-profile-email').value=data.account.email||'';
     message.textContent='';fields.forEach(field=>field.disabled=false);
   }catch(error){message.textContent=error.message;}
@@ -373,27 +395,46 @@ window.performLogout = performLogout;
 window.closeLogoutConfirmation = closeLogoutConfirmation;
 
 const featureSearchItems = [
-  { key: 'overview', title: 'Tổng quan', group: 'Tổng quan', icon: 'fa-chart-line', keywords: 'dashboard trang chủ thống kê hệ thống' },
-  { key: 'page-chat', title: 'Trò chuyện AI', group: 'Tổng quan', icon: 'fa-comments', keywords: 'chat hỏi đáp text to sql trợ lý' },
-  { key: 'library', title: 'Thư viện tri thức', group: 'Tổng quan', icon: 'fa-folder-open', keywords: 'tài liệu knowledge pdf docx upload' },
-  { key: 'watchfolder', title: 'Thư mục giám sát', group: 'Tổng quan', icon: 'fa-folder-tree', keywords: 'watch folder quét file tự động' },
-  { key: 'sql', title: 'Kết nối CSDL', group: 'Kết nối dữ liệu', icon: 'fa-plug', keywords: 'sql server database ddl nguồn dữ liệu' },
-  { key: 'dictionary', title: 'Lược đồ CSDL', group: 'Kết nối dữ liệu', icon: 'fa-table-list', keywords: 'data dictionary bảng cột quan hệ diagram schema' },
-  { key: 'glossary', title: 'Thuật ngữ nghiệp vụ', group: 'Kết nối dữ liệu', icon: 'fa-spell-check', keywords: 'business glossary từ điển' },
-  { key: 'ai-providers', title: 'Nhà cung cấp AI', group: 'AI & Báo cáo', icon: 'fa-network-wired', keywords: 'provider model gemini openai ollama active' },
-  { key: 'analytics', title: 'Báo cáo & Metrics', group: 'AI & Báo cáo', icon: 'fa-chart-pie', keywords: 'analytics chi phí độ trễ thống kê' },
-  { key: 'system-logs', title: 'Nhật ký hệ thống', group: 'Giám sát & Audit', icon: 'fa-terminal', keywords: 'system log lỗi cảnh báo audit' },
-  { key: 'chat-history', title: 'Lịch sử trò chuyện', group: 'Giám sát & Audit', icon: 'fa-clock-rotate-left', keywords: 'history gọi ai prompt json' },
-  { key: 'chat-feedback', title: 'Đánh giá AI', group: 'Giám sát & Audit', icon: 'fa-thumbs-up', keywords: 'feedback chất lượng thích không thích kiểm duyệt ai' },
-  { key: 'training-core', title: 'Training Core', group: 'Giám sát & Audit', icon: 'fa-graduation-cap', keywords: 'training report đề xuất cải tiến harness regression lỗi ai' },
+  { key: 'accounts', title: 'Quản lý tài khoản', group: 'Quản trị & phân quyền', icon: 'fa-users-gear', keywords: 'account user role tài khoản đăng nhập mật khẩu phân quyền admin', adminOnly: true },
+  { key: 'overview', title: 'Tổng quan', group: 'Không gian làm việc', icon: 'fa-chart-line', keywords: 'dashboard trang chủ thống kê hệ thống' },
+  { key: 'page-chat', title: 'Trò chuyện', group: 'Không gian làm việc', icon: 'fa-comments', keywords: 'chat hỏi đáp text to sql trợ lý hội thoại' },
+  { key: 'workflows', title: 'Mẫu nghiệp vụ', group: 'Không gian làm việc', icon: 'fa-diagram-project', keywords: 'workflow workflows luồng nghiệp vụ tự động hóa automation biểu mẫu form tác vụ' },
+  { key: 'memory', title: 'Bộ nhớ Agent', group: 'Không gian làm việc', icon: 'fa-brain', keywords: 'memory bộ nhớ agent cá nhân tổ chức sở thích ghi nhớ tác vụ' },
+  { key: 'chat-history', title: 'Lịch sử trò chuyện', group: 'Không gian làm việc', icon: 'fa-clock-rotate-left', keywords: 'history gọi ai prompt json hội thoại lịch sử chat' },
+  { key: 'sql', title: 'Kết nối CSDL', group: 'Dữ liệu & Tri thức', icon: 'fa-plug', keywords: 'sql server database cơ sở dữ liệu ddl nguồn dữ liệu kết nối' },
+  { key: 'dictionary', title: 'Lược đồ CSDL', group: 'Dữ liệu & Tri thức', icon: 'fa-table-list', keywords: 'data dictionary bảng cột quan hệ diagram schema sơ đồ' },
+  { key: 'library', title: 'Thư viện tri thức', group: 'Dữ liệu & Tri thức', icon: 'fa-folder-open', keywords: 'tài liệu knowledge pdf docx upload tải lên tìm kiếm tài liệu rag' },
+  { key: 'watchfolder', title: 'Thư mục giám sát', group: 'Dữ liệu & Tri thức', icon: 'fa-folder-tree', keywords: 'watchfolder watch folder quét file tự động đồng bộ tài liệu' },
+  { key: 'glossary', title: 'Thuật ngữ nghiệp vụ', group: 'Dữ liệu & Tri thức', icon: 'fa-spell-check', keywords: 'business glossary từ điển viết tắt định nghĩa' },
+  { key: 'ai-providers', title: 'Nhà cung cấp AI', group: 'Cấu hình Agent', icon: 'fa-network-wired', keywords: 'provider model mô hình gemini openai ollama active cấu hình ai' },
+  { key: 'system-tools', title: 'Công cụ hệ thống', group: 'Cấu hình Agent', icon: 'fa-screwdriver-wrench', keywords: 'tool tools function calling schema danh mục công cụ agent' },
+  { key: 'data-governance', title: 'Quản trị dữ liệu', group: 'Quản trị & phân quyền', icon: 'fa-shield-halved', keywords: 'governance acl quyền truy cập xử lý dữ liệu chỉ tiêu SQL phê duyệt chính sách phân quyền', adminOnly: true },
+  { key: 'analytics', title: 'Báo cáo & Metrics', group: 'Chất lượng & Giám sát', icon: 'fa-chart-pie', keywords: 'analytics metrics chi phí token độ trễ thống kê báo cáo hiệu suất' },
+  { key: 'chat-feedback', title: 'Đánh giá AI', group: 'Chất lượng & Giám sát', icon: 'fa-thumbs-up', keywords: 'feedback chất lượng thích không thích kiểm duyệt ai' },
+  { key: 'training-core', title: 'Training Core', group: 'Chất lượng & Giám sát', icon: 'fa-graduation-cap', keywords: 'training report đề xuất cải tiến harness regression lỗi ai huấn luyện đánh giá mô hình' },
+  { key: 'system-logs', title: 'Nhật ký hệ thống', group: 'Chất lượng & Giám sát', icon: 'fa-terminal', keywords: 'system log logs lỗi cảnh báo audit nhật ký' },
   { key: 'mcp-sources', title: 'Nguồn MCP Server', group: 'Tích hợp & Phát triển', icon: 'fa-cube', keywords: 'mcp tools server integration' },
-  { key: 'system-tools', title: 'Công cụ hệ thống', group: 'Tích hợp & Phát triển', icon: 'fa-screwdriver-wrench', keywords: 'tool function calling schema công cụ hệ thống' },
   { key: 'api-docs', title: 'API tích hợp & Embed Chat', group: 'Tích hợp & Phát triển', icon: 'fa-code-branch', keywords: 'api key developer embed website widget tài liệu lập trình' },
-  { key: 'settings', title: 'Cài đặt hệ thống', group: 'Tài khoản & Hệ thống', icon: 'fa-sliders', keywords: 'setting settings cấu hình env môi trường qdrant local model máy chủ', adminOnly: true }
+  { key: 'settings', title: 'Cài đặt hệ thống', group: 'Cấu hình Agent', icon: 'fa-sliders', keywords: 'setting settings cấu hình env môi trường qdrant local model máy chủ embedding sao lưu khôi phục backup restore', adminOnly: true }
 ];
+const accountTabPermissions={overview:'dashboard.read','page-chat':'chat.use',dictionary:'schema.read',sql:'sources.read',library:'library.read',glossary:'glossary.read',workflows:'workflows.use','chat-history':'history.read','chat-feedback':'feedback.read',analytics:'analytics.read',memory:'memory.use'};
+window.canAccessMainTab = function(key) {return window.currentAccountRole==='admin'||!Array.isArray(window.currentAccountPermissions)||!!accountTabPermissions[key]&&window.currentAccountPermissions.includes(accountTabPermissions[key]);};
 
 function normalizeFeatureSearch(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replaceAll('đ', 'd').trim();
+}
+
+function findFeatureSearchItems(query, role = window.currentAccountRole) {
+  const normalized = normalizeFeatureSearch(query);
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  return featureSearchItems.filter(item => document.getElementById(`nav-${item.key}`)?.dataset.featureHidden!=='true'&&(!item.adminOnly || role === 'admin')&&(!window.currentAccountPermissions||window.canAccessMainTab(item.key))).map((item, order) => {
+    const title = normalizeFeatureSearch(item.title);
+    const searchable = normalizeFeatureSearch(`${item.title} ${item.group} ${item.key} ${item.keywords}`);
+    if (!tokens.every(token => searchable.includes(token))) return null;
+    const score = normalized ? (title === normalized ? 100 : title.startsWith(normalized) ? 70 : title.includes(normalized) ? 50 : 0)
+      + tokens.reduce((total, token) => total + (title.includes(token) ? 10 : 0), 0) : 0;
+    return { item, score, order };
+  }).filter(Boolean).sort((a, b) => b.score - a.score || a.order - b.order).map(entry => entry.item).slice(0, 20);
 }
 
 function initGlobalFeatureSearch() {
@@ -405,13 +446,7 @@ function initGlobalFeatureSearch() {
   let activeIndex = 0;
   let filteredItems = [];
   const render = () => {
-    const query = normalizeFeatureSearch(input.value);
-    const queryTokens = query.split(/\s+/).filter(Boolean);
-    filteredItems = featureSearchItems.filter(item => {
-      if (item.adminOnly && window.currentAccountRole !== 'admin') return false;
-      const searchable = normalizeFeatureSearch(`${item.title} ${item.group} ${item.keywords}`);
-      return queryTokens.every(token => searchable.includes(token));
-    }).slice(0, 20);
+    filteredItems = findFeatureSearchItems(input.value);
     activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, filteredItems.length - 1)));
     results.innerHTML = filteredItems.length ? filteredItems.map((item, index) => `<button type="button" class="feature-search-item ${index === activeIndex ? 'active' : ''}" data-key="${item.key}"><span class="feature-result-icon"><i class="fa-solid ${item.icon}"></i></span><span><strong>${item.title}</strong><small>${item.group}</small></span><i class="fa-solid fa-arrow-turn-down feature-enter-icon"></i></button>`).join('') : '<div class="feature-search-empty"><i class="fa-solid fa-magnifying-glass"></i> Không tìm thấy chức năng phù hợp</div>';
     results.hidden = false;
@@ -500,7 +535,7 @@ async function runArchitectureSuggestionAction() {
       const res = await fetch('/api/qdrant/sync', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-      if (typeof showToast === 'function') showToast('Đã đồng bộ dữ liệu vào Qdrant.', 'success');
+      if (typeof showToast === 'function') showToast(data.data?.scheduled ? 'Đã xếp hàng đồng bộ dữ liệu vào Qdrant.' : 'Đã đồng bộ dữ liệu vào Qdrant.', 'success');
       await fetchQdrantStatus();
       await refreshArchitectureSuggestion();
     } catch (err) {
@@ -519,330 +554,6 @@ function dismissArchitectureSuggestion() {
 
 window.runArchitectureSuggestionAction = runArchitectureSuggestionAction;
 window.dismissArchitectureSuggestion = dismissArchitectureSuggestion;
-
-const MAIN_TAB_STORAGE_KEY = 'knowledgehub.activeMainTab';
-const MAIN_TAB_ALIASES = Object.freeze({
-  dashboard: 'overview',
-  sql_connector: 'sql',
-  sql_connectors: 'sql',
-  providers: 'ai-providers',
-  mcp: 'mcp-sources'
-});
-const MAIN_TAB_KEYS = new Set([
-  'overview',
-  'page-chat',
-  'library',
-  'watchfolder',
-  'sql',
-  'dictionary',
-  'glossary',
-  'ai-providers',
-  'analytics',
-  'system-logs',
-  'chat-history',
-  'chat-feedback',
-  'training-core',
-  'workflows',
-  'mcp-sources',
-  'system-tools',
-  'settings',
-  'api-docs'
-]);
-const TAB_DATA_CACHE_TTL_MS = 60_000;
-const tabDataLoadState = new Map();
-
-function loadTabData(tabKey, loaders = []) {
-  tabKey = normalizeMainTabKey(tabKey) || tabKey;
-  const callable = loaders.filter(loader => typeof loader === 'function');
-  if (!callable.length) return Promise.resolve();
-  let states = tabDataLoadState.get(tabKey);
-  if (!states) { states = new Map(); tabDataLoadState.set(tabKey, states); }
-  return Promise.all(callable.map(loader => {
-    const current = states.get(loader) || {};
-    if (current.promise) return current.promise;
-    if (current.loadedAt && Date.now() - current.loadedAt < TAB_DATA_CACHE_TTL_MS) return Promise.resolve();
-    const promise = Promise.resolve().then(loader)
-      .then(() => { states.set(loader, { loadedAt: Date.now(), promise: null }); })
-      .catch(error => { states.delete(loader); throw error; });
-    states.set(loader, { ...current, promise });
-    return promise;
-  }));
-}
-
-window.invalidateMainTabData = function invalidateMainTabData(tabKey) {
-  if (tabKey) tabDataLoadState.delete(normalizeMainTabKey(tabKey) || tabKey);
-  else tabDataLoadState.clear();
-};
-
-function normalizeMainTabKey(tabKey) {
-  const rawKey = String(tabKey || '')
-    .trim()
-    .replace(/^#/, '')
-    .split(/[?&]/, 1)[0]
-    .replace(/^\/+|\/+$/g, '');
-  const aliasKey = MAIN_TAB_ALIASES[rawKey] || MAIN_TAB_ALIASES[rawKey.replace(/-/g, '_')];
-  const normalizedKey = aliasKey || rawKey.replace(/_/g, '-');
-  return MAIN_TAB_KEYS.has(normalizedKey) ? normalizedKey : '';
-}
-
-function getRememberedMainTab() {
-  const pathTab = normalizeMainTabKey(window.location.pathname);
-  if (pathTab) return pathTab;
-  // Migrate the previous hash-based route to a clean URL.
-  const hashTab = normalizeMainTabKey(window.location.hash);
-  if (hashTab) return hashTab;
-  try {
-    return normalizeMainTabKey(localStorage.getItem(MAIN_TAB_STORAGE_KEY)) || 'overview';
-  } catch {
-    return 'overview';
-  }
-}
-
-function rememberMainTab(tabKey) {
-  window.activeMainTab = tabKey;
-  try {
-    localStorage.setItem(MAIN_TAB_STORAGE_KEY, tabKey);
-  } catch {
-    // The URL hash still preserves the route when browser storage is unavailable.
-  }
-
-  const nextPath = tabKey === 'overview' ? '/' : `/${tabKey}`;
-  if (window.location.pathname !== nextPath || window.location.hash) {
-    window.history.replaceState(null, '', `${nextPath}${window.location.search}`);
-  }
-}
-
-// Global Tab Switcher (Router)
-let mainTabNavigationVersion = 0;
-window.switchMainTab = async function switchMainTab(tabKey) {
-  tabKey = normalizeMainTabKey(tabKey);
-  if (!tabKey) return;
-  const navigationVersion = ++mainTabNavigationVersion;
-  rememberMainTab(tabKey);
-  window.updatePageChatMiniPanel?.();
-  const cleanKey = tabKey.replace(/-/g, '_');
-  const isDashboard = cleanKey === 'overview' || cleanKey === 'dashboard';
-  const mainContent = document.querySelector('main.main-content');
-  mainContent?.classList.toggle('chat-workspace-page', cleanKey === 'page_chat');
-  mainContent?.classList.toggle('training-workspace', cleanKey === 'training_core');
-  mainContent?.classList.toggle('dictionary-workspace', cleanKey === 'dictionary');
-  mainContent?.classList.toggle('settings-workspace', cleanKey === 'settings');
-
-  if (isDashboard) refreshArchitectureSuggestion();
-
-  const banner = document.getElementById('ai-suggestion-banner');
-  const metrics = document.querySelector('.metrics-grid');
-  const middleGrid = document.querySelector('.middle-grid');
-  const activityCard = document.getElementById('dashboard-activity-card');
-  const routerSection = document.querySelector('.dashboard-router-section');
-  const dashboardLower = document.querySelector('.dashboard-overview-lower');
-
-  if (banner) banner.style.display = isDashboard ? 'flex' : 'none';
-  if (metrics) metrics.style.display = isDashboard ? 'grid' : 'none';
-  if (middleGrid) middleGrid.style.display = isDashboard ? 'grid' : 'none';
-  if (activityCard) activityCard.style.display = isDashboard ? 'block' : 'none';
-  if (routerSection) routerSection.style.display = isDashboard ? 'block' : 'none';
-  if (dashboardLower) dashboardLower.classList.toggle('is-dashboard', isDashboard);
-
-  const pageHeading = document.getElementById('page-heading');
-  const dashboardHeadingIcon = document.getElementById('dashboard-heading-icon');
-  const dashboardHeadingSubtitle = document.getElementById('dashboard-heading-subtitle');
-  if (dashboardHeadingIcon) dashboardHeadingIcon.hidden = false;
-  const titles = {
-    settings: 'Cài đặt hệ thống',
-    overview: 'Tổng quan hệ thống',
-    dashboard: 'Tổng quan hệ thống',
-    page_chat: 'Trò chuyện AI',
-    dictionary: 'Lược đồ CSDL',
-    glossary: 'Thuật ngữ nghiệp vụ',
-    sql: 'Kết nối CSDL',
-    sql_connector: 'Kết nối CSDL',
-    providers: 'Nhà cung cấp AI',
-    ai_providers: 'Nhà cung cấp AI & Multi-LLM Router',
-    analytics: 'Báo cáo & Thống kê Metrics',
-    workflows: 'Mẫu nghiệp vụ',
-    mcp: 'Nguồn MCP Server',
-    mcp_sources: 'Nguồn MCP Server',
-    system_tools: 'Công cụ hệ thống',
-    watchfolder: 'Thư mục giám sát',
-    system_logs: 'Nhật ký hệ thống',
-    chat_history: 'Lịch sử trò chuyện & Gọi AI',
-    chat_feedback: 'Đánh giá chất lượng AI',
-    training_core: 'Training Core · Báo cáo cải tiến',
-    api_docs: 'API tích hợp',
-    library: 'Thư viện tri thức'
-  };
-  const pageMeta = {
-    settings: { icon: 'fa-gear', subtitle: 'Quản lý cấu hình và tùy chọn vận hành hệ thống' },
-    page_chat: { icon: 'fa-comments', subtitle: 'Trao đổi, phân tích dữ liệu và làm việc cùng trợ lý AI' },
-    dictionary: { icon: 'fa-table-columns', subtitle: 'Khám phá cấu trúc bảng, cột và quan hệ trong cơ sở dữ liệu' },
-    glossary: { icon: 'fa-book-open', subtitle: 'Quản lý thuật ngữ và ngữ cảnh nghiệp vụ dùng chung' },
-    sql: { icon: 'fa-plug', subtitle: 'Quản lý các kết nối cơ sở dữ liệu an toàn' },
-    sql_connector: { icon: 'fa-plug', subtitle: 'Quản lý các kết nối cơ sở dữ liệu an toàn' },
-    sql_connectors: { icon: 'fa-plug', subtitle: 'Quản lý các kết nối cơ sở dữ liệu an toàn' },
-    providers: { icon: 'fa-microchip', subtitle: 'Cấu hình mô hình và nhà cung cấp trí tuệ nhân tạo' },
-    ai_providers: { icon: 'fa-microchip', subtitle: 'Cấu hình mô hình, định tuyến và nhà cung cấp AI' },
-    analytics: { icon: 'fa-chart-line', subtitle: 'Theo dõi mức sử dụng, chi phí và hiệu suất hệ thống' },
-    workflows: { icon: 'fa-diagram-project', subtitle: 'Thiết lập kịch bản để trợ lý xử lý câu hỏi nghiệp vụ' },
-    mcp: { icon: 'fa-server', subtitle: 'Quản lý nguồn công cụ và ngữ cảnh từ MCP Server' },
-    mcp_sources: { icon: 'fa-server', subtitle: 'Quản lý nguồn công cụ và ngữ cảnh từ MCP Server' },
-    system_tools: { icon: 'fa-screwdriver-wrench', subtitle: 'Kiểm tra và vận hành các công cụ của hệ thống' },
-    watchfolder: { icon: 'fa-folder-open', subtitle: 'Theo dõi và tự động tiếp nhận tài liệu từ thư mục' },
-    system_logs: { icon: 'fa-file-lines', subtitle: 'Theo dõi sự kiện và trạng thái vận hành hệ thống' },
-    chat_history: { icon: 'fa-clock-rotate-left', subtitle: 'Tra cứu lịch sử hội thoại và các lượt gọi AI' },
-    chat_feedback: { icon: 'fa-thumbs-up', subtitle: 'Theo dõi phản hồi và chất lượng câu trả lời AI' },
-    training_core: { icon: 'fa-graduation-cap', subtitle: 'Đánh giá dữ liệu huấn luyện và đề xuất cải tiến mô hình' },
-    api_docs: { icon: 'fa-code', subtitle: 'Tài liệu và hướng dẫn tích hợp API hệ thống' },
-    library: { icon: 'fa-book-bookmark', subtitle: 'Quản lý tài liệu và nguồn tri thức dành cho AI' }
-  };
-  const activeMeta = pageMeta[cleanKey] || pageMeta[tabKey];
-  if (dashboardHeadingIcon) {
-    dashboardHeadingIcon.classList.toggle('is-page-icon', !isDashboard);
-    dashboardHeadingIcon.innerHTML = isDashboard
-      ? '<i></i><i></i><i></i>'
-      : `<i class="fa-solid ${activeMeta?.icon || 'fa-layer-group'}" aria-hidden="true"></i>`;
-  }
-  if (dashboardHeadingSubtitle) {
-    dashboardHeadingSubtitle.hidden = false;
-    dashboardHeadingSubtitle.textContent = isDashboard
-      ? 'Tổng hợp hoạt động và hiệu suất của hệ thống AI'
-      : (activeMeta?.subtitle || 'Quản lý và vận hành hệ thống KnowledgeHub AI');
-  }
-  if (pageHeading) {
-    pageHeading.textContent = titles[cleanKey] || titles[tabKey] || 'KnowledgeHub AI';
-  }
-
-  const viewMap = {
-    settings: 'view-settings',
-    page_chat: 'view-page_chat',
-    dictionary: 'view-dictionary',
-    glossary: 'view-glossary',
-    sql: 'view-sql_connector',
-    sql_connector: 'view-sql_connector',
-    sql_connectors: 'view-sql_connector',
-    providers: 'view-ai-providers',
-    ai_providers: 'view-ai-providers',
-    analytics: 'view-analytics',
-    workflows: 'view-workflows',
-    library: 'view-library',
-    watchfolder: 'view-watchfolder',
-    system_logs: 'view-system-logs',
-    chat_history: 'view-chat-history',
-    chat_feedback: 'view-chat-feedback',
-    training_core: 'view-training-core',
-    mcp: 'view-mcp-sources',
-    mcp_sources: 'view-mcp-sources',
-    system_tools: 'view-system-tools',
-    api_docs: 'view-api-docs'
-  };
-
-  const directChildren = document.querySelectorAll('#main-view-container > div, #main-view-container > section');
-  directChildren.forEach(v => {
-    v.style.display = 'none';
-  });
-
-  // Keep the sidebar selection in sync before any view-specific early return.
-  const navItems = document.querySelectorAll('.nav-list .nav-item');
-  navItems.forEach(item => {
-    const link = item.querySelector('a');
-    const attr = link ? (link.getAttribute('onclick') || '') : '';
-    const isActive = attr.includes(`'${tabKey}'`) || attr.includes(`'${cleanKey}'`);
-    item.classList.toggle('active', isActive);
-    if (link) {
-      if (isActive) {
-        link.setAttribute('aria-current', 'page');
-        link.scrollIntoView({ block: 'nearest' });
-      }
-      else link.removeAttribute('aria-current');
-    }
-  });
-
-  if (isDashboard) {
-    if (!document.getElementById('view-dashboard-logs')) await loadViewComponents('overview');
-    if (navigationVersion !== mainTabNavigationVersion) return;
-    const dashLogs = document.getElementById('view-dashboard-logs');
-    if (dashLogs) dashLogs.style.display = 'block';
-    requestAnimationFrame(() => {
-      if (typeof refreshDashboardMetrics === 'function') refreshDashboardMetrics();
-      if (typeof fetchDashboardLogs === 'function') fetchDashboardLogs();
-    });
-    return;
-  }
-
-  const targetId = viewMap[cleanKey] || `view-${cleanKey.replace(/_/g, '-')}`;
-  let targetView = document.getElementById(targetId);
-  if (!targetView && typeof loadViewComponents === 'function') {
-    const loading=document.createElement('div'); loading.className='tab-view-loading'; loading.setAttribute('role','status');
-    loading.innerHTML='<span class="tab-data-spinner" aria-hidden="true"></span><span>Đang tải giao diện…</span>';
-    document.getElementById('main-view-container')?.appendChild(loading);
-    try { await loadViewComponents(cleanKey); } finally { loading.remove(); }
-    targetView = document.getElementById(targetId);
-  }
-  if (navigationVersion !== mainTabNavigationVersion) return;
-
-  if (targetView) {
-    targetView.style.display = targetView.dataset.display || 'block';
-  } else {
-    console.warn(`Không tìm thấy view: ${targetId}`);
-  }
-
-  const tabLoaders = {
-    settings: [window.fetchSettings],
-    ai_providers: [window.fetchAiProviders],
-    dictionary: [window.fetchDataDictionary],
-    glossary: [window.fetchGlossaryData],
-    sql: [window.fetchDbSources], sql_connector: [window.fetchDbSources],
-    system_logs: [window.fetchLogs],
-    chat_history: [window.fetchChatHistory],
-    chat_feedback: [window.fetchChatFeedback],
-    mcp_sources: [window.fetchMcpServers],
-    training_core: [window.fetchTrainingReport],
-    system_tools: [window.fetchSystemTools],
-    api_docs: [window.fetchApiKeys, window.fetchEmbedConfigs],
-    library: [window.fetchLibraryDocuments],
-    watchfolder: [window.fetchWatchFolderData],
-    workflows: [window.initWorkflowsView],
-    analytics: [window.initPageAnalyticsCharts]
-  };
-  loadTabData(tabKey, tabLoaders[cleanKey] || []).catch(error => console.error(`Không thể tải dữ liệu tab ${tabKey}:`, error));
-  if (typeof renderChatSessionsList === 'function' && cleanKey === 'page_chat') renderChatSessionsList();
-  if (typeof renderCurrentChatMessages === 'function' && cleanKey === 'page_chat') renderCurrentChatMessages();
-  if (cleanKey === 'page_chat') loadTabData(tabKey, [window.populateChatModelSelector, window.populateChatKnowledgeSources, window.fetchAndRenderQuickPrompts])
-    .catch(error => console.error('Không thể tải dữ liệu Trò chuyện AI:', error));
-};
-
-
-// Load Modular HTML Component Templates into #main-view-container
-const viewLoadPromises = new Map();
-async function loadViewComponents(tabKey) {
-  const container = document.getElementById('main-view-container');
-  if (!container) return;
-  const viewFiles = {
-    overview: 'dashboard_logs.html', page_chat: 'page_chat.html', dictionary: 'dictionary.html',
-    sql: 'sql_connector.html', sql_connector: 'sql_connector.html', ai_providers: 'ai_providers.html',
-    library: 'library.html', watchfolder: 'watchfolder.html', glossary: 'glossary.html', analytics: 'analytics.html',
-    workflows: 'workflows.html', system_logs: 'system_logs.html', chat_history: 'chat_history.html',
-    chat_feedback: 'chat_feedback.html', training_core: 'training_core.html', mcp_sources: 'mcp_sources.html',
-    system_tools: 'system_tools.html', settings: 'settings.html', api_docs: 'api_docs.html'
-  };
-  const file = viewFiles[String(tabKey || '').replace(/-/g, '_')];
-  if (!file || container.querySelector(`[data-view-file="${file}"]`)) return;
-  if (viewLoadPromises.has(file)) return viewLoadPromises.get(file);
-  const pending = (async () => { try {
-    const response = await fetch(`/views/${file}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const template = document.createElement('template');
-    template.innerHTML = await response.text();
-    const firstView = template.content.firstElementChild;
-    if (firstView) firstView.dataset.viewFile = file;
-    container.appendChild(template.content);
-  } catch (err) {
-    console.error(`Lỗi khi tải view ${file}:`, err);
-  } finally { viewLoadPromises.delete(file); }
-  })();
-  viewLoadPromises.set(file, pending);
-  return pending;
-}
 
 // Fetch Qdrant Status
 async function fetchQdrantStatus() {
@@ -1022,26 +733,12 @@ function renderCopilotTechnicalDetails(toolCalls, sqlQuery, toolResult, sqlExecu
     return renderCopilotSql(execution.sql, `Câu lệnh SQL ${number}/${executions.length}`);
   }).join('');
   const resultPanels = renderCopilotExecutionResults(sqlExecutions, toolResult);
-  const thinkingTimeline = progressEvents.length ? `
-    <div class="chat-embedded-thinking">
-      <div class="chat-embedded-thinking-title"><i class="fa-solid fa-brain"></i> Thinking · ${progressEvents.length} bước${executionTime ? ` · ${escapeCopilotHtml(executionTime)}` : ''}</div>
-      <div class="chat-embedded-thinking-steps">
-        ${progressEvents.map(event => {
-          if (event.type === 'reasoning_delta') return '<details class="chat-reasoning-panel"><summary>Reasoning</summary><pre>' + escapeCopilotHtml(event.delta || '') + '</pre></details>';
-          const status = event.status || 'running';
-          const color = status === 'done' ? '#16a34a' : status === 'error' ? '#dc2626' : status === 'warning' ? '#d97706' : '#6366f1';
-          const fallbackIcon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : 'circle-notch';
-          const icon = String(event.icon || fallbackIcon).replace(/[^a-z0-9-]/gi, '') || fallbackIcon;
-          return `<div class="chat-embedded-thinking-step"><span style="color:${color}"><i class="fa-solid fa-${icon}"></i></span><span>${escapeCopilotHtml(event.label || 'Đang xử lý')}</span></div>`;
-        }).join('')}
-      </div>
-    </div>` : '';
   const toolPanels = renderCopilotToolCalls(toolCalls);
   if (!toolPanels && !resultPanels && !executionPanels) return '';
-  const content = `${thinkingTimeline}${toolPanels}${resultPanels}${executionPanels}`;
+  const content = `${toolPanels}${resultPanels}${executionPanels}`;
   return `
     <details class="copilot-technical-details">
-      <summary><span><i class="fa-solid fa-brain"></i> Thinking · Quá trình xử lý</span><i class="fa-solid fa-chevron-down"></i></summary>
+      <summary><span><i class="fa-solid fa-code"></i> Chi tiết truy vấn</span><i class="fa-solid fa-chevron-down"></i></summary>
       <div>${content}</div>
     </details>
   `;
@@ -1059,28 +756,7 @@ function renderCopilotChart(chartSpec) {
 }
 
 function addCopilotThinkingStep(containerId, icon, label, status = 'running', event = {}) {
-  const stepsEl = document.getElementById(`${containerId}-steps`);
-  if (!stepsEl) return;
-  if (event.type === 'reasoning_delta') {
-    let panel = Array.from(stepsEl.children).find(item => item.dataset?.reasoningIteration === String(event.reasoningId || event.iteration || 0));
-    if (!panel) {
-      panel = document.createElement('details'); panel.className = 'chat-reasoning-panel';
-      panel.dataset.reasoningIteration = String(event.reasoningId || event.iteration || 0); panel.open = false;
-      panel.innerHTML = '<summary>Reasoning</summary><pre></pre>'; stepsEl.appendChild(panel);
-    }
-    const text = panel.querySelector('pre');
-    text.textContent = (text.textContent + String(event.delta || '')).slice(0, 32000);
-    typeCopilotThinkingText(document.getElementById(`${containerId}-current`), text.textContent,
-      String(event.reasoningId || event.iteration || 0));
-    return;
-  }
-  typeCopilotThinkingText(document.getElementById(`${containerId}-current`), label);
-  const color = status === 'done' ? '#22c55e' : status === 'error' ? '#ef4444' : status === 'warning' ? '#f59e0b' : '#6366f1';
-  const fallbackIcon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : 'circle-notch';
-  const statusIcon = String(status === 'done' ? 'check' : status === 'error' ? 'xmark' : icon || fallbackIcon).replace(/[^a-z0-9-]/gi, '') || fallbackIcon;
-  const spinIcons = ['spinner', 'circle-notch', 'arrows-rotate', 'sync', 'gear', 'cog'];
-  const spinClass = (status === 'running' && spinIcons.includes(statusIcon)) ? 'fa-spin' : '';
-  stepsEl.insertAdjacentHTML('beforeend', `<div class="chat-thinking-step"><span style="color:${color};"><i class="fa-solid fa-${statusIcon} ${spinClass}"></i></span><span>${escapeCopilotHtml(label)}</span></div>`);
+  window.ChatReasoningUI.update(document.getElementById(containerId), event, label);
 }
 
 function typeCopilotThinkingText(element, value, streamKey = null) {
@@ -1101,7 +777,7 @@ function typeCopilotThinkingText(element, value, streamKey = null) {
     // Keep the same readable pace as the main chat, without backlog acceleration.
     element._typingIndex += 1;
     const visible = element._typingTarget.slice(0, element._typingIndex);
-    element.textContent = streaming && visible.length > 180 ? '…' + visible.slice(-180) : visible;
+    element.textContent = visible;
     if (streaming) element.scrollLeft = element.scrollWidth;
     if (element._typingIndex >= element._typingTarget.length) {
       clearInterval(element._typingTimer);
@@ -1110,45 +786,12 @@ function typeCopilotThinkingText(element, value, streamKey = null) {
   }, streaming ? 1000 / 120 : 14);
 }
 
-async function fetchCopilotStreamingChat(payload, onProgress, signal = null) {
+async function fetchCopilotStreamingChat(payload, onProgress, signal = null, onAnswer = null) {
   const response = await fetch('/api/intelligent-core/chat/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-    body: JSON.stringify(payload),
-    signal
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+    body: JSON.stringify(payload), signal
   });
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
-    try { detail = (await response.json()).message || detail; } catch (_) { }
-    throw new Error(detail);
-  }
-  if (!response.body) throw new Error('Trình duyệt không hỗ trợ streaming response.');
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-  let finalPayload = null;
-  while (true) {
-    const { value, done } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() || '';
-    for (const frame of frames) {
-      let eventName = 'message';
-      const dataLines = [];
-      frame.split(/\r?\n/).forEach(line => {
-        if (line.startsWith('event:')) eventName = line.slice(6).trim();
-        if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-      });
-      if (!dataLines.length) continue;
-      const data = JSON.parse(dataLines.join('\n'));
-      if (eventName === 'progress') onProgress?.(data);
-      else if (eventName === 'final') finalPayload = data;
-      else if (eventName === 'error') throw new Error(data.message || 'Streaming chat gặp lỗi.');
-    }
-    if (done) break;
-  }
-  if (!finalPayload) throw new Error('Stream kết thúc mà không có câu trả lời cuối.');
-  return finalPayload;
+  return window.ChatStream.read(response, { onProgress, onAnswer });
 }
 
 window.openModal = function openModal(id) {
@@ -1174,6 +817,7 @@ window.copilotIsResponding = false;
 
 function setCopilotResponding(active) {
   window.copilotIsResponding = Boolean(active);
+  window.ChatReasoningUI?.watchActivity?.(document.getElementById('chat-messages-container'),document.querySelector('#copilot-modal .copilot-chat-composer'),()=>window.copilotIsResponding);
   const button = document.getElementById('copilot-send-button');
   if (!button) return;
   button.classList.toggle('is-stop', window.copilotIsResponding);
@@ -1245,20 +889,19 @@ window.selectCopilotModel = function selectCopilotModel(value) {
 
 window.openCopilotFilePicker = function openCopilotFilePicker(type = 'all') {
   closeCopilotComposerMenus();
+  const picker=document.getElementById('copilot-file-input');
+  if(picker)picker.accept=window.ChatAttachments.accept;
   document.getElementById(type === 'camera' ? 'copilot-camera-input' : 'copilot-file-input')?.click();
 };
 
 window.handleCopilotFiles = function handleCopilotFiles(event) {
-  Array.from(event?.target?.files || []).forEach(file => {
-    const duplicate = window.copilotAttachments.some(item => item.name === file.name && item.size === file.size);
-    if (!duplicate && file.size <= 10 * 1024 * 1024) window.copilotAttachments.push(file);
-    else if (file.size > 10 * 1024 * 1024 && typeof showToast === 'function') showToast(`Tệp ${file.name} vượt quá 10 MB`, 'warning');
-  });
+  window.copilotAttachments=window.ChatAttachments.add(window.copilotAttachments,Array.from(event?.target?.files||[]),message=>showToast(message,'warning'));
   if (event?.target) event.target.value = '';
   renderCopilotAttachments();
 };
 
 window.removeCopilotAttachment = function removeCopilotAttachment(index) {
+  window.ChatAttachments.release(window.copilotAttachments.slice(index,index+1));
   window.copilotAttachments.splice(index, 1);
   renderCopilotAttachments();
 };
@@ -1267,7 +910,7 @@ function renderCopilotAttachments() {
   const preview = document.getElementById('copilot-attachment-preview');
   if (!preview) return;
   preview.classList.toggle('has-files', window.copilotAttachments.length > 0);
-  preview.innerHTML = window.copilotAttachments.map((file, index) => `<div class="page-chat-file-chip"><i class="fa-solid ${file.type?.startsWith('image/') ? 'fa-image' : 'fa-file-lines'}"></i><span title="${escapeCopilotHtml(file.name)}">${escapeCopilotHtml(file.name)}</span><button type="button" onclick="removeCopilotAttachment(${index})" aria-label="Xóa tệp"><i class="fa-solid fa-xmark"></i></button></div>`).join('');
+  window.ChatAttachments.render(preview,window.copilotAttachments,{onRemove:window.removeCopilotAttachment});
   renderCopilotKnowledgeChip();
 }
 
@@ -1428,16 +1071,6 @@ window.showCopilotAddNotice = function showCopilotAddNotice(type) {
   if (typeof showToast === 'function') showToast(`${labels[type] || type} sẽ được cấu hình tại trang quản trị tương ứng.`, 'info');
 };
 
-async function buildCopilotAttachmentContext(files) {
-  const parts = await Promise.all(files.map(async file => {
-    const isText = file.type.startsWith('text/') || /\.(txt|md|csv|json|sql|js|ts|html|css)$/i.test(file.name);
-    if (!isText || file.size > 1024 * 1024) return `[Tệp đính kèm: ${file.name}, ${Math.ceil(file.size / 1024)} KB]`;
-    try { return `[Nội dung tệp ${file.name}:\n${(await file.text()).slice(0, 12000)}\n]`; }
-    catch { return `[Tệp đính kèm: ${file.name}]`; }
-  }));
-  return parts.length ? `\n\n${parts.join('\n')}` : '';
-}
-
 document.addEventListener('click', closeCopilotComposerMenus);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
@@ -1559,44 +1192,25 @@ window.sendChatMessage = async function sendChatMessage() {
   renderCopilotAttachments();
 
   messages.insertAdjacentHTML('beforeend', `
-    <div class="chat-bubble user">${escapeCopilotHtml(text || 'Đã gửi tệp đính kèm')}${attachedFiles.length ? `<div style="margin-top:7px;font-size:11px;opacity:.85"><i class="fa-solid fa-paperclip"></i> ${attachedFiles.map(file => escapeCopilotHtml(file.name)).join(', ')}</div>` : ''}</div>
+    <div class="chat-bubble user">${escapeCopilotHtml(text || 'Đã gửi tệp đính kèm')}</div>
   `);
+  const sentFileGallery=attachedFiles.length?document.createElement('div'):null;
+  if(sentFileGallery){messages.lastElementChild.append(sentFileGallery);window.ChatAttachments.render(sentFileGallery,attachedFiles);}
 
   const thinkingId = `copilot-thinking-${Date.now()}`;
   const progressEvents = [];
-  messages.insertAdjacentHTML('beforeend', `
-    <div class="chat-thinking-row copilot-thinking-row" id="${thinkingId}">
-      <div class="chat-thinking-avatar"><svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg></div>
-      <div class="chat-thinking-card">
-        <div class="chat-thinking-head">
-          <canvas class="chat-thinking-spinner" width="22" height="22"></canvas>
-          <div class="chat-thinking-copy"><strong>Thinking</strong><span id="${thinkingId}-current">Phân tích yêu cầu của bạn...</span></div>
-          <button type="button" class="chat-thinking-toggle" aria-label="Xem chi tiết quá trình xử lý" aria-expanded="false"><i class="fa-solid fa-chevron-down"></i></button>
-        </div>
-        <div id="${thinkingId}-steps" class="chat-thinking-steps" hidden></div>
-      </div>
-    </div>
-  `);
-  const thinkingRoot = document.getElementById(thinkingId);
-  const thinkingToggle = thinkingRoot?.querySelector('.chat-thinking-toggle');
-  const thinkingSteps = document.getElementById(`${thinkingId}-steps`);
-  if (thinkingToggle && thinkingSteps) {
-    thinkingToggle.onclick = () => {
-      thinkingSteps.hidden = !thinkingSteps.hidden;
-      thinkingToggle.setAttribute('aria-expanded', String(!thinkingSteps.hidden));
-      thinkingToggle.classList.toggle('is-open', !thinkingSteps.hidden);
-    };
-  }
+  messages.appendChild(window.ChatReasoningUI.create(thinkingId));
+  const answerPreview=window.ChatStream?.createPreview(document.getElementById(thinkingId));
   messages.scrollTop = messages.scrollHeight;
+  const responseScroll=window.ChatStream?.followResponse(messages);
   const requestController = new AbortController();
   window.copilotRequestController = requestController;
   setCopilotResponding(true);
 
   try {
-    const attachmentContext = await buildCopilotAttachmentContext(attachedFiles);
-    const requestMessage = `${text || 'Hãy phân tích tệp đính kèm.'}${attachmentContext}`;
+    const requestMessage = text || 'Đã gửi tệp đính kèm';
     const knowledgeSources = getCopilotKnowledgeValues();
-    const data = await fetchCopilotStreamingChat({
+    const data = attachedFiles.length ? await window.ChatAttachments.submit(attachedFiles,{sessionId:window.copilotPopupSessionId,question:requestMessage},requestController.signal) : await fetchCopilotStreamingChat({
       question: requestMessage,
       message: requestMessage,
       history: window.copilotPopupHistory.slice(-20),
@@ -1614,17 +1228,21 @@ window.sendChatMessage = async function sendChatMessage() {
         else progressEvents.push({ ...event });
       } else progressEvents.push(event);
       addCopilotThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running', event);
-    }, requestController.signal);
+    }, requestController.signal,event=>answerPreview?.update(event));
+    answerPreview?.dispose();
+    if(data.batchId&&sentFileGallery){window.ChatAttachments.render(sentFileGallery,window.ChatAttachments.describe(data.attachments,data.batchId));window.ChatAttachments.release(attachedFiles);}
     const reply = data.execution?.status === 'WAITING_INPUT' ? 'Bổ sung thông tin bên dưới để tiếp tục.' : data.reply || data.replyText || data.message || 'Không tìm thấy thông tin tương ứng.';
     const sqlQuery = data.generatedSql || data.sql || null;
     const renderedReply = renderVerifiedCitationMarkers(renderCopilotText(stripInlineDownloadLink(reply, data.downloadUrl)), data.citations);
     const richHtml = [
+      window.ChatReasoningUI.render(progressEvents, data.executionTime || ''),
       renderedReply,
       typeof window.renderWorkflowExecution === 'function' ? window.renderWorkflowExecution(data.execution) : '',
       renderCopilotDownloadAction(data.downloadUrl, renderedReply),
       renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence),
       renderCopilotChart(data.chartSpec),
-      renderCopilotTechnicalDetails(data.toolCalls || [], sqlQuery, data.toolResult, data.sqlExecutions || [], progressEvents, data.executionTime || '')
+      renderCopilotTechnicalDetails(data.toolCalls || [], sqlQuery, data.toolResult, data.sqlExecutions || [], progressEvents, data.executionTime || ''),
+      window.AnswerUI?.render(data.answerEnvelope, data.execution) || ''
     ].filter(Boolean).join('');
 
     document.getElementById(thinkingId)?.remove();
@@ -1639,6 +1257,8 @@ window.sendChatMessage = async function sendChatMessage() {
     if (typeof fetchChatHistory === 'function') fetchChatHistory();
   } catch (err) {
     document.getElementById(thinkingId)?.remove();
+    answerPreview?.dispose();
+    if(attachedFiles.length){window.copilotAttachments=attachedFiles;renderCopilotAttachments();}
     if (err?.name === 'AbortError') {
       if (typeof showToast === 'function') showToast('Đã dừng tiến trình trả lời.', 'info');
       return;
@@ -1646,7 +1266,7 @@ window.sendChatMessage = async function sendChatMessage() {
     const noAnswer = /local model returned an empty response|stream kết thúc mà không có câu trả lời cuối/i.test(String(err?.message || ''));
     const errorContent = noAnswer
       ? '<strong>Chưa có câu trả lời phù hợp.</strong> Vui lòng thử lại.'
-      : `<strong>Lỗi kết nối AI:</strong> ${escapeCopilotHtml(err?.message || 'Không thể kết nối tới mô hình AI.')}`;
+      : `<strong>${attachedFiles.length?'Không tải được tệp':'Lỗi kết nối AI'}:</strong> ${escapeCopilotHtml(err?.message || 'Không thể kết nối tới mô hình AI.')}`;
     messages.insertAdjacentHTML('beforeend', `
       <div class="chat-bubble ai error">${errorContent}</div>
     `);
@@ -1657,7 +1277,7 @@ window.sendChatMessage = async function sendChatMessage() {
     }
   }
 
-  messages.scrollTop = messages.scrollHeight;
+  if(responseScroll?.following ?? true) messages.scrollTop = messages.scrollHeight;
 };
 
 function initCopilotSloganRotation() {
@@ -1714,87 +1334,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAccountMenu();
   initPwaInstall();
   await loadCurrentAccount();
-  window.loadChatProviders?.().catch(() => {});
-  window.fetchAndRenderQuickPrompts?.();
+  if(window.canAccessMainTab('page-chat')) {
+    window.loadChatProviders?.().catch(() => {});
+    window.fetchAndRenderQuickPrompts?.();
+  }
   startAuthHeartbeat();
   initGlobalFeatureSearch();
   await switchMainTab(getRememberedMainTab());
-  populateCopilotModelSelector();
+  if(window.canAccessMainTab('page-chat')) populateCopilotModelSelector();
 
-  // Khởi chạy vòng lặp hiệu ứng 3D Orb cho tất cả canvas.chat-thinking-spinner
-  requestAnimationFrame(runOrbAnimation);
 });
 
 window.addEventListener('popstate', () => {
   const pathTab = normalizeMainTabKey(window.location.pathname) || 'overview';
   if (pathTab !== window.activeMainTab) switchMainTab(pathTab);
 });
-
-// Shared 3D Dotted Orb Animation Loop for all canvas.chat-thinking-spinner
-function runOrbAnimation() {
-  const canvases = document.querySelectorAll('canvas.chat-thinking-spinner');
-  const now = Date.now() * 0.001; // Thời gian thực tính bằng giây
-
-  canvases.forEach(canvas => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Xóa frame cũ
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const radius = Math.min(cx, cy) - 2;
-
-    // Sinh các hạt điểm trên mặt cầu (Fibonacci sphere algorithm)
-    const numParticles = 40;
-    const points = [];
-
-    for (let i = 0; i < numParticles; i++) {
-      const phi = Math.acos(1 - 2 * (i + 0.5) / numParticles);
-      const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
-
-      // Tạo hiệu ứng lồi lõm hữu cơ (organic morphing)
-      const morph = 1 + 0.18 * Math.sin(phi * 2.5 + now * 3.5) * Math.cos(theta * 1.5 + now * 2.5);
-      const r = radius * morph;
-
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta);
-      const z = r * Math.cos(phi);
-
-      // Xoay quanh trục Y
-      const angleY = now * 1.2;
-      const x1 = x * Math.cos(angleY) - z * Math.sin(angleY);
-      const z1 = x * Math.sin(angleY) + z * Math.cos(angleY);
-
-      // Xoay quanh trục X
-      const angleX = now * 0.7;
-      const y2 = y * Math.cos(angleX) - z1 * Math.sin(angleX);
-      const z2 = y * Math.sin(angleX) + z1 * Math.cos(angleX);
-
-      points.push({ x: x1, y: y2, z: z2 });
-    }
-
-    // Thuật toán Painter's algorithm: vẽ các điểm từ xa tới gần (sort theo z)
-    points.sort((a, b) => a.z - b.z);
-
-    points.forEach(p => {
-      const depth = (p.z + radius * 1.2) / (radius * 2.4); // Chuẩn hóa z về đoạn [0, 1]
-      const px = cx + p.x;
-      const py = cy + p.y;
-
-      // Chuyển đổi màu mượt mà từ tím sang xanh dương/indigo
-      const rColor = Math.floor(139 + (99 - 139) * depth);
-      const gColor = Math.floor(92 + (102 - 92) * depth);
-      const bColor = Math.floor(246 + (241 - 246) * depth);
-      const alpha = 0.25 + 0.75 * depth;
-
-      ctx.beginPath();
-      ctx.arc(px, py, 0.7 + 1.3 * depth, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${rColor}, ${gColor}, ${bColor}, ${alpha})`;
-      ctx.fill();
-    });
-  });
-
-  requestAnimationFrame(runOrbAnimation);
-}

@@ -7,7 +7,7 @@ const path = require('node:path');
 
 test('chat displays backend failure in an assistant bubble and releases composer', async () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/page_chat.js'), 'utf8');
-  const body = source.slice(source.indexOf('async function sendPageChatMessage()'), source.indexOf('async function populateChatKnowledgeSources()'));
+  const body = source.slice(source.indexOf('async function sendPageChatMessage('), source.indexOf('async function populateChatKnowledgeSources()'));
   const messages = [];
   const node = () => ({ style: {}, innerHTML: '', get outerHTML() { return this.innerHTML; }, remove() {} });
   const container = { appendChild() {}, scrollHeight: 0 };
@@ -16,6 +16,9 @@ test('chat displays backend failure in an assistant bubble and releases composer
   const noop = () => {};
   const sandbox = {
     window, AbortController, chatHistoryReady: Promise.resolve(), chatHistoryFailed: false,
+    chatPageLoads:new Set(), chatContinuations:new Set(), chatSessionIsFull:()=>false, chatSessionUsage:()=>({count:0}),
+    saveChatSessions:async()=>true,
+    renderQuickPrompts() {},
     document: { getElementById: id => id === 'page-chat-user-input' ? input : id === 'page-chat-messages-container' ? container : null, createElement: node },
     getCurrentChatSession: () => ({ id: 'conversation', history: [] }),
     updatePageChatCharacterCount: noop, renderPageChatAttachments: noop,

@@ -11,6 +11,9 @@ function toolSummary(definitions) {
 function buildLocalMessages(messages = [], definitions = [], requestPolicy = {}, guidance = {}) {
   const protocol = definitions.length ? `
 
+# SQL relationship rules
+${require('../tools/join_path').instruction}
+
 # Local tool protocol
 Use a tool only when it is needed. Prefer the native function-calling interface.
 If native function calling is unavailable, output exactly one JSON object and no surrounding prose:

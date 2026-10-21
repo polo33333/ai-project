@@ -51,6 +51,17 @@ test('record lookup renders actual rows even when the provider only announces th
   }
 });
 
+test('requested table presentation renders verified rows even when model answers in prose', async () => {
+  for (const rows of [[{ ContractNo: 'HD-001' }], [{ ContractNo: 'HD-001' }, { ContractNo: 'HD-002' }]]) {
+    const s = setup([{ tool_calls: [call('execute_sql_query', { sql })] }, { content: 'Here is the comparison: see the details below.' }], { rows });
+    const result = await s.run({ context: { mode: 'data', requestPlan: { ...fixture.plan, intent: 'record_lookup', presentation: 'table' } } });
+    assert.match(result.replyText, /\| ContractNo \|/);
+    assert.match(result.replyText, /\| --- \|/);
+    for (const row of rows) assert.ok(result.replyText.includes(row.ContractNo));
+    assert.ok(!result.replyText.includes('see the details below'));
+  }
+});
+
 test('persistent SQL-only answers stop within repair budget and never enter successful memory', async () => {
   const s = setup(Array(6).fill(fixture.response));
   const result = await s.run();

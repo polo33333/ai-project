@@ -144,7 +144,7 @@ test('copy code uses only the displayed code text', async () => {
   assert.ok(button.textContent);
 });
 
-test('decision model usage separates routing tokens without adding them to the request total', () => {
+test('chat token badges show request totals without model breakdowns', () => {
   const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
   const context = vm.createContext({});
   vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('function sanitizeSystemPaths')) + source.slice(source.indexOf('function renderChatTokenUsage'), source.indexOf('async function copyPageChatQuestion')), context);
@@ -156,14 +156,9 @@ test('decision model usage separates routing tokens without adding them to the r
   ] };
   const html = context.renderChatTokenUsage({ available: true, inputTokens: 3903, outputTokens: 1111, totalTokens: 5014, byModel: routing.stages.filter(x => x.calls) }, routing);
   assert.match(html, /5\.014/);
-  assert.match(html, /423/);
-  assert.match(html, /425/);
-  assert.match(html, /tev1:4b/);
-  assert.match(html, /&lt;chat-model&gt;/);
-  assert.doesNotMatch(html, /<chat-model>/);
-  assert.match(html, /chat-routing-inline/);
+  assert.match(html, /3\.903/);
+  assert.match(html, /1\.111/);
+  assert.doesNotMatch(html, /423|425|tev1:4b|chat-model|chat-routing-inline/);
   assert.doesNotMatch(html, /<details/);
-  assert.ok(html.indexOf("chat-routing-inline") < html.indexOf("fa-arrow-down"));
-  assert.equal(context.renderDecisionModelUsage({ stages: [{ calls: 0 }] }), '');
-  assert.equal(context.renderDecisionModelUsage(null), '');
+  assert.equal(context.renderChatTokenUsage(null), '');
 });

@@ -1,0 +1,9 @@
+{
+  "revision": "example-review-before-activation",
+  "rates": {},
+  "thresholds": {
+    "minRequests": 20,
+    "errorRate": 0.05,
+    "p95Ms": 30000
+  }
+}

@@ -15,7 +15,12 @@ function validateToolCall(toolManager, call, allowedToolNames = null) {
   }
 
   const properties = tool.parameters?.properties || {};
-  const args = Object.fromEntries(Object.entries(call.arguments).filter(([key]) => Object.prototype.hasOwnProperty.call(properties, key)));
+  let supplied = call.arguments;
+  if(call.name==='execute_sql_query') {
+    try { supplied=require('../../services/semantic_query').normalizeArguments(supplied); }
+    catch(error){return {valid:false,category:error.code||'INVALID_ARGUMENTS',errors:[error.message]};}
+  }
+  const args = Object.fromEntries(Object.entries(supplied).filter(([key]) => Object.prototype.hasOwnProperty.call(properties, key)));
   const validation = tool.validateArgs(args);
   if (!validation.valid) return { valid: false, category: 'INVALID_ARGUMENTS', errors: validation.errors || ['Invalid tool arguments.'], args, tool };
   return { valid: true, args, tool };

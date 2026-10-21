@@ -95,6 +95,11 @@
     .kai-tool-balanced>.kai-tool-error{grid-column:1 / -1}
     @container(max-width:560px){.kai-tool-balanced.kai-tool-info{grid-template-columns:minmax(0,1fr);gap:10px}.kai-tool-metrics{justify-content:start;grid-template-columns:90px 140px;gap:12px}.kai-tool-chip,.kai-tool-metrics .kai-tool-state{padding:4px 8px}}
     @container(max-width:300px){.kai-tool-metrics{grid-template-columns:70px minmax(0,140px);gap:8px}}
+    /* Match chat typography across the shared page and popup tool panel. */
+    .kai-tool-panel{font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.6}
+    .kai-tool-panel .kai-tool-summary-title,.kai-tool-panel .kai-tool-identity>strong,.kai-tool-panel .kai-tool-title>strong{font-size:13px;font-weight:600;line-height:1.6}
+    .kai-tool-panel .kai-tool-name,.kai-tool-panel .kai-tool-subtitle .kai-tool-name{font-family:inherit;font-size:12px;font-weight:400;line-height:1.5}
+    .kai-tool-panel .kai-tool-count,.kai-tool-panel .kai-tool-failures,.kai-tool-panel .kai-tool-chip,.kai-tool-panel .kai-tool-state,.kai-tool-panel .kai-tool-metrics .kai-tool-state,.kai-tool-panel .kai-tool-meta,.kai-tool-panel .kai-tool-elapsed,.kai-tool-panel .kai-tool-error{font-size:12px;line-height:1.5}
     @media(prefers-reduced-motion:reduce){.kai-tool-chevron{transition:none}}
   `;
   root.ChatToolUI = { render, styles };

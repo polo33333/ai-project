@@ -601,7 +601,7 @@ test('local harness executes printed SQL instead of returning SQL-only prose', a
     messages: [{ role: 'user', content: 'ds 5 nhân viên' }], enabledToolNames: ['execute_sql_query']
   });
   assert.equal(result.toolCalls.some(call => call.toolName === 'execute_sql_query' && call.success), true);
-  assert.match(result.replyText, /1.*dòng/);
+  assert.match(result.replyText, /1.*bản ghi/);
   assert.equal(result.trace.steps.some(step => step.type === 'EXECUTED_PRINTED_SQL'), true);
 });
 

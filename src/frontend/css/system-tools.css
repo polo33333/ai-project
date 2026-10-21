@@ -1,3 +1,98 @@
+/* Integration-style catalog, scoped so shared administration pages keep their layout. */
+#view-system-tools .system-tool-detail-dialog { position:fixed; inset:0; margin:auto; box-sizing:border-box; width:min(680px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); padding:0; border:1px solid var(--tools-border); border-radius:18px; background:var(--tools-surface); color:var(--tools-text); font-family:inherit; box-shadow:0 24px 80px #0003; overflow:hidden; overscroll-behavior:contain; }
+#view-system-tools .system-tool-detail-dialog[open] { display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+#view-system-tools .system-tool-detail-dialog::backdrop { background:rgba(15,23,42,.48); backdrop-filter:blur(3px); }
+#view-system-tools .system-tool-detail-dialog header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:22px 24px; border-bottom:1px solid var(--tools-border); }
+#view-system-tools .system-tool-detail-dialog h2 { margin:7px 0; font-size:20px; line-height:1.4; }
+#view-system-tools .system-tool-detail-dialog code { font-size:12px; color:var(--tools-muted); overflow-wrap:anywhere; }
+#view-system-tools .system-tool-detail-group { color:var(--tools-muted); font-size:11px; }
+#view-system-tools .system-tool-detail-dialog button { flex-shrink:0; border:1px solid var(--tools-border); border-radius:9px; padding:9px 14px; background:var(--tools-soft); color:var(--tools-text); font:inherit; font-size:13px; cursor:pointer; }
+#view-system-tools .system-tool-detail-body { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:20px 24px 24px; }
+#view-system-tools .system-tool-detail-description { margin:0 0 24px; font-size:13px; line-height:1.8; color:var(--tools-muted); }
+#view-system-tools .system-tool-detail-body h3 { margin:0 0 14px; font-size:14px; }
+#view-system-tools .system-tool-detail-body h3 span { margin-left:5px; color:var(--tools-muted); font-weight:400; }
+#view-system-tools .system-tool-param-list { display:grid; gap:10px; }
+#view-system-tools .system-tool-param { padding:16px; border:1px solid var(--tools-border); border-radius:12px; }
+#view-system-tools .system-tool-param-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+#view-system-tools .system-tool-param-heading > div { display:grid; gap:5px; min-width:0; }
+#view-system-tools .system-tool-param-heading strong { font-size:13px; }
+#view-system-tools .system-tool-param-badge { flex-shrink:0; padding:4px 7px; border-radius:5px; background:var(--tools-soft); color:var(--tools-muted); font-size:10px; }
+#view-system-tools .system-tool-param-badge.is-required { color:#c04735; background:#fff1ed; }
+#view-system-tools .system-tool-param p { margin:10px 0; color:var(--tools-muted); font-size:12px; line-height:1.7; }
+#view-system-tools .system-tool-param-meta, #view-system-tools .system-tool-param-values { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:10px; color:var(--tools-muted); font-size:11px; }
+#view-system-tools .system-tool-param-values code { padding:4px 7px; border-radius:5px; background:var(--tools-soft); }
+#view-system-tools .system-tool-param details { margin-top:12px; font-size:12px; color:var(--tools-muted); }
+#view-system-tools .system-tool-param summary { cursor:pointer; }
+#view-system-tools .system-tool-param pre { overflow:auto; max-height:240px; padding:12px; background:var(--tools-soft); border-radius:8px; font-size:11px; }
+#view-system-tools .system-tool-detail-dialog footer { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; border-top:1px solid var(--tools-border); background:var(--tools-soft); }
+#view-system-tools .system-tool-detail-dialog footer span { font-size:11px; line-height:1.6; color:var(--tools-muted); }
+:root[data-theme="dark"] #view-system-tools .system-tool-param-badge.is-required { color:#ffb5a8; background:#462f30; }
+@media(max-width:620px) {
+  #view-system-tools .system-tool-detail-dialog { width:calc(100vw - 20px); max-height:calc(100dvh - 24px); border-radius:14px; }
+  #view-system-tools .system-tool-detail-dialog header, #view-system-tools .system-tool-detail-body, #view-system-tools .system-tool-detail-dialog footer { padding:16px; }
+  #view-system-tools .system-tool-detail-dialog h2 { font-size:17px; }
+}
+#view-system-tools { --tools-surface:#fff; --tools-soft:#f8f9fb; --tools-border:#e8e9ee; --tools-text:#242833; --tools-muted:#7b8190; gap:28px; padding:8px 0; }
+#view-system-tools .system-tools-catalog-header { display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+#view-system-tools .system-tools-catalog-header h2 { margin:0 0 7px; color:var(--tools-text); font-size:22px; font-weight:650; letter-spacing:-.5px; }
+#view-system-tools .system-tools-catalog-header p { margin:0; color:var(--tools-muted); font-size:13px; line-height:1.6; }
+#view-system-tools .system-tools-filters { justify-content:flex-start; gap:3px; padding:4px; border-radius:12px; background:var(--tools-soft); }
+#view-system-tools .system-tools-filters button { min-height:32px; padding:7px 11px; border:0; border-radius:8px; background:transparent; color:var(--tools-muted); font-size:12px; font-weight:500; }
+#view-system-tools .system-tools-filters button.active { color:var(--tools-text); background:var(--tools-surface); box-shadow:0 1px 5px #10182818; }
+#view-system-tools .system-tools-filters button:hover { color:var(--tools-text); }
+#view-system-tools .system-tools-toolbar { gap:14px; margin-bottom:22px; flex-direction:row; flex-wrap:wrap; }
+#view-system-tools .system-tools-search { flex:0 1 320px; min-width:0; width:auto; background:var(--tools-surface); border-color:var(--tools-border); }
+#view-system-tools .system-tools-search input { color:var(--tools-text); }
+#view-system-tools .system-tools-catalog-counts { display:flex; gap:16px; flex:1; color:var(--tools-muted); font-size:12px; }
+#view-system-tools .system-tools-catalog-counts strong { color:var(--tools-text); font-weight:600; }
+#view-system-tools .system-tools-toolbar > button { margin-left:auto; border:1px solid var(--tools-border); background:var(--tools-surface); color:var(--tools-muted); }
+#view-system-tools .system-tools-grid { grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:20px; }
+#view-system-tools .system-tool-item { --tool-accent:#6462dc; --tool-tint:#f0efff; display:flex; flex-direction:column; border:1px solid var(--tools-border); border-radius:14px; background:var(--tools-surface); box-shadow:0 1px 2px #10182805; }
+#view-system-tools .system-tool-item:hover { border-color:#c5c5d5; box-shadow:0 5px 18px #10182808; }
+#view-system-tools .system-tool-item[data-group="SQL"], #view-system-tools .system-tool-item[data-group="Dữ liệu"] { --tool-accent:#287bc5; --tool-tint:#edf5ff; }
+#view-system-tools .system-tool-item[data-group="Tri thức"], #view-system-tools .system-tool-item[data-group="Tra cứu"] { --tool-accent:#139779; --tool-tint:#ecf9f3; }
+#view-system-tools .system-tool-item[data-group="Tính toán"], #view-system-tools .system-tool-item[data-group="Tiện ích"] { --tool-accent:#d28a28; --tool-tint:#fff7e8; }
+#view-system-tools .system-tool-item[data-group="Trực quan hóa"] { --tool-accent:#d35886; --tool-tint:#fff0f5; }
+#view-system-tools .system-tool-head { padding:18px 18px 12px; gap:12px; }
+#view-system-tools .system-tool-icon { width:44px; height:44px; border:1px solid var(--tools-border); border-radius:11px; background:var(--tool-tint); color:var(--tool-accent); font-size:20px; }
+#view-system-tools .system-tool-identity { min-width:0; }
+#view-system-tools .system-tool-identity h3 { margin:0 0 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; line-height:1.4; font-weight:650; color:var(--tools-text); }
+#view-system-tools .system-tool-identity code { font-family:inherit; font-size:11px; font-weight:400; color:var(--tools-muted); }
+#view-system-tools .system-tool-availability { display:block; flex:none; width:36px; height:20px; padding:0; border:0; border-radius:20px; background:#a4aab5; position:relative; cursor:pointer; transition:background .15s; }
+#view-system-tools .system-tool-availability:disabled { cursor:not-allowed; }
+#view-system-tools .system-tool-availability[aria-busy="true"] { opacity:.6; cursor:wait; }
+#view-system-tools .system-tool-availability::after { content:''; position:absolute; top:3px; left:3px; width:14px; height:14px; background:#fff; border-radius:50%; box-shadow:0 1px 3px #0002; }
+#view-system-tools .system-tool-availability.is-available { background:#16a36a; }
+#view-system-tools .system-tool-availability.is-available::after { left:19px; }
+#view-system-tools .system-tool-item > p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:40px; height:40px; padding:0; margin:0 18px 14px; color:var(--tools-muted); font-size:12px; line-height:20px; }
+#view-system-tools .system-tool-tags { display:flex; flex-wrap:wrap; gap:6px; padding:0 18px 16px; }
+#view-system-tools .system-tool-tags span { padding:3px 6px; border-radius:4px; background:var(--tools-soft); color:var(--tools-muted); font-size:9px; font-weight:600; line-height:1.4; text-transform:uppercase; letter-spacing:.2px; }
+#view-system-tools .system-tool-foot { margin-top:auto; padding:11px 18px; min-height:44px; border-color:var(--tools-border); background:var(--tools-soft); }
+#view-system-tools .system-tool-foot button { color:var(--tools-text); font-size:12px; font-weight:500; }
+#view-system-tools .system-tool-foot button i { font-size:9px; margin-left:4px; }
+#view-system-tools .system-tool-state { display:flex; align-items:center; gap:5px; color:var(--tools-muted); font-size:10px; }
+#view-system-tools .system-tool-state i { font-size:5px; }
+#view-system-tools .system-tool-state.is-available { color:#278568; }
+#view-system-tools .system-tool-schema { background:var(--tools-soft); border-color:var(--tools-border); padding:16px 18px; }
+#view-system-tools .system-tool-full-description { margin:0 0 6px; color:var(--tools-muted); font-size:12px; line-height:1.7; }
+#view-system-tools .system-tool-schema > div { grid-template-columns:minmax(0,1fr); background:var(--tools-surface); border-color:var(--tools-border); overflow-wrap:anywhere; }
+#view-system-tools .system-tool-schema :is(span,p) { color:var(--tools-muted); }
+#view-system-tools button:focus-visible { outline:2px solid #7471ec; outline-offset:3px; }
+:root[data-theme="dark"] #view-system-tools { --tools-surface:#1c2330; --tools-soft:#232b39; --tools-border:#333d4e; --tools-text:#e5e9f0; --tools-muted:#a0aabc; }
+:root[data-theme="dark"] #view-system-tools .system-tool-icon { background:var(--tools-soft); color:#b3b0ff; }
+:root[data-theme="dark"] #view-system-tools .system-tool-availability { background:#647084; }
+:root[data-theme="dark"] #view-system-tools .system-tool-availability.is-available { background:#16a36a; }
+:root[data-theme="dark"] #view-system-tools .system-tool-state.is-available { color:#70d6b1; }
+@media(max-width:1200px) { #view-system-tools .system-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:700px) {
+  #view-system-tools { gap:20px; }
+  #view-system-tools .system-tools-grid { grid-template-columns:minmax(0,1fr); gap:14px; }
+  #view-system-tools .system-tools-catalog-header { gap:16px; }
+  #view-system-tools .system-tools-filters { flex-wrap:nowrap; overflow-x:auto; max-width:100%; }
+  #view-system-tools .system-tools-filters button { flex:none; white-space:nowrap; }
+  #view-system-tools .system-tools-search { flex-basis:100%; }
+  #view-system-tools .system-tools-catalog-counts { gap:10px; flex-wrap:wrap; }
+}
 .system-tools-page { display: grid; gap: 16px; }
 .system-tools-hero { position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 18px; padding: 22px 24px; overflow: hidden; border: 1px solid #dbe4f0; border-radius: 15px; background: linear-gradient(135deg,#fff 0%,#f7f8ff 56%,#f3e8ff 100%); box-shadow: 0 6px 22px rgba(79,70,229,.07); }
 .system-tools-hero::after { content: ""; position: absolute; z-index: -1; top: 50%; right: -72px; width: 310px; height: 210px; border-radius: 50%; background: radial-gradient(circle,rgba(168,85,247,.2) 0%,rgba(139,92,246,.1) 38%,transparent 72%); filter: blur(18px); transform: translateY(-50%); pointer-events: none; }
@@ -77,3 +172,31 @@
 .workflow-manager-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(310px,.65fr);gap:16px;align-items:start}.workflow-list-card,.workflow-runs-card{min-height:480px}.workflow-manager-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.workflow-manager-card{display:flex;min-width:0;flex-direction:column;gap:10px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.035)}.workflow-manager-card:hover{border-color:#c7d2fe;box-shadow:0 7px 20px rgba(79,70,229,.08)}.workflow-card-head,.workflow-card-actions,.workflow-section-title,.workflow-json-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.workflow-trigger,.workflow-status{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800;text-transform:uppercase}.workflow-trigger{color:#4338ca;background:#eef2ff}.workflow-trigger.webhook{color:#0369a1;background:#e0f2fe}.workflow-status{color:#64748b;background:#f1f5f9}.workflow-status.active{color:#047857;background:#dcfce7}.workflow-manager-card h3{margin:0;color:#1e293b;font-size:14px}.workflow-manager-card>p{min-height:38px;margin:0;color:#64748b;font-size:11.5px;line-height:1.55}.workflow-step-strip{display:flex;align-items:center;gap:5px;overflow-x:auto;padding:10px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc}.workflow-step-strip span{display:inline-flex;align-items:center;gap:5px;flex:none;padding:4px 7px;border-radius:6px;color:#475569;background:#fff;font-size:10px;font-weight:700}.workflow-step-strip span b{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;color:#fff;background:#6366f1;font-size:8px}.workflow-step-strip>i{color:#94a3b8;font-size:8px}.workflow-webhook{display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:7px;background:#f1f5f9}.workflow-webhook code{min-width:0;overflow:hidden;color:#475569;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px}.workflow-webhook button{border:0;color:#6366f1;background:transparent;cursor:pointer}.workflow-card-actions{justify-content:flex-end;margin-top:auto;padding-top:4px}.workflow-card-actions button{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border:1px solid #e2e8f0;border-radius:7px;color:#475569;background:#fff;font-size:10.5px;font-weight:750;cursor:pointer}.workflow-card-actions button:first-child{color:#fff;border-color:#4f46e5;background:#4f46e5}.workflow-card-actions button.danger{color:#dc2626}.workflow-section-title{margin-bottom:14px}.workflow-section-title>div{display:flex;align-items:center;gap:8px;color:#334155;font-size:13px;font-weight:800}.workflow-section-title select{max-width:145px;padding:6px;border:1px solid #e2e8f0;border-radius:7px;color:#64748b;background:#fff;font-size:10px}.workflow-run-list{display:grid;gap:7px}.workflow-run-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:9px;width:100%;padding:10px;border:1px solid #edf1f6;border-radius:9px;text-align:left;background:#fff;cursor:pointer}.workflow-run-row:hover{border-color:#c7d2fe;background:#f8fafc}.run-dot{width:8px;height:8px;border-radius:50%;background:#ef4444}.run-dot.success{background:#10b981}.workflow-run-row span:nth-child(2){display:grid;gap:3px;min-width:0}.workflow-run-row strong{overflow:hidden;color:#334155;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}.workflow-run-row small{color:#94a3b8;font-size:9px}.workflow-run-row>b{color:#64748b;font-size:9px}.workflow-run-row>i{color:#cbd5e1;font-size:9px}
 .workflow-modal{display:flex;align-items:center;justify-content:center;z-index:1200}.workflow-dialog{width:min(620px,94vw);max-height:90vh;overflow:auto;border-radius:15px;background:#fff;box-shadow:0 25px 70px rgba(15,23,42,.3)}.workflow-editor-dialog{width:min(820px,95vw)}.workflow-detail-dialog{width:min(760px,95vw)}.workflow-dialog header,.workflow-dialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid #e2e8f0}.workflow-dialog header>div{display:flex;align-items:center;gap:9px;color:#1e293b;font-size:14px;font-weight:800}.workflow-dialog header>div i{color:#6366f1}.workflow-dialog header button{display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:7px;color:#64748b;background:#f1f5f9;cursor:pointer}.workflow-dialog footer{justify-content:flex-end;border-top:1px solid #e2e8f0;border-bottom:0}.workflow-editor-body{display:grid;gap:14px;padding:18px}.workflow-editor-body label{display:grid;gap:6px;color:#475569;font-size:11px;font-weight:750}.workflow-editor-body input,.workflow-editor-body select{box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;outline:0;color:#334155;background:#fff}.workflow-form-grid{display:grid;grid-template-columns:1fr 180px;gap:12px}.workflow-check{display:flex!important;align-items:center!important}.workflow-check input{width:auto}.workflow-json-head small{display:block;margin-top:3px;color:#94a3b8;font-size:9.5px}.workflow-json-head button{padding:6px 9px;border:1px solid #c7d2fe;border-radius:7px;color:#4f46e5;background:#eef2ff;font-size:10px;font-weight:700;cursor:pointer}.workflow-json-editor{box-sizing:border-box;width:100%;min-height:300px;padding:12px;border:1px solid #cbd5e1;border-radius:9px;outline:0;color:#dbeafe;background:#172033;font:11px/1.55 Consolas,monospace;resize:vertical}.workflow-json-editor.short{min-height:190px}.workflow-form-error{min-height:15px;color:#dc2626;font-size:10.5px}.workflow-run-summary{display:flex;justify-content:space-between;padding:11px 18px;color:#b91c1c;background:#fee2e2;font-size:11px}.workflow-run-summary.success{color:#047857;background:#dcfce7}.workflow-run-json{max-height:530px;overflow:auto;margin:0;padding:14px;border-radius:9px;color:#dbeafe;background:#172033;font:10.5px/1.55 Consolas,monospace;white-space:pre-wrap}.workflow-editor-body p{margin:0;color:#64748b;font-size:11px;line-height:1.55}
 @media(max-width:1120px){.workflow-manager-layout{grid-template-columns:1fr}.workflow-manager-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.workflow-manager-grid,.workflow-form-grid{grid-template-columns:1fr}}
+
+/* Catalog filters share the raised toolbar. */
+#view-system-tools .system-tools-toolbar { padding:16px; border:1px solid var(--tools-border,#e2e8f0); border-radius:14px; background:var(--tools-surface,#fff); box-shadow:0 3px 12px rgba(15,23,42,.05); }
+#view-system-tools .system-tools-group-select { box-sizing:border-box; min-width:180px; max-width:100%; min-height:40px; padding:9px 32px 9px 12px; border:1px solid var(--tools-border,#e2e8f0); border-radius:10px; background:var(--tools-surface,#fff); color:var(--tools-text,#334155); font:inherit; font-size:13px; cursor:pointer; }
+@media(max-width:620px) { #view-system-tools .system-tools-group-select { flex:1 1 100%; width:100%; } }
+
+#view-system-tools .system-tools-catalog-counts { flex-wrap:wrap; }
+#view-system-tools .system-tools-catalog-counts > span { white-space:nowrap; }
+
+/* Match the shared administration hero and keep filter controls on a stable grid. */
+#view-system-tools { padding:0; gap:20px; }
+#view-system-tools .system-tools-hero .card-title { margin:0; font-size:17px; font-weight:650; line-height:1.4; }
+#view-system-tools .system-tools-toolbar { display:grid; grid-template-columns:minmax(220px,1fr) 190px auto auto; gap:14px; align-items:center; }
+#view-system-tools .system-tools-search { width:100%; box-sizing:border-box; min-height:40px; }
+#view-system-tools .system-tools-group-select { width:100%; height:40px; }
+#view-system-tools .system-tools-catalog-counts { gap:14px; justify-content:flex-end; }
+#view-system-tools .system-tools-toolbar > button { margin-left:0; min-height:40px; white-space:nowrap; }
+@container main-content (max-width:1000px) {
+  #view-system-tools .system-tools-toolbar { grid-template-columns:minmax(0,1fr) 190px auto; }
+  #view-system-tools .system-tools-catalog-counts { grid-row:2; grid-column:1/-1; justify-content:flex-start; padding-top:10px; border-top:1px solid var(--tools-border); }
+}
+@media(max-width:620px) {
+  #view-system-tools .system-tools-toolbar { grid-template-columns:minmax(0,1fr) auto; gap:12px; padding:14px; }
+  #view-system-tools .system-tools-search { grid-column:1/-1; }
+  #view-system-tools .system-tools-group-select { min-width:0; grid-column:1; }
+  #view-system-tools .system-tools-toolbar > button { grid-column:2; grid-row:2; }
+  #view-system-tools .system-tools-catalog-counts { grid-row:3; grid-column:1/-1; justify-content:flex-start; }
+}

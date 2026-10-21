@@ -34,7 +34,7 @@
   const done = value => ['SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(value);
   async function api(url, method = 'GET', body) {
     const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
-    const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Không thể xử lý yêu cầu.'); return data;
+    const data = await response.json(); if (!response.ok) throw new Error(data.message || data.error || 'Không thể xử lý yêu cầu.'); return data;
   }
   function notify(message, failed = false) { const box = document.getElementById('wp-message'); if (box) { box.textContent = message; box.style.color = failed ? '#b91c1c' : ''; } else if (typeof showToast === 'function') showToast(message, failed ? 'error' : 'success'); }
   function button(text, action) { const element = document.createElement('button'); element.type = 'button'; element.className = 'btn-secondary-sm'; element.textContent = text; element.onclick = async () => { element.disabled = true; try { await action(); } catch (failure) { notify(failure.message, true); } finally { element.disabled = false; } }; return element; }
@@ -58,6 +58,10 @@
     });
   }
   function decorateCard(card, template) {
+    card.tabIndex = 0;
+    card.addEventListener('click', event => {
+      if (!event.target.closest('button, a, input, select, textarea, summary')) card.focus({ preventScroll: true });
+    });
     const type = template.workflow?.steps.some(step => step.type === 'export') ? 'export' : template.workflow?.steps.some(step => step.type === 'sql') ? 'sql' : Object.values(template.inputs || {}).some(slot => slot.schema?.format === 'date') ? 'delay' : 'transform';
     const head = document.createElement('div'); head.className = `wp-template-head wp-tone-${type}`;
     const badge = document.createElement('span'); badge.className = 'wp-template-icon'; badge.appendChild(icon(nodeIcons[type])); head.append(badge, card.querySelector('h3')); card.prepend(head); card.classList.add('wp-template-card');
@@ -74,11 +78,115 @@
     const values=[...new Set((tags||[]).filter(Boolean))];
     if(values.length) { const list=document.createElement('div'); list.className='wp-card-tags'; list.setAttribute('aria-label','Từ khóa mẫu'); values.forEach(tag=>{const chip=document.createElement('span'); chip.append(icon('fa-hashtag'),document.createTextNode(tag));list.appendChild(chip);});card.appendChild(list); }
   }
-  function modal(title) {
+  function modal(title, { closeOnBackdrop = true } = {}) {
     const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop workflow-modal show';
     backdrop.innerHTML = `<div class="workflow-dialog workflow-editor-dialog"><header><strong>${h(title)}</strong><button type="button" aria-label="Đóng">×</button></header><div class="workflow-editor-body"></div><footer></footer></div>`;
-    backdrop.querySelector('header button').onclick = () => backdrop.remove(); backdrop.onclick = event => { if (event.target === backdrop) backdrop.remove(); }; document.body.appendChild(backdrop);
+    backdrop.querySelector('header button').onclick = () => backdrop.remove(); backdrop.onclick = event => { if (closeOnBackdrop && event.target === backdrop) backdrop.remove(); }; document.body.appendChild(backdrop);
     return { backdrop, body: backdrop.querySelector('.workflow-editor-body'), footer: backdrop.querySelector('footer') };
+  }
+  async function aiConnectionDialog() {
+    const dialog = modal('Kết nối Claude / Codex', { closeOnBackdrop: false });
+    dialog.backdrop.classList.add('wp-ai-connection-modal');
+    const previousFocus = document.activeElement;
+    const dialogBox = dialog.backdrop.querySelector('.workflow-dialog');
+    dialogBox.setAttribute('role', 'dialog'); dialogBox.setAttribute('aria-modal', 'true'); dialogBox.setAttribute('aria-label', 'Kết nối Claude / Codex');
+    dialog.backdrop.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { dialog.backdrop.remove(); previousFocus?.focus(); }
+      if (event.key === 'Tab') {
+        const controls = [...dialogBox.querySelectorAll('button, input, textarea, summary')].filter(control => !control.disabled && control.getClientRects().length);
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    });
+    dialog.body.setAttribute('aria-busy', 'true');
+    try {
+      const data = await api('/api/workflow-plugins/mcp');
+      let config = data.settings;
+      const intro = document.createElement('div'); intro.className = 'wp-ai-intro';
+      intro.innerHTML = '<span class="wp-ai-intro-icon"><i class="fa-solid fa-plug" aria-hidden="true"></i></span><div><strong>Tạo nghiệp vụ bằng cuộc trò chuyện</strong><p>Kết nối một lần, sau đó mô tả yêu cầu trong Claude hoặc Codex.</p></div>';
+      const host = document.createElement('section'); host.className = 'wp-ai-section wp-ai-host';
+      const hostHeading = document.createElement('div'); hostHeading.className = 'wp-ai-section-heading';
+      hostHeading.innerHTML = '<h3>Thiết lập kết nối</h3>';
+      const hostState = document.createElement('span'); hostState.className = 'wp-ai-host-state'; hostHeading.appendChild(hostState); host.appendChild(hostHeading);
+      const publicOrigin = field(host, 'Địa chỉ host công khai', config.publicOrigin || location.origin);
+      publicOrigin.type = 'url'; publicOrigin.placeholder = 'https://knowledgehub.example.com';
+      const enabled = field(host, 'Cho phép AI kết nối', '', { type: 'checkbox' }); enabled.checked = config.enabled;
+      enabled.parentElement.classList.add('wp-ai-toggle'); enabled.setAttribute('role', 'switch');
+      const status = document.createElement('p'); status.className = 'wp-ai-status'; status.setAttribute('role', 'status');
+      const action = (label, operation) => button(label, async () => { try { await operation(); } catch (failure) { status.textContent = failure.message; } });
+      const endpoint = document.createElement('input'); endpoint.readOnly = true; endpoint.setAttribute('aria-label', 'URL MCP'); endpoint.className = 'wp-ai-endpoint';
+      const updateEndpoint = () => { endpoint.value = config.publicOrigin ? config.publicOrigin + '/mcp/workflows' : ''; };
+      updateEndpoint();
+      const actions = document.createElement('div'); actions.className = 'wp-ai-actions';
+      const copyText = async value => { try { await navigator.clipboard.writeText(value); status.textContent = 'Đã sao chép.'; } catch { status.textContent = 'Hãy chọn và sao chép nội dung trong ô.'; } };
+      const saveButton = action('Lưu kết nối', async () => {
+        const saved = await api('/api/workflow-plugins/mcp', 'PUT', { publicOrigin: publicOrigin.value.trim(), enabled: enabled.checked, revision: config.revision });
+        config = saved.settings; publicOrigin.value = config.publicOrigin; updateEndpoint(); syncState();
+        status.textContent = config.enabled ? 'Đã bật kết nối AI trên host.' : 'Đã tắt kết nối AI. Các client không thể truy cập.';
+      }); saveButton.classList.add('wp-ai-primary'); saveButton.prepend(icon('fa-check'));
+      const copyURL = action('Sao chép URL', () => { if (!endpoint.value || !config.enabled) throw new Error('Lưu và bật kết nối trước.'); return copyText(endpoint.value); }); copyURL.prepend(icon('fa-copy'));
+      actions.append(saveButton,
+      action('Kiểm tra URL', async () => {
+        if (!config.enabled || !config.publicOrigin) throw new Error('Lưu và bật kết nối trước.');
+        const response = await fetch(config.publicOrigin + '/.well-known/oauth-protected-resource/mcp/workflows', { credentials: 'omit', signal: AbortSignal.timeout(15000) });
+        const result = await response.json(); if (!response.ok || result.resource !== endpoint.value) throw new Error('URL chưa trả về MCP của host này. Kiểm tra domain, HTTPS và reverse proxy.');
+        status.textContent = 'URL trả về metadata MCP hợp lệ. Bạn có thể thêm URL vào Claude/Codex.';
+      }));
+      const note = document.createElement('p'); note.className = 'wp-ai-hint'; note.textContent = 'Host dùng HTTPS. Localhost chỉ dành cho client trên cùng máy.';
+      const urlBox = document.createElement('div'); urlBox.className = 'wp-ai-url-box';
+      const urlTitle = document.createElement('span'); urlTitle.textContent = 'URL MCP dành cho Claude / Codex';
+      const urlRow = document.createElement('div'); urlRow.className = 'wp-ai-url-row'; urlRow.append(endpoint, copyURL); urlBox.append(urlTitle, urlRow);
+      host.append(note, actions, urlBox);
+      const connect = document.createElement('details'); connect.className = 'wp-ai-help';
+      connect.innerHTML = '<summary><i class="fa-regular fa-circle-question" aria-hidden="true"></i> Cách kết nối với Claude / Codex</summary><ol><li>Sao chép URL MCP.</li><li>Thêm URL trong Connectors của Claude hoặc MCP servers (HTTP) của Codex.</li><li>Đăng nhập KnowledgeHub và chọn “Cho phép kết nối”.</li></ol><p>Sau đó yêu cầu AI tạo nghiệp vụ và lưu bản nháp. Bạn xem lại và Publish trong KnowledgeHub.</p>';
+      const tokenSection = document.createElement('details'); tokenSection.className = 'wp-ai-section';
+      const summary = document.createElement('summary'); summary.innerHTML = '<span><i class="fa-solid fa-key" aria-hidden="true"></i> Tạo Bearer token</span><small>Dành cho client dùng token</small>'; tokenSection.appendChild(summary);
+      const tokenGrid = document.createElement('div'); tokenGrid.className = 'wp-ai-token-grid'; tokenSection.appendChild(tokenGrid);
+      const tokenLabel = field(tokenGrid, 'Tên kết nối', 'Codex');
+      const days = field(tokenGrid, 'Thời hạn (ngày)', 7, { type: 'number' }); days.min = 1; days.max = 90;
+      const secretBox = document.createElement('div'); secretBox.className = 'wp-ai-secret'; secretBox.hidden = true;
+      const tokenValue = document.createElement('textarea'); tokenValue.className = 'wp-ai-token-value'; tokenValue.readOnly = true; tokenValue.rows = 2; tokenValue.setAttribute('aria-label', 'Bearer token mới');
+      const secretNote = document.createElement('p'); secretNote.textContent = 'Token đã sẵn sàng. Sao chép và lưu lại trước khi đóng cửa sổ.';
+      secretBox.append(secretNote, tokenValue, action('Sao chép token', () => copyText(tokenValue.value)));
+      const list = document.createElement('section'); list.className = 'wp-ai-section';
+      const renderConnections = connections => {
+        list.replaceChildren(); const title = document.createElement('h3'); title.textContent = 'Kết nối của bạn'; list.appendChild(title);
+        if (!connections.length) { const empty = document.createElement('div'); empty.className = 'wp-ai-empty'; empty.innerHTML = '<i class="fa-solid fa-link" aria-hidden="true"></i><strong>Chưa có client kết nối</strong><p>Thêm URL trong Claude/Codex hoặc tạo token bên dưới.</p>'; list.appendChild(empty); }
+        for (const connection of connections) {
+          const row = document.createElement('div'); row.className = 'wp-ai-connection-row';
+          const text = document.createElement('div'), name = document.createElement('strong'), detail = document.createElement('small'); name.textContent = connection.label;
+          detail.textContent = (connection.revoked ? 'Đã thu hồi' : connection.expiresAt <= Date.now() ? 'Đã hết hạn' : connection.clientId ? 'OAuth · Đã cấp quyền' : 'Token · Đang hoạt động') + ' · Hết hạn ' + new Date(connection.expiresAt).toLocaleDateString('vi-VN');
+          const mark = document.createElement('span'); mark.className = 'wp-ai-client-icon'; mark.appendChild(icon(connection.clientId ? 'fa-link' : 'fa-key'));
+          text.append(name, detail); row.append(mark, text);
+          if (!connection.revoked) row.appendChild(action('Thu hồi', async () => { await api('/api/workflow-plugins/mcp/revoke', 'POST', { id: connection.id }); tokenValue.value = ''; secretBox.hidden = true; renderConnections((await api('/api/workflow-plugins/mcp')).connections); }));
+          list.appendChild(row);
+        }
+      };
+      const createToken = action('Tạo token', async () => {
+        const created = await api('/api/workflow-plugins/mcp/tokens', 'POST', { label: tokenLabel.value.trim(), days: Number(days.value) });
+        tokenValue.value = created.token; secretBox.hidden = false; renderConnections((await api('/api/workflow-plugins/mcp')).connections);
+      }); createToken.classList.add('wp-ai-primary'); createToken.prepend(icon('fa-plus'));
+      const tokenHint = document.createElement('p'); tokenHint.className = 'wp-ai-hint';
+      tokenSection.append(createToken, tokenHint, secretBox);
+      function syncState() {
+        const dirty = publicOrigin.value.trim() !== (config.publicOrigin || location.origin) || enabled.checked !== config.enabled;
+        hostState.textContent = dirty ? 'Chưa lưu thay đổi' : config.enabled ? 'Đang bật' : 'Đang tắt';
+        hostState.dataset.state = dirty ? 'pending' : config.enabled ? 'enabled' : 'disabled';
+        createToken.disabled = !config.enabled || dirty;
+        copyURL.disabled = !config.enabled || !endpoint.value || dirty;
+        tokenHint.textContent = dirty ? 'Lưu thay đổi kết nối ở trên trước khi tạo token.' : !config.enabled ? 'Bật và lưu kết nối để tạo token.' : 'Token chỉ hiển thị một lần sau khi tạo.';
+        saveButton.replaceChildren(icon('fa-check'), document.createTextNode(dirty ? ' Lưu thay đổi' : ' Lưu kết nối'));
+      }
+      publicOrigin.addEventListener('input', syncState); enabled.addEventListener('change', syncState); syncState();
+      renderConnections(data.connections);
+      dialog.body.append(intro, host, connect, list, tokenSection);
+      dialog.footer.appendChild(status);
+      dialog.footer.appendChild(action('Làm mới kết nối', async () => renderConnections((await api('/api/workflow-plugins/mcp')).connections)));
+      dialog.footer.appendChild(button('Đóng', () => dialog.backdrop.remove()));
+      publicOrigin.focus();
+    } catch (failure) { dialog.body.textContent = failure.message; }
+    finally { dialog.body.removeAttribute('aria-busy'); }
   }
   function typeBadge(label) {
     const badge=document.createElement('span'); badge.className='wp-field-type';
@@ -324,6 +432,7 @@
       function add(key, child) {
         const row = document.createElement('div'); row.className = 'wp-value-row' + (child !== null && typeof child === 'object' ? ' wp-complex-row' : '') + (array ? ' wp-array-row' : '') + (key === 'sql' ? ' wp-sql-row' : '');
         const keyInput = array ? null : field(row, 'Tên trường', key);
+        if (!array && key !== 'sql' && ['string', 'number'].includes(typeof child)) row.classList.add('wp-scalar-row');
         const fieldType=propertyKey==='bindings'?(child?.type || (typeof child?.sql==='string'?'sql':'object')):key==='sql' && typeof child==='string'?'sql':child===null?'null':Array.isArray(child)?'array':typeof child;
         const typeNames={sql:'SQL',api:'API',file:'File',previous:'Bước trước',object:'Nhóm',array:'Danh sách',string:'Văn bản',number:'Số',boolean:'Có / Không',null:'Trống'};
         const badge=typeBadge(typeNames[fieldType] || fieldType);row.classList.add('wp-typed-row');
@@ -429,12 +538,14 @@
   async function refresh() {
     const panel=document.getElementById('workflow-plugin-panel'), message=document.getElementById('wp-message');
     panel?.setAttribute('aria-busy','true');
-    if(message) { message.style.color=''; message.innerHTML='<span class="wp-library-loader" aria-hidden="true"></span><span>Đang tải mẫu nghiệp vụ<span class="wp-loading-detail">Chuẩn bị kịch bản của bạn…</span></span>'; }
+    if(message) { message.classList.add('tab-loading-label'); message.style.color=''; message.innerHTML='<span class="wp-library-loader" aria-hidden="true"></span><span>Đang tải mẫu nghiệp vụ<span class="wp-loading-detail">Chuẩn bị kịch bản của bạn…</span></span>'; }
     const packagesContainer = document.getElementById('wp-packages');
-    if (packagesContainer && !packagesContainer.children.length) {
+    const previousPackageNodes = packagesContainer ? [...packagesContainer.childNodes] : [];
+    if (packagesContainer) {
+      packagesContainer.replaceChildren();
       for (let index = 0; index < 3; index++) {
         const skeleton = document.createElement('div'); skeleton.className = 'wp-skeleton-card'; skeleton.setAttribute('aria-hidden', 'true');
-        skeleton.innerHTML = '<div class="wp-skeleton-heading"><span class="wp-skeleton-icon"></span><div><span class="wp-skeleton-line short"></span><span class="wp-skeleton-line title"></span></div></div><div class="wp-skeleton-copy"><span class="wp-skeleton-line"></span><span class="wp-skeleton-line"></span><span class="wp-skeleton-line medium"></span></div><div class="wp-skeleton-chips"><span></span><span></span></div><div class="wp-skeleton-footer"><span></span><span></span><span></span></div>';
+        skeleton.innerHTML = window.workflowSkeletonCardMarkup();
         packagesContainer.appendChild(skeleton);
       }
     }
@@ -446,8 +557,8 @@
     state.packages = packages.packages;
     render();
     if(message) message.replaceChildren();
-    } catch(failure) { notify(failure.message,true); throw failure; }
-    finally { panel?.removeAttribute('aria-busy'); packagesContainer?.querySelectorAll('.wp-skeleton-card').forEach(node => node.remove()); }
+    } catch(failure) { packagesContainer?.replaceChildren(...previousPackageNodes); notify(failure.message,true); throw failure; }
+    finally { message?.classList.remove('tab-loading-label'); panel?.removeAttribute('aria-busy'); packagesContainer?.querySelectorAll('.wp-skeleton-card').forEach(node => node.remove()); }
   }
   function render() {
     const toolbar = document.getElementById('wp-toolbar'); if (!toolbar) return;
@@ -468,12 +579,13 @@
     const matches = definition => (!state.domain || definition.domain === state.domain) && `${definition.name} ${definition.description || ''} ${(definition.tags || []).join(' ')}`.toLocaleLowerCase().includes(state.search.toLocaleLowerCase());
     search.oninput = () => { state.search = search.value; render(); const input = document.querySelector('#wp-toolbar input'); input.focus(); input.setSelectionRange(state.search.length, state.search.length); }; domains.onchange = () => { state.domain = domains.value; render(); };
     if (state.admin) {
+      const connectAI = button('Kết nối AI', aiConnectionDialog); connectAI.classList.add('wp-ai-connect'); connectAI.prepend(icon('fa-plug')); toolbarActions.appendChild(connectAI);
       if (!state.settings.enabled && !state.settings.disabledByEnvironment) toolbarActions.appendChild(button('Bật workflow/plugin', async () => { await api('/api/workflow-plugins/settings', 'PUT', { enabled: true, revision: state.settings.revision }); await refresh(); }));
       const importButton = button('Import gói', () => importDialog()); importButton.prepend(icon('fa-arrow-up-from-bracket')); toolbarActions.appendChild(importButton);
       const createButton = button('Tạo mẫu', () => editDialog({ draft: blankBundle(), revision: null })); createButton.className = 'btn-primary wp-create-template'; createButton.prepend(icon('fa-plus')); toolbarActions.appendChild(createButton);
     }
     for (const control of toolbarActions.children) {
-      if (control.classList.contains('wp-create-template')) continue;
+      if (control.classList.contains('wp-create-template') || control.classList.contains('wp-ai-connect')) continue;
       const label = control.textContent;
       const symbol = control.querySelector('i') || icon('fa-power-off');
       control.replaceChildren(symbol); control.title = label; control.setAttribute('aria-label', label); control.classList.add('wp-toolbar-icon');
@@ -1018,8 +1130,8 @@
       }
     };
     if (schema.type === 'boolean') {
-      const group = document.createElement('fieldset'); group.className = 'wp-boolean-field';
-      const legend = document.createElement('legend'); legend.textContent = label; group.appendChild(legend);
+      const group = document.createElement('div'); group.className = 'wp-boolean-field'; group.setAttribute('role', 'group');
+      const legend = document.createElement('span'); legend.className = 'wp-boolean-caption'; legend.id = `wp-caption-${crypto.randomUUID()}`; legend.textContent = label; group.appendChild(legend); group.setAttribute('aria-labelledby', legend.id);
       const choices = document.createElement('div'); choices.className = 'wp-boolean-choices'; group.appendChild(choices);
       const name = `wp-boolean-${crypto.randomUUID()}`;
       const values = schema.enum || [true, false];
@@ -1174,6 +1286,13 @@
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   function mount(node, execution) {
+    if(window.ChatStream?.holdWorkflowUpdate(node,execution)){
+      if(!views.has(node)||execution.revision>=views.get(node).revision)views.set(node,execution);
+      return;
+    }
+    // Remove stale snapshot badges from restored messages as well as live updates.
+    const bubble = node.closest('.chat-ai-message-bubble, .chat-bubble.ai');
+    bubble?.querySelectorAll('.answer-status').forEach(status => status.remove());
     // Chat history snapshots this node during workflow-execution-updated.
     // Loading state belongs to the live request, never to the saved markup.
     delete node.dataset.restoring;
@@ -1263,7 +1382,19 @@
       }
       const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'btn-primary'; submit.textContent = 'Bổ sung và tiếp tục'; actions.appendChild(submit); form.appendChild(actions);
       const message = document.createElement('p'); message.className = 'wp-execution-error'; message.setAttribute('role', 'alert'); form.appendChild(message);
-      form.onsubmit = async event => { event.preventDefault(); submit.disabled = true; submit.textContent = 'Đang xử lý…'; node.setAttribute('aria-busy', 'true'); try { const values = Object.fromEntries(inputs.map(({ slot, read }) => [slot.key, read()])); const data = await api(`/api/automation-runs/${encodeURIComponent(execution.id)}/inputs`, 'POST', { inputs: values, revision: execution.revision }); mount(node, data.execution); } catch (failure) { message.textContent = failure.message; } finally { submit.disabled = false; submit.textContent = 'Bổ sung và tiếp tục'; if (node.contains(form)) node.setAttribute('aria-busy', 'false'); } }; node.appendChild(form);
+      form.onsubmit = async event => {
+        event.preventDefault();if(submit.disabled||!form.reportValidity())return;
+        let pending;
+        try {
+          const values=Object.fromEntries(inputs.map(({slot,read})=>[slot.key,read()]));
+          message.textContent='';
+          pending=window.ChatStream?.beginWorkflowSubmission(node,form,submit,execution);
+          submit.disabled=true;submit.textContent='Đang xử lý…';
+          const data=await api(`/api/automation-runs/${encodeURIComponent(execution.id)}/inputs`,'POST',{inputs:values,revision:execution.revision});
+          pending?.received();mount(node,data.execution);
+        }catch(failure){pending?.release();message.textContent=failure.message;}
+        finally{if(!pending&&node.contains(form)){submit.disabled=false;submit.textContent='Bổ sung và tiếp tục';node.setAttribute('aria-busy','false');}}
+      }; node.appendChild(form);
     }
     const defaults = Object.entries(execution.provenance || {}).filter(([, source]) => source.source === 'default');
     if (defaults.length) { const info = document.createElement('p'); info.textContent = 'Giá trị mặc định: ' + defaults.map(([key]) => `${execution.inputLabels?.[key] || key} = ${JSON.stringify(execution.inputs[key])}`).join(', '); node.appendChild(info); }
@@ -1309,13 +1440,14 @@
       }
       // Old saved replies may contain data-restoring="true" without a live
       // request or click handlers. Only the in-memory set can guard reentry.
-      if (!node.dataset.automationRun || node.dataset.executionArchived || views.has(node) || restoringPanels.has(node)) continue;
+      if (!node.dataset.automationRun || node.dataset.executionArchived || views.has(node) || restoringPanels.has(node)
+        || node.getClientRects?.().length === 0) continue;
       restoringPanels.add(node);
       node.dataset.restoring = 'true';
       node.setAttribute('aria-busy', 'true');
       node.querySelectorAll('button, input, select, textarea').forEach(control => { control.disabled = true; });
       if (!node.querySelector('strong')) node.textContent = 'Đang tải tác vụ đã lưu…';
-      jobs.push((async () => {
+      jobs.push(async () => {
         const id = node.dataset.automationRun;
         let request = restoringRuns.get(id);
         if (!request) {
@@ -1325,9 +1457,13 @@
         try { const { execution } = await request; if (node.isConnected) mount(node, execution); }
         catch (_) { if (!node.querySelector('strong')) node.textContent = 'Không thể tải tác vụ đã lưu. Đang thử lại…'; }
         finally { restoringPanels.delete(node); delete node.dataset.restoring; }
-      })());
+      });
     }
-    await Promise.all(jobs);
+    // Historical cards can number in the dozens. Leave pool capacity for
+    // navigation, live workflow execution and writes while restoring them.
+    await Promise.all(Array.from({ length: Math.min(2, jobs.length) }, async () => {
+      while (jobs.length) await jobs.shift()();
+    }));
   };
   // Rehydrate saved chat HTML and poll only mounted panels. Owner checks are server-side.
   let pollInFlight = false;
@@ -1339,6 +1475,7 @@
     const cached = new Map();
     for (const [node, execution] of views) {
       if (!node.isConnected) { views.delete(node); continue; }
+      if (node.getClientRects?.().length === 0) continue;
       if (!execution.id || (done(execution.status) && !execution.retryWaitingInput)) continue;
       try { let data = cached.get(execution.id); if (!data) { data = await api(`/api/automation-runs/${encodeURIComponent(execution.id)}`); cached.set(execution.id, data); } if (data.execution.revision !== execution.revision || data.execution.retryWaitingInput !== execution.retryWaitingInput) mount(node, data.execution); } catch (_) { /* Retry while mounted. */ }
     }

@@ -5,8 +5,8 @@ const {sha256}=require('./postgres/crypto');
 const crypto=require('node:crypto');
 const chatPaths=new Set(['/api/chat','/api/intelligent-core/chat','/api/intelligent-core/chat/stream','/api/embed/chat','/api/v1/chat/completions']);
 
-// Gate the response at the async repository boundary. Progress may stream while
-// tools run; final data and cookies are released only after a successful commit.
+// Gate durable output at the repository boundary. Progress and transient answer
+// previews may stream; verified output/final/cookies require a successful commit.
 async function handleStoredRequest(req, res, handler) {
   if (!storage.enabled()) return handler(req, res);
   const native = {
@@ -17,6 +17,7 @@ async function handleStoredRequest(req, res, handler) {
   let stream = false;
   let ended = false;
   const chunks = [];
+  const transientAnswers=new Set();
   const bodyDigest=crypto.createHash('sha256');
   const observe=chunk=>bodyDigest.update(chunk);
   // Observe body bytes without putting IncomingMessage into flowing mode
@@ -36,7 +37,19 @@ async function handleStoredRequest(req, res, handler) {
     if (stream) { if (headerArgs && !res.headersSent) native.writeHead(...headerArgs); native.flushHeaders(); }
   };
   res.write = (chunk, ...args) => {
-    if (stream && /^event: progress\n/.test(String(chunk))) {
+    const wire=String(chunk);
+    let transient=stream&&wire.startsWith('event: progress\n');
+    if(stream&&wire.startsWith('event: answer_')){
+      const lines=wire.split('\n'),name=lines[0].slice('event: '.length);
+      try{
+        const event=JSON.parse(lines.find(line=>line.startsWith('data: '))?.slice(6));
+        if(name==='answer_start'&&event.verified===false&&event.id){transientAnswers.add(event.id);transient=true;}
+        else if(['answer_delta','answer_reset'].includes(name)&&transientAnswers.has(event.id)){
+          transient=true;if(name==='answer_reset')transientAnswers.delete(event.id);
+        }
+      }catch{ /* Unknown frames retain the normal commit boundary. */ }
+    }
+    if (transient) {
       if (headerArgs && !res.headersSent) native.writeHead(...headerArgs);
       return native.write(chunk, ...args);
     }
@@ -71,8 +84,12 @@ async function handleStoredRequest(req, res, handler) {
   } catch (error) {
     restore();
     if (res.destroyed) return;
-    const message = error.code === 'DATA_CONFLICT' ? 'DATA_CONFLICT' : 'STORAGE_OPERATION_FAILED';
-    console.error('[Storage] Request failed:', error.code || error.message || error.name || 'ERROR');
+    const message = ['DATA_CONFLICT','ACCOUNT_CONFLICT'].includes(error.code) ? error.code : 'STORAGE_OPERATION_FAILED';
+    console.error('[Storage] Request failed:', JSON.stringify({
+      ...require('./postgres/worker_failure').describe(error, storage.getPool()),
+      method: req.method, path: new URL(req.url, 'http://localhost').pathname, requestId: req.requestId || null,
+      ...(error.conflictTable ? { conflictTable: error.conflictTable, conflictStore: error.conflictStore } : {})
+    }));
     if (res.headersSent) native.end(`event: error\ndata: ${JSON.stringify({ status: 'error', message })}\n\n`);
     else {
       res.removeHeader('Set-Cookie');

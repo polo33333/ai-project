@@ -20,7 +20,7 @@ test('HTTP and SSE routes expose PARTIAL consistently and never mark it as succe
   });
   t.mock.method(core, 'chat', async (_, options) => {
     options.onProgress?.({ type: 'policy_repair', label: 'Đang điều chỉnh', status: 'warning' });
-    return { success: true, replyText: 'Chưa thể hoàn tất yêu cầu với kết quả đã xác minh.', toolCalls: [], sqlExecutions: [],
+    return { success: true, replyText: 'Chưa thể hoàn tất yêu cầu.', toolCalls: [], sqlExecutions: [],
       usedProvider: { id: 'fixture', name: 'Fixture', model: 'test' },
       trace: { completionStatus: 'PARTIAL', training: { plan: { outputs: { data: true } }, responseEvaluation: { valid: false, failures: ['MISSING_SQL'] } } } };
   });

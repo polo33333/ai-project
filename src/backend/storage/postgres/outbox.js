@@ -26,6 +26,11 @@ async function processOne() {
       const library = require('../../knowledge_core/services/library_service');
       if (job.kind === 'document.ingest') await library.processQueuedDocument(job.resource_id, payload);
       else if (job.kind === 'document.delete') await library.removeQueuedFiles(job.resource_id, payload);
+      else if (job.kind === 'dictionary.sync') {
+        const result = await require('../../services/dictionary_service').syncToQdrant({ defer: false });
+        if (!result?.success) throw Object.assign(new Error(result?.error || 'VECTOR_SYNC_FAILED'), { code: 'VECTOR_SYNC_FAILED' });
+        require('../../services/logger_service').addLog('INFO', 'Qdrant Vector DB', 'Đã hoàn tất đồng bộ vector từ cấu hình đã lưu.');
+      }
       else throw new Error('UNKNOWN_OUTBOX_JOB');
     }, { independent: true }));
     if (result?.skipped) throw new Error('RESOURCE_BUSY');
@@ -34,6 +39,12 @@ async function processOne() {
     await pool.query(`UPDATE app.outbox_jobs SET status=CASE WHEN attempts>=10 THEN 'failed' ELSE 'pending' END,
       available_at=now()+least(attempts*10,300)*interval '1 second', lease_owner=null, lease_until=null,
       last_error=$3, updated_at=now() WHERE id=$1 AND lease_owner=$2`, [job.id, owner, error.code || error.name || 'ERROR']);
+    if (job.kind === 'dictionary.sync' && (job.attempts === 1 || job.attempts >= 10)) {
+      await storage.run(() => require('../../services/logger_service').addLog(job.attempts >= 10 ? 'ERROR' : 'WARN', 'Qdrant Vector DB',
+        job.attempts >= 10 ? 'Đồng bộ vector chưa thành công sau các lần thử lại.' : 'Đồng bộ vector chưa thành công; tác vụ đã được giữ lại để thử lại.',
+        { code: error.code || 'VECTOR_SYNC_FAILED', attempts: job.attempts }), { independent: true })
+        .catch(failure => console.error('[Outbox] Sync status log failed:', failure.code || failure.name));
+    }
     if (job.kind==='document.ingest') {
       const payload=protect(job.payload, `outbox/${job.id}`, true);
       await storage.run(() => {
@@ -55,7 +66,7 @@ function start() {
   stopped = false;
   const tick = () => {
     if (stopped || running) return;
-    running = processOne().catch(error => console.error('[Outbox] Failed:', error.code || error.name)).finally(() => { running = null; });
+    running = processOne().catch(error => console.error('[Outbox] Failed:', require('./worker_failure').describe(error, storage.getPool()))).finally(() => { running = null; });
   };
   timer = setInterval(storage.detach(tick), 2000); timer.unref();
   storage.detach(tick)();

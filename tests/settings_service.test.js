@@ -10,8 +10,20 @@ function fixture(t, text) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return { service: createSettingsService(file), file };
 }
+
+test('agent settings hide legacy and unused keys and expose the real embedding switch', t => {
+  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\nEMBEDDING_ENABLED=true\nAI_MEMORY_SUMMARY_CHARS=4000\n');
+  let before = service.get();
+  assert.equal(before.fields.find(field => field.key === 'EMBEDDING_ENABLED').type, 'boolean');
+  assert.ok(!before.fields.some(field => field.key.startsWith('CHAT_ROUTING_') || field.key === 'AI_MEMORY_SUMMARY_CHARS'));
+  service.save({ revision: before.revision, values: { EMBEDDING_ENABLED: 'false', GOVERNED_CONTROLLER_MODE: 'legacy' } });
+  assert.match(fs.readFileSync(file, 'utf8'), /EMBEDDING_ENABLED=false/);
+  before = service.get();
+  assert.equal(before.fields.find(field => field.key === 'CHAT_ROUTING_MODE').group, 'Tương thích legacy');
+  assert.throws(() => service.save({ revision: before.revision, values: { AI_MEMORY_SUMMARY_CHARS: '5000' } }));
+});
 test('routing settings persist valid mode and reject invalid selection and endpoint', t => {
-  const { service, file } = fixture(t, 'CHAT_ROUTING_MODE=local_tev1\n');
+  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=legacy\nCHAT_ROUTING_MODE=local_tev1\n');
   const field = service.get().fields.find(item => item.key === 'CHAT_ROUTING_MODE');
   assert.equal(field.type, 'select');
   assert.deepEqual(field.options, ['local_tev1', 'chat_model', 'auto']);

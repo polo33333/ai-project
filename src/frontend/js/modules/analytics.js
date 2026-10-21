@@ -41,7 +41,7 @@ function setAnalyticsLoading(targetIds, loading) {
       overlay = document.createElement('div');
       overlay.className = 'analytics-loading-overlay';
       overlay.setAttribute('role', 'status');
-      overlay.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Đang tải dữ liệu...</span>';
+      overlay.innerHTML = window.tabSkeletonMarkup('chart');
       host.appendChild(overlay);
     }
     if (overlay) overlay.hidden = !loading;
@@ -211,6 +211,7 @@ function groupHistoryByMonth(history, months = 6, providers = []) {
 }
 
 async function fetchAnalyticsSourceData() {
+  const can = permission => window.currentAccountRole==='admin'||!Array.isArray(window.currentAccountPermissions)||window.currentAccountPermissions.includes(permission);
   const safeJson = async (url, fallback) => {
     try {
       const res = await fetch(url);
@@ -221,12 +222,12 @@ async function fetchAnalyticsSourceData() {
     }
   };
   const [history, providersData, dictionary, sources, qdrant, feedback] = await Promise.all([
-    safeJson('/api/chat-history', []),
-    safeJson('/api/ai-providers', { providers: [] }),
-    safeJson('/api/dictionary', []),
-    safeJson('/api/sql/sources', []),
+    can('history.read')?safeJson('/api/chat-history', []):[],
+    safeJson(window.currentAccountRole==='admin'?'/api/ai-providers':'/api/chat/providers', { providers: [] }),
+    can('schema.read')?safeJson('/api/dictionary', []):[],
+    can('sources.read')||(can('chat.use')&&can('sql:read'))?safeJson('/api/sql/sources', []):[],
     safeJson('/api/qdrant/status', {}),
-    safeJson('/api/chat-feedback', [])
+    can('feedback.read')?safeJson('/api/chat-feedback', []):[]
   ]);
   return {
     history: Array.isArray(history) ? history : [],
@@ -775,7 +776,10 @@ async function refreshDashboardMetrics() {
   } else setAnalyticsLoading(targets, true);
 
   if (dashboardAnalyticsRefreshPromise) return dashboardAnalyticsRefreshPromise;
-  if (cached && Date.now() - Number(window.dashboardAnalyticsLoadedAt || 0) < DASHBOARD_ANALYTICS_CACHE_MS) return cached;
+  if (cached && Date.now() - Number(window.dashboardAnalyticsLoadedAt || 0) < DASHBOARD_ANALYTICS_CACHE_MS) {
+    renderDashboardAnalyticsData(cached);
+    return cached;
+  }
   dashboardAnalyticsRefreshPromise = (async () => {
     try {
       const data = await fetchAnalyticsSourceData();

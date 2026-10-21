@@ -58,6 +58,9 @@ const FRONTEND_ROUTES = new Set([
   '/mcp-sources',
   '/system-tools',
   '/settings',
+  '/data-governance',
+  '/accounts',
+  '/memory',
   '/api-docs'
 ]);
 
@@ -132,11 +135,11 @@ function checkChatRateLimit(key) {
 function permissionsForAccount(account, isEmbed = false) {
   if (isEmbed) return ['knowledge:read', 'sql:read'];
   if (account?.role === 'admin') return ['admin'];
-  return ['knowledge:read', 'sql:read'];
+  return account?.permissions || ['knowledge:read', 'sql:read'];
 }
 
 function buildChatClientPayload(coreResult, execMs, auditId = null) {
-  const sqlToolCalls = (coreResult.toolCalls || []).filter(item => item.toolName === 'execute_sql_query' && item.success);
+  const sqlToolCalls = (coreResult.toolCalls || []).filter(item => ['execute_sql_query', 'query_sql_metric'].includes(item.toolName) && item.success);
   const chartToolCall = (coreResult.toolCalls || []).find(item => item.toolName === 'render_chart' && item.success);
   const exportToolCall = (coreResult.toolCalls || []).find(item => item.toolName === 'export_data' && item.success);
   const downloadUrl = exportToolCall?.result?.downloadUrl || null;
@@ -162,6 +165,7 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
     durationMs: Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null
   }));
   return {
+    answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(coreResult),
     status: coreResult.success ? 'success' : 'error', completionStatus: coreResult.trace?.completionStatus || (coreResult.success ? 'PARTIAL' : 'ERROR'), reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
     executionTime: `${execMs}ms`, executionMode: coreResult.executionMode, auditId, tokenUsage: coreResult.tokenUsage || null,
     providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null,
@@ -198,7 +202,8 @@ function isAdminMutation(pathname, method) {
 }
 
 function isAdminOnlyResource(pathname) {
-  return /^\/api\/(settings|backups|providers|ai-providers|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
+  if (pathname === '/accounts' || pathname === '/views/accounts.html') return true;
+  return /^\/api\/(accounts|settings|backups|providers|ai-providers|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
 }
 
 function getSessionToken(req) {
@@ -223,6 +228,8 @@ function isPublicPath(pathname) {
     || pathname === '/service-worker.js'
     || pathname === '/favicon.svg'
     || pathname === '/embed/knowledgehub-chat.js'
+    || pathname === '/embed/chat-attachments.js'
+    || pathname === '/embed/chat-stream.js'
     || pathname === '/api/embed/chat'
     || pathname === '/api/auth/login'
     || pathname === '/api/auth/logout'
@@ -243,9 +250,10 @@ function isPublicPath(pathname) {
  * @param {import('http').IncomingMessage} req 
  * @param {import('http').ServerResponse} res 
  */
-async function handleRequest(req, res) {
+async function handleGovernedRequest(req, res) {
   const requestId = String(req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 128);
   req.requestId = requestId;
+  require('../governance/context').current().requestId = requestId;
   res.setHeader('X-Request-Id', requestId);
   const allowedOrigin = configuredOrigin(req);
   if (allowedOrigin) {
@@ -269,6 +277,10 @@ async function handleRequest(req, res) {
   const pathname = parsedUrl.pathname;
   const sessionToken = getSessionToken(req);
   const currentAccount = authService.getAccountBySession(sessionToken);
+  if (currentAccount) require('../governance/context').setPrincipal({ subject: `account:${currentAccount.id}`, role: currentAccount.role, permissions:currentAccount.permissions, dataAccess:currentAccount.dataAccess, tenantId: currentAccount.tenantId, channel: 'chat' }, () => {
+    const account = authService.getAccountBySession(sessionToken, { touch: false });
+    return account ? { subject: `account:${account.id}`, role: account.role, permissions:account.permissions, dataAccess:account.dataAccess, tenantId: account.tenantId, channel: 'chat' } : null;
+  });
   // Keep the browser cookie aligned with the server-side sliding session.
   // Without this refresh, the browser drops an otherwise active session eight
   // hours after the original login.
@@ -288,7 +300,8 @@ async function handleRequest(req, res) {
     res.end(JSON.stringify({ status: 'error', message: 'ORIGIN_NOT_ALLOWED', requestId }));
     return;
   }
-  const isChatRoute = ['/api/intelligent-core/chat', '/api/intelligent-core/chat/stream', '/api/embed/chat', '/api/chat', '/api/v1/chat/completions'].includes(pathname);
+  const isChatRoute = ['/api/intelligent-core/chat', '/api/intelligent-core/chat/stream', '/api/embed/chat', '/api/chat', '/api/v1/chat/completions','/api/chat/attachments'].includes(pathname);
+  if (await require('../automation/mcp_host_routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
   if (isChatRoute) {
     const rateKey = currentAccount?.id || req.socket.remoteAddress || 'anonymous';
     if (!checkChatRateLimit(`${pathname}:${rateKey}`)) {
@@ -343,13 +356,78 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if (currentAccount?.role !== 'admin' && (isAdminOnlyResource(pathname) || isAdminMutation(pathname, req.method) || pathname.startsWith('/api/exports/'))) {
+  if (currentAccount?.role !== 'admin' && (isAdminOnlyResource(pathname) || isAdminMutation(pathname, req.method))) {
     res.writeHead(403, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ status: 'error', message: 'FORBIDDEN', requestId }));
     return;
   }
+  if (!require('../services/account_access').allowed(currentAccount,pathname)) {
+    res.writeHead(403, { 'Content-Type':'application/json; charset=UTF-8' }); res.end(JSON.stringify({message:'Bạn chưa được cấp quyền sử dụng chức năng này.'})); return;
+  }
 
   if (await require('../automation/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
+  if (await require('../governance/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
+  if (await require('../memory_core/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
+
+  if (pathname === '/api/accounts' || pathname.startsWith('/api/accounts/')) {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      if (pathname === '/api/accounts/embed-identity') {
+        authService.requireAccountAdmin(currentAccount.id);
+        if (req.method === 'GET') {
+          res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8'});
+          res.end(JSON.stringify({configs:embedChatService.configs.map(c=>({id:c.id,name:c.name,identity:c.identity || {enabled:false}})),sessions:embedChatService.listSessions()})); return;
+        }
+        if (req.method !== 'PUT') throw Object.assign(new Error('Method not allowed'),{statusCode:405});
+        const body = await readJsonBody(req);
+        const identity = embedChatService.saveIdentity(body.embedId, body.identity);
+        loggerService.addLog('INFO','Embed identity','Cập nhật server xác thực Embed.',{actorId:currentAccount.id,embedId:body.embedId});
+        res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8'});
+        res.end(JSON.stringify({identity})); return;
+      }
+      let account;
+      if (pathname === '/api/accounts/roles' && req.method === 'GET') {
+        const roles=require('../services/account_roles');
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
+        res.end(JSON.stringify({roles:roles.list(),capabilities:roles.capabilities,resources:{sql:sqlConnector.dbSources.map(s=>({id:s.id,name:s.name||s.dbName||s.id})),documents:require('../knowledge_core/services/library_service').documents.map(d=>({id:d.id,name:d.title||d.id}))}})); return;
+      }
+      const roleMatch=pathname.match(/^\/api\/accounts\/roles(?:\/([^/]+))?$/);
+      if (roleMatch && (req.method==='POST'||req.method==='PUT')) {
+        authService.requireAccountAdmin(currentAccount.id);
+        const roleId=roleMatch[1]&&decodeURIComponent(roleMatch[1]), previous=roleId&&require('../services/account_roles').get(roleId);
+        const role=require('../services/account_roles').save(await readJsonBody(req),roleId);
+        if(previous&&(JSON.stringify(previous.permissions)!==JSON.stringify(role.permissions)||JSON.stringify(previous.dataAccess)!==JSON.stringify(role.dataAccess))) {
+          const affected=new Set(authService.accounts.filter(a=>a.role===role.id).map(a=>a.id));
+          for(const account of authService.accounts)if(affected.has(account.id)){account.securityVersion=(account.securityVersion||0)+1;account.managementRevision=(account.managementRevision||0)+1;}
+          for(const [token,session] of Object.entries(authService.sessions))if(affected.has(session.accountId))delete authService.sessions[token];
+          if(affected.size){authService.persistAccounts();authService.persistSessions();}
+        }
+        loggerService.addLog('INFO','Quản lý tài khoản','Quản trị viên cập nhật vai trò.',{actorId:currentAccount.id,roleId:role.id});
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({role}));return;
+      }
+      if (pathname === '/api/accounts' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+        res.end(JSON.stringify({ accounts: authService.listAccounts(currentAccount.id) })); return;
+      }
+      if (pathname === '/api/accounts' && req.method === 'POST') account = authService.createAccount(currentAccount.id, await readJsonBody(req));
+      else {
+        const match = pathname.match(/^\/api\/accounts\/([^/]+)(\/password)?$/);
+        if (!match || (match[2] ? req.method !== 'POST' : req.method !== 'PUT'))
+          throw Object.assign(new Error('Thao tác không được hỗ trợ.'), { statusCode: 405 });
+        const id = decodeURIComponent(match[1]), body = await readJsonBody(req);
+        account = match[2] ? authService.resetAccountPassword(currentAccount.id, id, body) : authService.updateAccount(currentAccount.id, id, body);
+        if (match[2] && id === currentAccount.id) clearSessionCookie(req, res);
+      }
+      loggerService.addLog('INFO', 'Quản lý tài khoản', 'Quản trị viên cập nhật tài khoản.', { actorId: currentAccount.id, accountId: account.id,
+        action: pathname.endsWith('/password') ? 'reset_password' : req.method === 'POST' ? 'create' : 'update' });
+      res.writeHead(req.method === 'POST' && pathname === '/api/accounts' ? 201 : 200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ account }));
+    } catch (error) {
+      res.writeHead(error.statusCode || 503, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ message: error.statusCode ? error.message : 'Không thể lưu tài khoản.' }));
+    }
+    return;
+  }
 
   if (pathname === '/api/backups' || pathname.startsWith('/api/backups/')) {
     res.setHeader('Cache-Control', 'no-store');
@@ -451,7 +529,7 @@ async function handleRequest(req, res) {
   // 1. SQL Connectors & DB Sources APIs
   if (pathname === '/api/sql/sources' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-    res.end(JSON.stringify(sqlConnector.getDbSources()));
+    res.end(JSON.stringify(sqlConnector.getDbSources().filter(source=>require('../governance/context').canRead(source,'sql'))));
     return;
   }
 
@@ -479,8 +557,8 @@ async function handleRequest(req, res) {
     try {
       config = await readJsonBody(req);
       const liveTables = await sqlConnector.addLiveSource(config);
-      dictionaryService.saveDictionaryItems(liveTables);
-      dictionaryService.syncToQdrant();
+      dictionaryService.saveDictionaryItems(liveTables, { completeSourceId: liveTables[0]?.dbSourceId });
+      await dictionaryService.syncToQdrant();
 
       loggerService.addLog('SUCCESS', 'SQL Connector', `Kết nối Live Read-Only thành công tới SQL Server '${config.host}/${config.dbName}' (${liveTables.length} bảng).`);
 
@@ -548,7 +626,7 @@ async function handleRequest(req, res) {
     try {
       const { id } = await readJsonBody(req);
       const liveTables = await sqlConnector.refreshLiveSource(id);
-      dictionaryService.saveDictionaryItems(liveTables);
+      dictionaryService.saveDictionaryItems(liveTables, { completeSourceId: id });
       await dictionaryService.syncToQdrant();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', tablesCount: liveTables.length, tables: dictionaryService.getGroupedTables() }));
@@ -560,6 +638,12 @@ async function handleRequest(req, res) {
   }
 
   // 2. Data Dictionary APIs (Grouped Tables & Active Toggle)
+  if (pathname === '/api/dictionary/workspace' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ tables: dictionaryService.getGroupedTables(), domains: domainAliasService.getDomainAliases(),
+      relationships: dictionaryService.getTableRelationships(), quality: require('../services/schema_quality').audit(dictionaryService.getGroupedTables(), dictionaryService.getTableRelationships()) }));
+    return;
+  }
   if (pathname === '/api/dictionary' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify(dictionaryService.getGroupedTables()));
@@ -633,8 +717,8 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/dictionary/toggle-active' && req.method === 'POST') {
     try {
-      const { tableName, isActive } = await readJsonBody(req);
-      await dictionaryService.toggleTableActive(tableName, isActive);
+      const { tableId, tableName, isActive } = await readJsonBody(req);
+      if (!await dictionaryService.toggleTableActive(tableName, isActive, tableId)) throw new Error('Không tìm thấy bảng cần cập nhật.');
       loggerService.addLog('INFO', 'Data Dictionary', `Đã đổi trạng thái Bảng '${tableName}' sang ${isActive ? 'Active (Cho AI)' : 'Tắt'} & tự động đồng bộ Qdrant.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success' }));
@@ -770,8 +854,8 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/dictionary/update-table' && req.method === 'POST') {
     try {
-      const { tableName, description, domain, defaultMetric, defaultTimeColumn, defaultAggregation } = await readJsonBody(req);
-      const updated = await dictionaryService.updateTableMetadata(tableName, { description, domain, defaultMetric, defaultTimeColumn, defaultAggregation });
+      const { tableId, tableName, description, domain, defaultMetric, defaultTimeColumn, defaultAggregation } = await readJsonBody(req);
+      const updated = await dictionaryService.updateTableMetadata(tableName, { description, domain, defaultMetric, defaultTimeColumn, defaultAggregation }, tableId);
       if (!updated) throw new Error('Không tìm thấy bảng cần cập nhật.');
       loggerService.addLog('INFO', 'Data Dictionary', `Cập nhật metadata Bảng '${tableName}' & tự động đồng bộ Qdrant.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -783,12 +867,32 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/dictionary/sync-status' && req.method === 'GET') {
+    try {
+      let state = { status: 'none', attempts: 0 };
+      if (!require('../services/embedding_policy').enabled()) state.status = 'disabled';
+      else if (storage.enabled()) {
+        const result = await storage.getPool().query(`SELECT status, attempts, updated_at FROM app.outbox_jobs
+          WHERE kind='dictionary.sync' AND resource_id='dictionary-schema'
+          ORDER BY (status IN ('pending','running')) DESC, created_at DESC LIMIT 1`);
+        if (result.rows[0]) state = { status: result.rows[0].status, attempts: result.rows[0].attempts, updatedAt: result.rows[0].updated_at };
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(state));
+    } catch (error) {
+      res.writeHead(503, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'unavailable' }));
+    }
+    return;
+  }
+
   if (pathname === '/api/dictionary/save-table-configuration' && req.method === 'POST') {
     try {
       const result = await dictionaryService.saveTableConfiguration(await readJsonBody(req));
       loggerService.addLog('INFO', 'Data Dictionary', `Đã lưu đồng thời cấu hình bảng, cột và quan hệ của '${result.table.tableName}', sau đó đồng bộ Qdrant một lần.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({ status: 'success', tables: result.tables, relationships: result.relationships }));
+      res.end(JSON.stringify({ status: 'success', tables: result.tables, relationships: result.relationships, vectorSync: result.vectorSync, configurationAdjustments: result.configurationAdjustments,
+        quality: require('../services/schema_quality').audit(result.tables, result.relationships) }));
     } catch (err) {
       res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
@@ -798,8 +902,8 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/dictionary/update-column' && req.method === 'POST') {
     try {
-      const { tableName, columnName, description, displayName } = await readJsonBody(req);
-      await dictionaryService.updateColumnDescription(tableName, columnName, description, displayName);
+      const { tableId, tableName, columnName, description, displayName } = await readJsonBody(req);
+      if (!await dictionaryService.updateColumnDescription(tableName, columnName, description, displayName, tableId)) throw new Error('Không tìm thấy bảng hoặc cột cần cập nhật.');
       loggerService.addLog('INFO', 'Data Dictionary', `Cập nhật metadata cột '${columnName}' của Bảng '${tableName}' & tự động đồng bộ Qdrant.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success' }));
@@ -810,6 +914,12 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/chat/providers' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control':'no-store' });
+    res.end(JSON.stringify({ providers:aiProviderManager.getProviders().filter(p=>p.enabled!==false&&p.isEnabled!==false)
+      .map(p=>({id:p.id,name:p.name,type:p.type,model:p.model,isActive:!!p.isActive})) }));
+    return;
+  }
   if (pathname === '/api/providers' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify(aiProviderManager.getProviders()));
@@ -931,24 +1041,44 @@ async function handleRequest(req, res) {
   // Public embeddable chat endpoint. Provider selection always follows the active backend priority.
   if (pathname === '/api/embed/chat' && req.method === 'POST') {
     const startTime = Date.now();
+    let embedStreaming = false;
+    const embedEvent = (name, value) => { if (!res.destroyed && !res.writableEnded) res.write(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`); };
     const embedAbortController = new AbortController();
     req.once('aborted', () => embedAbortController.abort());
     res.once('close', () => { if (!res.writableEnded) embedAbortController.abort(); });
     try {
-      const body = await readJsonBody(req);
+      const body = await readJsonBody(req,28*1024*1024);
       const { question, message, history, embedId, sessionId, preview } = body;
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
       const isAdminPreview = preview === true && currentAccount?.role === 'admin';
-      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview, recordUsage: !['get','artifact'].includes(body.workflowAction) });
+      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview, recordUsage: !body.presence && !['get','artifact'].includes(body.workflowAction) });
       if (!authorization.ok) {
         res.writeHead(authorization.status, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: authorization.message }));
         return;
       }
       req.storageOwner=`embed:${authorization.config.id}:${authorization.origin || 'admin-preview'}`;
+      require('../governance/context').setPrincipal({ subject: req.storageOwner, channel: 'embed', embedId: authorization.config.id });
       if (authorization.origin) res.setHeader('Access-Control-Allow-Origin', authorization.origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Cache-Control', 'no-store');
+      const visitorIdentity = require('../services/embed_identity').verify(authorization.config, body.identityToken);
+      if (sessionId) embedChatService.touchSession(authorization.config, sessionId, visitorIdentity, authorization.origin);
+      if (body.presence === true) {
+        res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8'});
+        res.end(JSON.stringify({status:'success'})); return;
+      }
+      if(body.files || body.batchId) {
+        const uploadOwner=JSON.stringify([req.storageOwner,visitorIdentity?.id||sessionId]);
+        if(body.attachmentAction==='file') {
+          const file=await require('../services/chat_attachment_service').read(uploadOwner,body.batchId,body.fileId);
+          res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
+          res.end(JSON.stringify({name:file.name,type:file.type,base64:file.bytes.toString('base64')}));return;
+        }
+        const result=await require('../services/chat_attachment_service').submit(uploadOwner,{...body,channel:'embed'});
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
+        res.end(JSON.stringify(result));return;
+      }
       const queryText = String(question || message || '').trim();
       if (!queryText && !body.workflowAction) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -960,9 +1090,20 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ status: 'error', message: `Câu hỏi vượt quá ${authorization.config.maxQuestionLength} ký tự.` }));
         return;
       }
-      const workflowIdentity = sessionId ? embedChatService.workflowSession(authorization.config, String(sessionId), body.workflowToken) : null;
+      const workflowIdentity = sessionId ? embedChatService.workflowSession(authorization.config, String(sessionId), body.workflowToken, visitorIdentity) : null;
+      require('../governance/context').setPrincipal({ subject: workflowIdentity?.accountId || `embed:${authorization.config.id}:${requestId}`, channel: 'embed', embedId: authorization.config.id });
       if (body.workflowAction) {
         if (!body.workflowToken || !workflowIdentity) throw Object.assign(new Error('Cần phiên nghiệp vụ đã xác thực.'),{statusCode:403});
+        if (body.workflowAction === 'export_artifact') {
+          const filename = String(body.filename || '');
+          await require('../governance/context').refresh();
+          require('../governance/artifacts').authorize(filename);
+          const filePath = path.join(EXPORTS_DIR, filename), stats = await fs.promises.stat(filePath);
+          if (!stats.isFile() || stats.size > 20 * 1024 * 1024) throw Object.assign(new Error('File không khả dụng hoặc vượt giới hạn tải.'), { statusCode: 413 });
+          res.writeHead(200, { 'Content-Type': MIME_TYPES[path.extname(filename).toLowerCase()] || 'application/octet-stream',
+            'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`, 'Content-Length': stats.size, 'Cache-Control': 'private, no-store' });
+          res.end(await fs.promises.readFile(filePath)); return;
+        }
         const automation=require('../automation'); await automation.settings();
         const context={accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,permissions:permissionsForAccount(null,true)};
         if(body.workflowAction==='artifact') {
@@ -975,7 +1116,7 @@ async function handleRequest(req, res) {
         if(body.workflowAction==='get') execution=automation.runtime.view(await automation.runtime.owned(body.runId,context));
         else if(body.workflowAction==='inputs') execution=await automation.runtime.inputs(body.runId,body.inputs||{},context,body.revision);
         else if(body.workflowAction==='cancel') execution=await automation.runtime.cancel(body.runId,context,body.revision);
-        else if(body.workflowAction==='create') execution=await automation.runtime.create(body.templateId,{},context,{conversationId:conversationMemoryService.normalizeSessionId(`${authorization.config.id}-${sessionId}`),requestId:body.requestId,parentRunId:body.parentRunId});
+        else if(body.workflowAction==='create') execution=await automation.runtime.create(body.templateId,{},context,{conversationId:embedChatService.conversationId(authorization.config, sessionId, visitorIdentity),requestId:body.requestId,parentRunId:body.parentRunId});
         else throw Object.assign(new Error('Thao tác không hợp lệ.'),{statusCode:400});
         execution.artifacts=(execution.artifacts||[]).map(({id,filename,expiresAt})=>({id,filename,expiresAt}));
         for(const value of Object.values(execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows);
@@ -989,10 +1130,20 @@ async function handleRequest(req, res) {
       // Scope public memory by embed configuration so two widgets cannot read
       // each other's state even if a client-provided session id collides.
       const memorySessionId = safeSessionId
-        ? conversationMemoryService.normalizeSessionId(`${authorization.config.id}-${safeSessionId}`)
+        ? conversationMemoryService.normalizeSessionId(embedChatService.conversationId(authorization.config, safeSessionId, visitorIdentity))
         : null;
+      if (body.stream === true) {
+        embedStreaming = true;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=UTF-8', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+        res.flushHeaders?.();
+      }
       const coreResult = await intelligentCore.chat(queryText, {
         history: safeHistory,
+        onAnswer:embedStreaming?event=>embedEvent(event.type,event):undefined,
+        onProgress: embedStreaming ? event => {
+          if (event.type === 'reasoning_delta') return;
+          embedEvent('progress', { type: event.type, label: event.label, status: event.status, toolName: event.toolName, durationMs: event.durationMs });
+        } : undefined,
         useTools: true,
         signal: embedAbortController.signal,
         permissions: permissionsForAccount(null, true),
@@ -1006,6 +1157,7 @@ async function handleRequest(req, res) {
       });
 
       const payload = buildChatClientPayload(coreResult, execMs);
+      payload.streaming=coreResult.trace?.streaming;
       payload.workflowToken=workflowIdentity?.token;
       if(payload.execution) { payload.execution.artifacts=(payload.execution.artifacts||[]).map(({id,filename,expiresAt})=>({id,filename,expiresAt})); for(const value of Object.values(payload.execution.result||{})) if(Array.isArray(value)) value.splice(authorization.config.maxRows); }
       if (payload.toolResult?.rows) payload.toolResult.rows = payload.toolResult.rows.slice(0, authorization.config.maxRows);
@@ -1033,7 +1185,7 @@ async function handleRequest(req, res) {
         });
       const audit = loggerService.addChatAudit(queryText, coreResult.replyText, payload.generatedSql, activeProvider, execMs, auditStatus, null, {
         endpoint: '/api/embed/chat', embedId: authorization.config.id, origin: authorization.origin, preview: isAdminPreview,
-        historyCount: safeHistory.length, sessionId: safeSessionId, toolCalls: payload.toolCalls,
+        historyCount: safeHistory.length, sessionId: safeSessionId, visitorIdentity, toolCalls: payload.toolCalls,
         executionMode: coreResult.executionMode, tokenUsage: coreResult.tokenUsage || null,
         contextSelection: coreResult.contextSelection || null,
         memoryDecision: coreResult.trace?.memoryDecision || null,
@@ -1041,8 +1193,7 @@ async function handleRequest(req, res) {
         pendingTurnRecorded: pendingPersistence.recorded,
         diagnostics: buildChatDiagnostics(coreResult.trace)
       });
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({
+      const embedPayload = {
         status: payload.status,
         reply: payload.reply,
         chartSpec: payload.chartSpec,
@@ -1053,15 +1204,19 @@ async function handleRequest(req, res) {
         auditId: audit.id,
         completionStatus: auditStatus,
         citations: payload.citations || [],
+        answerEnvelope: payload.answerEnvelope,
         supportingEvidence: payload.supportingEvidence || [],
         citationValidation: payload.citationValidation || null,
         sessionId: safeSessionId,
         execution:payload.execution, workflowToken:payload.workflowToken, tokenUsage:payload.tokenUsage, routing:payload.routing
-      }));
+      };
+      if (embedStreaming) { embedEvent('result', embedPayload); res.end(); }
+      else { res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' }); res.end(JSON.stringify(embedPayload)); }
     } catch (err) {
       const execMs = Date.now() - startTime;
       loggerService.addLog('ERROR', 'Embed Chat', err.message);
       if (embedAbortController.signal.aborted || res.destroyed) return;
+      if (embedStreaming) { embedEvent('error', { status: 'error', message: err.message, errorCode: err.code }); res.end(); return; }
       res.writeHead(err.statusCode || 500, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message, errorCode: err.code, routing: err.routing || null, executionTime: `${execMs}ms` }));
     }
@@ -1083,7 +1238,9 @@ async function handleRequest(req, res) {
       res.write(`event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`);
     };
     try {
-      const { question, message, history, providerId, sessionId, knowledgeSearchEnabled, knowledgeSourceIds, dbSourceId, webSearch } = await readJsonBody(req);
+      const { question, message, history:suppliedHistory, providerId, sessionId, knowledgeSearchEnabled, knowledgeSourceIds, dbSourceId, webSearch, retryMessageIndex, continuationContext } = require('../services/chat_request_context').normalize(await readJsonBody(req));
+      const retryState=await require('../services/page_chat_history_service').assertCanChat(currentAccount?.id,sessionId,retryMessageIndex);
+      const history=require('../services/chat_request_context').normalize({history:retryState?.history || suppliedHistory}).history;
       const queryText = String(question || message || '').trim();
       if (!queryText) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -1102,6 +1259,7 @@ async function handleRequest(req, res) {
       const coreResult = await intelligentCore.chat(queryText, {
         providerId: providerId || null,
         history: memoryHistory,
+        continuationContext,
         useTools: true,
         knowledgeSearchEnabled: knowledgeSearchEnabled !== false,
         knowledgeSourceIds: Array.isArray(knowledgeSourceIds) ? knowledgeSourceIds : [],
@@ -1110,7 +1268,8 @@ async function handleRequest(req, res) {
         permissions: permissionsForAccount(currentAccount),
         session: { id: normalizedSessionId, accountId: currentAccount?.id || null, tenantId: currentAccount?.tenantId },
         signal: requestAbortController.signal,
-        onProgress: event => sendEvent('progress', event)
+        onProgress: event => sendEvent('progress', event),
+        onAnswer:event=>sendEvent(event.type,event)
       });
       const execMs = Date.now() - startTime;
       const auditProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
@@ -1118,6 +1277,7 @@ async function handleRequest(req, res) {
         code: coreResult.errorCode, routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null
       });
       const payload = buildChatClientPayload(coreResult, execMs);
+      payload.streaming=coreResult.trace?.streaming;
       payload.memoryDecision = coreResult.trace?.memoryDecision || null;
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
       const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
@@ -1178,7 +1338,9 @@ async function handleRequest(req, res) {
     let auditQuestionText = 'N/A';
     let auditProviderId = null;
     try {
-      const { question, message, model, history, providerId, sessionId, knowledgeSearchEnabled, knowledgeSourceIds, dbSourceId, webSearch } = await readJsonBody(req);
+      const { question, message, model, history:suppliedHistory, providerId, sessionId, knowledgeSearchEnabled, knowledgeSourceIds, dbSourceId, webSearch, retryMessageIndex, continuationContext } = require('../services/chat_request_context').normalize(await readJsonBody(req));
+      const retryState=await require('../services/page_chat_history_service').assertCanChat(currentAccount?.id,sessionId,retryMessageIndex);
+      const history=require('../services/chat_request_context').normalize({history:retryState?.history || suppliedHistory}).history;
       const queryText = question || message || '';
       auditQuestionText = queryText || 'N/A';
       auditProviderId = providerId || null;
@@ -1196,6 +1358,7 @@ async function handleRequest(req, res) {
       const coreResult = await intelligentCore.chat(queryText, {
         providerId: providerId || null,
         history: memoryHistory,
+        continuationContext,
         useTools: true,
         knowledgeSearchEnabled: knowledgeSearchEnabled !== false,
         knowledgeSourceIds: Array.isArray(knowledgeSourceIds) ? knowledgeSourceIds : [],
@@ -1262,7 +1425,7 @@ async function handleRequest(req, res) {
       }
 
       // ── Map kết quả Tool Calling sang format frontend cần ────────────────
-      const successfulSqlToolCalls = (coreResult.toolCalls || []).filter(t => t.toolName === 'execute_sql_query' && t.success);
+      const successfulSqlToolCalls = (coreResult.toolCalls || []).filter(t => ['execute_sql_query', 'query_sql_metric'].includes(t.toolName) && t.success);
       const sqlToolCall   = successfulSqlToolCalls[successfulSqlToolCalls.length - 1];
       const chartToolCall = coreResult.toolCalls?.find(t => t.toolName === 'render_chart' && t.success);
       const exportToolCall = coreResult.toolCalls?.find(t => t.toolName === 'export_data' && t.success);
@@ -1345,6 +1508,7 @@ async function handleRequest(req, res) {
         reply: coreResult.replyText,
         completionStatus: coreResult.trace?.completionStatus || 'PARTIAL',
         generatedSql,
+        answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(coreResult),
         toolResult,
         sqlExecutions,
         chartSpec,
@@ -1353,6 +1517,7 @@ async function handleRequest(req, res) {
         executionTime: `${execMs}ms`,
         executionMode: coreResult.executionMode,
         auditId: chatAudit.id,
+        execution: coreResult.execution || null,
         tokenUsage: coreResult.tokenUsage || null,
         providerFallbacks: coreResult.providerFallbacks || [],
         contextSelection: coreResult.contextSelection || null,
@@ -1386,10 +1551,41 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if(pathname==='/api/chat/attachments/file'&&req.method==='GET') {
+    try {
+      const file=await require('../services/chat_attachment_service').read(currentAccount?.id,parsedUrl.searchParams.get('batchId'),parsedUrl.searchParams.get('fileId'));
+      res.writeHead(200,{'Content-Type':file.type,'Content-Length':file.size,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store','Content-Security-Policy':"sandbox; default-src 'none'"});
+      res.end(file.bytes);
+    }catch(error){res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode?error.message:'Không đọc được tệp.'}));}
+    return;
+  }
+  if(pathname==='/api/chat/attachments'&&req.method==='POST') {
+    try {
+      const body=await readJsonBody(req,28*1024*1024);
+      if(body.sessionId)await require('../services/page_chat_history_service').assertCanChat(currentAccount?.id,body.sessionId,body.retryMessageIndex);
+      const result=await require('../services/chat_attachment_service').submit(currentAccount?.id,{...body,channel:'chat'});
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});
+      res.end(JSON.stringify(result));
+    }catch(error){
+      res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});
+      res.end(JSON.stringify({status:'error',message:error.statusCode?error.message:'Không lưu được tệp. Hãy thử lại.'}));
+    }
+    return;
+  }
   if (pathname === '/api/page-chat/sessions' && ['GET','POST'].includes(req.method)) {
     try {
       const history = require('../services/page_chat_history_service');
-      const result = req.method === 'GET' ? {sessions:await history.list(currentAccount.id)} : await history.save(currentAccount.id,await readJsonBody(req,8*1024*1024));
+      const query=parsedUrl.searchParams;
+      const body=req.method==='POST' ? await readJsonBody(req,8*1024*1024) : null;
+      const result = req.method === 'GET'
+        ? query.has('continuation')
+          ? await history.continuation(currentAccount.id,query.get('sessionId'),Number(query.get('version')))
+          : query.has('sessionId')
+          ? {session:await history.page(currentAccount.id,query.get('sessionId'),Number(query.get('before')),Number(query.get('version')))}
+          : {sessions:await history.list(currentAccount.id,true)}
+        : body.action==='summarize' ? await history.summarize(currentAccount.id,body)
+          : body.action==='replaceAnswer' ? await history.replaceAnswer(currentAccount.id,body)
+            : body.action==='suggestReplies' ? await history.suggestReplies(currentAccount.id,body) : await history.save(currentAccount.id,body);
       res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});
       res.end(JSON.stringify(result));
     } catch(error) {
@@ -1400,7 +1596,8 @@ async function handleRequest(req, res) {
   }
   if (pathname === '/api/chat-history' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-    res.end(JSON.stringify(loggerService.getChatHistory()));
+    const history=loggerService.getChatHistory();
+    res.end(JSON.stringify(currentAccount?.role==='admin'?history:history.filter(item=>item.requestPayload?.principalRef===`account:${currentAccount.id}`||item.requestPayload?.memoryDecision?.accountId===currentAccount.id)));
     return;
   }
 
@@ -1473,8 +1670,8 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/chat-feedback/review' && req.method === 'PUT') {
     try {
-      const { auditId, reviewStatus, reviewNote } = await readJsonBody(req);
-      const feedback = loggerService.reviewChatFeedback(auditId, reviewStatus, reviewNote);
+      const { auditId, reviewStatus, reviewNote, expectedOutcome } = await readJsonBody(req);
+      const feedback = loggerService.reviewChatFeedback(auditId, reviewStatus, reviewNote, { expectedOutcome, reviewer: currentAccount?.id });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', feedback }));
     } catch (err) {
@@ -1517,6 +1714,20 @@ async function handleRequest(req, res) {
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/mcp/review-read-only' && req.method === 'POST') {
+    try {
+      if (currentAccount?.role !== 'admin') throw Object.assign(new Error('Cần quyền quản trị.'), { statusCode: 403 });
+      const body = await readJsonBody(req);
+      const server = mcpService.reviewReadOnly(body.id, body, currentAccount.id);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'success', server }));
+    } catch (error) {
+      res.writeHead(error.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ status: 'error', message: error.message }));
     }
     return;
   }
@@ -1650,7 +1861,24 @@ async function handleRequest(req, res) {
   // ── Tool Registry APIs ─────────────────────────────────────────────────────
   if (pathname === '/api/tools' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-    res.end(JSON.stringify({ tools: toolRegistry.listTools() }));
+    res.end(JSON.stringify({ canManage: currentAccount?.role === 'admin', tools: toolRegistry.listTools(null, { permissions: permissionsForAccount(currentAccount), includeDisabled: true })
+      .map(tool => ({ ...tool, enabled: require('../services/tool_settings_service').isEnabled(tool.name) })) }));
+    return;
+  }
+
+  if (pathname === '/api/tools/state' && req.method === 'POST') {
+    try {
+      if (currentAccount?.role !== 'admin') throw Object.assign(new Error('Chỉ quản trị viên được bật/tắt công cụ.'), { statusCode: 403 });
+      const { toolName, enabled, expectedEnabled } = await readJsonBody(req);
+      if (!toolRegistry.listTools(null, { permissions: permissionsForAccount(currentAccount), includeDisabled: true }).some(tool => tool.name === toolName)) throw Object.assign(new Error('Công cụ không tồn tại hoặc không khả dụng.'), { statusCode: 404 });
+      const state = require('../services/tool_settings_service').setEnabled(toolName, enabled, expectedEnabled, currentAccount.id);
+      loggerService.addLog('INFO', 'System Tools', `${currentAccount.username}: ${enabled ? 'bật' : 'tắt'} ${toolName}`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ success: true, ...state }));
+    } catch (error) {
+      res.writeHead(error.statusCode || 400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ success: false, message: error.message }));
+    }
     return;
   }
 
@@ -1658,7 +1886,10 @@ async function handleRequest(req, res) {
     try {
       const { toolName, args, dbSourceId } = await readJsonBody(req);
       if (!toolName) throw new Error('Thiếu "toolName".');
-      const result = await toolRegistry.executeTool(toolName, args || {}, { dbSourceId: dbSourceId || null });
+      const result = await toolRegistry.executeTool(toolName, args || {}, {
+        dbSourceId: dbSourceId || null, accountId: currentAccount?.id,
+        permissions: permissionsForAccount(currentAccount)
+      });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1742,6 +1973,7 @@ async function handleRequest(req, res) {
           total_tokens: userPrompt.length + (result.replyText || '').length
         },
         sqlResult: result.executionResult || null,
+        answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(result),
         execution: result.execution || null,
         completionStatus: result.trace?.completionStatus || (result.success ? 'PARTIAL' : 'ERROR')
       }));
@@ -2068,6 +2300,8 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({ status: 'error', message: 'Tên file không hợp lệ.' }));
       return;
     }
+    try { await require('../governance/context').refresh(); require('../governance/artifacts').authorize(safeName); }
+    catch (error) { res.writeHead(error.statusCode || 403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ message: error.message, code: error.code })); return; }
     const primaryExportPath = path.join(EXPORTS_DIR, safeName);
     const legacyExportPath = path.join(LEGACY_EXPORTS_DIR, safeName);
     const exportPath = fs.existsSync(primaryExportPath) ? primaryExportPath : legacyExportPath;
@@ -2103,7 +2337,7 @@ async function handleRequest(req, res) {
       }
     } else {
       const headers = { 'Content-Type': contentType };
-      if (pathname === '/embed/knowledgehub-chat.js') {
+      if (/\.(?:html|js|css)$/i.test(filePath)) {
         headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
       }
       res.writeHead(200, headers);
@@ -2113,5 +2347,5 @@ async function handleRequest(req, res) {
 }
 
 module.exports = {
-  handleRequest
+  handleRequest: (req, res) => require('../governance/context').run(() => handleGovernedRequest(req, res))
 };

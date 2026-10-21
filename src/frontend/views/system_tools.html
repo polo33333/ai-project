@@ -1,31 +1,22 @@
 <div class="system-tools-page" id="view-system-tools" data-display="grid" style="display: none;">
   <section class="system-tools-hero">
-    <div class="system-tools-hero-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+    <div class="system-tools-hero-icon"><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i></div>
     <div>
-      <span class="system-tools-eyebrow">INTELLIGENT CORE</span>
-      <h2>Công cụ hệ thống</h2>
-      <p>Danh mục Function Calling mà AI có thể sử dụng trong quá trình xử lý yêu cầu.</p>
+      <h2 class="card-title">Công cụ hệ thống</h2>
+      <p>Quản lý công cụ KAI. Bật/tắt áp dụng cho yêu cầu mới trên toàn hệ thống.</p>
     </div>
-    <button class="btn-secondary-sm" type="button" onclick="fetchSystemTools(true)">
-      <i class="fa-solid fa-rotate"></i> Tải lại
-    </button>
   </section>
 
-  <section class="system-tools-summary" aria-label="Thống kê công cụ">
-    <div class="metric-card metric-card-blue"><span class="metric-main-icon blue"><i class="fa-solid fa-screwdriver-wrench"></i></span><div class="metric-content"><span>Tổng số tool</span><strong id="system-tools-total">0</strong></div></div>
-    <div class="metric-card metric-card-green"><span class="metric-main-icon green"><i class="fa-solid fa-circle-check"></i></span><div class="metric-content"><span>Đang khả dụng</span><strong class="available" id="system-tools-available">0</strong></div></div>
-    <div class="metric-card metric-card-purple"><span class="metric-main-icon purple"><i class="fa-solid fa-layer-group"></i></span><div class="metric-content"><span>Nhóm chức năng</span><strong id="system-tools-groups">0</strong></div></div>
-  </section>
-
-  <section class="system-tools-card">
+  <section class="system-tools-catalog">
     <div class="system-tools-toolbar">
       <label class="system-tools-search">
         <i class="fa-solid fa-magnifying-glass"></i>
-        <input id="system-tools-search" type="search" placeholder="Tìm theo tên hoặc mô tả tool..." oninput="renderSystemTools()">
+        <input id="system-tools-search" type="search" aria-label="Tìm công cụ" placeholder="Tìm công cụ..." oninput="renderSystemTools()">
       </label>
-      <div class="system-tools-filters" id="system-tools-filters"></div>
+      <select id="system-tools-filters" class="system-tools-group-select" aria-label="Lọc theo nhóm công cụ" onchange="setSystemToolGroup(this.value)"><option value="all">Tất cả nhóm</option></select>
+      <div class="system-tools-catalog-counts" aria-live="polite"><span>Hiển thị <strong id="system-tools-matched">0</strong>/<strong id="system-tools-total">0</strong> công cụ</span><span><strong id="system-tools-available">0</strong> đang bật</span><span><strong id="system-tools-groups">0</strong> nhóm</span></div>
+      <button class="btn-secondary-sm" type="button" onclick="fetchSystemTools(true)"><i class="fa-solid fa-rotate"></i> Tải lại</button>
     </div>
-    <div class="module-section-heading"><div><h3>Danh mục công cụ AI</h3><p>Xem chức năng và mở thông tin tham số của từng công cụ.</p></div></div>
     <div class="system-tools-grid" id="system-tools-grid">
       <div class="system-tools-loading"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải danh sách tool...</div>
     </div>

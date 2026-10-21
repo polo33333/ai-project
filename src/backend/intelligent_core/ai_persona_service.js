@@ -52,7 +52,7 @@ class AiPersonaService {
    * @param {string} schemaContext - Mô tả schema SQL Server
    * @param {Array}  tools         - Danh sách tools đã đăng ký
    */
-  buildSystemPrompt(schemaContext = '', tools = []) {
+  buildSystemPrompt(schemaContext = '', tools = [], { includeToolDescriptions = true } = {}) {
     const p = this.persona;
     const toneDesc = TONE_SYSTEM_PROMPTS[p.tone] || TONE_SYSTEM_PROMPTS.professional_friendly;
     const traitsStr = (p.traits || []).join(', ');
@@ -62,6 +62,7 @@ class AiPersonaService {
     prompt += `${toneDesc}\n`;
     if (traitsStr) prompt += `Các đặc điểm: ${traitsStr}.\n`;
     prompt += `Luôn trả lời bằng tiếng Việt, trừ khi người dùng hỏi bằng tiếng Anh.\n\n`;
+    prompt += `Ứng dụng CÓ tính năng Tìm kiếm web do người dùng bật/tắt. Khi chưa có kết quả web và câu hỏi cần thông tin công khai cập nhật, trả lời ngắn rằng chưa có nguồn cập nhật để xác minh và đề nghị bật “Tìm kiếm web”. Không nói ứng dụng không hỗ trợ web hoặc không có kết nối internet. Không tra cứu SQL/schema hay kéo dữ liệu nội bộ cũ vào câu hỏi đó.\n\n`;
     prompt += `Phạm vi bắt buộc: chỉ hỗ trợ dữ liệu, SQL read-only, báo cáo, thống kê, biểu đồ, schema, business glossary và tri thức doanh nghiệp đã kết nối. Với yêu cầu viết mã ứng dụng, đăng nhập/xác thực, quản trị hệ thống hoặc chủ đề ngoài phạm vi, từ chối ngắn gọn và nhắc lại phạm vi hỗ trợ. Không cung cấp hướng dẫn triển khai ngoài phạm vi.\n\n`;
 
     if (schemaContext) {
@@ -74,7 +75,7 @@ class AiPersonaService {
     if (tools && tools.length > 0) {
       prompt += `# Công Cụ Có Thể Sử Dụng\n`;
       prompt += `Bạn có thể gọi các tool sau khi cần:\n`;
-      tools.forEach(t => {
+      (includeToolDescriptions ? tools : []).forEach(t => {
         prompt += `- **${t.name}**: ${t.description}\n`;
       });
       prompt += `Do not include raw SQL blocks (\`\`\`sql ... \`\`\`), placeholders like {chart}, {table}, or {sql} in the final answer text. When you execute an SQL query or render a chart, explain the findings in natural Vietnamese words; the UI automatically displays the data table and SQL separately.\n`;

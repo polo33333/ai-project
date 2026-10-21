@@ -1,0 +1,25 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
+const { verify, restore } = require('../scripts/prepare_agent_release');
+const hash = value => crypto.createHash('sha256').update(value).digest('hex');
+test('release restores verified code into a new directory and refuses existing targets or traversal', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledgehub-release-test-'));
+  t.after(() => { assert.ok(directory.startsWith(path.resolve(os.tmpdir()) + path.sep)); fs.rmSync(directory, { recursive: true, force: true }); });
+  fs.mkdirSync(path.join(directory, 'code', 'src'), { recursive: true });
+  const source = 'verified application code'; fs.writeFileSync(path.join(directory, 'code', 'src', 'probe.js'), source);
+  const files = [{ path: 'src/probe.js', sha256: hash(source) }];
+  const manifest = { schemaVersion: '1', files, revision: hash(JSON.stringify(files)) };
+  const filename = path.join(directory, 'manifest.json'); fs.writeFileSync(filename, JSON.stringify(manifest));
+  assert.equal(verify(filename).manifest.revision, manifest.revision);
+  const target = path.join(directory, 'staged'); restore(filename, target);
+  assert.equal(fs.readFileSync(path.join(target, 'src', 'probe.js'), 'utf8'), source);
+  assert.equal(fs.existsSync(path.join(target, '.env')), false);
+  assert.throws(() => restore(filename, target), /NEW_DIRECTORY/);
+  manifest.files[0].path = '../private'; fs.writeFileSync(filename, JSON.stringify(manifest));
+  assert.throws(() => verify(filename), /PATH_INVALID/);
+});

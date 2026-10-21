@@ -1,0 +1,18 @@
+'use strict';
+const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+function render(request) {
+  return `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kết nối AI · KnowledgeHub</title>
+<style>:root{color-scheme:light dark;font-family:Inter,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:light-dark(#f5f7fc,#111827);color:light-dark(#18243d,#e5e7eb);padding:20px}main{width:min(100%,480px);padding:32px;border:1px solid light-dark(#e1e7f0,#374151);border-radius:24px;background:light-dark(white,#1f2937)}h1{font-size:24px}p,li{line-height:1.6}label{display:grid;gap:8px;margin:16px 0}input,button{font:inherit;border-radius:10px;padding:12px;border:1px solid #8c89b0}button{cursor:pointer}button.primary{background:#6554df;color:white;border-color:#6554df}footer{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}#message{color:light-dark(#b42318,#fca5a5);overflow-wrap:anywhere}[hidden]{display:none!important}</style>
+<main><p>KnowledgeHub · Kết nối AI</p><h1>Cho phép ${escape(request.name)}?</h1><p>Địa chỉ nhận kết nối: <strong>${escape(request.redirectOrigin)}</strong></p><p>Ứng dụng này yêu cầu quyền tạo nghiệp vụ:</p><ul><li>Đọc metadata nguồn dữ liệu và mẫu hiện có.</li><li>Tạo, sửa bản nháp và chạy kiểm thử fixture.</li></ul><p>Bạn vẫn xem và Publish trong KnowledgeHub. Có thể thu hồi quyền ở <strong>Nghiệp vụ → Kết nối AI</strong>.</p>
+<form id="login" hidden><label>Tài khoản KnowledgeHub<input name="username" autocomplete="username" required></label><label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Đăng nhập</button></form>
+<p id="account"></p><p id="message" role="status"></p><footer id="consent" hidden><button id="approve" class="primary">Cho phép kết nối</button><button id="deny">Từ chối</button></footer></main>
+<script>
+const requestId=${JSON.stringify(request.id)},login=document.getElementById('login'),consent=document.getElementById('consent'),message=document.getElementById('message');
+async function api(url,body){const r=await fetch(url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw Error(d.message||d.error||'Không thể xử lý');return d;}
+async function check(){const d=await api('/api/auth/me');login.hidden=!!d.authenticated;consent.hidden=!d.authenticated||d.account?.role!=='admin';document.getElementById('account').textContent=d.authenticated?'Đăng nhập: '+(d.account.displayName||d.account.username):'';if(d.authenticated&&d.account.role!=='admin')message.textContent='Cần tài khoản quản trị để tạo kết nối.';}
+login.onsubmit=async e=>{e.preventDefault();const b=login.querySelector('button');b.disabled=true;try{await api('/api/auth/login',Object.fromEntries(new FormData(login)));login.reset();message.textContent='';await check();}catch(e){message.textContent=e.message;}finally{b.disabled=false;}};
+async function choose(approve){consent.querySelectorAll('button').forEach(b=>b.disabled=true);try{const d=await api('/api/workflow-plugins/mcp/authorize',{requestId,approve});location.assign(d.redirect);}catch(e){message.textContent=e.message;consent.querySelectorAll('button').forEach(b=>b.disabled=false);}}
+document.getElementById('approve').onclick=()=>choose(true);document.getElementById('deny').onclick=()=>choose(false);check().catch(e=>message.textContent=e.message);
+</script></html>`;
+}
+module.exports = { render };

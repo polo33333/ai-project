@@ -59,6 +59,8 @@ window.updatePageChatMiniPanel = function updatePageChatMiniPanel(nextState) {
 
 function setPageChatResponding(active) {
   window.pageChatIsResponding = Boolean(active);
+  window.syncPageChatScrollActivity?.();
+  renderChatSessionsList();
   const button = document.getElementById('page-chat-send-button');
   if (!button) return;
   button.classList.toggle('is-stop', window.pageChatIsResponding);
@@ -67,8 +69,33 @@ function setPageChatResponding(active) {
   button.title = window.pageChatIsResponding ? 'Dừng tiến trình trả lời hiện tại' : 'Gửi yêu cầu';
   button.innerHTML = window.pageChatIsResponding
     ? '<i class="fa-solid fa-square"></i>'
-    : '<i class="fa-solid fa-paper-plane"></i>';
+    : '<i class="fa-solid fa-arrow-up"></i>';
 }
+
+window.syncPageChatComposerLayout = function syncPageChatComposerLayout() {
+  const area = document.querySelector('#view-page_chat .page-chat-composer-area');
+  const main = area?.parentElement;
+  if (!area || !main || area._composerLayoutObserver || !window.ResizeObserver) return;
+  let previousHeight = 0;
+  const update = () => {
+    const height = Math.ceil(area.getBoundingClientRect().height);
+    if (!height || height === previousHeight) return;
+    const messages = document.getElementById('page-chat-messages-container');
+    const follow = messages && messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 48;
+    previousHeight = height;
+    main.style.setProperty('--page-chat-composer-height', `${height}px`);
+    if (follow) messages.scrollTop = messages.scrollHeight;
+  };
+  area._composerLayoutObserver = new window.ResizeObserver(update);
+  area._composerLayoutObserver.observe(area);
+  update();
+};
+
+window.syncPageChatScrollActivity=function syncPageChatScrollActivity(){
+  window.syncPageChatComposerLayout?.();
+  window.ChatReasoningUI?.watchActivity?.(document.getElementById('page-chat-messages-container'),document.getElementById('quick-prompts-bar') || document.querySelector('#view-page_chat .page-chat-composer'),
+    ()=>Boolean(window.pageChatIsResponding&&window.pageChatPendingThinking?.sessionId===window.currentChatSessionId),{showWhenIdle:true,arrow:true});
+};
 
 function stopPageChatResponse() {
   if (!window.pageChatRequestController || !window.pageChatIsResponding) return false;
@@ -85,6 +112,8 @@ function handlePageChatSendAction() {
 }
 
 function closePageChatMenus() {
+  closeChatModelChoices();
+  document.querySelectorAll('#page-chat-model-menu .chat-model-submenu-trigger').forEach(button => button.setAttribute('aria-expanded', 'false'));
   document.getElementById('page-chat-model-menu')?.classList.remove('is-open');
   document.getElementById('page-chat-add-menu')?.classList.remove('is-open');
   document.getElementById('page-chat-model-trigger')?.setAttribute('aria-expanded', 'false');
@@ -104,6 +133,26 @@ function toggleChatModelMenu(event) {
   if (open) { menu?.classList.add('is-open'); trigger?.setAttribute('aria-expanded', 'true'); }
 }
 
+function closeChatModelChoices(){
+  const choices=document.getElementById('chat-model-other-menu');
+  if(choices)choices.hidden=true;
+  document.getElementById('chat-effort-model-button')?.setAttribute('aria-expanded','false');
+}
+
+function toggleChatModelChoices(event){
+  event.stopPropagation();
+  const choices=document.getElementById('chat-model-other-menu');
+  const button=document.getElementById('chat-effort-model-button');
+  if(!choices||!button)return;
+  const open=choices.hidden;
+  choices.hidden=!open;button.setAttribute('aria-expanded',String(open));
+  if(open){
+    const panel=document.getElementById('page-chat-model-menu').getBoundingClientRect();
+    choices.classList.toggle('opens-right',panel.left<choices.offsetWidth+12&&window.innerWidth-panel.right>choices.offsetWidth+12);
+    choices.querySelector('.is-selected')?.focus({preventScroll:true});
+  }
+}
+
 function toggleChatAddMenu(event) {
   event?.stopPropagation();
   const menu = document.getElementById('page-chat-add-menu');
@@ -117,37 +166,69 @@ function toggleChatAddMenu(event) {
   if (open) { menu?.classList.add('is-open'); trigger?.setAttribute('aria-expanded', 'true'); }
 }
 
-function selectPageChatModel(value) {
+function getPageChatReasoningMode() {
+  return localStorage.getItem('knowledgehub_chat_reasoning_mode') === 'fast' ? 'fast' : 'medium';
+}
+
+function selectPageChatReasoningMode(mode, keepOpen = false) {
+  localStorage.setItem('knowledgehub_chat_reasoning_mode', mode === 'fast' ? 'fast' : 'medium');
+  selectPageChatModel(document.getElementById('page-chat-model-selector')?.value, !keepOpen);
+}
+
+function toggleChatModelSubmenu(event, button) {
+  event.stopPropagation();
+  const open = button.getAttribute('aria-expanded') !== 'true';
+  document.querySelectorAll('#page-chat-model-menu .chat-model-submenu-trigger').forEach(item => item.setAttribute('aria-expanded', 'false'));
+  button.setAttribute('aria-expanded', String(open));
+}
+
+function selectPageChatModel(value, closeMenu = true) {
   const selector = document.getElementById('page-chat-model-selector');
   if (!selector) return;
   selector.value = value;
   const option = selector.options[selector.selectedIndex];
   const label = document.getElementById('page-chat-model-label');
-  if (label && option) label.textContent = option.dataset.shortLabel || option.textContent;
+  if (label && option) label.innerHTML = `<span class="chat-selected-model">${escapeChatMarkdown(option.dataset.shortLabel || option.textContent)}</span><span class="chat-selected-mode">${getPageChatReasoningMode() === 'fast' ? 'Nhanh' : 'Suy luận'}</span>`;
+  const currentModel = document.getElementById('chat-menu-current-model');
+  if (currentModel && option) currentModel.textContent = option.dataset.shortLabel || option.textContent;
+  const currentMode = document.getElementById('chat-menu-current-mode');
+  if (currentMode) currentMode.textContent = getPageChatReasoningMode() === 'fast' ? 'Nhanh' : 'Suy luận';
+  const effortSlider=document.getElementById('chat-effort-slider');
+  const effortLabel=document.getElementById('chat-effort-label');
+  const effortModel=document.getElementById('chat-effort-model');
+  const effortDescription=document.getElementById('chat-effort-description');
+  const isFast=getPageChatReasoningMode()==='fast';
+  if(effortSlider){effortSlider.value=isFast?'0':'1';effortSlider.setAttribute('aria-valuetext',isFast?'Nhanh':'Suy luận');effortSlider.style.setProperty('--effort-progress',isFast?'0%':'100%');}
+  if(effortLabel)effortLabel.textContent=isFast?'Nhanh':'Suy luận';
+  if(effortModel&&option){effortModel.textContent=option.dataset.shortLabel||option.textContent;effortModel.title=option.textContent;}
+  if(effortDescription)effortDescription.textContent=isFast?'Ẩn phần suy nghĩ khi xử lý':'Hiện phần suy nghĩ khi xử lý';
+  document.querySelectorAll('.chat-reasoning-mode-option').forEach(button => {
+    button.setAttribute('aria-selected', String(button.dataset.mode === getPageChatReasoningMode()));
+  });
   document.querySelectorAll('.page-chat-model-option').forEach(button => {
     button.classList.toggle('is-selected', button.dataset.value === value);
+    button.setAttribute('aria-selected',String(button.dataset.value === value));
   });
   localStorage.setItem('knowledgehub_selected_chat_model', value);
-  closePageChatMenus();
+  if(closeMenu)closePageChatMenus();
 }
 
 function openChatFilePicker(type = 'all') {
   closePageChatMenus();
+  const picker=document.getElementById('page-chat-file-input');
+  if(picker)picker.accept=window.ChatAttachments.accept;
   document.getElementById(type === 'camera' ? 'page-chat-camera-input' : 'page-chat-file-input')?.click();
 }
 
 function handlePageChatFiles(event) {
   const incoming = Array.from(event?.target?.files || []);
-  incoming.forEach(file => {
-    const duplicate = window.pageChatAttachments.some(item => item.name === file.name && item.size === file.size);
-    if (!duplicate && file.size <= 10 * 1024 * 1024) window.pageChatAttachments.push(file);
-    else if (file.size > 10 * 1024 * 1024 && typeof showToast === 'function') showToast(`Tệp ${file.name} vượt quá 10 MB`, 'warning');
-  });
+  window.pageChatAttachments=window.ChatAttachments.add(window.pageChatAttachments,incoming,message=>showToast(message,'warning'));
   if (event?.target) event.target.value = '';
   renderPageChatAttachments();
 }
 
 function removePageChatAttachment(index) {
+  window.ChatAttachments.release(window.pageChatAttachments.slice(index,index+1));
   window.pageChatAttachments.splice(index, 1);
   renderPageChatAttachments();
 }
@@ -156,12 +237,7 @@ function renderPageChatAttachments() {
   const preview = document.getElementById('page-chat-attachment-preview');
   if (!preview) return;
   preview.classList.toggle('has-files', window.pageChatAttachments.length > 0);
-  preview.innerHTML = window.pageChatAttachments.map((file, index) => `
-    <div class="page-chat-file-chip">
-      <i class="fa-solid ${file.type?.startsWith('image/') ? 'fa-image' : 'fa-file-lines'}"></i>
-      <span title="${escapeChatMarkdown(file.name)}">${escapeChatMarkdown(file.name)}</span>
-      <button type="button" onclick="removePageChatAttachment(${index})" aria-label="Xóa tệp"><i class="fa-solid fa-xmark"></i></button>
-    </div>`).join('');
+  window.ChatAttachments.render(preview,window.pageChatAttachments,{onRemove:removePageChatAttachment});
   renderChatKnowledgeChip();
 }
 
@@ -175,6 +251,7 @@ function togglePageChatWebSearch(event) {
   }
   document.getElementById('page-chat-web-toggle')?.classList.toggle('is-active', window.pageChatWebSearchEnabled);
   document.getElementById('page-chat-web-toggle')?.setAttribute('aria-pressed', String(window.pageChatWebSearchEnabled));
+  document.getElementById('page-chat-web-toggle')?.setAttribute('aria-checked', String(window.pageChatWebSearchEnabled));
   renderChatKnowledgeChip();
 }
 
@@ -182,17 +259,6 @@ function showChatAddNotice(type) {
   closePageChatMenus();
   const labels = { project: 'Dự án', skills: 'Skills', connector: 'Connector', plugins: 'Plugins' };
   if (typeof showToast === 'function') showToast(`${labels[type] || type} sẽ được cấu hình tại trang quản trị tương ứng.`, 'info');
-}
-
-async function buildPageChatAttachmentContext(files) {
-  if (!files.length) return '';
-  const parts = await Promise.all(files.map(async file => {
-    const isText = file.type.startsWith('text/') || /\.(txt|md|csv|json|sql|js|ts|html|css)$/i.test(file.name);
-    if (!isText || file.size > 1024 * 1024) return `[Tệp đính kèm: ${file.name}, ${Math.ceil(file.size / 1024)} KB]`;
-    try { return `[Nội dung tệp ${file.name}:\n${(await file.text()).slice(0, 12000)}\n]`; }
-    catch { return `[Tệp đính kèm: ${file.name}]`; }
-  }));
-  return `\n\n${parts.join('\n')}`;
 }
 
 document.addEventListener('click', closePageChatMenus);
@@ -206,8 +272,134 @@ document.addEventListener('keydown', event => {
 
 let chatHistoryLoaded = false;
 let chatHistoryFailed = false;
+let chatHistoryConflict = false;
+const chatPinSaves = new Set();
 let chatHistorySaveQueue = Promise.resolve();
 const persistedChatSessions = new Map();
+
+const chatPageLoads = new Set();
+const chatContinuations = new Set();
+function chatPayloadBytes(session) {
+  return new TextEncoder().encode(JSON.stringify({messages:session.messages,history:session.history})).length;
+}
+function chatSessionUsage(session) {
+  return {count:(session._page?.start || 0)+session.messages.length,
+    bytes:session._page ? session._page.bytes + chatPayloadBytes(session) - session._page.loadedBytes : new TextEncoder().encode(JSON.stringify(session)).length};
+}
+function chatSessionIsFull(session) {
+  const usage=chatSessionUsage(session);
+  return usage.count >= 80 || usage.bytes >= 2*1024*1024;
+}
+function renderChatLimitNotice(session) {
+  let notice=document.getElementById('chat-session-limit-notice');
+  if (!notice) {
+    notice=document.createElement('div'); notice.id='chat-session-limit-notice';
+  }
+  // Keep the warning in the measured floating stack. A sibling at the bottom
+  // of chat-main would sit underneath the absolutely positioned composer.
+  const composerArea=document.querySelector?.('#view-page_chat .page-chat-composer-area');
+  if (composerArea && notice.parentElement!==composerArea) composerArea.prepend(notice);
+  else if (!composerArea && !notice.isConnected) document.getElementById('page-chat-messages-container')?.after(notice);
+  notice.replaceChildren(); notice.hidden=true;
+  if (!session) return;
+  const usage=chatSessionUsage(session);
+  const canContinue=usage.count>=60 || chatSessionIsFull(session);
+  const nextSession=session.continuedTo && window.chatSessions?.find(item=>item.id===session.continuedTo);
+  if (!canContinue && !nextSession) return;
+  notice.hidden=false;
+  notice.className=chatSessionIsFull(session) ? 'chat-limit-card is-full' : canContinue || nextSession ? 'chat-limit-card' : 'chat-limit-card is-context';
+  notice.role='status'; notice.ariaLive='polite';
+  const text=document.createElement('span');
+  text.className='chat-limit-copy';
+  text.textContent=chatSessionIsFull(session) ? 'Hội thoại đã đạt giới hạn' :
+    usage.count>=60 ? 'Hội thoại sắp đầy · '+usage.count+'/80 tin' : 'Đã tiếp nối ngữ cảnh hội thoại';
+  const detail=document.createElement('small'); detail.className='chat-limit-description';
+  detail.textContent=nextSession ? 'Bản tóm tắt đã sẵn sàng trong hội thoại tiếp theo. Bạn vẫn có thể xem lại lịch sử tại đây.' :
+    session.continuedFrom && usage.count<60 && !chatSessionIsFull(session) ? 'Bạn có thể xem bản tóm tắt hoặc quay lại hội thoại trước bất cứ lúc nào.' :
+    'Tiếp tục trong hội thoại mới kèm bản tóm tắt ngữ cảnh. Lịch sử cũ vẫn được giữ lại.';
+  text.append(detail);
+  notice.append(text);
+  if (canContinue || nextSession) {
+    const button=document.createElement('button'); button.type='button';
+    button.className='chat-limit-primary';
+    button.textContent=nextSession ? 'Mở hội thoại tiếp' : chatContinuations.has(session.id) ? 'Đang tóm tắt…' : 'Tiếp tục với ngữ cảnh';
+    button.disabled=chatContinuations.has(session.id);
+    button.onclick=()=>nextSession ? selectChatSession(nextSession.id) : continueChatSession(session.id);
+    notice.append(button);
+    const fresh=document.createElement('button'); fresh.type='button'; fresh.className='chat-limit-fresh';
+    fresh.textContent='Chat mới trống';
+    fresh.title='Bắt đầu hội thoại trống, không mang theo ngữ cảnh cũ';
+    fresh.disabled=chatContinuations.has(session.id);
+    fresh.onclick=()=>createNewChatSession(); notice.append(fresh);
+  }
+}
+async function loadOlderChatMessages(session=getCurrentChatSession()) {
+  if (!session?._page?.start || chatPageLoads.has(session.id) || window.pageChatIsResponding) return;
+  chatPageLoads.add(session.id);
+  try {
+    if (!await saveChatSessions()) return;
+    const version=persistedChatSessions.get(session.id)?.version;
+    const before=session._page.start;
+    const response=await fetch('/api/page-chat/sessions?'+new URLSearchParams({sessionId:session.id,before,version}));
+    if (!response.ok) throw new Error(response.status===409 ? 'Lịch sử đã thay đổi. Hãy tải lại trang.' : 'Không tải được tin cũ. Cuộn lên hoặc bấm để thử lại.');
+    const {session:older}=await response.json();
+    if (!window.chatSessions.includes(session) || session._page.start!==before) return;
+    const baseline=chatPayloadBytes(session);
+    session.messages.unshift(...older.messages);
+    session._page.start=older._page.start;
+    session._page.loadedBytes+=chatPayloadBytes(session)-baseline;
+    // Loading old messages is not a user edit.
+    const saved=persistedChatSessions.get(session.id);
+    if (saved) {
+      const snapshot=JSON.parse(saved.snapshot);
+      snapshot.messages.unshift(...older.messages); snapshot._page={...session._page};
+      saved.snapshot=sessionSnapshot(snapshot);
+    }
+    if (window.currentChatSessionId===session.id) renderCurrentChatMessages(true);
+  } catch(error) { showToast(error.message,'error'); }
+  finally { chatPageLoads.delete(session.id); }
+}
+async function continueChatSession(id) {
+  if (window.pageChatIsResponding || chatContinuations.has(id)) return;
+  const source=window.chatSessions.find(item=>item.id===id);
+  if (!source) return;
+  if (source.continuedTo && window.chatSessions.some(item=>item.id===source.continuedTo)) {
+    if (await saveChatSessions()) selectChatSession(source.continuedTo);
+    return;
+  }
+  if (chatSessionUsage(source).count<60 && !chatSessionIsFull(source)) return;
+  chatContinuations.add(id); renderChatLimitNotice(source);
+  try {
+    if (!await saveChatSessions()) throw new Error('Hãy lưu lại lịch sử trước khi tiếp tục.');
+    const response=await fetch('/api/page-chat/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'summarize',sessionId:id,version:persistedChatSessions.get(id).version,
+        providerId:document.getElementById('page-chat-model-selector')?.value || null}),signal:AbortSignal.timeout(18000)});
+    if (!response.ok) {
+      const error=await response.json().catch(()=>({}));
+      const message=error.message==='CHAT_HISTORY_CONFLICT' ? 'Hội thoại đã thay đổi trên tab khác. Hãy tải lại trang trước khi tiếp tục.' :
+        error.message==='CHAT_NOT_FOUND' ? 'Không tìm thấy hội thoại gốc. Hãy tải lại danh sách hội thoại.' :
+        response.status===401 ? 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.' :
+        'Chưa chuyển được ngữ cảnh (HTTP '+response.status+'). Hãy thử lại.';
+      throw new Error(message);
+    }
+    const {summary:summaryText,mode}=await response.json();
+    const newId='session-'+crypto.randomUUID();
+    const summary=typeof summaryText==='string' ? summaryText.trim() : '';
+    if (!summary) throw new Error('Chưa tạo được ngữ cảnh chuyển tiếp. Hãy thử lại.');
+    const now=Date.now();
+    if (!window.chatSessions.includes(source)) throw new Error('Hội thoại gốc đã bị xóa.');
+    const next={id:newId,title:('Tiếp tục: '+source.title).slice(0,200),createdAt:now,updatedAt:now,continuedFrom:id,
+      continuationSummary:summary,history:[],messages:[]};
+    window.chatSessions.unshift(next);
+    source.continuedTo=newId;
+    renderChatSessionsList();
+    if (!await saveChatSessions()) { throw new Error('Chưa lưu được hội thoại mới. Hãy bấm lưu lại lịch sử; bản tóm tắt vẫn được giữ trên trang.'); }
+    selectChatSession(newId);
+    if (mode==='excerpt') showToast('Model phản hồi chậm hoặc chưa khả dụng. Đã chuyển tiếp bằng trích đoạn ngữ cảnh; bạn có thể xem lại trong hội thoại mới.','info');
+  } catch(error) { showToast(error.message,'error'); }
+  finally { chatContinuations.delete(id); renderChatLimitNotice(getCurrentChatSession()); }
+}
+
 function sessionSnapshot(session) { const {version,...data}=session; return JSON.stringify(data); }
 function saveChatSessions() {
   try { localStorage.setItem(CHAT_ACTIVE_SESSION_KEY, window.currentChatSessionId || ''); } catch (_) {}
@@ -225,23 +417,39 @@ function saveChatSessions() {
     const result=await response.json();
     deleted.forEach(item=>persistedChatSessions.delete(item.id));
     changes.forEach(session=>persistedChatSessions.set(session.id,{version:result.versions[session.id],snapshot:sessionSnapshot(session)}));
+    document.getElementById('chat-history-save-notice')?.setAttribute('hidden', '');
     return true;
   }).catch(error=>{
     chatHistoryFailed=true;
-    showToast(error.message,'error');
-    if (!error.message.includes('thiết bị khác')) {
-      let retry=document.getElementById('chat-history-save-retry');
-      if (!retry) {
-        retry=document.createElement('button'); retry.id='chat-history-save-retry'; retry.type='button';
-        retry.textContent='Thử lưu lại lịch sử chat';
-        retry.onclick=async()=>{chatHistoryFailed=false;if(await saveChatSessions())retry.remove();};
-        document.getElementById('chat-sessions-list')?.prepend(retry);
-      }
-    }
-    console.error('Chat history save failed');
+    const networkFailure=error?.name==='TypeError';
+    showToast(networkFailure
+      ? 'Mất kết nối khi lưu lịch sử. Nội dung vẫn còn trên trang; hãy bấm Lưu lại khi kết nối ổn định.'
+      : error.message,'error','Chưa lưu được lịch sử');
+    chatHistoryConflict = error.message.includes('thiết bị khác');
+    const notice = document.getElementById('chat-history-save-notice');
+    const message = document.getElementById('chat-history-save-message');
+    const retry = document.getElementById('chat-history-save-retry');
+    if (notice) notice.hidden = false;
+    if (message) message.textContent = chatHistoryConflict ? 'Lịch sử đã thay đổi trên thiết bị khác. Tải lại trang trước khi sửa tiếp.' : 'Chưa lưu được thay đổi. Nội dung vẫn còn trên trang.';
+    if (retry) retry.hidden = chatHistoryConflict;
+    console.error('Chat history save failed', {operation:'save_sessions',errorName:error?.name,message:error?.message});
     return false;
   });
   return chatHistorySaveQueue;
+}
+
+async function retrySaveChatSessions() {
+  if (chatHistoryConflict) return;
+  const button = document.getElementById('chat-history-save-retry');
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
+  chatHistoryFailed = false;
+  try {
+    if (await saveChatSessions()) {
+      document.getElementById('chat-history-save-notice')?.setAttribute('hidden', '');
+      showToast('Đã lưu lịch sử chat.', 'success');
+    }
+  } finally { if (button) button.disabled = false; }
 }
 
 function clearBackendConversationMemory(sessionId) {
@@ -327,6 +535,7 @@ async function loadChatSessions() {
     if (!response.ok) throw new Error('Không tải được lịch sử chat từ máy chủ. Hãy tải lại trang.');
     const data=await response.json();
     window.chatSessions=data.sessions.map(normalizeStoredChatSession);
+    window.chatSessions.forEach(session=>{ if(session._page) session._page.loadedBytes=chatPayloadBytes(session); });
     window.chatSessions.forEach(session=>persistedChatSessions.set(session.id,{version:session.version,snapshot:sessionSnapshot(session)}));
     try { window.currentChatSessionId=localStorage.getItem(CHAT_ACTIVE_SESSION_KEY); } catch (_) {}
     if (!window.chatSessions.some(session=>session.id===window.currentChatSessionId)) window.currentChatSessionId=window.chatSessions[0]?.id || null;
@@ -437,6 +646,7 @@ function stripInlineDownloadLink(value, downloadUrl) {
     .replace(new RegExp(escapedUrl, 'gi'), '')
     .replace(/^[\s>*•-]*(?:🔽\s*)?(?:Tải (?:về|xuống|file)(?: tại| kết quả)?|Download)\s*:?\s*[.,]*\s*$/gim, '')
     .replace(/:\s*\.(?=\s|$)/g, '.')
+    .replace(/^\s*[.,]\s*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -466,13 +676,20 @@ function parseMarkdownInline(value) {
 }
 
 function splitMarkdownTableRow(line) {
-  const trimmed = String(line || '').trim().replace(/^\|/, '').replace(/\|$/, '');
-  return trimmed.split('|').map(cell => cell.trim());
+  const text = String(line || '').trim();
+  const cells = []; let cell = '', delimiter = false;
+  for (let index = text.startsWith('|') ? 1 : 0; index < text.length; index++) {
+    if (text[index] === '\\' && text[index + 1] === '|') { cell += '|'; index++; delimiter = false; }
+    else if (text[index] === '|') { cells.push(cell.trim()); cell = ''; delimiter = true; }
+    else { cell += text[index]; delimiter = false; }
+  }
+  if (!delimiter) cells.push(cell.trim());
+  return cells;
 }
 
 function isMarkdownTableDivider(line) {
   const cells = splitMarkdownTableRow(line);
-  return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+  return cells.length >= 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
 }
 
 function isBooleanDisplayColumn(columnName = '') {
@@ -498,6 +715,9 @@ function formatChatDisplayValue(value, columnName = '') {
 function renderMarkdownTable(headerLine, bodyLines) {
   const headers = splitMarkdownTableRow(headerLine);
   const rows = bodyLines.map(splitMarkdownTableRow);
+  const widths = headers.map((header, index) => Math.max(100, Math.min(320,
+    Math.max(String(header).length, ...rows.map(row => String(row[index] ?? '').length)) * 7 + 24)));
+  const columnsHtml = widths.map(width => `<col style="width:${width}px">`).join('');
   const headerHtml = headers.map(cell => `<th>${parseMarkdownInline(cell)}</th>`).join('');
   const bodyHtml = rows.map(row => `<tr>${headers.map((header, index) => {
     const value = formatChatDisplayValue(row[index] ?? '', header);
@@ -505,7 +725,7 @@ function renderMarkdownTable(headerLine, bodyLines) {
     return `<td${empty ? ' class="is-empty"' : ''}>${empty ? '&mdash;' : parseMarkdownInline(value)}</td>`;
   }).join('')}</tr>`).join('');
 
-  return `<div class="chat-markdown-table-wrap"><table class="chat-markdown-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+  return `<div class="chat-markdown-table-wrap"><table class="chat-markdown-table" style="--chat-table-width:${widths.reduce((sum, width) => sum + width, 0)}px"><colgroup>${columnsHtml}</colgroup><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
 }
 
 function renderChatCodeBlock(content, language = '') {
@@ -705,38 +925,10 @@ function renderChartSpec(canvasId, chartSpec) {
 
 // Thinking / Tool Calling Steps UI
 function createThinkingBubble(containerId) {
-  const div = document.createElement('div');
-  div.id = containerId;
-  div.className = 'chat-thinking-row';
-  div.innerHTML = `
-    <div class="chat-thinking-avatar">
-      <svg class="chat-ai-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75c.55 4.95 2.3 6.7 7.25 7.25-4.95.55-6.7 2.3-7.25 7.25C11.45 12.3 9.7 10.55 4.75 10 9.7 9.45 11.45 7.7 12 2.75Z"/><path d="M19 15.75c.22 1.97.91 2.66 2.88 2.88-1.97.22-2.66.91-2.88 2.87-.22-1.96-.91-2.65-2.88-2.87 1.97-.22 2.66-.91 2.88-2.88Z"/></svg>
-    </div>
-    <div class="chat-thinking-card">
-      <div class="chat-thinking-head">
-        <canvas class="chat-thinking-spinner" width="22" height="22" aria-hidden="true"></canvas>
-        <div class="chat-thinking-copy">
-          <strong>Đang xử lý yêu cầu</strong>
-          <span id="${containerId}-current">Phân tích yêu cầu của bạn...</span>
-        </div>
-        <button type="button" class="chat-thinking-toggle" aria-label="Xem chi tiết quá trình xử lý" aria-expanded="false">
-          <i class="fa-solid fa-chevron-down"></i>
-        </button>
-      </div>
-      <div id="${containerId}-steps" class="chat-thinking-steps"></div>
-    </div>
-  `;
-  const toggle = div.querySelector('.chat-thinking-toggle');
-  const steps = div.querySelector('.chat-thinking-steps');
-  if (steps) steps.hidden = true;
-  if (toggle && steps) {
-    toggle.onclick = () => {
-      steps.hidden = !steps.hidden;
-      toggle.setAttribute('aria-expanded', String(!steps.hidden));
-      toggle.classList.toggle('is-open', !steps.hidden);
-    };
-  }
-  return div;
+  const root = window.ChatReasoningUI.create(containerId);
+  root._hideReasoning = getPageChatReasoningMode() === 'fast';
+  if (root._hideReasoning) root.querySelector('.chat-thinking-copy strong').textContent = 'Đang xử lý';
+  return root;
 }
 
 function formatThinkingDuration(durationMs) {
@@ -759,7 +951,14 @@ function disposeThinkingBubble(root) {
 function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '') {
   const url = String(downloadUrl || '').trim();
   if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return '';
-  return `<div><a class="chat-download-link" href="${escapeChatMarkdown(url)}" download><i class="fa-solid fa-download"></i>Tải file báo cáo</a></div>`;
+  let filename = url.split('/').pop().split(/[?#]/)[0];
+  try { filename = decodeURIComponent(filename); } catch (_) { /* Retain malformed encoded names as text. */ }
+  const extension = filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase() || 'FILE';
+  const spreadsheet = ['XLSX','XLS','CSV','TSV'].includes(extension);
+  const html = ['HTML','HTM'].includes(extension);
+  const icon = spreadsheet ? 'fa-file-excel' : html ? 'fa-globe' : extension === 'PDF' ? 'fa-file-pdf' : 'fa-file-lines';
+  const kind = spreadsheet ? 'Bảng tính' : html ? 'Mã' : 'Tài liệu';
+  return `<div class="page-chat-download-card"><span class="page-chat-download-icon" aria-hidden="true"><i class="fa-solid ${icon}"></i></span><span class="page-chat-download-info"><span class="page-chat-download-name" title="${escapeChatMarkdown(filename)}">${escapeChatMarkdown(filename)}</span><span class="page-chat-download-meta">${kind} · ${extension}</span></span><a class="page-chat-download-button" href="${escapeChatMarkdown(url)}" download aria-label="Tải xuống ${escapeChatMarkdown(filename)}">Tải xuống</a></div>`;
 }
 
 function typeThinkingText(element, value, streamKey = null) {
@@ -780,7 +979,7 @@ function typeThinkingText(element, value, streamKey = null) {
     // Keep a readable pace even when the provider sends a large burst.
     element._typingIndex += 1;
     const visible = element._typingTarget.slice(0, element._typingIndex);
-    element.textContent = streaming && visible.length > 180 ? '…' + visible.slice(-180) : visible;
+    element.textContent = visible;
     if (streaming) element.scrollLeft = element.scrollWidth;
     if (element._typingIndex >= element._typingTarget.length) {
       clearInterval(element._typingTimer);
@@ -792,44 +991,7 @@ function typeThinkingText(element, value, streamKey = null) {
 function addThinkingStep(containerId, icon, label, status = 'running', event = {}) {
   const pending = window.pageChatPendingThinking;
   const root = pending?.node?.id === containerId ? pending.node : document.getElementById(containerId);
-  const stepsEl = root?.querySelector('.chat-thinking-steps');
-  if (!stepsEl) return;
-  if (event.type === 'reasoning_delta') {
-    let panel = Array.from(stepsEl.children).find(item => item.dataset?.reasoningIteration === String(event.reasoningId || event.iteration || 0));
-    if (!panel) {
-      panel = document.createElement('details');
-      panel.className = 'chat-reasoning-panel';
-      panel.dataset.reasoningIteration = String(event.reasoningId || event.iteration || 0);
-      panel.open = false;
-      const summary = document.createElement('summary');
-      summary.textContent = 'Reasoning';
-      panel.appendChild(summary);
-      panel.appendChild(document.createElement('pre'));
-      stepsEl.appendChild(panel);
-    }
-    const text = panel.querySelector('pre');
-    text.textContent = (text.textContent + String(event.delta || '')).slice(0, 32000);
-    typeThinkingText(root.querySelector('.chat-thinking-copy span'), text.textContent,
-      String(event.reasoningId || event.iteration || 0));
-    return;
-  }
-  typeThinkingText(root.querySelector('.chat-thinking-copy span'), label);
-  const key = event.toolName ? `tool:${event.toolName}` : event.iteration != null && /^model_/.test(event.type || '') ? `model:${event.iteration}` : '';
-  let step = key ? Array.from(stepsEl.children).reverse().find(item => item.dataset?.stepKey === key && item.dataset?.status === 'running') : null;
-  const statusIcon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : icon;
-  const spinIcons = ['spinner', 'circle-notch', 'arrows-rotate', 'sync', 'gear', 'cog'];
-  const spinClass = (status === 'running' && spinIcons.includes(statusIcon)) ? 'fa-spin' : '';
-  if (!step) {
-    step = document.createElement('div');
-    step.className = 'chat-thinking-step';
-    step.dataset.stepKey = key;
-    step._startedAt = performance.now();
-    stepsEl.appendChild(step);
-  }
-  step.dataset.status = status;
-  const duration = event.durationMs != null ? event.durationMs : (status !== 'running' ? performance.now() - step._startedAt : null);
-  const toolCode = event.toolName ? `<code>${escapeChatMarkdown(event.toolName)}</code>` : '';
-  step.innerHTML = `<span class="chat-thinking-step-icon"><i class="fa-solid fa-${statusIcon} ${spinClass}"></i></span><span class="chat-thinking-step-copy"><strong>${escapeChatMarkdown(label)}</strong>${toolCode}</span>${duration != null ? `<time>${formatThinkingDuration(duration)}</time>` : '<time>đang chạy</time>'}`;
+  window.ChatReasoningUI.update(root, event, label);
 }
 
 function finalizeThinkingBubble(containerId, executionTime) {
@@ -853,45 +1015,12 @@ function finalizeThinkingBubble(containerId, executionTime) {
   }
 }
 
-async function fetchStreamingChat(payload, onProgress, signal = null) {
+async function fetchStreamingChat(payload, onProgress, signal = null, onAnswer = null) {
   const response = await fetch('/api/intelligent-core/chat/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-    body: JSON.stringify(payload),
-    signal
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+    body: JSON.stringify(payload), signal
   });
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
-    try { detail = (await response.json()).message || detail; } catch (_) {}
-    throw new Error(detail);
-  }
-  if (!response.body) throw new Error('Trình duyệt không hỗ trợ streaming response.');
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-  let finalPayload = null;
-  while (true) {
-    const { value, done } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() || '';
-    for (const frame of frames) {
-      let eventName = 'message';
-      const dataLines = [];
-      frame.split(/\r?\n/).forEach(line => {
-        if (line.startsWith('event:')) eventName = line.slice(6).trim();
-        if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-      });
-      if (!dataLines.length) continue;
-      const data = JSON.parse(dataLines.join('\n'));
-      if (eventName === 'progress') onProgress?.(data);
-      else if (eventName === 'final') finalPayload = data;
-      else if (eventName === 'error') throw new Error(data.message || 'Streaming chat gặp lỗi.');
-    }
-    if (done) break;
-  }
-  if (!finalPayload) throw new Error('Stream kết thúc mà không có câu trả lời cuối.');
-  return finalPayload;
+  return window.ChatStream.read(response, { onProgress, onAnswer });
 }
 
 function getCurrentChatSession() {
@@ -907,8 +1036,18 @@ function getCurrentChatSession() {
   return session;
 }
 
+function renderPageChatQuestionActions() {
+  return `<button type="button" onclick="copyPageChatQuestion(this)" title="Sao chép" aria-label="Sao chép câu hỏi">${renderPageChatActionIcon('copy')}</button><button type="button" onclick="editPageChatQuestion(this)" title="Chỉnh sửa và gửi lại" aria-label="Chỉnh sửa câu hỏi">${renderPageChatActionIcon('edit')}</button>`;
+}
+
 function enhanceUserMessageNode(node, question) {
-  if (!node || !question || node.querySelector('.chat-user-message-group')) return;
+  if (!node || !question) return;
+  const existingGroup = node.querySelector('.chat-user-message-group');
+  if (existingGroup) {
+    const actions = existingGroup.querySelector('.chat-user-message-actions');
+    if (actions) actions.innerHTML = renderPageChatQuestionActions();
+    return;
+  }
   const bubble = node.firstElementChild;
   const avatar = node.lastElementChild;
   if (!bubble || bubble === avatar) return;
@@ -925,7 +1064,7 @@ function enhanceUserMessageNode(node, question) {
   group.appendChild(bubble);
   const actions = document.createElement('div');
   actions.className = 'chat-user-message-actions';
-  actions.innerHTML = '<button type="button" onclick="copyPageChatQuestion(this)" title="Sao chép" aria-label="Sao chép câu hỏi"><i class="fa-regular fa-copy"></i></button><button type="button" onclick="editPageChatQuestion(this)" title="Chỉnh sửa và gửi lại" aria-label="Chỉnh sửa câu hỏi"><i class="fa-solid fa-pen"></i></button>';
+  actions.innerHTML = renderPageChatQuestionActions();
   group.appendChild(actions);
 }
 
@@ -933,6 +1072,14 @@ function enhanceAssistantMessageNode(node) {
   const bubble = node?.children?.[1];
   if (!bubble) return;
   bubble.classList.add('chat-ai-message-bubble');
+  // Upgrade saved page-chat answers as they are mounted, without changing history.
+  bubble.querySelectorAll('a.chat-download-link').forEach(link => {
+    const card = renderPageChatDownloadAction(link.getAttribute('href'));
+    if (!card) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = card;
+    link.replaceWith(wrapper.firstElementChild);
+  });
   bubble.querySelectorAll('.chat-citation-heading a[href*="/api/library/"][href$="/file"]').forEach(link => {
     const match = link.getAttribute('href')?.match(/\/api\/library\/([^/]+)\/file$/);
     const item = link.closest('.chat-citation-item');
@@ -974,40 +1121,140 @@ function repairStoredSummaryMarkup(node) {
 function addChatMessageTime(node, role, timestamp) {
   const time = new Date(Number(timestamp));
   const label = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  node.dataset.messageTimestamp = String(timestamp);
+  const messageBubble = node.querySelector(role === 'user' ? '.chat-user-message-bubble' : '.chat-ai-message-bubble');
+  if (messageBubble) messageBubble.title = time.toLocaleString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
   if (role === 'user') {
     const bubble = node.querySelector('.chat-user-message-bubble');
-    if (bubble && !bubble.querySelector('.chat-message-time')) {
-      bubble.insertAdjacentHTML('afterbegin', `<div class="chat-user-message-meta"><strong>Bạn</strong><time class="chat-message-time">${label}</time></div>`);
+    if (!bubble) return;
+    bubble.querySelector('.chat-user-message-meta')?.remove();
+    if (!bubble.querySelector('.chat-user-message-content')) {
+      const content = document.createElement('div');
+      content.className = 'chat-user-message-content';
+      content.append(...bubble.childNodes);
+      bubble.append(content);
     }
+    if (!bubble.querySelector('.chat-user-message-stamp')) bubble.insertAdjacentHTML('beforeend', `<span class="chat-user-message-stamp"><time class="chat-message-time">${label}</time><i class="fa-solid fa-check-double" aria-hidden="true"></i></span>`);
     return;
   }
   const bubble = node.querySelector('.chat-ai-message-bubble');
-  if (!bubble || bubble.querySelector('.chat-message-time')) return;
+  if (!bubble) return;
   const existingHead = bubble.firstElementChild;
-  if (existingHead?.querySelector('.fa-robot')) {
+  if (existingHead?.querySelector('.fa-robot') || existingHead?.classList.contains('chat-ai-message-meta')) {
     existingHead.classList.add('chat-ai-message-meta');
-    existingHead.insertAdjacentHTML('beforeend', `<time class="chat-message-time">${label}</time>`);
+    existingHead.removeAttribute('style');
+    existingHead.querySelector('.fa-robot')?.parentElement.remove();
+    const labels = [...existingHead.children].filter(child => !child.matches('.chat-message-time,.chat-ai-time-separator'));
+    labels[0]?.classList.add('chat-ai-author');
+    labels[1]?.classList.add('chat-ai-role');
+    existingHead.querySelector('.chat-message-time')?.remove();
+    existingHead.querySelector('.chat-ai-time-separator')?.remove();
+    existingHead.insertAdjacentHTML('beforeend', `<span class="chat-ai-time-separator" aria-hidden="true">·</span><time class="chat-message-time"><i class="fa-regular fa-clock" aria-hidden="true"></i> ${label}</time>`);
   } else {
     bubble.insertAdjacentHTML('afterbegin', `<div class="chat-ai-message-meta"><strong>Trợ lý AI</strong><time class="chat-message-time">${label}</time></div>`);
   }
 }
 
-function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
+function shouldShowChatTimeMarker(previousTimestamp, timestamp) {
+  if (!previousTimestamp) return true;
+  const previous = new Date(Number(previousTimestamp)), current = new Date(Number(timestamp));
+  return current.toDateString() !== previous.toDateString() || current - previous >= 15 * 60 * 1000;
+}
+
+function formatChatTimeMarker(timestamp) {
+  const date = new Date(Number(timestamp));
+  const weekday = date.getDay() === 0 ? 'Chủ nhật' : `Thứ ${date.getDay() + 1}`;
+  const year = date.getFullYear() === new Date().getFullYear() ? '' : ` ${date.getFullYear()}`;
+  const time = date.toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit', hour12:false });
+  return `${weekday}, ${date.getDate()} tháng ${date.getMonth() + 1}${year} lúc ${time}`;
+}
+
+function renderPageChatActionIcon(name) {
+  const paths = {
+    copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+    retry: '<path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.34 5.66"/>',
+    edit: '<path d="m15 5 4 4M4 16l-1 5 5-1L20 8a2.8 2.8 0 0 0-4-4Z"/>',
+    more: '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>',
+    check: '<path d="m5 12 4 4L19 6"/>'
+  };
+  return `<svg class="chat-answer-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || ''}</svg>`;
+}
+
+function appendChatMessage(record, shouldPersist = true, shouldScroll = true, targetSession = null, replacementRecord = null) {
+  if (replacementRecord) {
+    if (!targetSession?.messages.includes(replacementRecord)) return false;
+    Object.assign(replacementRecord,{...record,createdAt:replacementRecord.createdAt});
+    record=replacementRecord;
+  }
+  // A response belongs to the session that started it, even after navigation.
+  if (targetSession && window.currentChatSessionId !== targetSession.id) {
+    if (shouldPersist && window.chatSessions.includes(targetSession)) {
+      record.createdAt = Number(record.createdAt) || Date.now();
+      if (!replacementRecord) targetSession.messages.push(record);
+      targetSession.updatedAt = Date.now();
+      saveChatSessions();
+    }
+    return false;
+  }
   const container = document.getElementById('page-chat-messages-container');
   if (!container || !record) return;
+  const content=document.getElementById('page-chat-thread') || container;
+  if (replacementRecord && ![...container.querySelectorAll('.chat-assistant-message-row')].some(item=>item._chatRecord===replacementRecord)) {
+    renderCurrentChatMessages(true); return false;
+  }
 
   const wrapper = document.createElement('div');
   wrapper.innerHTML = record.html || '';
   const node = wrapper.firstElementChild;
   if (!node) return;
-  const repairedStoredMarkup = repairStoredSummaryMarkup(node);
+  node._chatRecord=record;
+  if(record.role==='user'&&record.attachments?.length&&window.ChatAttachments?.render){
+    const bubble=node.querySelector('.chat-user-message-bubble');
+    if(bubble){
+      let gallery=bubble.querySelector('.chat-file-cards');
+      if(!gallery){gallery=document.createElement('div');bubble.append(gallery);}
+      window.ChatAttachments.render(gallery,record.attachments.map(file=>({...file,...(record.attachmentBatchId?{batchId:record.attachmentBatchId}:{})})));
+    }
+  }
+  let repairedStoredMarkup = repairStoredSummaryMarkup(node);
+  if (record.role === 'assistant' && window.ChatReasoningUI?.stripCompleted(node)) repairedStoredMarkup = true;
   if (repairedStoredMarkup) record.html = node.outerHTML;
   record.createdAt = Number(record.createdAt) || Date.now();
   if (record.role === 'user') enhanceUserMessageNode(node, record.content || '');
   if (record.role === 'assistant') enhanceAssistantMessageNode(node);
   addChatMessageTime(node, record.role, record.createdAt);
 
-  container.appendChild(node);
+  const previousMessages = container.querySelectorAll('[data-message-timestamp]');
+  const previousTimestamp = previousMessages[previousMessages.length - 1]?.dataset.messageTimestamp;
+  if (!replacementRecord && shouldShowChatTimeMarker(previousTimestamp, record.createdAt)) {
+    const marker = document.createElement('time');
+    marker.className = 'chat-conversation-time-marker';
+    const date = new Date(record.createdAt);
+    marker.dateTime = date.toISOString();
+    marker.textContent = formatChatTimeMarker(record.createdAt);
+    content.appendChild(marker);
+  }
+  const oldNode=replacementRecord && [...container.querySelectorAll('.chat-assistant-message-row')].find(item=>item._chatRecord===replacementRecord);
+  if (oldNode) oldNode.replaceWith(node); else content.appendChild(node);
+  if (record.role === 'assistant') {
+    node.classList.add('chat-assistant-message-row');
+    const bubble = node.querySelector('.chat-ai-message-bubble');
+    if (bubble) {
+      const actions = node.querySelector('.chat-answer-actions') || document.createElement('div');
+      actions.className = 'chat-answer-actions';
+      actions.setAttribute('aria-label', 'Thao tác với câu trả lời');
+      actions.innerHTML = `<button type="button" onclick="copyPageChatAnswer(this)" title="Sao chép" aria-label="Sao chép câu trả lời">${renderPageChatActionIcon('copy')}</button><button type="button" onclick="retryPageChatAnswer(this)" title="Thử lại" aria-label="Yêu cầu AI trả lời lại câu hỏi này">${renderPageChatActionIcon('retry')}</button>`;
+      const answeredAt = new Date(record.createdAt);
+      const answerTime = answeredAt.toLocaleString('vi-VN', {
+        day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'
+      });
+      actions.insertAdjacentHTML('beforeend', `<details class="chat-answer-more">
+        <summary title="Thông tin câu trả lời" aria-label="Thông tin câu trả lời">${renderPageChatActionIcon('more')}</summary>
+        <div class="chat-answer-time-menu"><span>Thời gian trả lời</span><time datetime="${answeredAt.toISOString()}">${answerTime}</time></div>
+      </details>`);
+      node.append(actions);
+    }
+  }
   node.addEventListener('workflow-execution-updated', event => {
     const execution = event.detail.execution;
     if (execution.tokenUsage?.available) { const feedback = node.querySelector('.chat-feedback'); if (feedback) { feedback.querySelector('.chat-token-usage')?.remove(); feedback.querySelector('.chat-routing-usage')?.remove(); feedback.insertAdjacentHTML('beforeend', renderChatTokenUsage(execution.tokenUsage, execution.routing)); } }
@@ -1030,25 +1277,63 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true) {
   }
 
   if (shouldPersist) {
-    const session = getCurrentChatSession();
+    const session = targetSession || getCurrentChatSession();
     if (session) {
-      session.messages.push(record);
+      if (!replacementRecord) session.messages.push(record);
       session.updatedAt = Date.now();
+      renderChatLimitNotice(session);
       saveChatSessions();
     }
   }
   return repairedStoredMarkup;
 }
 
-function renderCurrentChatMessages() {
+function renderCurrentChatMessages(preserveScroll = false) {
   const container = document.getElementById('page-chat-messages-container');
   if (!container) return;
+  const content=document.getElementById('page-chat-thread') || container;
   const session = getCurrentChatSession();
-  container.innerHTML = '';
+  const oldHeight=container.scrollHeight, oldTop=container.scrollTop;
+  content.innerHTML = '';
+  renderChatLimitNotice(session);
+  if (session?._page?.start) {
+    const more=document.createElement('button'); more.type='button'; more.className='chat-load-older';
+    more.textContent='Tải tin nhắn cũ hơn'; more.onclick=()=>loadOlderChatMessages(session); content.append(more);
+  }
+  if (session?.continuationSummary && !session._page?.start) {
+    const summary=document.createElement('section'); summary.className='chat-continuation-summary';
+    const header=document.createElement('div'); header.className='chat-context-header';
+    const title=document.createElement('button'); title.type='button'; title.className='chat-context-toggle';
+    title.innerHTML='<span class="chat-context-icon" aria-hidden="true"><i class="fa-regular fa-file-lines"></i></span><span class="chat-context-heading"><strong>Ngữ cảnh từ hội thoại trước</strong><small>Đã sẵn sàng để tiếp tục · Mở để xem nội dung</small></span><span class="chat-context-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>';
+    const label=document.createElement('div'); label.className='chat-context-label';
+    const heading=document.createElement('div'); heading.innerHTML=title.innerHTML;
+    const chevron=heading.lastElementChild;
+    label.append(...Array.from(heading.children).filter(item=>item!==chevron));
+    title.replaceChildren(chevron);
+    title.setAttribute('aria-label','Mở rộng ngữ cảnh');
+    const text=document.createElement('div'); text.className='chat-context-body';
+    text.id='chat-context-body-'+session.id; text.hidden=true;
+    title.setAttribute('aria-controls',text.id); title.setAttribute('aria-expanded','false');
+    title.onclick=()=>{
+      text.hidden=!text.hidden;
+      title.setAttribute('aria-expanded',String(!text.hidden));
+      title.setAttribute('aria-label',text.hidden ? 'Mở rộng ngữ cảnh' : 'Thu gọn ngữ cảnh');
+      summary.classList.toggle('is-open',!text.hidden);
+    };
+    text.innerHTML=parseMarkdown(session.continuationSummary);
+    const back=document.createElement('button'); back.type='button'; back.textContent='Xem hội thoại gốc ↗';
+    back.className='chat-context-source';
+    back.onclick=()=>selectChatSession(session.continuedFrom);
+    header.append(label,back,title);
+    summary.append(header,text); content.append(summary);
+  }
+  container.onscroll=()=>{ if(container.scrollTop<=40) loadOlderChatMessages(getCurrentChatSession()); };
   const userHistory = (session?.history || []).filter(item => item.role === 'user');
   let userIndex = 0;
   let repairedStoredMarkup = false;
+  const pending = window.pageChatPendingThinking;
   (session?.messages || []).forEach(record => {
+    if (pending && pending.sessionId===session.id && pending.retryRecord===record) { content.appendChild(pending.node); return; }
     const hydrated = record.role === 'user' && !record.content
       ? { ...record, content: userHistory[userIndex]?.content || '' }
       : record;
@@ -1056,11 +1341,12 @@ function renderCurrentChatMessages() {
     repairedStoredMarkup = appendChatMessage(hydrated, false, false) || repairedStoredMarkup;
   });
   if (repairedStoredMarkup) saveChatSessions();
-  const pending = window.pageChatPendingThinking;
-  if (pending && pending.sessionId === session?.id) {
-    container.appendChild(pending.node);
+  if (pending && !pending.retryRecord && pending.sessionId === session?.id) {
+    content.appendChild(pending.node);
   }
-  container.scrollTop = container.scrollHeight;
+  renderQuickPrompts();
+  container.scrollTop = preserveScroll ? oldTop + container.scrollHeight - oldHeight : container.scrollHeight;
+  window.syncPageChatScrollActivity?.();
 }
 
 async function submitChatFeedback(button) {
@@ -1104,28 +1390,10 @@ function renderChatTokenUsage(usage, routing = null) {
   const output = Number(usage.outputTokens) || 0;
   const total = Number(usage.totalTokens) || input + output;
   return `<div class="chat-token-usage" title="Tổng token của toàn bộ các lượt gọi model trong yêu cầu này">
-    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Đầu vào: <strong>${input.toLocaleString('vi-VN')}</strong>${renderDecisionModelUsage(usage)}</span>
+    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Đầu vào: <strong>${input.toLocaleString('vi-VN')}</strong></span>
     <span title="Tổng token đầu ra của các lần gọi model trong yêu cầu, bao gồm định tuyến"><i class="fa-solid fa-arrow-down"></i> Trả lời: <strong>${output.toLocaleString('vi-VN')}</strong></span>
     <span class="chat-token-total"><i class="fa-solid fa-coins"></i> Tổng: <strong>${total.toLocaleString('vi-VN')}</strong> token</span>
   </div>`;
-}
-
-function renderDecisionModelUsage(usage) {
-  const stages = usage?.byModel || [];
-  if (!stages.length) return '';
-  const models = new Map();
-  for (const stage of stages) {
-    const name = String(stage.model || 'Không rõ model');
-    const item = models.get(name) || { input: 0, output: 0, total: 0, calls: 0 };
-    item.input += Number(stage.inputTokens) || 0;
-    item.output += Number(stage.outputTokens) || 0;
-    item.total += Number(stage.totalTokens) || (Number(stage.inputTokens) || 0) + (Number(stage.outputTokens) || 0);
-    item.calls += Number(stage.calls) || 0;
-    models.set(name, item);
-  }
-  const format = value => value.toLocaleString('vi-VN');
-  const detail = [...models].map(([name, item]) => `${name}: đầu vào ${format(item.input)}, đầu ra ${format(item.output)}, tổng ${format(item.total)} token; ${format(item.calls)} lượt đánh giá/gọi`).join('\n');
-  return `<small class="chat-routing-inline" title="${escapeChatMarkdown(detail)}">(${[...models].map(([name, item]) => `<strong>${escapeChatMarkdown(name)}</strong>: <strong>${format(item.input)}</strong>`).join('; ')})</small>`;
 }
 
 async function copyPageChatQuestion(button) {
@@ -1151,56 +1419,125 @@ function editPageChatQuestion(button) {
 }
 
 // Main Send Message
-async function sendPageChatMessage() {
+async function copyPageChatAnswer(button) {
+  const answer = button.closest('.chat-assistant-message-row')?.querySelector('.chat-ai-answer');
+  if (!answer) return;
+  try {
+    await navigator.clipboard.writeText(answer.innerText || answer.textContent || '');
+    button.innerHTML = renderPageChatActionIcon('check');
+    setTimeout(() => { if (button.isConnected) button.innerHTML = renderPageChatActionIcon('copy'); }, 1500);
+  } catch (_) { showToast('Không thể sao chép câu trả lời.', 'error'); }
+}
+
+function isPageChatRetryResultUsable(data) {
+  if (!data || data.status==='error' || ['ERROR','CANCELLED'].includes(data.completionStatus)) return false;
+  if (data.execution) return Boolean(data.execution.id) &&
+    ['CREATED','WAITING_INPUT','READY','RUNNING','NEEDS_REVIEW','SUCCEEDED'].includes(data.execution.status);
+  return data.completionStatus==='SUCCESS';
+}
+
+async function retryPageChatAnswer(button) {
+  if (window.pageChatIsResponding) return;
+  const session=getCurrentChatSession();
+  const node=button.closest('.chat-assistant-message-row');
+  const record=node?._chatRecord;
+  const index=session?.messages.indexOf(record) ?? -1;
+  let questionIndex=index-1;
+  while (questionIndex>=0 && session.messages[questionIndex].role!=='user') questionIndex--;
+  const questionRecord=session?.messages[questionIndex];
+  const question=questionRecord?.requestMessage || questionRecord?.content;
+  if (!question) return showToast('Không tìm thấy câu hỏi để thử lại.', 'error');
+  button.disabled = true;
+  const historyIndex=session.history.findIndex((item,i)=>item.role==='user' && item.content===question &&
+    session.history[i+1]?.role==='assistant' && session.history[i+1]?.content===record.content);
+  button.disabled = true;
+  try { await sendPageChatMessage(question,{session,record,questionRecord,node,historyIndex,index}); } finally { button.disabled = false; }
+}
+
+async function replacePageChatAnswer(session,retryContext,answer) {
+  if (!window.chatSessions.includes(session)) throw new Error('Hội thoại đã bị xóa.');
+  if (!await saveChatSessions()) throw new Error('Chưa lưu được lịch sử. Câu trả lời cũ vẫn được giữ.');
+  const baseline=JSON.parse(sessionSnapshot(session));
+  const answerIndex=session.messages.indexOf(retryContext.record);
+  const response=await fetch('/api/page-chat/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'replaceAnswer',sessionId:session.id,version:persistedChatSessions.get(session.id)?.version,
+      messageIndex:(session._page?.start || 0)+session.messages.indexOf(retryContext.record),answer,paged:Boolean(session._page)})});
+  if (!response.ok) throw new Error(response.status===409 ? 'Hội thoại đã thay đổi trên tab khác. Hãy tải lại trang; câu trả lời cũ vẫn được giữ.' : 'Chưa lưu được câu trả lời mới. Câu trả lời cũ vẫn được giữ.');
+  const result=await response.json();
+  baseline.messages[answerIndex]={...answer,createdAt:retryContext.record.createdAt};
+  baseline.history=result.history; baseline.updatedAt=result.updatedAt;
+  session.history=result.history; session.updatedAt=result.updatedAt; session.version=result.version;
+  appendChatMessage(answer,false,false,session,retryContext.record);
+  if (session._page) {
+    baseline._page.historyStart=result.historyStart; baseline._page.bytes=result.bytes;
+    baseline._page.loadedBytes=chatPayloadBytes(baseline);
+    session._page={...baseline._page};
+  }
+  persistedChatSessions.set(session.id,{version:result.version,snapshot:sessionSnapshot(baseline)});
+}
+
+async function sendPageChatMessage(retryQuestion, retryContext = null) {
   await chatHistoryReady;
   if (chatHistoryFailed) return showToast('Lịch sử chat chưa được lưu hoặc tải thành công. Hãy thử lưu lại hoặc tải lại trang trước khi gửi tiếp.','error');
   if (window.pageChatIsResponding) return;
   const input = document.getElementById('page-chat-user-input');
   if (!input) return;
-  const msg = input.value.trim();
-  const attachedFiles = [...window.pageChatAttachments];
+  const isRetry = Boolean(retryContext);
+  const msg = isRetry ? retryQuestion : input.value.trim();
+  const attachedFiles = isRetry ? [] : [...window.pageChatAttachments];
   if (!msg && attachedFiles.length === 0) return;
 
   const container = document.getElementById('page-chat-messages-container');
   if (!container) return;
+  const content=document.getElementById('page-chat-thread') || container;
 
   // Get current session
-  let session = getCurrentChatSession();
+  let session = retryContext?.session || getCurrentChatSession();
   if (!session) return;
+  if (chatPageLoads.has(session.id) || chatContinuations.has(session.id)) return;
+  if (!isRetry && (chatSessionIsFull(session) || chatSessionUsage(session).count+2>80)) { renderChatLimitNotice(session); return showToast('Hội thoại không còn đủ chỗ cho một lượt hỏi đáp. Hãy tiếp tục trong hội thoại mới.', 'info'); }
 
+  if (!isRetry) {
   input.value = '';
   updatePageChatCharacterCount('');
   window.resizeChatComposerInput?.(input);
   window.pageChatAttachments = [];
   renderPageChatAttachments();
+  }
 
   // Render User Message
+  let userRecord=retryContext?.questionRecord;
+  if (!isRetry) {
   const userDiv = document.createElement('div');
   userDiv.className = 'chat-user-message-row';
   userDiv.innerHTML = `
     <div class="chat-user-message-group" data-question="${encodeURIComponent(msg || '')}">
       <div class="chat-user-message-bubble">
         ${escapeChatMarkdown(msg || 'Đã gửi tệp đính kèm')}
-        ${attachedFiles.length ? `<div style="margin-top:8px;font-size:11px;opacity:.85;"><i class="fa-solid fa-paperclip"></i> ${attachedFiles.map(file => escapeChatMarkdown(file.name)).join(', ')}</div>` : ''}
       </div>
       <div class="chat-user-message-actions" aria-label="Thao tác với câu hỏi">
-        <button type="button" onclick="copyPageChatQuestion(this)" title="Sao chép" aria-label="Sao chép câu hỏi"><i class="fa-regular fa-copy"></i></button>
-        <button type="button" onclick="editPageChatQuestion(this)" title="Chỉnh sửa và gửi lại" aria-label="Chỉnh sửa câu hỏi"><i class="fa-solid fa-pen"></i></button>
+        ${renderPageChatQuestionActions()}
       </div>
     </div>
     <div class="chat-user-message-avatar">
       <i class="fa-solid fa-user"></i>
     </div>
   `;
-  appendChatMessage({ role: 'user', content: msg, html: userDiv.outerHTML });
+  userRecord={ role: 'user', content: msg, html: userDiv.outerHTML,
+    ...(attachedFiles.length?{attachments:window.ChatAttachments.describe(attachedFiles)}:{}) };
+  appendChatMessage(userRecord);
+  renderQuickPrompts();
+  }
 
   // Thinking Bubble
   const thinkingId = `thinking-${Date.now()}`;
   const thinkingDiv = createThinkingBubble(thinkingId);
+  const answerPreview=window.ChatStream?.createPreview(thinkingDiv);
   const progressEvents = [];
-  window.pageChatPendingThinking = { sessionId: session.id, node: thinkingDiv };
-  container.appendChild(thinkingDiv);
-  container.scrollTop = container.scrollHeight;
+  window.pageChatPendingThinking = { sessionId: session.id, node: thinkingDiv, retryRecord:retryContext?.record };
+  if (isRetry) { retryContext.node.before(thinkingDiv); retryContext.node.style.setProperty('display','none','important'); }
+  else { content.appendChild(thinkingDiv); container.scrollTop = container.scrollHeight; }
+  const responseScroll=window.ChatStream?.followResponse(container);
   const requestController = new AbortController();
   window.pageChatRequestController = requestController;
   const persona = window.aiPersona || {};
@@ -1209,19 +1546,22 @@ async function sendPageChatMessage() {
   setPageChatResponding(true);
   window.updatePageChatMiniPanel({
     status: 'running',
-    label: 'Đang bắt đầu xử lý…',
+    label: isRetry ? 'Đang thử lại câu trả lời…' : 'Đang bắt đầu xử lý…',
     question: msg || attachedFiles.map(file => file.name).join(', ')
   });
 
   try {
+    if (!await saveChatSessions()) throw new Error('Chưa lưu được câu hỏi. Hãy lưu lại lịch sử trước khi gửi tiếp.');
     const selectedProviderId = document.getElementById('page-chat-model-selector')?.value || null;
     const knowledgeSources = getChatKnowledgeValues();
-    const attachmentContext = await buildPageChatAttachmentContext(attachedFiles);
-    const requestMessage = `${msg || 'Hãy phân tích tệp đính kèm.'}${attachmentContext}`;
+    const requestMessage = msg || 'Đã gửi tệp đính kèm';
+    if (!isRetry) userRecord.requestMessage=requestMessage;
     const requestPayload = {
       question: requestMessage,
       message: requestMessage,
-      history: session.history.slice(-20),
+      continuationContext:session.continuationSummary || '',
+      history: (isRetry ? session.history.slice(0,retryContext.historyIndex>=0 ? retryContext.historyIndex : 0) : session.history).slice(-20),
+      ...(isRetry ? {retryMessageIndex:(session._page?.start || 0)+retryContext.index} : {}),
       sessionId: session.id,
       providerId: selectedProviderId,
       knowledgeSearchEnabled: !window.pageChatWebSearchEnabled && !knowledgeSources.includes('none'),
@@ -1229,7 +1569,12 @@ async function sendPageChatMessage() {
       webSearch: window.pageChatWebSearchEnabled,
       attachments: attachedFiles.map(file => ({ name: file.name, type: file.type, size: file.size }))
     };
-    const data = await fetchStreamingChat(requestPayload, event => {
+    const hasAttachments=attachedFiles.length>0 || userRecord.attachmentBatchId || userRecord.attachments?.length>0;
+    if(hasAttachments&&!attachedFiles.length&&!userRecord.attachmentBatchId)throw new Error('Tệp chưa được tải lên. Vui lòng đính kèm và gửi lại.');
+    const data = hasAttachments ? await window.ChatAttachments.submit(attachedFiles,{
+      sessionId:session.id,batchId:userRecord.attachmentBatchId,question:requestMessage,
+      ...(isRetry?{retryMessageIndex:requestPayload.retryMessageIndex}:{})
+    },requestController.signal) : await fetchStreamingChat(requestPayload, event => {
       if (event.type === 'reasoning_delta') {
         const previous = progressEvents.find(item => item.type === 'reasoning_delta' && item.reasoningId === event.reasoningId && item.iteration === event.iteration);
         if (previous) previous.delta = (previous.delta + (event.delta || '')).slice(0, 32000);
@@ -1237,10 +1582,20 @@ async function sendPageChatMessage() {
       } else progressEvents.push(event);
       addThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running', event);
       window.updatePageChatMiniPanel({ status: 'running', label: event.label || 'Đang xử lý yêu cầu…' });
-    }, requestController.signal);
+    }, requestController.signal,event=>answerPreview?.update(event));
+    if(data.batchId) {
+      userRecord.attachmentBatchId=data.batchId;userRecord.attachments=data.attachments;
+      const userNode=[...container.querySelectorAll('.chat-user-message-row')].find(node=>node._chatRecord===userRecord);
+      const gallery=userNode?.querySelector('.chat-file-cards');
+      if(gallery){window.ChatAttachments.render(gallery,window.ChatAttachments.describe(data.attachments,data.batchId));userRecord.html=userNode.outerHTML;}
+      window.ChatAttachments.release(attachedFiles);
+      await saveChatSessions();
+    }
+    answerPreview?.dispose();
     disposeThinkingBubble(thinkingDiv);
     thinkingDiv.remove();
     if (window.pageChatPendingThinking?.node === thinkingDiv) window.pageChatPendingThinking = null;
+    if (isRetry && !isPageChatRetryResultUsable(data)) throw new Error('Lần thử lại chưa hoàn tất. Câu trả lời trước vẫn được giữ.');
 
     // Build AI Response
     const aiResponseText = cleanReplyText(data.reply || data.replyText || 'Không tìm thấy thông tin tương ứng.');
@@ -1252,16 +1607,13 @@ async function sendPageChatMessage() {
     const chartSpec = data.chartSpec || null;
 
     // Save to history for next turn
-    if (data.completionStatus === 'SUCCESS') {
-      session.history.push({ role: 'user', content: requestMessage });
-      session.history.push({ role: 'assistant', content: aiResponseText });
+    if (!isRetry && data.completionStatus === 'SUCCESS') {
+      session.history.push({ role: 'user', content: requestMessage }); session.history.push({ role: 'assistant', content: aiResponseText });
     }
-    saveChatSessions();
 
     // Auto-update session title from first message
     if (session.history.length === 2 && session.title.startsWith('Cuộc trò chuyện mới')) {
-      session.title = msg.slice(0, 200);
-      saveChatSessions();
+      session.title = (msg || attachedFiles.map(file=>file.name).join(', ') || 'Tệp đính kèm').slice(0, 200);
       renderChatSessionsList();
     }
 
@@ -1338,30 +1690,16 @@ async function sendPageChatMessage() {
       `;
     }
 
-    const thinkingTimelineHtml = progressEvents.length ? `
-      <div class="chat-embedded-thinking">
-        <div class="chat-embedded-thinking-title"><i class="fa-solid fa-brain"></i> Thinking · ${progressEvents.length} bước · ${escapeChatMarkdown(data.executionTime || '')}</div>
-        <div class="chat-embedded-thinking-steps">
-          ${progressEvents.map(event => {
-            if (event.type === 'reasoning_delta') return '<details class="chat-reasoning-panel"><summary>Reasoning</summary><pre>' + escapeChatMarkdown(event.delta || '') + '</pre></details>';
-            const status = event.status || 'running';
-            const color = status === 'done' ? '#16a34a' : status === 'error' ? '#dc2626' : status === 'warning' ? '#d97706' : '#6366f1';
-            const icon = status === 'done' ? 'check' : status === 'error' ? 'xmark' : status === 'warning' ? 'triangle-exclamation' : (event.icon || 'circle-notch');
-            return `<div class="chat-embedded-thinking-step"><span style="color:${color}"><i class="fa-solid fa-${icon}"></i></span><span>${escapeChatMarkdown(event.label || 'Đang xử lý')}</span></div>`;
-          }).join('')}
-        </div>
-      </div>
-    ` : '';
+    const reasoningHtml = window.ChatReasoningUI.render(progressEvents, formatExecutionTime(data.executionTime));
 
     const technicalHtml = (sqlHtml || toolStepsHtml || toolResultHtml) ? `
       <details class="chat-technical-details">
         <summary>
-          <span><i class="fa-solid fa-brain"></i> Thinking · Quá trình xử lý</span>
+          <span><i class="fa-solid fa-code"></i> Chi tiết truy vấn</span>
           <time class="chat-process-total"><i class="fa-regular fa-clock"></i>${escapeChatMarkdown(formatExecutionTime(data.executionTime))}</time>
           <i class="fa-solid fa-chevron-down chat-technical-chevron"></i>
         </summary>
         <div class="chat-technical-content">
-          ${thinkingTimelineHtml}
           ${toolStepsHtml}
           ${toolResultHtml}
           ${sqlHtml}
@@ -1392,36 +1730,54 @@ async function sendPageChatMessage() {
           <span>${aiName}</span>
           <span style="font-size:10.5px;font-weight:500;color:#94a3b8;">${aiRole}</span>
         </div>
+        ${reasoningHtml}
         <div class="chat-ai-answer">${data.execution?.status === 'WAITING_INPUT' ? 'Bổ sung thông tin bên dưới để tiếp tục.' : renderedAnswerHtml}</div>
         ${downloadActionHtml}
         ${typeof window.renderWorkflowExecution === 'function' ? window.renderWorkflowExecution(data.execution) : ''}
         ${renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence)}
         ${chartHtml}
         ${technicalHtml}
+        ${window.AnswerUI?.render(data.answerEnvelope, data.execution) || ''}
         ${renderChatFeedback(data, data.tokenUsage)}
       </div>
     `;
-    appendChatMessage({
+    const answerRecord={
       role: 'assistant',
+      content: aiResponseText,
+      executionId:data.execution?.id || null,
+      followUpSuggestions:[],
       html: aiDiv.outerHTML,
       chartSpec: chartSpec && typeof chartSpec === 'object' ? chartSpec : null,
       chartId: chartSpec && typeof chartSpec === 'object' ? chartId : null
-    });
+    };
+    if (isRetry) await replacePageChatAnswer(session,retryContext,answerRecord);
+    else appendChatMessage(answerRecord,true,responseScroll?.following ?? true,session);
+    if(!hasAttachments)requestPageChatSuggestions(session,isRetry ? retryContext.record : answerRecord,data.provider?.id);
     window.updatePageChatMiniPanel({ status: data.execution ? 'complete' : data.completionStatus === 'PARTIAL' ? 'error' : 'complete',
       label: data.execution ? 'Theo dõi tác vụ trong hội thoại' : data.completionStatus === 'PARTIAL' ? 'Một phần yêu cầu chưa hoàn tất' : 'Đã hoàn thành câu trả lời' });
     if (typeof fetchChatHistory === 'function') fetchChatHistory();
 
     // Render chart after DOM insert (Chart.js needs canvas in DOM)
-    if (chartSpec && typeof chartSpec === 'object') {
+    if (chartSpec && typeof chartSpec === 'object' && window.currentChatSessionId === session.id) {
       requestAnimationFrame(() => {
         setTimeout(() => renderChartSpec(chartId, chartSpec), 100);
       });
     }
 
   } catch (err) {
+    answerPreview?.dispose();
+    if(!isRetry&&attachedFiles.length&&window.currentChatSessionId===session.id) {
+      window.pageChatAttachments=attachedFiles;renderPageChatAttachments();
+    }
     disposeThinkingBubble(thinkingDiv);
     thinkingDiv.remove();
     if (window.pageChatPendingThinking?.node === thinkingDiv) window.pageChatPendingThinking = null;
+    if (isRetry) {
+      if (window.currentChatSessionId===session.id) renderCurrentChatMessages(true);
+      window.updatePageChatMiniPanel({status:err?.name==='AbortError' ? 'stopped' : 'error',label:'Đã giữ câu trả lời trước'});
+      showToast(err?.name==='AbortError' ? 'Đã dừng thử lại. Câu trả lời trước vẫn được giữ.' : (err.message || 'Thử lại thất bại. Câu trả lời trước vẫn được giữ.'),'info');
+      return;
+    }
     if (err?.name === 'AbortError') {
       window.updatePageChatMiniPanel({ status: 'stopped', label: 'Đã dừng trả lời' });
       if (typeof showToast === 'function') showToast('Đã dừng tiến trình trả lời.', 'info');
@@ -1446,7 +1802,7 @@ async function sendPageChatMessage() {
         <div class="chat-ai-answer">${errorContent}</div>
       </div>
     `;
-    appendChatMessage({ role: 'assistant', html: errDiv.outerHTML });
+    appendChatMessage({ role: 'assistant', html: errDiv.outerHTML }, true, true, session);
     window.updatePageChatMiniPanel({ status: 'error', label: 'Không thể hoàn thành câu trả lời' });
   } finally {
     if (window.pageChatRequestController === requestController) {
@@ -1545,9 +1901,8 @@ function renderChatKnowledgeChip() {
     const label = option?.textContent || 'Nguồn tri thức';
     chips.push(`<span class="chat-knowledge-chip ${value === 'none' ? 'disabled' : ''}" title="${escapeChatMarkdown(label)}"><i class="fa-solid ${value === 'none' ? 'fa-ban' : 'fa-book-open'}"></i><span>${escapeChatMarkdown(label)}</span><button type="button" data-value="${escapeChatMarkdown(value)}" title="Bỏ nguồn đã chọn" onclick="selectChatKnowledgeSource(this.dataset.value,event)"><i class="fa-solid fa-xmark"></i></button></span>`);
   });
-  if (window.pageChatWebSearchEnabled) {
-    chips.push('<span class="chat-knowledge-chip web-search-chip" title="Tìm kiếm trên web đang bật"><i class="fa-solid fa-globe"></i><span>Tìm kiếm web</span><button type="button" title="Tắt tìm kiếm web" onclick="togglePageChatWebSearch(event)"><i class="fa-solid fa-xmark"></i></button></span>');
-  }
+  const inlineWeb = document.getElementById('page-chat-web-inline');
+  if (inlineWeb) inlineWeb.hidden = !window.pageChatWebSearchEnabled;
   root.hidden = chips.length === 0;
   root.innerHTML = chips.join('');
 }
@@ -1588,6 +1943,21 @@ function useQuickPrompt(text) {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+function chatSessionPreview(session) {
+  const history=session.history || [];
+  const recent=[...history].reverse().find(item=>item.role==='assistant' && item.content)
+    || [...(session.messages || [])].reverse().find(item=>item.content);
+  return String(recent?.content || session.continuationSummary || 'Bắt đầu cuộc trò chuyện mới')
+    .replace(/```[\s\S]*?```/g,' [Mã] ').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1')
+    .replace(/[#*_>`~]/g,'').replace(/\s+/g,' ').trim().slice(0,200);
+}
+
+function chatSessionAge(timestamp, now=new Date()) {
+  const date=new Date(Number(timestamp));
+  return Math.max(0,Math.round((new Date(now.getFullYear(),now.getMonth(),now.getDate())-
+    new Date(date.getFullYear(),date.getMonth(),date.getDate()))/86400000));
+}
+
 function renderChatSessionsList() {
   ensureChatSession();
   const container = document.getElementById('chat-sessions-list');
@@ -1596,13 +1966,16 @@ function renderChatSessionsList() {
   const sessions = (window.chatSessions || []).map(normalizeStoredChatSession)
     .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
   window.chatSessions = sessions;
+  const query=(document.getElementById('chat-history-search')?.value || '').trim();
+  const searchable=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLocaleLowerCase('vi');
+  const filtered=sessions.filter(session=>!query || searchable(session.title+' '+chatSessionPreview(session)).includes(searchable(query)));
   const formatSessionTime = timestamp => {
     const date = new Date(Number(timestamp));
     if (Number.isNaN(date.getTime())) return '';
     const now = new Date();
     const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const daysAgo = Math.floor((startToday - startDate) / 86400000);
+    const daysAgo = Math.round((startToday - startDate) / 86400000);
     if (daysAgo <= 0) return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     if (daysAgo === 1) return 'Hôm qua';
     if (daysAgo < 7) return `${daysAgo} ngày trước`;
@@ -1610,16 +1983,18 @@ function renderChatSessionsList() {
   };
   const renderSession = session => {
     const isCurrent = session.id === window.currentChatSessionId;
+    const isResponding = window.pageChatIsResponding && window.pageChatPendingThinking?.sessionId === session.id;
     const div = document.createElement('div');
     div.className = `chat-session-item${isCurrent ? ' is-current' : ''}${session.pinned ? ' is-pinned' : ''}`;
     div.dataset.sessionId = session.id;
     div.innerHTML = `
       <button type="button" class="chat-session-main" ${isCurrent ? 'aria-current="true"' : ''} onclick="selectChatSession('${session.id}')">
-        <i aria-hidden="true" class="fa-${session.pinned ? 'solid' : 'regular'} ${session.pinned ? 'fa-thumbtack' : 'fa-message'}"></i>
-        <span title="${escapeChatMarkdown(session.title)}">${escapeChatMarkdown(session.title)}</span>
-        <time>${formatSessionTime(session.updatedAt)}</time>
+        <i aria-hidden="true" class="fa-regular fa-comment-dots"></i>
+        <span class="chat-session-copy" title="${escapeChatMarkdown(session.title)}"><span class="chat-session-title-line"><span class="chat-session-title">${escapeChatMarkdown(session.title)}</span></span></span>
+        <span class="chat-session-meta">${isResponding ? '<small class="chat-session-responding" role="status"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Đang trả lời</small>' : `<time>${formatSessionTime(session.updatedAt)}</time>`}</span>
+      <span class="chat-session-preview">${escapeChatMarkdown(chatSessionPreview(session))}</span>
       </button>
-      <button class="chat-session-more" onclick="toggleChatSessionMenu('${session.id}',event)" title="Tùy chọn" aria-label="Tùy chọn đoạn chat" aria-expanded="false">
+      <button class="chat-session-more" onclick="toggleChatSessionMenu('${session.id}',event)" title="Tùy chọn hội thoại" aria-label="Tùy chọn: ${escapeChatMarkdown(session.title)}" aria-expanded="false">
         <i class="fa-solid fa-ellipsis"></i>
       </button>
       <div class="chat-session-menu" data-menu-for="${session.id}" hidden>
@@ -1631,19 +2006,31 @@ function renderChatSessionsList() {
     `;
     container.appendChild(div);
   };
-  const recentSessions = sessions.filter(session => !session.pinned);
-  const pinnedSessions = sessions.filter(session => session.pinned)
+  const recentSessions = filtered.filter(session => !session.pinned);
+  const pinnedSessions = filtered.filter(session => session.pinned)
     .sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0));
-  container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title"><i class="fa-regular fa-clock"></i> Gần đây</div>');
-  if (recentSessions.length) {
-    recentSessions.forEach(renderSession);
-  } else {
-    container.insertAdjacentHTML('beforeend', '<div class="chat-sessions-empty" role="status">Chưa có cuộc trò chuyện gần đây.</div>');
-  }
   if (pinnedSessions.length) {
-    container.insertAdjacentHTML('beforeend', '<div class="chat-session-group-title is-pinned"><i class="fa-solid fa-thumbtack"></i> Ghim</div>');
+    container.insertAdjacentHTML('beforeend', `<div class="chat-session-group-title is-pinned"><span>Đã ghim</span><span class="chat-session-group-count">${pinnedSessions.length}</span></div>`);
     pinnedSessions.forEach(renderSession);
   }
+  const now=new Date();
+  const thisMonth=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  const lastMonth=new Date(now.getFullYear(),now.getMonth()-1,1).getTime();
+  const groupFor=session=>{
+    const age=chatSessionAge(session.updatedAt,now), time=Number(session.updatedAt);
+    if (age===0) return 'Hôm nay';
+    if (age<7) return '7 ngày qua';
+    if (time>=thisMonth) return 'Tháng này';
+    if (time>=lastMonth) return 'Tháng trước';
+    return 'Trước đó';
+  };
+  for (const label of ['Hôm nay','7 ngày qua','Tháng này','Tháng trước','Trước đó']) {
+    const items=recentSessions.filter(session=>groupFor(session)===label);
+    if (!items.length) continue;
+    container.insertAdjacentHTML('beforeend',`<div class="chat-session-group-title"><span>${label}</span></div>`);
+    items.forEach(renderSession);
+  }
+  if (!filtered.length) container.insertAdjacentHTML('beforeend','<div class="chat-sessions-empty" role="status">'+(query?'Không tìm thấy cuộc trò chuyện.':'Chưa có cuộc trò chuyện.')+'</div>');
 
   // Sync title in header
   const currentSession = sessions.find(s => s.id === window.currentChatSessionId);
@@ -1669,16 +2056,30 @@ function toggleChatSessionMenu(id, event) {
   menu.closest('.chat-session-item')?.querySelector('.chat-session-more')?.setAttribute('aria-expanded', String(willOpen));
 }
 
-function togglePinChatSession(id, event) {
-  if (!chatHistoryLoaded || chatHistoryFailed) return;
+async function togglePinChatSession(id, event) {
   event?.stopPropagation();
+  if (!chatHistoryLoaded || chatHistoryFailed) return;
+  if (chatPinSaves.has(id)) return;
   const session = window.chatSessions.find(item => item.id === id);
   if (!session) return;
+  const previous = { pinned: session.pinned, pinnedAt: session.pinnedAt };
+  chatPinSaves.add(id);
   session.pinned = !session.pinned;
   session.pinnedAt = session.pinned ? Date.now() : null;
-  saveChatSessions();
+  const pinned = session.pinned;
   renderChatSessionsList();
-  showToast(session.pinned ? 'Đã ghim đoạn chat.' : 'Đã bỏ ghim đoạn chat.', 'info');
+  try {
+    if (await saveChatSessions()) showToast(pinned ? 'Đã ghim đoạn chat.' : 'Đã bỏ ghim đoạn chat.', 'success');
+    else {
+      const current = window.chatSessions.find(item => item.id === id);
+      if (current) {
+        for (const key of ['pinned', 'pinnedAt']) {
+          if (previous[key] === undefined) delete current[key]; else current[key] = previous[key];
+        }
+      }
+      renderChatSessionsList();
+    }
+  } finally { chatPinSaves.delete(id); }
 }
 
 async function renameChatSession(id, event) {
@@ -1705,7 +2106,6 @@ if (!window.__chatSessionMenuOutsideClickBound) {
 
 function createNewChatSession() {
   if (!chatHistoryLoaded || chatHistoryFailed) return;
-  if (window.pageChatIsResponding) return showToast('Hãy dừng câu trả lời hiện tại trước khi tạo đoạn chat mới.', 'info');
   const newId = `session-${crypto.randomUUID()}`;
   const count = window.chatSessions.length + 1;
   const now = Date.now();
@@ -1716,8 +2116,9 @@ function createNewChatSession() {
   const titleEl = document.getElementById('current-session-title');
   if (titleEl) titleEl.textContent = newSession.title;
   const msgContainer = document.getElementById('page-chat-messages-container');
-  if (msgContainer) msgContainer.innerHTML = '';
+  if (msgContainer) (document.getElementById('page-chat-thread') || msgContainer).innerHTML = '';
   renderChatSessionsList();
+  renderCurrentChatMessages();
 }
 
 async function deleteSingleChatSession(id, event) {
@@ -1734,7 +2135,7 @@ async function deleteSingleChatSession(id, event) {
     } else {
       window.currentChatSessionId = null;
       const msgContainer = document.getElementById('page-chat-messages-container');
-      if (msgContainer) msgContainer.innerHTML = '';
+      if (msgContainer) (document.getElementById('page-chat-thread') || msgContainer).innerHTML = '';
     }
   }
   saveChatSessions();
@@ -1743,7 +2144,7 @@ async function deleteSingleChatSession(id, event) {
 }
 
 function selectChatSession(id) {
-  if (window.pageChatIsResponding && id !== window.currentChatSessionId) return showToast('Hãy dừng câu trả lời hiện tại trước khi chuyển đoạn chat.', 'info');
+  if (!window.chatSessions.some(session => session.id === id)) return;
   window.currentChatSessionId = id;
   try { localStorage.setItem(CHAT_ACTIVE_SESSION_KEY, id); } catch (_) { /* storage unavailable */ }
   const session = window.chatSessions.find(s => s.id === id);
@@ -1797,25 +2198,46 @@ async function populateChatModelSelector() {
   const selectedValue = Array.from(selector.options).some(option => option.value === savedValue)
     ? savedValue : (activeValue || selector.options[0]?.value || '');
 
-  menu.innerHTML = Array.from(selector.options).map((option, index) => {
+  const modelOptions = Array.from(selector.options).map((option, index) => {
     const provider = (providers || [])[index] || {};
     const description = provider.name || provider.type || 'Trợ giúp toàn diện';
-    return `<button type="button" class="page-chat-model-option" data-value="${escapeChatMarkdown(option.value)}" onclick="selectPageChatModel(this.dataset.value)" role="option">
+    return `<button type="button" class="page-chat-model-option" data-value="${escapeChatMarkdown(option.value)}" onclick="selectPageChatModel(this.dataset.value,false);closeChatModelChoices();document.getElementById('chat-effort-model-button').focus()" role="option">
       <i class="fa-solid fa-check model-check"></i>
-      <span class="page-chat-model-copy"><strong>${escapeChatMarkdown(option.dataset.shortLabel || option.textContent)}</strong><small>${escapeChatMarkdown(description)}</small></span>
-      ${provider.isActive ? '<span class="page-chat-model-badge">Mặc định</span>' : ''}
+      <span class="page-chat-model-copy"><strong>${escapeChatMarkdown(option.dataset.shortLabel || option.textContent)}</strong><span class="page-chat-model-details"><small>${escapeChatMarkdown(description)}</small>${provider.isActive ? '<span class="page-chat-model-badge">Mặc định</span>' : ''}</span></span>
     </button>`;
   }).join('');
+  menu.setAttribute('role', 'dialog');menu.setAttribute('aria-label','Chọn mức độ và mô hình AI');
+  menu.classList.add('chat-effort-panel');menu.onclick=event=>event.stopPropagation();
+  menu.innerHTML = `<div id="chat-model-effort-menu">
+        <div class="chat-effort-heading"><i class="fa-solid fa-bolt" aria-hidden="true"></i><div><strong id="chat-effort-label"></strong><button type="button" id="chat-effort-model-button" class="chat-effort-model-picker" aria-label="Chọn mô hình AI" aria-haspopup="listbox" aria-expanded="false" aria-controls="chat-model-other-menu" onclick="toggleChatModelChoices(event)"><span id="chat-effort-model"></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div><button type="button" class="chat-effort-reset" onclick="selectPageChatReasoningMode('medium',true)" title="Đặt lại Suy luận" aria-label="Đặt lại mức Suy luận"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button></div>
+        <div class="chat-effort-track"><input id="chat-effort-slider" type="range" min="0" max="1" step="1" value="1" aria-label="Mức độ" aria-describedby="chat-effort-description" oninput="selectPageChatReasoningMode(this.value==='0'?'fast':'medium',true)"><span class="chat-effort-stops" aria-hidden="true"><i></i><i></i></span></div>
+        <div class="chat-effort-endpoints" aria-hidden="true"><span>Nhanh</span><span>Suy luận</span></div>
+        <p id="chat-effort-description"></p>
+      </div>
+      <div id="chat-model-other-menu" class="chat-model-choice-panel" role="listbox" aria-label="Chọn mô hình AI" hidden>${modelOptions}</div>`;
   selectPageChatModel(selectedValue);
 }
 
 let quickPromptsRequest = null;
-function renderQuickPrompts(prompts) {
+function renderQuickPrompts() {
+  const session=window.chatSessions?.find(item=>item.id===window.currentChatSessionId);
+  const latest=session?.messages?.at(-1);
+  const userReplies=latest?.role==='assistant' && Array.isArray(latest.followUpSuggestions)
+    ? latest.followUpSuggestions.filter(item=>item?.speaker==='user' && typeof item.label==='string'
+      && item.label.trim() && typeof item.prompt==='string' && item.prompt.trim()) : [];
+  const contextual=userReplies.length>0;
   const container = document.getElementById('quick-prompts-bar');
   if (!container) return;
+  const signature=JSON.stringify([session?.id,session?.messages?.length,userReplies]);
+  if(container._suggestionSignature===signature) return;
+  container._suggestionSignature=signature;
+  container.hidden=!contextual;
+  container.ariaLabel='Gợi ý trả lời để làm rõ hoặc xác nhận';
+  container.className=contextual ? 'has-contextual-suggestions' : '';
   container.replaceChildren();
-  for (const prompt of prompts) {
+  for (const [index,prompt] of userReplies.entries()) {
     const button = document.createElement('button'); button.type = 'button';
+    button.style.setProperty('--suggestion-order',index);
     const icon = document.createElement('i');
     icon.className = `fa-solid ${/^fa-[a-z0-9-]+$/.test(prompt.icon || '') ? prompt.icon : 'fa-lightbulb'}`;
     icon.setAttribute('aria-hidden', 'true');
@@ -1824,19 +2246,30 @@ function renderQuickPrompts(prompts) {
     container.appendChild(button);
   }
 }
+async function requestPageChatSuggestions(session,record,providerId) {
+  if(record.executionId || /data-automation-run/.test(record.html || '') || !record.content || !/[?？]|bạn (?:muốn|chọn)|xác nhận|bổ sung thông tin|chưa rõ|làm rõ|phân vân|không chắc|chưa xác định/i.test(record.content)) return;
+  const originalContent=record.content;
+  try {
+    if(!await saveChatSessions() || !window.chatSessions.includes(session) || session.messages.at(-1)!==record) return;
+    const response=await fetch('/api/page-chat/sessions',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(8000),
+      body:JSON.stringify({action:'suggestReplies',sessionId:session.id,version:persistedChatSessions.get(session.id)?.version,
+        messageIndex:(session._page?.start || 0)+session.messages.indexOf(record),providerId:providerId || null})});
+    if(!response.ok) return;
+    const {suggestions}=await response.json();
+    if(!window.chatSessions.includes(session) || session.messages.at(-1)!==record || record.content!==originalContent || !Array.isArray(suggestions)) return;
+    record.followUpSuggestions=suggestions;
+    if(window.currentChatSessionId===session.id) renderQuickPrompts();
+    if(suggestions.length) saveChatSessions();
+  } catch(_) { /* Suggestions are optional; the answer remains available. */ }
+}
 async function fetchAndRenderQuickPrompts() {
-  let cached = null;
-  try { cached = JSON.parse(sessionStorage.getItem('kh-quick-prompts')); } catch (_) {}
-  if (cached && Date.now() - cached.at < 300000 && Array.isArray(cached.prompts)) renderQuickPrompts(cached.prompts);
-  if (Array.isArray(window.aiPersona?.quickPrompts)) renderQuickPrompts(window.aiPersona.quickPrompts);
+  renderQuickPrompts();
   if (!quickPromptsRequest) {
     quickPromptsRequest = (async () => {
       const response = await fetch('/api/persona');
       if (!response.ok) throw new Error('Unable to load quick prompts');
       const data = await response.json(); window.aiPersona = data;
-      const prompts = Array.isArray(data.quickPrompts) ? data.quickPrompts : [];
-      try { sessionStorage.setItem('kh-quick-prompts', JSON.stringify({ at: Date.now(), prompts })); } catch (_) {}
-      renderQuickPrompts(prompts);
+      renderQuickPrompts();
     })().catch(() => {}).finally(() => { quickPromptsRequest = null; });
   }
   await quickPromptsRequest;
@@ -1873,6 +2306,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // NOTE: renderChatSessionsList() is called by switchMainTab('page_chat') in app.js
   // when user navigates to the chat page, not on DOMContentLoaded (SPA view not mounted yet)
   populateChatModelSelector();
+  window.syncPageChatComposerLayout?.();
   fetchAndRenderQuickPrompts();
   document.getElementById('page-chat-web-toggle')?.classList.toggle('is-active', window.pageChatWebSearchEnabled);
   document.getElementById('page-chat-web-toggle')?.setAttribute('aria-pressed', String(window.pageChatWebSearchEnabled));

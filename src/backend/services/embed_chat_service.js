@@ -5,6 +5,7 @@ class EmbedChatService {
   constructor() {
     StorageHelper.bind(this, 'configs', 'embed_chat_configs.json', []);
     this.rateBuckets = new Map();
+    this.activeSessions = new Map();
   }
 
   persist() {
@@ -101,10 +102,31 @@ class EmbedChatService {
     }
     return { ok: true, config, origin: normalizedOrigin };
   }
-  workflowSession(config, sessionId, token) {
+  saveIdentity(id, data) {
+    const config = this.configs.find(item => item.id === id);
+    if (!config) throw Object.assign(new Error('Không tìm thấy Embed.'), {statusCode:404});
+    config.identity = require('./embed_identity').normalize(data);
+    this.persist();
+    for (const [key, value] of this.activeSessions) if (value.embedId === id) this.activeSessions.delete(key);
+    return config.identity;
+  }
+  touchSession(config, sessionId, identity, origin) {
+    if (!/^[-a-zA-Z0-9_]{1,100}$/.test(String(sessionId || ''))) throw Object.assign(new Error('Phiên embed không hợp lệ.'), {statusCode:400});
+    const key = config.id + ':' + sessionId, now = Date.now();
+    for (const [id, value] of this.activeSessions) if (now - value.lastSeen > 86400000) this.activeSessions.delete(id);
+    if (!this.activeSessions.has(key) && this.activeSessions.size >= 10000) this.activeSessions.delete(this.activeSessions.keys().next().value);
+    this.activeSessions.set(key, { embedId:config.id, embedName:config.name, sessionId, identity, origin, lastSeen:now });
+  }
+  listSessions() {
+    return [...this.activeSessions.values()].filter(s => Date.now()-s.lastSeen < 86400000 && this.configs.some(c=>c.id===s.embedId && c.isActive)).map(s=>({...s,online:Date.now()-s.lastSeen<90000})).sort((a,b)=>b.lastSeen-a.lastSeen);
+  }
+  conversationId(config, sessionId, identity) {
+    return identity ? 'embed-' + crypto.createHash('sha256').update(JSON.stringify([config.id, identity.id, sessionId])).digest('hex') : `${config.id}-${sessionId}`;
+  }
+  workflowSession(config, sessionId, token, identity = null) {
     if (!sessionId || !/^[-a-zA-Z0-9_]{1,100}$/.test(sessionId)) throw Object.assign(new Error('Phiên embed không hợp lệ.'), {statusCode:400});
     if (!config.workflowSecret) { config.workflowSecret=crypto.randomBytes(32).toString('hex'); this.persist(); }
-    const sign=value=>crypto.createHmac('sha256',config.workflowSecret).update(`${config.id}:${sessionId}:${value}`).digest('hex');
+    const sign=value=>crypto.createHmac('sha256',config.workflowSecret).update(identity ? `${config.id}:${sessionId}:${identity.id}:${value}` : `${config.id}:${sessionId}:${value}`).digest('hex');
     if (token) { const parts=String(token).split('.'); if(parts.length!==2 || !/^[a-f0-9]{64}$/.test(parts[1]) || !/^[a-f0-9]{48}$/.test(parts[0]) || !crypto.timingSafeEqual(Buffer.from(parts[1],'hex'),Buffer.from(sign(parts[0]),'hex'))) throw Object.assign(new Error('Phiên nghiệp vụ không hợp lệ.'),{statusCode:403}); }
     else { const nonce=crypto.randomBytes(24).toString('hex'); token=`${nonce}.${sign(nonce)}`; }
     return { token, accountId:`embed:${config.id}:${crypto.createHash('sha256').update(token).digest('hex')}`, tenantId:`embed:${config.id}` };

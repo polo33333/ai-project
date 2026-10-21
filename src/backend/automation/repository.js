@@ -13,6 +13,7 @@ class AutomationRepository {
     this.directory = directory; this.pool = pool;
   }
   database() { return this.pool || (storage.enabled() ? storage.getPool() : null); }
+  lease(key, operation) { return storage.lease(key, operation, { pool: this.database() }); }
   file(kind) { return path.join(this.directory, kind === 'catalog' ? 'workflow_catalog.json' : 'automation_runs.json'); }
   readFile(kind) {
     const file = this.file(kind);

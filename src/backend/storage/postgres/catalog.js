@@ -3,6 +3,7 @@
 // Fixed identifiers only. Never interpolate identifiers supplied by an HTTP client.
 const sources = [
   ['accounts.json', 'accounts', 'array', 'id'],
+  ['account_roles.json', 'account_roles', 'array', 'id'],
   ['sessions.json', 'auth_sessions', 'map'],
   ['api_keys.json', 'api_keys', 'array', 'id'],
   ['db_sources.json', 'data_sources', 'array', 'id'],
@@ -10,6 +11,7 @@ const sources = [
   ['ai_persona.json', 'ai_personas', 'singleton'],
   ['embed_chat_configs.json', 'embed_configs', 'array', 'id'],
   ['mcp_servers.json', 'mcp_servers', 'array', 'id'],
+  ['tool_settings.json', 'tool_settings', 'array', 'id'],
   ['dictionary.json', 'dictionary_tables', 'array', 'tableId'],
   ['table_relationships.json', 'table_relationships', 'array', 'id'],
   ['glossary.json', 'glossary_terms', 'array', 'id'],
@@ -18,6 +20,8 @@ const sources = [
   ['chat_history.json', 'chat_runs', 'array', 'id'],
   ['chat_feedback.json', 'chat_feedback', 'array', 'id'],
   ['conversation_memory.json', 'chat_sessions', 'wrappedMap', 'id', 'sessions'],
+  ['long_term_memory.json', 'long_term_memory', 'array', 'id'],
+  ['episodic_memory.json', 'episodic_memory', 'array', 'id'],
   ['logs.json', 'system_logs', 'array', 'id'],
   ['workflows.json', 'workflows', 'array', 'id'],
   ['workflow_runs.json', 'workflow_runs', 'array', 'runId'],

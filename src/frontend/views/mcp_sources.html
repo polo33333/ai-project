@@ -5,7 +5,7 @@
     <div>
       <span class="system-tools-eyebrow" style="color: #2563eb; font-size: 11px; font-weight: 700; letter-spacing: 1px;">MODEL CONTEXT PROTOCOL</span>
       <h2 style="margin: 4px 0 5px; color: #172033; font-size: 22px; line-height: 1.25;">Nguồn MCP Server</h2>
-      <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.5;">Quản lý MCP Server dạng SSE hoặc stdio để cấp Tools và Resources cho LLM Agent.</p>
+      <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.5;">Chỉ công cụ đã được duyệt là chỉ đọc mới được cấp cho trợ lý. Thay đổi mô tả hoặc schema cần duyệt lại.</p>
     </div>
     <button class="btn-secondary-sm" type="button" onclick="fetchMcpServers()">
       <i class="fa-solid fa-rotate"></i> Tải lại
@@ -32,6 +32,15 @@
     </div>
   </div>
 
+  <section class="content-card" id="mcp-read-only-review" hidden style="margin-bottom:20px">
+    <h3 id="mcp-review-title">Duyệt công cụ chỉ đọc</h3>
+    <p>Chọn các công cụ bạn đã kiểm tra không làm thay đổi dữ liệu ở hệ thống đích. Quyền truy cập vẫn được kiểm tra khi chạy.</p>
+    <form id="mcp-review-form" onsubmit="saveMcpReadOnlyReview(event)">
+      <input type="hidden" id="mcp-review-id">
+      <div id="mcp-review-items" style="display:grid;gap:12px;margin:16px 0"></div>
+      <div style="display:flex;gap:10px"><button class="btn-primary" type="submit">Lưu phạm vi chỉ đọc</button><button class="btn-secondary-sm" type="button" onclick="document.getElementById('mcp-read-only-review').hidden=true">Đóng</button></div>
+    </form>
+  </section>
   <div class="content-card mcp-form-card" id="add-mcp-card">
     <div class="module-section-heading">
       <div><span class="module-section-kicker">Thêm nguồn công cụ</span><h3>Kết nối MCP Server mới</h3><p>Chọn giao thức và nhập địa chỉ hoặc lệnh khởi chạy để quét công cụ.</p></div>

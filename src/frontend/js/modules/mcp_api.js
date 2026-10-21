@@ -56,11 +56,12 @@ function renderMcpServersTable() {
         <td><strong>${escapeMcpApiHtml(server.name)}</strong></td>
         <td><span class="metric-tag purple">${escapeMcpApiHtml(server.protocol || '-')}</span></td>
         <td><code class="table-code">${escapeMcpApiHtml(server.endpoint || '-')}</code></td>
-        <td><span class="metric-tag gray">${server.toolsCount || 0} tools</span> <span class="metric-tag gray">${server.resourcesCount || 0} res</span></td>
+        <td><span class="metric-tag gray">${server.toolsCount || 0} tools</span> <span class="metric-tag gray">${server.resourcesCount || 0} res</span><br><small>${(server.readOnlyTools || []).length} công cụ trong phạm vi chỉ đọc</small></td>
         <td>${escapeMcpApiHtml(server.scope || '-')}</td>
         <td><span class="metric-tag ${statusClass}" title="${escapeMcpApiHtml(server.lastError || '')}"><i class="fa-solid ${status === 'CONNECTED' ? 'fa-circle-check' : status === 'ERROR' ? 'fa-circle-xmark' : 'fa-circle-pause'}"></i> ${escapeMcpApiHtml(status)}</span></td>
         <td>
           <div class="table-actions">
+            <button class="icon-action-btn" onclick="openMcpReadOnlyReview('${escapeMcpApiHtml(server.id)}')" title="Duyệt phạm vi chỉ đọc" aria-label="Duyệt phạm vi chỉ đọc"><i class="fa-solid fa-shield-halved"></i></button>
             <button class="icon-action-btn" onclick="connectMcpServer('${escapeMcpApiHtml(server.id)}')" title="Kết nối lại và quét Tools/Resources">
               <i class="fa-solid fa-plug-circle-bolt"></i>
             </button>
@@ -105,6 +106,37 @@ async function submitNewMcpServer() {
   }
 }
 
+function openMcpReadOnlyReview(id) {
+  const server = window.mcpServersData.find(item => item.id === id);
+  if (!server) return;
+  const panel = document.getElementById('mcp-read-only-review');
+  document.getElementById('mcp-review-id').value = id;
+  document.getElementById('mcp-review-title').textContent = `Phạm vi chỉ đọc · ${server.name}`;
+  const items = [...(server.tools || []).map(tool => ({ kind: 'tool', value: tool.name, description: tool.description, selected: server.readOnlyTools?.includes(tool.name) })),
+    ...(server.resources || []).map(resource => ({ kind: 'resource', value: resource.uri, description: resource.description, selected: server.readOnlyResources?.includes(resource.uri) }))];
+  document.getElementById('mcp-review-items').innerHTML = items.length ? items.map(item => `<label style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" name="${item.kind}" value="${escapeMcpApiHtml(item.value)}" ${item.selected ? 'checked' : ''}><span><strong>${escapeMcpApiHtml(item.value)}</strong><br><small>${escapeMcpApiHtml(item.description || '')}</small></span></label>`).join('') : '<p>Chưa có công cụ. Hãy kết nối và quét lại nguồn.</p>';
+  panel.hidden = false; panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function saveMcpReadOnlyReview(event) {
+  event.preventDefault();
+  const form = event.currentTarget, button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const values = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(input => input.value);
+    const server = window.mcpServersData.find(item => item.id === document.getElementById('mcp-review-id').value);
+    const response = await fetch('/api/mcp/review-read-only', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: document.getElementById('mcp-review-id').value, readOnlyTools: values('tool'), readOnlyResources: values('resource'),
+        expectedToolHashes: Object.fromEntries((server?.tools || []).map(tool => [tool.name, tool.schemaHash])),
+        expectedResourceHashes: Object.fromEntries((server?.resources || []).map(resource => [resource.uri, resource.schemaHash])) }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Không lưu được phạm vi.');
+    document.getElementById('mcp-read-only-review').hidden = true;
+    await fetchMcpServers(); showToast('Đã cập nhật phạm vi chỉ đọc.', 'success');
+  } catch (error) { showToast(error.message, 'error'); }
+  finally { button.disabled = false; }
+}
+
 async function connectMcpServer(id) {
   try {
     const res = await fetch('/api/mcp/connect', {
@@ -138,6 +170,7 @@ async function deleteMcpServer(id) {
 }
 
 async function fetchApiKeys() {
+  document.querySelectorAll('[data-api-origin]').forEach(element => { element.textContent = location.origin; });
   try {
     const res = await fetch('/api/keys');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -278,7 +311,7 @@ function openEmbedPreview(id) {
   document.querySelectorAll('script[data-kh-embed-preview]').forEach(script => script.remove());
 
   const script = document.createElement('script');
-  script.src = `/embed/knowledgehub-chat.js?v=20260920-date-display-${Date.now()}`;
+  script.src = `/embed/knowledgehub-chat.js?v=20261012-embed-status-${Date.now()}`;
   script.dataset.khEmbedPreview = 'true';
   script.dataset.embedId = config.id;
   script.dataset.title = 'Trợ lý AI';
@@ -362,7 +395,7 @@ async function confirmDeleteEmbedConfig() {
 }
 
 async function copyEmbedSnippet(id) {
-  const snippet = `<script src="${location.origin}/embed/knowledgehub-chat.js?v=20260920-date-display" data-embed-id="${id}" data-title="Trợ lý AI" data-color="#4f46e5" data-position="right" data-theme="auto"><\/script>`;
+  const snippet = `<script src="${location.origin}/embed/knowledgehub-chat.js?v=20261012-embed-status" data-embed-id="${id}" data-title="Trợ lý AI" data-color="#4f46e5" data-position="right" data-theme="auto"><\/script>`;
   await copyMcpText(snippet);
   if (typeof showToast === 'function') showToast('Đã sao chép mã nhúng.', 'success');
 }

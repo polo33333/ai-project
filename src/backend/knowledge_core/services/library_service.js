@@ -50,7 +50,7 @@ class LibraryService {
   }
 
   persist() { StorageHelper.saveJson('library.json', this.documents); }
-  getDocuments() { return this.documents.map(({ storagePath, contentPath, manifestPath, sourceFingerprint, ...item }) => item); }
+  getDocuments() { return this.documents.filter(document => require('../../governance/context').canRead(document)).map(({ storagePath, contentPath, manifestPath, sourceFingerprint, ...item }) => item); }
   findDocument(id) { return this.documents.find(item => item.id === id); }
   findByFingerprint(fingerprint) {
     return fingerprint ? this.documents.find(item => item.sourceFingerprint === fingerprint) : null;
@@ -151,6 +151,7 @@ class LibraryService {
   getChunks(id) {
     const document = this.findDocument(id);
     if (!document) return [];
+    require('../../governance/context').read(document, 'document');
     if (!document.manifestPath) {
       // Legacy documents remain readable until an explicit reindex/backfill.
       return this.chunkText(this.getContent(id).content).map((text, chunkIndex) => ({ text, chunkIndex }));
@@ -255,7 +256,8 @@ class LibraryService {
       this.activateChunks(document, prepared);
       document.chunksCount = chunks.length;
       document.preview = text.slice(0, 500);
-      document.status = result.success ? 'Đã lập chỉ mục' : 'Đã đọc · Qdrant lỗi';
+      document.status = result.success ? (result.mode === 'lexical' ? 'Sẵn sàng · Tìm kiếm từ khóa' : 'Đã lập chỉ mục') : 'Đã đọc · Qdrant lỗi';
+      document.indexMode = result.mode === 'lexical' ? 'lexical' : 'vector';
       document.error = result.success ? null : result.error;
     } catch (error) {
       document.status = 'Lỗi xử lý';
@@ -268,6 +270,7 @@ class LibraryService {
   getContent(id) {
     const document = this.findDocument(id);
     if (!document) throw new Error('Không tìm thấy tài liệu.');
+    require('../../governance/context').read(document, 'document');
     const content = document.contentPath && fs.existsSync(document.contentPath) ? fs.readFileSync(document.contentPath, 'utf8') : '';
     return { document: this.getDocuments().find(item => item.id === id), content };
   }
@@ -275,6 +278,7 @@ class LibraryService {
   getFile(id) {
     const document = this.findDocument(id);
     if (!document || !document.storagePath || !fs.existsSync(document.storagePath)) throw new Error('Không tìm thấy file gốc.');
+    require('../../governance/context').read(document, 'document');
     return { document, buffer: fs.readFileSync(document.storagePath) };
   }
 
@@ -314,7 +318,8 @@ class LibraryService {
         if (!result.success) throw new Error(result.error || 'Qdrant indexing failed');
         this.activateChunks(document, prepared);
         document.chunksCount = chunks.length;
-        document.status = 'Đã lập chỉ mục';
+        document.status = result.mode === 'lexical' ? 'Sẵn sàng · Tìm kiếm từ khóa' : 'Đã lập chỉ mục';
+        document.indexMode = result.mode === 'lexical' ? 'lexical' : 'vector';
         document.error = null;
         document.updatedAt = new Date().toISOString();
         summary.indexed++;
@@ -344,7 +349,7 @@ class LibraryService {
     for (const copies of groups.values()) {
       if (copies.length < 2) continue;
       copies.sort((a, b) => {
-        const quality = item => (item.sourcePath ? 4 : 0) + (item.status === 'Đã lập chỉ mục' ? 2 : 0) + (item.contentPath && fs.existsSync(item.contentPath) ? 1 : 0);
+        const quality = item => (item.sourcePath ? 4 : 0) + (['Đã lập chỉ mục', 'Sẵn sàng · Tìm kiếm từ khóa'].includes(item.status) ? 2 : 0) + (item.contentPath && fs.existsSync(item.contentPath) ? 1 : 0);
         return quality(b) - quality(a) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
       });
       const keeper = copies[0];
@@ -378,7 +383,8 @@ class LibraryService {
     this.activateChunks(document, prepared);
     document.chunksCount = chunks.length;
     document.preview = text.slice(0, 500);
-    document.status = 'Đã lập chỉ mục';
+    document.status = result.mode === 'lexical' ? 'Sẵn sàng · Tìm kiếm từ khóa' : 'Đã lập chỉ mục';
+    document.indexMode = result.mode === 'lexical' ? 'lexical' : 'vector';
     document.error = null;
     document.updatedAt = new Date().toISOString();
     this.persist();

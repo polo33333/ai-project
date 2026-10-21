@@ -21,6 +21,20 @@ function describe(run, execution) {
 
 function persist(run, execution, memory = require('../memory_core').memoryService) {
   if (run.status !== 'SUCCEEDED') return { persisted: false, reason: 'workflow_incomplete' };
+  const governance = require('../governance/context');
+  // Finalization runs in a new worker context. Restore all bound resources,
+  // rather than inheriting an empty resource list from the final step.
+  if (governance.current()) {
+    for (const binding of Object.values(run.definition.bindings || {})) {
+      const type = binding.dbSourceId ? 'sql' : binding.documentId ? 'document' : null;
+      if (!type) continue;
+      const resource = type === 'sql'
+        ? require('../services/sql_connector').dbSources.find(item => item.id === binding.dbSourceId)
+        : require('../knowledge_core/services/library_service').documents.find(item => item.id === binding.documentId);
+      if (!resource || !governance.canRead(resource)) return { persisted: false, reason: 'workflow_source_unavailable' };
+      governance.read(resource, type);
+    }
+  }
   return memory.persistWorkflowExchange({ sessionId: run.conversationId, accountId: run.ownerId,
     workflow: sanitizeObject(describe(run, execution)), artifacts: execution.artifacts || [] });
 }

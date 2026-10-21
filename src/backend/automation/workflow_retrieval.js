@@ -10,7 +10,7 @@ const positive = (value, fallback) => Number.isFinite(Number(value)) && Number(v
 function configuration() {
   const mode = process.env.CHAT_ROUTING_RETRIEVAL_MODE || 'off';
   if (!['off', 'shadow', 'on'].includes(mode)) throw fail('ROUTING_CONFIG_INVALID', 'Invalid workflow retrieval mode');
-  const method = process.env.CHAT_ROUTING_RETRIEVAL_METHOD || 'hybrid';
+  const method = require('../services/embedding_policy').enabled() ? (process.env.CHAT_ROUTING_RETRIEVAL_METHOD || 'hybrid') : 'lexical';
   if (!['lexical', 'hybrid'].includes(method)) throw fail('ROUTING_CONFIG_INVALID', 'Invalid workflow retrieval method');
   return { mode, method, collection: process.env.CHAT_ROUTING_RETRIEVAL_COLLECTION || 'workflow_routing_v1',
     qdrantUrl: process.env.QDRANT_URL || 'http://127.0.0.1:6333',
@@ -72,6 +72,7 @@ class WorkflowRetrieval {
     return response.json();
   }
   async embed(texts, config, signal) {
+    require('../services/embedding_policy').assertEnabled();
     if (config.provider !== 'ollama') throw fail('ROUTING_RETRIEVAL_UNAVAILABLE', 'Workflow routing currently requires Ollama embeddings');
     const response = await this.json(`${config.embeddingUrl.replace(/\/$/, '')}/api/embed`, 'POST', { model: config.model, input: texts }, signal);
     const vectors = response.embeddings;
@@ -82,6 +83,7 @@ class WorkflowRetrieval {
     return vectors; // Strict: never use deterministic fallback from the RAG service.
   }
   async sync(definitions, config, signal, { readOnly = false } = {}) {
+    if (!require('../services/embedding_policy').enabled()) return { skipped: true, mode: 'lexical' };
     if (!definitions.length) return;
     if (!config.modelDigest) {
       const tags = await this.json(`${config.embeddingUrl.replace(/\/$/, '')}/api/tags`, 'GET', undefined, signal);

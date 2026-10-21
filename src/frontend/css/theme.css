@@ -354,6 +354,13 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] :is(.chat-input-wrapper,.drawer-header,.modal-header,.modal-footer,.workflow-dialog header,.workflow-dialog footer) { background: var(--dark-raised) !important; border-color: var(--border-color) !important; }
 :root[data-theme="dark"] ::selection { color: #f0ebff; background: #56467f; }
 :root[data-theme="dark"] * { scrollbar-color: #465671 #111a2a; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap) { color-scheme:dark; scrollbar-color:#66758e #172235; scrollbar-width:thin; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap)::-webkit-scrollbar { width:8px; height:8px; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap)::-webkit-scrollbar-track { background:#172235; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap)::-webkit-scrollbar-thumb { background:#66758e; border:2px solid #172235; border-radius:999px; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap)::-webkit-scrollbar-thumb:hover { background:#8290a8; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap)::-webkit-scrollbar-button { display:none; width:0; height:0; }
+:root[data-theme="dark"] :is(.workflow-result-table,.wp-report-table-wrap)::-webkit-scrollbar-corner { background:#172235; }
 :root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap) { scrollbar-width:thin; scrollbar-color:#66758e #172235; }
 :root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar { width:8px; height:8px; }
 :root[data-theme="dark"] :is(.chat-bubble table,.chat-markdown-table-wrap)::-webkit-scrollbar-track { background:#172235; }
@@ -629,7 +636,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .page-chat-model-badge { color: #d0c5ff; background: #332b50; }
 :root[data-theme="dark"] .page-chat-knowledge-search > i { color: #9eacc5; }
 :root[data-theme="dark"] .chat-bubble.user { background: #5c4bb3; color: #fff; }
-:root[data-theme="dark"] :is(.chat-input,.chat-input-wrapper input,#page-chat-user-input) { background: transparent !important; box-shadow: none !important; }
+:root[data-theme="dark"] :is(.chat-input,.chat-input-wrapper input:not([type="range"]),#page-chat-user-input) { background: transparent !important; box-shadow: none !important; }
 :root[data-theme="dark"] .chat-sidebar button[onclick="clearAllChatSessions()"],
 :root[data-theme="dark"] .btn-secondary-sm.danger-soft { background: #402633 !important; border-color: #653343 !important; color: #f49dab !important; }
 :root[data-theme="dark"] .text-green { background: transparent; color: #75dcb5; }

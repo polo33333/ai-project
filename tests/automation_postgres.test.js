@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 test('PostgreSQL phase 1 catalog and checkpoints survive repository restart with concurrent CAS', { skip: process.env.KNOWLEDGEHUB_TEST_POSTGRES !== '1' }, async t => {
   const { loadEnvironment } = require('../src/backend/storage/postgres/config'); loadEnvironment();
+  // This suite exercises persistence, not live routing embeddings from .env.
+  process.env.CHAT_ROUTING_RETRIEVAL_MODE = 'off';
   const { createPool } = require('../src/backend/storage/postgres/pool');
   const { migrate } = require('../src/backend/storage/postgres/migrate');
   const { AutomationRepository } = require('../src/backend/automation/repository');

@@ -30,6 +30,7 @@ async function fetchGlossaryData() {
   } catch (err) {
     console.error('Lỗi nạp Business Glossary:', err);
     if (typeof showToast === 'function') showToast('Không thể nạp Business Glossary.', 'error');
+    return false;
   }
 }
 
@@ -231,6 +232,7 @@ async function saveGlossaryTermFromModal() {
 
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('schema');
     window.businessGlossaryData = normalizeGlossaryItems(data);
     renderGlossaryTable();
     if (typeof closeModal === 'function') closeModal('glossary-modal');
@@ -256,6 +258,7 @@ async function deleteGlossaryTermItem(encodedTerm) {
     });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('schema');
     window.businessGlossaryData = normalizeGlossaryItems(data);
     renderGlossaryTable();
     if (typeof showToast === 'function') showToast(`Đã xóa thuật ngữ "${term}".`, 'info');

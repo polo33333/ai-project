@@ -7,10 +7,11 @@ window.editingAiProviderId = null;
 let chatProvidersRequest = null;
 let chatProvidersLoadedAt = 0;
 window.loadChatProviders = async function loadChatProviders() {
+  if(window.currentAccountRole!=='admin'&&Array.isArray(window.currentAccountPermissions)&&!window.currentAccountPermissions.includes('chat.use')) return [];
   if (chatProvidersLoadedAt && Date.now() - chatProvidersLoadedAt < 60000) return window.aiProvidersData;
   if (!chatProvidersRequest) {
     chatProvidersRequest = (async () => {
-      const response = await fetch('/api/ai-providers');
+      const response = await fetch('/api/chat/providers');
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       window.aiProvidersData = normalizeProvidersResponse(await response.json());
       chatProvidersLoadedAt = Date.now();
@@ -54,6 +55,7 @@ async function fetchAiProviders() {
   } catch (err) {
     console.error('Lỗi khi nạp danh sách AI Providers:', err);
     if (typeof showToast === 'function') showToast('Không thể nạp danh sách AI Providers.', 'error');
+    return false;
   }
 }
 
@@ -227,6 +229,7 @@ async function testAiProviderConnection(id) {
     if (typeof showToast === 'function') {
       showToast(`${ok ? 'Kết nối thành công' : 'Kết nối fallback'} (${data.latencyMs || 0}ms)`, ok ? 'success' : 'warn');
     }
+    window.invalidateRelatedTabData?.('providers');
     await fetchAiProviders();
   } catch (err) {
     console.error('Test Provider lỗi:', err);
@@ -243,6 +246,7 @@ async function activateAiProvider(id) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('providers');
     await fetchAiProviders();
     if (typeof showToast === 'function') showToast('Đã kích hoạt AI Provider.', 'success');
   } catch (err) {
@@ -261,6 +265,7 @@ async function deleteAiProvider(id) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('providers');
     await fetchAiProviders();
     if (typeof showToast === 'function') showToast('Đã xóa AI Provider.', 'info');
   } catch (err) {
@@ -330,6 +335,7 @@ async function savePageNewAiProvider() {
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
     const actionText = editingId ? 'cập nhật' : 'thêm';
     cancelEditAiProvider();
+    window.invalidateRelatedTabData?.('providers');
     await fetchAiProviders();
     if (typeof showToast === 'function') showToast(`Đã ${actionText} AI Provider "${name}".`, 'success');
   } catch (err) {

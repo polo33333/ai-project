@@ -1,0 +1,68 @@
+<section id="view-accounts" class="system-tools-page accounts-page" data-display="grid" style="display:none">
+  <header class="system-tools-hero"><div class="system-tools-hero-icon"><i class="fa-solid fa-users-gear"></i></div><div><div class="card-title">Quản lý tài khoản</div><p>Tạo tài khoản đăng nhập, phân quyền và quản lý trạng thái truy cập ứng dụng.</p></div><button type="button" class="btn-primary" onclick="openAccountEditor()"><i class="fa-solid fa-plus"></i> Thêm tài khoản</button></header>
+  <section class="system-tools-card">
+    <div class="accounts-toolbar"><div class="search-input-wrapper"><i class="fa-solid fa-magnifying-glass search-icon"></i><input id="accounts-search" class="search-input" placeholder="Tìm tên, tài khoản hoặc email…" aria-label="Tìm tài khoản" oninput="filterAccountsTable()"></div><select id="accounts-role-filter" class="form-control" aria-label="Lọc vai trò" onchange="filterAccountsTable()"><option value="">Tất cả vai trò</option><option value="admin">Admin</option><option value="user">User</option></select><select id="accounts-status-filter" class="form-control" aria-label="Lọc trạng thái" onchange="filterAccountsTable()"><option value="">Tất cả trạng thái</option><option value="active">Đang hoạt động</option><option value="inactive">Đã khóa</option></select><button type="button" id="accounts-refresh" class="btn-secondary-sm" onclick="loadAccounts()"><i class="fa-solid fa-rotate"></i> Làm mới</button></div>
+    <p id="accounts-message" role="status" class="accounts-message"></p>
+    <div class="accounts-table-wrap"><table class="accounts-table"><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead><tbody id="accounts-rows"></tbody></table></div>
+    <div id="accounts-pagination" class="pagination-wrapper"></div>
+    <div class="accounts-role-guide"><span><strong>Admin</strong> Quản lý tài khoản và cấu hình hệ thống.</span><span><strong>User</strong> Sử dụng ứng dụng theo quyền truy cập dữ liệu được cấp.</span></div>
+  </section>
+  <section class="system-tools-card embed-auth-card">
+    <header class="embed-section-heading">
+      <div class="embed-section-title"><span class="embed-section-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span><div><h3>Xác thực Embed Chat</h3><p>Nhận diện người dùng từ tài khoản đăng nhập trên website của bạn.</p></div></div>
+      <span id="embed-identity-status" class="embed-state-badge">Chưa bật</span>
+    </header>
+    <form onsubmit="saveEmbedIdentity(event)" class="embed-auth-form">
+      <div class="embed-widget-picker"><label for="embed-identity-config">Widget cần kết nối</label><select id="embed-identity-config" class="form-control" onchange="selectEmbedIdentity()"></select></div>
+      <div class="embed-auth-layout">
+        <div class="embed-auth-main">
+          <div class="embed-form-heading"><h4>Thông tin server</h4><p>Khai báo nơi cấp token và thông tin dùng để xác thực.</p></div>
+          <div class="embed-field-grid">
+            <label class="embed-field embed-field-full" for="embed-identity-server">Địa chỉ server website<input id="embed-identity-server" type="url" class="form-control" placeholder="https://website.example"><small>Website đang quản lý phiên đăng nhập của người dùng.</small></label>
+            <label class="embed-field" for="embed-identity-issuer">Issuer <span class="embed-field-hint">iss</span><input id="embed-identity-issuer" class="form-control" maxlength="500" placeholder="https://website.example"></label>
+            <label class="embed-field" for="embed-identity-audience">Audience <span class="embed-field-hint">aud</span><input id="embed-identity-audience" class="form-control" maxlength="200" placeholder="knowledgehub-chat"></label>
+            <label class="embed-field embed-field-full" for="embed-identity-key">Khóa công khai RSA <span class="embed-field-hint">PEM</span><textarea id="embed-identity-key" class="form-control" rows="5" spellcheck="false" placeholder="-----BEGIN PUBLIC KEY-----&#10;Dán khóa công khai của server tại đây&#10;-----END PUBLIC KEY-----"></textarea><small>RSA từ 2048 bit. Khóa riêng được giữ trên server website.</small></label>
+          </div>
+        </div>
+        <aside class="embed-auth-policy">
+          <div class="embed-form-heading"><h4>Chính sách truy cập</h4><p>Chọn cách người dùng bắt đầu chat.</p></div>
+          <label class="embed-toggle-row" for="embed-identity-enabled"><span><strong>Xác thực danh tính</strong><small>Gắn tên và ID tài khoản vào phiên chat.</small></span><input type="checkbox" role="switch" id="embed-identity-enabled" onchange="updateEmbedIdentityState()"><span class="embed-switch-track" aria-hidden="true"></span></label>
+          <label class="embed-toggle-row" for="embed-identity-required"><span><strong>Yêu cầu đăng nhập</strong><small>Chỉ cho phép tài khoản đã xác thực gửi tin nhắn.</small></span><input type="checkbox" role="switch" id="embed-identity-required"><span class="embed-switch-track" aria-hidden="true"></span></label>
+          <div class="embed-auth-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><p>Danh tính được kiểm tra bằng chữ ký token. Người dùng website không được cấp thêm quyền quản trị.</p></div>
+        </aside>
+      </div>
+      <footer class="embed-auth-footer"><p id="embed-identity-message" role="status" aria-live="polite"></p><button id="embed-identity-save" class="btn-primary" type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Lưu cấu hình</button></footer>
+    </form>
+    <details class="embed-connect-guide"><summary><i class="fa-solid fa-code" aria-hidden="true"></i> Hướng dẫn kết nối website <i class="fa-solid fa-chevron-down embed-guide-chevron" aria-hidden="true"></i></summary><div class="embed-guide-body"><p>Server website cấp token RS256 chứa <code>sub</code>, <code>name</code>, <code>iss</code>, <code>aud</code>, <code>exp</code>, thời hạn tối đa 1 giờ. KnowledgeHub kiểm tra chữ ký bằng khóa công khai, không gọi trực tiếp địa chỉ server.</p><p>Đặt đoạn này trước script nhúng. Endpoint website cần kiểm tra phiên đăng nhập và trả <code>{token}</code>; với khách chưa đăng nhập, trả <code>{token:null}</code>.</p><pre><code>window.KnowledgeHubIdentity = {
+  async getToken(embedId) {
+    const response = await fetch('/api/chat-identity?embedId=' + encodeURIComponent(embedId), {
+      credentials: 'same-origin', cache: 'no-store'
+    });
+    if (!response.ok) throw new Error('Không thể xác thực danh tính');
+    return (await response.json()).token;
+  }
+};</code></pre></div></details>
+  </section>
+  <section class="system-tools-card embed-sessions-card">
+    <header class="embed-section-heading"><div class="embed-section-title"><span class="embed-section-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></span><div><h3>Phiên chat gần đây <span id="embed-session-count" class="embed-count-badge">0</span></h3><p>Theo dõi người dùng đang hoạt động trên các website đã kết nối.</p></div></div><button type="button" id="embed-sessions-refresh" class="btn-secondary-sm" onclick="refreshEmbedSessions()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button></header>
+    <div class="accounts-table-wrap"><table class="accounts-table"><thead><tr><th>Người dùng</th><th>Widget / Website</th><th>Trạng thái</th><th>Hoạt động cuối</th></tr></thead><tbody id="embed-identity-sessions"></tbody></table></div>
+    <p class="embed-sessions-note"><span class="embed-online-dot" aria-hidden="true"></span> Online khi có hoạt động trong 90 giây gần nhất.<span>Phiên được lưu tạm tối đa 24 giờ.</span></p>
+  </section>
+  <div class="accounts-editor-backdrop" id="accounts-editor" hidden>
+    <form id="accounts-form" class="accounts-editor" role="dialog" aria-modal="true" aria-labelledby="accounts-editor-title" onsubmit="saveAccountEditor(event)">
+      <header><div><h3 id="accounts-editor-title">Thêm tài khoản</h3><p id="accounts-editor-subtitle">Thông tin dùng để đăng nhập ứng dụng.</p></div><button type="button" class="modal-close-btn" onclick="closeAccountEditor()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button></header>
+      <div class="accounts-form-body">
+        <label id="accounts-username-label">Tên đăng nhập<input id="accounts-username" class="form-control" minlength="3" maxlength="64" autocomplete="off" required></label>
+        <label id="accounts-name-label">Tên hiển thị<input id="accounts-name" class="form-control" maxlength="100" required></label>
+        <label id="accounts-email-label">Email<input id="accounts-email" class="form-control" type="email" maxlength="254"></label>
+        <div id="accounts-access-fields" class="accounts-access-fields"><label>Vai trò<select id="accounts-role" class="form-control" onchange="updateAccountPermissionPreview()"></select></label><label>Trạng thái<select id="accounts-active" class="form-control"><option value="active">Đang hoạt động</option><option value="inactive">Đã khóa</option></select></label><button type="button" class="accounts-create-role" onclick="openRoleEditor()"><i class="fa-solid fa-plus"></i> Tạo vai trò mới</button></div>
+        <details id="accounts-permission-section" class="accounts-permission-section"><summary>Phân quyền riêng cho tài khoản</summary><p>Chọn kế thừa từ vai trò hoặc tùy chỉnh. Phạm vi dữ liệu riêng không vượt phạm vi vai trò và chính sách nguồn.</p><label>Quyền chức năng<select id="accounts-permission-mode" class="form-control" onchange="updateAccountPermissionPreview()"><option value="inherit">Kế thừa từ vai trò</option><option value="custom">Tùy chỉnh cho tài khoản</option></select></label><div id="accounts-permissions"></div><div id="accounts-data-access"></div></details>
+        <label id="accounts-password-label">Mật khẩu<input id="accounts-password" type="password" class="form-control" minlength="8" maxlength="128" autocomplete="new-password"><small>Từ 8 đến 128 ký tự. Mật khẩu chỉ hiển thị khi nhập, không được tải lại từ hệ thống.</small></label>
+        <p id="accounts-editor-message" class="accounts-message" role="alert"></p>
+      </div>
+      <footer><button type="button" class="btn-secondary-sm" onclick="closeAccountEditor()">Hủy</button><button type="submit" id="accounts-save" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Lưu tài khoản</button></footer>
+    </form>
+  </div>
+  <section class="system-tools-card accounts-roles-section"><div class="accounts-roles-heading"><div><h3>Vai trò & quyền mặc định</h3><p>Vai trò tùy chỉnh quy định quyền sử dụng; cấu hình hệ thống và quản lý tài khoản chỉ dành cho Admin.</p></div><button type="button" class="btn-secondary-sm" onclick="openRoleEditor()"><i class="fa-solid fa-plus"></i> Thêm vai trò</button></div><div id="accounts-roles-list" class="accounts-roles-list"></div></section>
+  <div id="accounts-role-editor" class="accounts-editor-backdrop accounts-role-editor" hidden><form class="accounts-editor" id="accounts-role-form" role="dialog" aria-modal="true" aria-labelledby="accounts-role-title" onsubmit="saveRoleEditor(event)"><header><div><h3 id="accounts-role-title">Thêm vai trò</h3><p>Chọn quyền sử dụng mặc định cho các tài khoản thuộc vai trò.</p></div><button type="button" class="modal-close-btn" onclick="closeRoleEditor()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button></header><div class="accounts-form-body"><label>Mã vai trò<input id="account-role-id" class="form-control" required minlength="2" maxlength="40" placeholder="Ví dụ: ke_toan"></label><label>Tên vai trò<input id="account-role-name" class="form-control" required maxlength="100" placeholder="Ví dụ: Kế toán"></label><label>Mô tả<input id="account-role-description" class="form-control" maxlength="400"></label><div id="role-permissions"></div><div id="role-data-access"></div><p id="account-role-message" class="accounts-message" role="alert"></p></div><footer><button type="button" class="btn-secondary-sm" onclick="closeRoleEditor()">Hủy</button><button id="account-role-save" class="btn-primary" type="submit">Lưu vai trò</button></footer></form></div>
+</section>

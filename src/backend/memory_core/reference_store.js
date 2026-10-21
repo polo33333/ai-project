@@ -43,6 +43,19 @@ function resolveReference(questionText, references = {}, now = Date.now(), prefe
       && references.lastEntity.runId === references.lastDataset.runId) {
     return { type: 'lastEntity', data: sanitizeObject(references.lastEntity) };
   }
+  // A SQL lookup creates both a dataset and an entity from the same result.
+  // They are two representations of one antecedent, not competing references.
+  if (valid.length === 2 && valid.includes('lastEntity') && valid.includes('lastDataset')) {
+    const entity = references.lastEntity, dataset = references.lastDataset;
+    const keys = dataset.entityKeys || [];
+    const sameResult = entity.table === dataset.table && timestamp(entity.updatedAt) === timestamp(dataset.updatedAt)
+      && (!entity.dbSourceId || !dataset.dbSourceId || entity.dbSourceId === dataset.dbSourceId);
+    const sameLegacyEntity = keys.length === 1 && Object.entries(keys[0]).length > 0
+      && Object.entries(keys[0]).every(([key, value]) => String(entity.filters?.[key]) === String(value));
+    if (sameResult && (dataset.rowCount === 1 || (dataset.rowCount === undefined && sameLegacyEntity))) {
+      return { type: 'lastEntity', data: sanitizeObject(entity) };
+    }
+  }
   if (valid.length > 1 && policy.strictReferenceResolution()) {
     return { type: null, data: null, reason: 'ambiguous_reference' };
   }
@@ -83,15 +96,18 @@ function deriveReferences({ currentPlan = {}, toolCalls = [], now = new Date().t
       timeColumn: currentPlan.timeColumn || null,
       requiredColumns: currentPlan.requiredColumns || [],
       dbSourceId: currentPlan.dbSourceId || null,
+      rowCount: sqlCall.result.rows.length,
       queryScope: { question: currentPlan.question || null, unfilteredList: currentPlan.unfilteredList === true,
         temporalMonths: currentPlan.temporalMonths || null },
       entityKeys: datasetEntityKeys(sqlCall.result.rows, currentPlan),
       updatedAt: now
     });
     const firstRow = sqlCall.result.rows.length === 1 ? sqlCall.result.rows[0] : null;
-    const filters = firstRow && pickEntityFilters(firstRow);
+    const filters = firstRow && pickEntityFilters(Object.fromEntries(Object.entries(firstRow).map(([key, value]) => [
+      Object.entries(currentPlan.columnDisplayNames || {}).find(([, alias]) => alias === key)?.[0] || key, value
+    ])));
     if (filters && Object.keys(filters).length) {
-      updates.lastEntity = sanitizeObject({ table: currentPlan.table, filters, updatedAt: now });
+      updates.lastEntity = sanitizeObject({ table: currentPlan.table, dbSourceId: currentPlan.dbSourceId || null, filters, updatedAt: now });
     }
   }
   const exportCall = [...toolCalls].reverse().find(call => call.toolName === 'export_data' && call.success && call.result?.downloadUrl);

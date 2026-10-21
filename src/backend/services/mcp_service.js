@@ -1,6 +1,9 @@
 'use strict';
 
 const StorageHelper = require('../utils/storage_helper');
+const Ajv = require('ajv');
+const validateSchema = new Ajv({ allErrors: true, strict: false, validateFormats: false });
+const fingerprint = value => require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
 const { SSEClientTransport } = require('@modelcontextprotocol/sdk/client/sse.js');
@@ -50,8 +53,8 @@ class McpService {
       ...server,
       toolsCount: tools.length,
       resourcesCount: resources.length,
-      tools: tools.map(tool => ({ name: tool.name, description: tool.description || '' })),
-      resources: resources.map(resource => ({ uri: resource.uri, name: resource.name || resource.uri, description: resource.description || '' }))
+      tools: tools.map(tool => ({ name: tool.name, description: tool.description || '', schemaHash: fingerprint(tool) })),
+      resources: resources.map(resource => ({ uri: resource.uri, name: resource.name || resource.uri, description: resource.description || '', schemaHash: fingerprint(resource) }))
     }));
   }
 
@@ -70,12 +73,36 @@ class McpService {
       endpoint,
       status: 'connecting',
       scope: String(data.scope || 'General Tools & Resources').trim().slice(0, 500),
+      readOnlyTools: Array.isArray(data.readOnlyTools) ? data.readOnlyTools.filter(value => typeof value === 'string').slice(0, 100) : [],
+      readOnlyResources: Array.isArray(data.readOnlyResources) ? data.readOnlyResources.filter(value => typeof value === 'string').slice(0, 100) : [],
       tools: [], resources: [], lastError: null, lastConnectedAt: null
     };
     this.mcpServers.unshift(newServer);
     this.persist();
     try { await this.connectServer(newServer.id); } catch (_) { /* Error state is persisted by connectServer. */ }
+    if (newServer.status === 'connected' && (newServer.readOnlyTools.length || newServer.readOnlyResources.length)) {
+      this.reviewReadOnly(newServer.id, data, 'server-configuration');
+    }
     return this.getServer(newServer.id);
+  }
+
+  reviewReadOnly(id, data, actorId) {
+    const server = this.getServer(id);
+    if (!server) throw new Error('Không tìm thấy MCP Server.');
+    for (const key of ['readOnlyTools', 'readOnlyResources']) {
+      if (!Array.isArray(data[key]) || data[key].length > 100 || data[key].some(value => typeof value !== 'string')) throw new Error('Danh sách chỉ đọc không hợp lệ.');
+    }
+    if (data.readOnlyTools.some(name => !server.tools.some(tool => tool.name === name)) ||
+        data.readOnlyResources.some(uri => !server.resources.some(resource => resource.uri === uri))) throw new Error('Công cụ hoặc tài nguyên đã thay đổi. Hãy quét lại nguồn.');
+    if (actorId !== 'server-configuration' && (data.readOnlyTools.some(name => data.expectedToolHashes?.[name] !== fingerprint(server.tools.find(tool => tool.name === name))) ||
+        data.readOnlyResources.some(uri => data.expectedResourceHashes?.[uri] !== fingerprint(server.resources.find(resource => resource.uri === uri))))) throw new Error('Schema đã thay đổi sau khi mở bảng duyệt. Hãy tải lại và kiểm tra.');
+    server.readOnlyTools = [...new Set(data.readOnlyTools)];
+    server.readOnlyResources = [...new Set(data.readOnlyResources)];
+    server.readOnlyReview = { actorId, reviewedAt: new Date().toISOString(),
+      toolHashes: Object.fromEntries(server.tools.filter(tool => server.readOnlyTools.includes(tool.name)).map(tool => [tool.name, fingerprint(tool)])),
+      resourceHashes: Object.fromEntries(server.resources.filter(resource => server.readOnlyResources.includes(resource.uri)).map(resource => [resource.uri, fingerprint(resource)])) };
+    this.persist(); this.syncAgentTools();
+    return this.getServers().find(item => item.id === id);
   }
 
   async deleteServer(id) {
@@ -181,32 +208,72 @@ class McpService {
   getToolSpecs() {
     const specs = [];
     for (const server of this.mcpServers) {
-      for (const tool of server.tools || []) specs.push({
+      const readOnly = require('../automation/read_only_policy').externalReadOnly();
+      for (const tool of (server.tools || []).filter(tool => !readOnly || (server.readOnlyTools?.includes(tool.name) && server.readOnlyReview?.toolHashes?.[tool.name] === fingerprint(tool)))) specs.push({
         name: this.toolAlias(server, tool.name),
         description: `[MCP: ${server.name}] ${tool.description || `Gọi công cụ ${tool.name}`}`.slice(0, 1000),
         parameters: sanitizeSchema(tool.inputSchema),
         serverId: server.id, remoteName: tool.name, kind: 'tool'
       });
-      if ((server.resources || []).length) specs.push({
+      const resources = (server.resources || []).filter(resource => !readOnly || (server.readOnlyResources?.includes(resource.uri) && server.readOnlyReview?.resourceHashes?.[resource.uri] === fingerprint(resource)));
+      if (resources.length) specs.push({
         name: this.resourceAlias(server),
         description: `[MCP: ${server.name}] Đọc một resource đã công bố bởi server.`,
-        parameters: { type: 'object', properties: { uri: { type: 'string', enum: server.resources.map(resource => resource.uri), description: 'URI resource cần đọc' } }, required: ['uri'] },
+        parameters: { type: 'object', properties: { uri: { type: 'string', enum: resources.map(resource => resource.uri), description: 'URI resource cần đọc' } }, required: ['uri'] },
         serverId: server.id, kind: 'resource'
       });
     }
     return specs;
   }
 
-  async executeSpec(spec, args = {}) {
+  async executeSpec(spec, args = {}, context = {}) {
+    const startedAt = Date.now();
+    const preCancelled = context.signal?.aborted === true;
+    let result;
+    try { result = await this.executeValidatedSpec(spec, args, context); }
+    catch (error) {
+      if (error.name === 'AbortError') {
+        error.toolResult = require('../agent_core/tools/tool_result').createToolResult({ success: false,
+          tool: spec.name, outcome: 'cancelled', code: error.code || 'MCP_CANCELLED', error: error.message,
+          effectState: preCancelled || spec.kind === 'resource' ? 'none' : 'unknown', durationMs: Date.now() - startedAt }, context);
+        throw error;
+      }
+      result = { success: false, error: error.message || 'MCP execution failed.', code: error.code || null,
+        outcome: ['ETIMEDOUT', 'TOOL_TIMEOUT'].includes(error.code) ? 'timeout' : 'failed',
+        effectState: spec.kind === 'resource' ? 'none' : 'unknown', retryable: false };
+    }
+    const execution = { ...result, tool: spec.name, success: result.success !== false,
+      result: result.success === false ? null : result, durationMs: Date.now() - startedAt,
+      effectState: result.effectState || (spec.kind === 'resource' ? 'none' : 'unknown') };
+    return { ...result, envelope: require('../agent_core/tools/tool_result').createToolResult(execution, context) };
+  }
+
+  async executeValidatedSpec(spec, args = {}, context = {}) {
+    if (context.signal?.aborted) throw Object.assign(new Error('Request aborted'), { name: 'AbortError' });
+    const permissions = Array.isArray(context.permissions) ? context.permissions : [];
+    if (!permissions.some(value => ['admin', '*', `mcp:${spec.serverId}:execute`].includes(value))) {
+      return { success: false, error: 'MCP access denied.', code: 'MCP_ACCESS_DENIED', outcome: 'denied', effectState: 'none' };
+    }
+    const current = this.getToolSpecs().filter(item => item.name === spec.name);
+    if (current.length !== 1 || current[0].serverId !== spec.serverId || current[0].remoteName !== spec.remoteName || current[0].kind !== spec.kind ||
+        JSON.stringify(current[0].parameters) !== JSON.stringify(spec.parameters)) {
+      return { success: false, error: 'MCP tool changed or is unavailable.', code: 'MCP_SPEC_CHANGED', outcome: 'denied', effectState: 'none' };
+    }
+    if (!validateSchema.validate(current[0].parameters, args)) {
+      return { success: false, error: 'Invalid MCP arguments.', code: 'MCP_INVALID_INPUT', outcome: 'invalid_input', effectState: 'none' };
+    }
+    await require('../governance/context').refresh(`mcp:${spec.serverId}`);
     const client = await this.ensureClient(spec.serverId);
+    if (context.signal?.aborted) throw Object.assign(new Error('Request aborted'), { name: 'AbortError' });
     if (spec.kind === 'resource') {
-      const result = await client.readResource({ uri: args.uri }, { timeout: CALL_TIMEOUT_MS });
+      const result = await client.readResource({ uri: args.uri }, { timeout: CALL_TIMEOUT_MS, signal: context.signal });
       return { serverId: spec.serverId, uri: args.uri, contents: result.contents || [] };
     }
-    const result = await client.callTool({ name: spec.remoteName, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS });
+    const result = await client.callTool({ name: spec.remoteName, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS, signal: context.signal });
     if (result.isError) {
       const message = (result.content || []).map(item => item.text || '').filter(Boolean).join('\n') || `MCP tool ${spec.remoteName} báo lỗi.`;
-      return { success: false, error: message };
+      return { success: false, error: message, code: 'MCP_REMOTE_ERROR', outcome: 'failed',
+        effectState: 'unknown', retryable: false };
     }
     return { serverId: spec.serverId, tool: spec.remoteName, content: result.content || [], structuredContent: result.structuredContent || null };
   }
@@ -222,8 +289,12 @@ class McpService {
     const service = this;
     for (const spec of this.getToolSpecs()) {
       const DynamicMcpTool = class extends this.BaseTool {
-        constructor() { super({ name: spec.name, description: spec.description, parameters: spec.parameters, timeoutMs: CALL_TIMEOUT_MS }); }
-        async run(args) { return service.executeSpec(spec, args); }
+        constructor() { super({ name: spec.name, description: spec.description, parameters: spec.parameters, timeoutMs: CALL_TIMEOUT_MS,
+          isDangerous: spec.kind !== 'resource', requiredPermissions: [`mcp:${spec.serverId}:execute`] }); }
+        async run(args, context) {
+          const { envelope, ...result } = await service.executeSpec(spec, args, context);
+          return result;
+        }
       };
       this.boundToolManager.registerTool(new DynamicMcpTool());
       this.registeredToolNames.add(spec.name);

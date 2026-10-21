@@ -17,7 +17,8 @@ const { callAnthropic } = require('./anthropic');
  * @param {Array}  tools    - Tools array (OpenAI format)
  * @param {AbortSignal} signal
  */
-async function dispatchToProvider(provider, messages, tools, signal, options = {}) {
+async function dispatchUnchecked(provider, messages, tools, signal, options = {}) {
+  await require('../../governance/context').refresh(provider.id, /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(provider.baseUrl || ''));
   if (typeof fetch === 'undefined') {
     throw new Error('Fetch API không khả dụng trong môi trường Node.js này (yêu cầu Node.js >= 18).');
   }
@@ -44,6 +45,19 @@ async function dispatchToProvider(provider, messages, tools, signal, options = {
 
   // Default: OpenAI-compat (OpenAI, DeepSeek, LM Studio, OpenRouter, ...)
   return callOpenAI(provider, messages, tools, signal, options);
+}
+
+async function dispatchToProvider(provider, messages, tools, signal, options = {}) {
+  const budget = options.executionBudget || require('../../governance/context').current()?.executionBudget;
+  return require('../../governance/admission').model.run(async () => {
+    const estimated = Math.ceil(JSON.stringify([messages, tools]).length / 3) + (Number(provider.maxTokens) || 4096);
+    const receipt = budget?.reserveUsage({ tokens: estimated, cost: estimated * (Number(provider.costPerToken) || 0), purpose: options.purpose || 'work' });
+    let response;
+    try { response = await dispatchUnchecked(provider, messages, tools, signal, options); return response; }
+    finally { if (receipt !== undefined) budget.reconcileUsage(receipt, { tokens: response?.usage?.totalTokens, cost: response?.usage?.cost }); }
+  }, {
+    signal, timeoutMs: Math.min(10000, budget?.remainingMs() ?? 10000)
+  });
 }
 
 module.exports = {

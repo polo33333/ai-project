@@ -114,6 +114,15 @@ function aliasesForEdge(edge, plan, refs) {
 function validateGrain(select, refs, plan, usedEdges) {
   const aggregates = [];
   (select.columns || []).forEach(column => walk(column.expr, node => { if (node.type === 'aggr_func') aggregates.push(node); }));
+  for(const edge of usedEdges.filter(item=>item.cardinality==='many-to-one')) {
+    const aliases=aliasesForEdge(edge,plan,refs);
+    for(const aggregate of aggregates) {
+      const argument=aggregate.args?.expr,name=key(aggregate.name);
+      if(argument?.type!=='column_ref'||!aliases.to.includes(key(argument.table))||(name==='count'&&aggregate.args?.distinct))continue;
+      if(['sum','count','avg'].includes(name))return failure('JOIN_GRAIN_UNSAFE',
+        'Aggregate trên bảng đích N:1 có thể lặp giá trị theo các dòng bảng nguồn; cần DISTINCT phù hợp hoặc tổng hợp đúng grain trước JOIN.');
+    }
+  }
   for (const edge of usedEdges.filter(item => item.cardinality === 'one-to-many')) {
     const aliases = aliasesForEdge(edge, plan, refs);
     for (const aggregate of aggregates) {
@@ -135,24 +144,36 @@ function validateGrain(select, refs, plan, usedEdges) {
 }
 
 function validateEnrichmentProjection(select, refs, plan, bindings) {
-  if (plan.purpose !== 'enrichment') return { valid: true };
   const columns = select.columns || [];
+  if (plan.requireMappedProjection) {
+    const missing = (plan.edges || []).filter(edge => edge.displayColumn && edge.businessRole
+      && !bindings.some(binding => binding.edge.relationshipId === edge.relationshipId));
+    if (missing.length) return failure('JOIN_PROJECTION_INVALID',
+      `Full comparison is missing configured mapped criteria: ${missing.map(edge => edge.businessRole).join(', ')}. Join the verified relationships and project their display columns.`);
+  }
+  // Aggregated measures do not project a record's mapped ID/display fields.
+  // Relationship and grain checks still run independently for these JOINs.
+  if(!plan.requireMappedProjection&&columns.length&&columns.every(c=>c.expr?.type==='aggr_func'))return {valid:true};
   if (!bindings.length) {
-    const root = plan.tableRefs?.[0];
+    const root = plan.tableRefs?.find(ref=>key(ref.tableName)===refs[0]?.tableName && key(ref.schemaName || 'dbo')===refs[0]?.schemaName) || plan.tableRefs?.[0];
     const rootAliases = refs.filter(ref => ref.tableName === key(root?.tableName)).map(ref => ref.alias);
-    const mappedIds = new Set((plan.edges || []).flatMap(edge => (edge.columnPairs || []).map(pair => key(pair.sourceColumn))));
+    const mappedEdges=(plan.edges || []).filter(edge=>edge.displayColumn && edge.businessRole && !edge.reversed && edge.cardinality!=='one-to-many'
+      && (!root?.tableId || edge.fromTableId===root.tableId));
+    const mappedIds = new Set(mappedEdges
+      .flatMap(edge => (edge.columnPairs || []).map(pair => key(pair.sourceColumn))));
     const exposesMappedId = columns.some(column => {
-      if (column.expr?.type === 'star') return true;
+      if (column.expr?.type === 'star') return mappedIds.size > 0;
       if (column.expr?.type !== 'column_ref') return false;
       const alias = key(column.expr.table);
       return mappedIds.has(key(column.expr.column)) && (!alias || rootAliases.includes(alias));
     });
     if (exposesMappedId) {
-      const targetNames = [...new Set((plan.edges || []).map(edge => refForEdge(plan, edge, 'to')?.tableName).filter(Boolean))];
+      const targetNames = [...new Set(mappedEdges.map(edge => refForEdge(plan, edge, 'to')?.tableName).filter(Boolean))];
       return failure('JOIN_PROJECTION_INVALID',
         `SQL hiển thị ID đã map nhưng thiếu JOIN tới bảng hiển thị bắt buộc${targetNames.length ? `: ${targetNames.join(', ')}` : ''}.`);
     }
   }
+  if (plan.purpose !== 'enrichment') return { valid: true };
   for (const { edge, fromAlias, toAlias } of bindings.filter(item => item.edge.displayColumn && item.edge.businessRole)) {
     const mappedSourceColumns = new Set((edge.columnPairs || []).map(pair => key(pair.sourceColumn)));
     const exposesMappedId = columns.some(column => {

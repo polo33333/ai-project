@@ -37,6 +37,7 @@ try {
 
 const StorageHelper = require('../utils/storage_helper');
 const crypto = require('node:crypto');
+const { readUniqueConstraints } = require('./sql_catalog_keys');
 
 class SqlConnector {
   constructor() {
@@ -73,7 +74,9 @@ class SqlConnector {
   }
 
   getDefaultDbSource() {
-    return this.ensureSingleDefault() || null;
+    const preferred=this.ensureSingleDefault();
+    const governance=require('../governance/context');
+    return preferred&&governance.canRead(preferred,'sql')?preferred:this.dbSources.find(source=>governance.canRead(source,'sql'))||null;
   }
 
   setDefaultDbSource(id) {
@@ -331,8 +334,15 @@ class SqlConnector {
         const sqlQuery = `
           SELECT s.name AS TABLE_SCHEMA, t.name AS TABLE_NAME, c.name AS COLUMN_NAME,
             ty.name AS DATA_TYPE, c.is_nullable AS IS_NULLABLE, c.column_id AS ORDINAL_POSITION,
-            CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS IS_PRIMARY_KEY,
-            CASE WHEN uq.column_id IS NOT NULL THEN 1 ELSE 0 END AS IS_UNIQUE_KEY,
+            (SELECT i.name AS name, i.is_primary_key AS isPrimaryKey,
+              i.is_disabled AS isDisabled, i.has_filter AS hasFilter,
+              JSON_QUERY((SELECT kc.name AS columnName FROM sys.index_columns ic
+                JOIN sys.columns kc ON kc.object_id=ic.object_id AND kc.column_id=ic.column_id
+                WHERE ic.object_id=i.object_id AND ic.index_id=i.index_id
+                  AND ic.key_ordinal>0 AND ic.is_included_column=0
+                ORDER BY ic.key_ordinal FOR JSON PATH)) AS columns
+             FROM sys.indexes i WHERE i.object_id=t.object_id AND i.is_unique=1
+               AND i.is_hypothetical=0 ORDER BY i.index_id FOR JSON PATH) AS UNIQUE_CONSTRAINTS,
             fk.name AS FK_NAME, fk.is_disabled AS FK_DISABLED, fk.is_not_trusted AS FK_NOT_TRUSTED,
             rs.name AS REF_SCHEMA, rt.name AS REF_TABLE, rc.name AS REF_COLUMN,
             fkc.constraint_column_id AS FK_ORDINAL
@@ -340,14 +350,6 @@ class SqlConnector {
           JOIN sys.schemas s ON s.schema_id=t.schema_id
           JOIN sys.columns c ON c.object_id=t.object_id
           JOIN sys.types ty ON ty.user_type_id=c.user_type_id
-          LEFT JOIN (
-            SELECT ic.object_id,ic.column_id FROM sys.indexes i JOIN sys.index_columns ic
-              ON ic.object_id=i.object_id AND ic.index_id=i.index_id WHERE i.is_primary_key=1
-          ) pk ON pk.object_id=c.object_id AND pk.column_id=c.column_id
-          LEFT JOIN (
-            SELECT ic.object_id,ic.column_id FROM sys.indexes i JOIN sys.index_columns ic
-              ON ic.object_id=i.object_id AND ic.index_id=i.index_id WHERE i.is_unique=1
-          ) uq ON uq.object_id=c.object_id AND uq.column_id=c.column_id
           LEFT JOIN sys.foreign_key_columns fkc ON fkc.parent_object_id=c.object_id AND fkc.parent_column_id=c.column_id
           LEFT JOIN sys.foreign_keys fk ON fk.object_id=fkc.constraint_object_id
           LEFT JOIN sys.tables rt ON rt.object_id=fkc.referenced_object_id
@@ -375,6 +377,7 @@ class SqlConnector {
             dbName: opts.dbName,
             columnCount: entry.columns.length,
             columns: entry.columns,
+            uniqueConstraints: entry.uniqueConstraints,
             foreignKeys: Object.values(entry.foreignKeys).map(fk => ({ ...fk, columnPairs: fk.columnPairs.sort((a, b) => a.ordinal - b.ordinal) }))
           }));
 
@@ -391,14 +394,16 @@ class SqlConnector {
           const schemaName = row.TABLE_SCHEMA || 'dbo';
           const tableKey = `${schemaName}.${tableName}`;
           if (!tablesMap[tableKey]) {
-            tablesMap[tableKey] = { tableName, schemaName, columns: [], foreignKeys: {} };
+            tablesMap[tableKey] = { tableName, schemaName, columns: [], foreignKeys: {},
+              uniqueConstraints: readUniqueConstraints(row.UNIQUE_CONSTRAINTS) };
           }
           const entry = tablesMap[tableKey];
           if (!entry.columns.some(column => column.columnName === row.COLUMN_NAME)) entry.columns.push({
             columnName: row.COLUMN_NAME,
             dataType: row.DATA_TYPE ? row.DATA_TYPE.toUpperCase() : 'NVARCHAR',
-            isPrimaryKey: row.IS_PRIMARY_KEY === 1,
-            isUnique: row.IS_UNIQUE_KEY === 1,
+            isPrimaryKey: entry.uniqueConstraints.some(key => key.isPrimaryKey && !key.isDisabled && key.columnNames.includes(row.COLUMN_NAME)),
+            isUnique: entry.uniqueConstraints.some(key => !key.isDisabled && !key.hasFilter
+              && key.columnNames.length === 1 && key.columnNames[0] === row.COLUMN_NAME),
             isNullable: row.IS_NULLABLE === true || row.IS_NULLABLE === 1,
             ordinalPosition: Number(row.ORDINAL_POSITION) || entry.columns.length + 1,
             description: `Cột ${row.COLUMN_NAME} trong bảng SQL Server ${tableName}`
@@ -426,6 +431,18 @@ class SqlConnector {
    * Execute real SELECT SQL query on connected live database
    */
   executeSqlQuery(sqlString, dbSourceId = null, signal = null, parameters = []) {
+    return require('../governance/admission').sql.run(async () => {
+      const governance = require('../governance/context');
+      if (governance.current()) {
+        const source = dbSourceId ? this.dbSources.find(item => item.id === dbSourceId) : this.dbSources.find(item => item.isDefault) || this.dbSources[0];
+        if (source) governance.read(source, 'sql');
+        await governance.refresh();
+      }
+      return this.executeAdmittedSql(sqlString, dbSourceId, signal, parameters);
+    }, { signal, executionBudget: require('../governance/context').current()?.executionBudget });
+  }
+
+  executeAdmittedSql(sqlString, dbSourceId = null, signal = null, parameters = []) {
     return new Promise((resolve, reject) => {
       const liveSource = dbSourceId
         ? this.dbSources.find(s => s.id === dbSourceId && (s.mode === 'live' || s.type === 'Direct Live Connection'))
@@ -435,8 +452,16 @@ class SqlConnector {
       if (!liveSource || !Connection) {
         return reject(new Error("Chưa kết nối SQL Server trực tiếp (Live Database)."));
       }
+      try { require('../governance/context').read(liveSource, 'sql'); }
+      catch (error) { return reject(error); }
+      try { sqlString = require('../governance/sql_policy').check(sqlString, require('../governance/context').current()?.resources.get(`sql:${liveSource.id}`)?.resource || liveSource); }
+      catch (error) { return reject(error); }
 
       // Parse connection config from liveSource.host (e.g. "103.226.248.147:1433")
+      try {
+        const tables = require('./dictionary_service').getGroupedTables().filter(table => table.dbSourceId === liveSource.id);
+        sqlString = require('./required_filters').enforce(sqlString, tables);
+      } catch (error) { return reject(error); }
       let host = liveSource.host || 'localhost';
       let port = 1433;
       let instanceName = undefined;

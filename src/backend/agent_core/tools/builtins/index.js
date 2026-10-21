@@ -121,12 +121,14 @@ class ExportDataTool extends BaseTool {
       const dataset = await require('../../../automation/conversation_memory').readDataset({ runId, field: args.workflowField || context.memoryDecision?.reference?.data?.field }, context);
       args = { ...args, data: dataset.rows };
     }
-    const { data, format = 'csv', filename } = args;
+    let { data, format = 'csv', filename } = args;
     if (!data || !Array.isArray(data) || data.length === 0) {
       throw new Error('Không có dữ liệu để xuất file.');
     }
 
     const fmt = (format || 'csv').toLowerCase();
+    const presentation = require('../../../utils/export_presentation').prepare(securityGuard.sanitizeTabularRows(data), context.verifiedExport);
+    data = presentation.data;
     const cleanFilename = (filename || `Export_Data_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
     const exportDir = getExportsDirectory();
 
@@ -141,17 +143,18 @@ class ExportDataTool extends BaseTool {
 
     if (fmt === 'csv') {
       fullFileName = `${availableFilename}.csv`;
-      const header = keys.join(',') + '\n';
-      const rows = data.map(row => keys.map(k => `"${String(row[k] !== undefined ? row[k] : '').replace(/"/g, '""')}"`).join(',')).join('\n');
-      const fileContent = '\uFEFF' + header + rows;
+      const fileContent = require('../../../utils/export_safety').toCsv(data);
       fs.writeFileSync(path.join(exportDir, fullFileName), fileContent, 'utf8');
 
     } else if (fmt === 'xlsx' || fmt === 'excel') {
       const XLSX = require('xlsx');
       fullFileName = `${availableFilename}.xlsx`;
-      const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'DataExport');
+      for(const group of presentation.groups || [{name:'DataExport',data}]) {
+        const worksheet=XLSX.utils.json_to_sheet(group.data);
+        worksheet['!cols']=Object.keys(group.data[0]||{}).map(label=>({wch:Math.min(45,Math.max(18,label.length+3))}));
+        XLSX.utils.book_append_sheet(workbook,worksheet,group.name);
+      }
       
       const filePath = path.join(exportDir, fullFileName);
       XLSX.writeFile(workbook, filePath);
@@ -161,8 +164,12 @@ class ExportDataTool extends BaseTool {
 
     } else if (fmt === 'pdf') {
       fullFileName = `${availableFilename}.html`;
-      const ths = keys.map(k => `<th style="background:#4f46e5;color:#fff;padding:8px 12px;text-align:left;">${k}</th>`).join('');
-      const trs = data.map(row => `<tr>${keys.map(k => `<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${row[k] !== undefined ? row[k] : ''}</td>`).join('')}</tr>`).join('');
+      const ths = keys.map(k => `<th style="background:#4f46e5;color:#fff;padding:8px 12px;text-align:left;">${require('../../../utils/export_safety').escapeHtml(k)}</th>`).join('');
+      const trs = data.map(row => `<tr>${keys.map(k => `<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${require('../../../utils/export_safety').escapeHtml(row[k])}</td>`).join('')}</tr>`).join('');
+      const tablesHtml=(presentation.groups||[{label:'',data}]).map(group=>
+        (group.label?`<h3>${require('../../../utils/export_safety').escapeHtml(group.label)} (${group.data.length})</h3>`:'')
+        +`<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr>${ths}</tr></thead><tbody>`
+        +group.data.map(row=>`<tr>${keys.map(k=>`<td>${require('../../../utils/export_safety').escapeHtml(row[k])}</td>`).join('')}</tr>`).join('')+'</tbody></table>').join('');
       const fileContent = `
         <!DOCTYPE html>
         <html>
@@ -170,10 +177,7 @@ class ExportDataTool extends BaseTool {
         <body style="font-family:Arial,sans-serif;padding:20px;">
           <h2 style="color:#4f46e5;">Báo cáo Xuất Dữ liệu: ${availableFilename}</h2>
           <p style="font-size:12px;color:#64748b;">Thời gian khởi tạo: ${new Date().toLocaleString('vi-VN')} | Tong so ban ghi: ${data.length}</p>
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr>${ths}</tr></thead>
-            <tbody>${trs}</tbody>
-          </table>
+          ${tablesHtml}
           <script>window.onload = function() { window.print(); };</script>
         </body>
         </html>
@@ -187,6 +191,7 @@ class ExportDataTool extends BaseTool {
       fileName: fullFileName,
       downloadUrl,
       recordCount: data.length,
+      ...(presentation.groups?{groups:presentation.groups.map(g=>({label:g.label,sheetName:fmt==='xlsx'||fmt==='excel'?g.name:undefined,rowCount:g.data.length}))}:{}),
       message: `🎉 Đã xuất thành công file ${fmt.toUpperCase()} (${data.length} bản ghi). Người dùng có thể bấm tải về tại: ${downloadUrl}`
     };
   }
@@ -239,13 +244,14 @@ class ExecuteSqlTool extends BaseTool {
   constructor() {
     super({
       name: 'execute_sql_query',
-      description: 'Thực thi câu lệnh SQL SELECT trên SQL Server và trả về kết quả dữ liệu thực tế. Chỉ dùng khi cần truy vấn dữ liệu từ database.',
+      description: 'Read actual SQL data. Supply sql as a SELECT string, OR dataQuery as a structured single-table plan. Backend compiles dataQuery fields, filters, configured segments and time grouping. Complex verified JOINs use sql. Never supply both.',
       parameters: {
         type: 'object',
         properties: {
-          sql: { type: 'string', description: 'Câu lệnh SQL SELECT hợp lệ (T-SQL, SQL Server chuẩn). Chỉ SELECT, không INSERT/UPDATE/DELETE.' }
+          sql: { type: 'string', description: 'Câu lệnh SQL SELECT hợp lệ (T-SQL, SQL Server chuẩn). Chỉ SELECT, không INSERT/UPDATE/DELETE.' },
+          dataQuery: require('../../../services/semantic_query').schema
         },
-        required: ['sql']
+        required: []
       },
       requiredPermissions: ['sql:read'],
       timeoutMs: 45000,
@@ -254,6 +260,16 @@ class ExecuteSqlTool extends BaseTool {
   }
 
   async run(args, context = {}) {
+    if(!context.compiledSemanticQuery) {
+      args=require('../../../services/semantic_query').normalizeArguments(args);
+      if(args.dataQuery){args.query=args.dataQuery;delete args.dataQuery;}
+    }
+    if (args.query && args.sql && !context.compiledSemanticQuery) throw Object.assign(new Error('Supply exactly one query or sql.'), {code:'SEMANTIC_QUERY_CONFLICT'});
+    if (args.query && !args.sql) {
+      const tables = dictionaryService.getGroupedTables().filter(t=>t.isActive && t.dbSourceId===context.dbSourceId);
+      const compiled = require('../../../services/semantic_query').compile(args.query,tables,context.requestPlan?.schemaScope,context.requestPlan?.requestContract);
+      args.sql = compiled.sql;context.semanticQueryUnits = compiled.units;
+    }
     const { sql } = args;
     if (context.requireModelIntentPlan) {
       const { validateSqlAgainstIntent } = require('../../../services/data_intent_service');
@@ -271,10 +287,19 @@ class ExecuteSqlTool extends BaseTool {
     const rawRows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
     const rows = securityGuard.sanitizeTabularRows(rawRows);
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const units=args.query ? context.semanticQueryUnits || {} : require('../../../services/semantic_query').inferUnits(check.cleanedSql,
+      dictionaryService.getGroupedTables().filter(table=>table.isActive&&table.dbSourceId===context.dbSourceId));
     return {
       rows,
       columns,
+      displayNames: require('../../../services/sql_result_labels').inferDisplayNames(check.cleanedSql,
+        dictionaryService.getGroupedTables().filter(table=>table.isActive&&table.dbSourceId===context.dbSourceId),
+        dictionaryService.getTableRelationships()),
       rowCount: rows.length,
+      ...(Object.keys(units).length?{units}:{}),
+      ...(args.query ? { hasMore: rows.length >= (args.query.limit || 100)
+        && !(Number.isInteger(args.query.limit) && context.requestPlan?.requestedRowLimit === args.query.limit)
+        && (args.query.operation !== 'aggregate' || args.query.dimensions?.length > 0 || Boolean(args.query.time)) } : {}),
       sql: check.cleanedSql
     };
   }
@@ -368,7 +393,7 @@ class CalculateStatsTool extends BaseTool {
       parameters: {
         type: 'object',
         properties: {
-          data: { type: 'array', items: { type: 'number' }, description: 'Mảng các số cần tính toán' },
+          data: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number' }, description: 'Mảng các số cần tính toán' },
           operation: { type: 'string', enum: ['min', 'max', 'avg', 'sum', 'count', 'all'], description: 'Phép tính. "all" tính tất cả cùng lúc.' }
         },
         required: ['data', 'operation']
@@ -460,7 +485,9 @@ class SearchSchemaTool extends BaseTool {
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Từ khóa tìm kiếm tên bảng hoặc cột' }
+        query: { type: 'string', description: 'Từ khóa tìm kiếm tên bảng hoặc cột' },
+        request: { ...require('../../harness/request_contract').intentSchema,
+          description: 'Use aggregate for statistics/count/sum/average/trends, never list. Use describe for stored fields/classification criteria without records; guidance for lookup prerequisites, not execution. For actual list/compare/detail/attribute requests declare only explicitly requested attributes (empty for default fields). Keep the same user operation across schema searches; this grants no permissions.' }
         },
         required: ['query']
       },
@@ -468,37 +495,10 @@ class SearchSchemaTool extends BaseTool {
     });
   }
 
-  async run(args) {
-    const { query } = args;
-    if (!query) throw new Error('Thiếu từ khóa tìm kiếm.');
-    const q = query.toLowerCase();
-    const allTables = dictionaryService.getGroupedTables();
-
-    const matched = allTables.filter(t =>
-      t.tableName.toLowerCase().includes(q) ||
-      (t.tableDescription || '').toLowerCase().includes(q) ||
-      t.columns.some(c =>
-        c.columnName.toLowerCase().includes(q) ||
-        (c.description || '').toLowerCase().includes(q)
-      )
-    );
-
-    return {
-      query,
-      totalMatched: matched.length,
-      tables: matched.map(t => ({
-        tableName: t.tableName,
-        dbName: t.dbName,
-        isActive: t.isActive,
-        columnCount: t.columns.length,
-        columns: t.tableName.toLowerCase() === q || t.tableName.toLowerCase().includes(q)
-          ? t.columns.map(c => ({ name: c.columnName, type: c.dataType, isPK: c.isPrimaryKey }))
-          : undefined,
-        matchedColumns: t.columns
-          .filter(c => c.columnName.toLowerCase().includes(q))
-          .map(c => ({ name: c.columnName, type: c.dataType, isPK: c.isPrimaryKey }))
-      }))
-    };
+  async run(args, context) {
+    const execution = await require('../../../intelligent_core/tool_registry').executeTool(this.name, args, context);
+    if (!execution.success) throw Object.assign(new Error(execution.error), { code: execution.code, outcome: execution.outcome, effectState: execution.effectState });
+    return execution.result;
   }
 }
 
@@ -555,7 +555,7 @@ class SearchKnowledgeTool extends BaseTool {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Câu hỏi hoặc từ khóa ngữ nghĩa cần tìm kiếm trong Vector DB' },
-          limit: { type: 'number', description: 'Số lượng kết quả liên quan nhất (mặc định 5)' }
+          limit: { type: 'integer', minimum: 1, maximum: 20, description: 'Số lượng kết quả liên quan nhất (mặc định 5)' }
         },
         required: ['query']
       },
@@ -563,36 +563,10 @@ class SearchKnowledgeTool extends BaseTool {
     });
   }
 
-  async run(args) {
-    const { query, limit = 5 } = args;
-    if (!query) throw new Error('Thiếu từ khóa/câu hỏi tra cứu Vector DB.');
-    
-    const safeLimit = Math.max(1, Math.min(10, Number(limit) || 5));
-    const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const queryText = normalize(query);
-    const directMatches = libraryService.getDocuments()
-      .filter(item => queryText.includes(normalize(item.title)) || normalize(item.title).includes(queryText))
-      .slice(0, safeLimit)
-      .map(item => {
-        const content = libraryService.getContent(item.id).content;
-        return { score: 1, payload: { fullText: content.slice(0, 12000), title: item.title, documentId: item.id, chunkIndex: 0 } };
-      });
-    const retrieval = await retrievalService.search(query, { limit: safeLimit });
-    const vectorResults = retrieval.results || [];
-    const seen = new Set(directMatches.map(item => item.payload.documentId));
-    const results = [...directMatches, ...vectorResults.filter(item => !seen.has(item.payload?.documentId))].slice(0, safeLimit);
-
-    return {
-      query,
-      totalResults: results.length,
-      documents: results.map(r => ({
-        score: Math.round((r.score || 0) * 100) / 100,
-        text: r.payload?.fullText || r.payload?.text || r.payload?.content || '',
-        source: r.payload?.title || r.payload?.source || 'Knowledge Base',
-        documentId: r.payload?.documentId || null,
-        chunkIndex: Number(r.payload?.chunkIndex || 0)
-      }))
-    };
+  async run(args, context) {
+    const execution = await require('../../../intelligent_core/tool_registry').executeTool(this.name, args, context);
+    if (!execution.success) throw Object.assign(new Error(execution.error), { code: execution.code, outcome: execution.outcome, effectState: execution.effectState });
+    return execution.result;
   }
 }
 
@@ -603,12 +577,47 @@ class GetWorkflowDatasetTool extends BaseTool {
   }
   async run(args, context) {
     const execution = await require('../../../intelligent_core/tool_registry').executeTool(this.name, args, context);
-    if (!execution.success) throw new Error(execution.error);
+    if (!execution.success) throw Object.assign(new Error(execution.error), { code: execution.code, outcome: execution.outcome, effectState: execution.effectState });
     return execution.result;
   }
 }
 
+class ListSqlMetricsTool extends BaseTool {
+  constructor() { super({ ...require('../../../intelligent_core/tool_registry').listTools().find(tool => tool.name === 'list_sql_metrics'), requiredPermissions: ['sql:read'] }); }
+  async run() { return { metrics: require('../../../governance/metrics').list() }; }
+}
+class GovernedWorkflowTool extends BaseTool {
+  constructor(name) { super({ ...require('../../../intelligent_core/tool_registry').listTools().find(tool => tool.name === name), requiredPermissions: ['sql:read'] }); }
+  async run(args, context) { return require('../../../governance/workflow_tools').execute(this.name, args, context); }
+}
+class QuerySqlMetricTool extends BaseTool {
+  constructor() { super({ ...require('../../../intelligent_core/tool_registry').listTools().find(tool => tool.name === 'query_sql_metric'), requiredPermissions: ['sql:read'] }); }
+  async run(args, context) { return require('../../../governance/metrics').execute(args, context); }
+}
 module.exports = {
+  GetJoinPathTool: class GetJoinPathTool extends BaseTool {
+    constructor() { super({ ...require('../join_path').definition, requiredPermissions: ['sql:read'] }); }
+    async run(args, context) { return require('../join_path').execute(args, context); }
+  },
+  ResolveDateRangeTool: class ResolveDateRangeTool extends BaseTool {
+    constructor() { super(require('../date_range').definition); }
+    async run(args) { return require('../date_range').resolve(args); }
+  },
+  ReadContextResultTool: class ReadContextResultTool extends BaseTool {
+    constructor() { super(require('../../../intelligent_core/tool_registry').listTools().find(tool => tool.name === 'read_context_result')); }
+    available(context) { return typeof context.readContextResult === 'function'; }
+    async run(args, context) {
+      if (typeof context.readContextResult !== 'function') throw new Error('CONTEXT_RESULT_NOT_AVAILABLE');
+      return context.readContextResult(args);
+    }
+  },
+  MemoryTool: class MemoryTool extends BaseTool {
+    constructor(name) { super(require('../../../memory_core/tools').definitions.find(item => item.name === name)); }
+    available() { return require('../../../memory_core/tools').available(); }
+    async run(args, context) { return require('../../../memory_core/tools').execute(this.name, args, context); }
+  },
+  GovernedWorkflowTool,
+  ListSqlMetricsTool, QuerySqlMetricTool,
   GetWorkflowDatasetTool,
   GetDateTimeTool,
   ExportDataTool,

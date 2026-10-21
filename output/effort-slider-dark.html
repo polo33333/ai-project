@@ -1,0 +1,53 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="file:///D:/Dev/ai-project/src/frontend/css/chat-conversation.css"><style>body{margin:0;background:#f4f5fa;font-family:Arial}#view-page_chat .chat-effort-panel{display:block;position:static;margin:36px auto;width:256px}[data-theme=dark] body{background:#16181b}</style></head><body><div id="view-page_chat"><div id="chat-model-effort-menu" class="chat-model-submenu chat-effort-panel" role="dialog" aria-label="Chọn mức độ" onclick="event.stopPropagation()">
+        <div class="chat-effort-heading"><i class="fa-solid fa-bolt" style="display:block" aria-hidden="true"></i><div><strong id="chat-effort-label"></strong><small id="chat-effort-model"></small></div><button type="button" class="chat-effort-reset" onclick="selectPageChatReasoningMode('medium',true)" title="Đặt lại Trung bình" aria-label="Đặt lại mức Trung bình"><span aria-hidden="true">&#8634;</span></button></div>
+        <div class="chat-effort-track"><input id="chat-effort-slider" type="range" min="0" max="1" step="1" value="1" aria-label="Mức độ" aria-describedby="chat-effort-description" oninput="selectPageChatReasoningMode(this.value==='0'?'fast':'medium',true)"><span class="chat-effort-stops" aria-hidden="true"><i></i><i></i></span></div>
+        <div class="chat-effort-endpoints" aria-hidden="true"><span>Nhanh</span><span>Trung bình</span></div>
+        <p id="chat-effort-description"></p>
+      </div>
+    </div><select id="page-chat-model-selector" hidden><option value="model" data-short-label="gemini-3.5-flash-lite">Model</option></select><span id="page-chat-model-label" hidden></span></div><script>function escapeChatMarkdown(value){return value}function closePageChatMenus(){}function getPageChatReasoningMode() {
+  return localStorage.getItem('knowledgehub_chat_reasoning_mode') === 'fast' ? 'fast' : 'medium';
+}
+
+function selectPageChatReasoningMode(mode, keepOpen = false) {
+  localStorage.setItem('knowledgehub_chat_reasoning_mode', mode === 'fast' ? 'fast' : 'medium');
+  selectPageChatModel(document.getElementById('page-chat-model-selector')?.value, !keepOpen);
+}
+
+function toggleChatModelSubmenu(event, button) {
+  event.stopPropagation();
+  const open = button.getAttribute('aria-expanded') !== 'true';
+  document.querySelectorAll('#page-chat-model-menu .chat-model-submenu-trigger').forEach(item => item.setAttribute('aria-expanded', 'false'));
+  button.setAttribute('aria-expanded', String(open));
+}
+
+function selectPageChatModel(value, closeMenu = true) {
+  const selector = document.getElementById('page-chat-model-selector');
+  if (!selector) return;
+  selector.value = value;
+  const option = selector.options[selector.selectedIndex];
+  const label = document.getElementById('page-chat-model-label');
+  if (label && option) label.innerHTML = `<span class="chat-selected-model">${escapeChatMarkdown(option.dataset.shortLabel || option.textContent)}</span><span class="chat-selected-mode">${getPageChatReasoningMode() === 'fast' ? 'Nhanh' : 'Trung bình'}</span>`;
+  const currentModel = document.getElementById('chat-menu-current-model');
+  if (currentModel && option) currentModel.textContent = option.dataset.shortLabel || option.textContent;
+  const currentMode = document.getElementById('chat-menu-current-mode');
+  if (currentMode) currentMode.textContent = getPageChatReasoningMode() === 'fast' ? 'Nhanh' : 'Trung bình';
+  const effortSlider=document.getElementById('chat-effort-slider');
+  const effortLabel=document.getElementById('chat-effort-label');
+  const effortModel=document.getElementById('chat-effort-model');
+  const effortDescription=document.getElementById('chat-effort-description');
+  const isFast=getPageChatReasoningMode()==='fast';
+  if(effortSlider){effortSlider.value=isFast?'0':'1';effortSlider.setAttribute('aria-valuetext',isFast?'Nhanh':'Trung bình');effortSlider.style.setProperty('--effort-progress',isFast?'0%':'100%');}
+  if(effortLabel)effortLabel.textContent=isFast?'Nhanh':'Trung bình';
+  if(effortModel&&option){effortModel.textContent=option.dataset.shortLabel||option.textContent;effortModel.title=effortModel.textContent;}
+  if(effortDescription)effortDescription.textContent=isFast?'Ẩn phần suy nghĩ khi xử lý':'Hiện phần suy nghĩ khi xử lý';
+  document.querySelectorAll('.chat-reasoning-mode-option').forEach(button => {
+    button.setAttribute('aria-selected', String(button.dataset.mode === getPageChatReasoningMode()));
+  });
+  document.querySelectorAll('.page-chat-model-option').forEach(button => {
+    button.classList.toggle('is-selected', button.dataset.value === value);
+  });
+  localStorage.setItem('knowledgehub_selected_chat_model', value);
+  if(closeMenu)closePageChatMenus();
+}
+
+selectPageChatModel('model',false);</script></body></html>

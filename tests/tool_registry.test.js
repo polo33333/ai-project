@@ -29,6 +29,33 @@ test('calculation tool evaluates a simple arithmetic expression', async () => {
 
   assert.equal(response.success, true);
   assert.equal(response.result.value, 386);
+  assert.equal(response.envelope.status, 'succeeded');
+  assert.equal(response.envelope.data, response.result);
+});
+
+test('direct registry calls preserve rejection metadata and never dispatch after deadline', async t => {
+  let calls = 0;
+  t.mock.method(toolRegistry, 'executeLegacyTool', async () => { calls++; return { success: true, result: {} }; });
+  const disabled = await toolRegistry.executeTool('calculate_expression', { expression: '1+1' }, { allowedToolNames: [] });
+  assert.equal(disabled.envelope.status, 'denied');
+  assert.equal(disabled.envelope.error.code, 'TOOL_NOT_ENABLED');
+  const expired = await toolRegistry.executeTool('calculate_expression', { expression: '1+1' }, { executionBudget: { remainingMs: () => 0 } });
+  assert.equal(expired.envelope.status, 'timeout');
+  const controller = new AbortController(); controller.abort();
+  assert.equal((await toolRegistry.executeTool('calculate_expression', {}, { signal: controller.signal })).envelope.status, 'cancelled');
+  assert.equal(calls, 0);
+});
+
+test('schema tool wrapper preserves registry denial code and outcome', async t => {
+  const { SearchSchemaTool } = require('../src/backend/agent_core/tools/builtins');
+  const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
+  t.mock.method(toolRegistry, 'executeTool', async () => ({ success: false, error: 'Source denied',
+    code: 'SOURCE_DENIED', outcome: 'denied', effectState: 'none' }));
+  const manager = new ToolManager(); manager.registerTool(new SearchSchemaTool());
+  const result = await manager.executeTool('search_schema', { query: 'records' });
+  assert.equal(result.envelope.status, 'denied');
+  assert.equal(result.envelope.error.code, 'SOURCE_DENIED');
+  assert.equal(result.envelope.effectState, 'none');
 });
 
 test('SQL tool forwards the selected database source from tool context', async () => {

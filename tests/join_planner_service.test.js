@@ -30,6 +30,19 @@ test('join planner fails closed when an edge is not verified', () => withGraph(t
   assert.equal(planJoin([tables[0].tableId, tables[2].tableId], { dbSourceId: 'src' }).outcome, 'no_path');
 }));
 
+test('path lookup reads the scoped catalog once per search and does not reuse stale edges', () => withGraph(tables => {
+  const relationships = require('../src/backend/services/relationship_service');
+  const original = dictionaryService.getTableRelationships;
+  let calls = 0;
+  dictionaryService.getTableRelationships = function () { calls++; return original.call(this); };
+  try {
+    assert.equal(relationships.findPaths(tables[0].tableId, tables[2].tableId).length, 1);
+    assert.equal(calls, 1);
+    dictionaryService.tableRelationships[1].status = 'stale';
+    assert.equal(relationships.findPaths(tables[0].tableId, tables[2].tableId).length, 0);
+  } finally { dictionaryService.getTableRelationships = original; }
+}));
+
 test('enrichment planner assigns a distinct alias when fields share a lookup table', () => withGraph(tables => {
   const root = tables[0];
   const lookup = tables[2];
@@ -46,6 +59,7 @@ test('enrichment planner assigns a distinct alias when fields share a lookup tab
 
 test('join planner uses requested parallel lookup roles with distinct aliases', () => withGraph(tables => {
   const root = tables[0];
+  root.columns.push({ columnName: 'genderId' }, { columnName: 'statusId' });
   const lookup = tables[2];
   dictionaryService.tableRelationships = ['gender', 'status'].map(id => ({
     id, sourceTableId: root.tableId, targetTableId: lookup.tableId,
@@ -63,6 +77,7 @@ test('join planner uses requested parallel lookup roles with distinct aliases', 
 
 test('join planner selects a uniquely preferred relationship when direct paths are ambiguous', () => withGraph(tables => {
   const root = tables[0];
+  root.columns.push({ columnName: 'productId' }, { columnName: 'primaryProductId' });
   const target = tables[2];
   dictionaryService.tableRelationships = [
     { id: 'ordinary', sourceTableId: root.tableId, targetTableId: target.tableId, sourceTable: root.tableName, targetTable: target.tableName,

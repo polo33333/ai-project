@@ -25,25 +25,18 @@ class ConfiguredStep extends BaseStep {
 }
 
 class HttpRequestStep extends ConfiguredStep {
-  async execute(state) {
-    const url = resolve(this.config.url, state);
-    if (!/^https?:\/\//i.test(url || '')) throw new Error('HTTP step requires a valid http(s) URL');
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), Math.max(1, Number(this.config.timeoutMs || 30000)));
-    try {
-      const response = await fetch(url, {
-        method: String(this.config.method || 'GET').toUpperCase(),
-        headers: resolve(this.config.headers || {}, state),
-        body: ['GET', 'HEAD'].includes(String(this.config.method || 'GET').toUpperCase())
-          ? undefined : JSON.stringify(resolve(this.config.body || {}, state)),
-        signal: controller.signal
-      });
-      const text = await response.text();
-      let data = text;
-      try { data = JSON.parse(text); } catch (_) {}
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${String(text).slice(0, 300)}`);
-      return { [this.config.outputKey || this.id]: { status: response.status, data } };
-    } finally { clearTimeout(timer); }
+  async execute(state, context = {}) {
+    if (!Array.isArray(context.permissions) || !context.permissions.some(value => ['admin', 'knowledge:read'].includes(value))) {
+      throw Object.assign(new Error('Kh?ng c? quy?n ??c ngu?n HTTP.'), { statusCode: 403 });
+    }
+    const method = String(this.config.method || 'GET').toUpperCase();
+    const binding = { ...this.config, type: 'api', method, responseFormat: 'text',
+      bodyFormat: ['GET', 'HEAD'].includes(method) ? 'none' : 'json' };
+    if (!['GET', 'HEAD'].includes(method)) binding.body = this.config.body || {};
+    const response = await require('../../automation/api_http').readApi(binding, state, context.signal);
+    let data = response.data;
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (_) {} }
+    return { [this.config.outputKey || this.id]: { status: response.response.status, data } };
   }
 }
 

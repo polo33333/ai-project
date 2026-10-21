@@ -60,15 +60,16 @@ function renderChatFeedbackTable() {
       <td><span class="metric-tag ${item.rating === 'like' ? 'green' : 'red'}"><i class="fa-solid fa-thumbs-${item.rating === 'like' ? 'up' : 'down'}"></i> ${item.rating === 'like' ? 'Thích' : 'Không thích'}</span></td>
       <td><div class="chat-prompt">${feedbackEscape(audit.question || 'Không tìm thấy câu hỏi')}</div><details class="feedback-answer"><summary>Xem câu trả lời và SQL</summary><div>${feedbackEscape(audit.replyText || 'Không có câu trả lời')}</div>${audit.sqlQuery ? `<pre>${feedbackEscape(audit.sqlQuery)}</pre>` : ''}</details></td>
       <td><span class="metric-tag purple">${feedbackEscape(item.model || audit.modelName || 'Không rõ model')}</span><small class="feedback-token">${feedbackEscape(feedbackTokenUsage(audit))}</small></td>
-      <td><span class="feedback-review-status ${review}">${reviewLabel}</span><textarea id="feedback-note-${auditId}" placeholder="Ghi chú kiểm duyệt">${feedbackEscape(item.reviewNote || '')}</textarea><div class="feedback-review-actions"><button data-audit-id="${auditId}" onclick="reviewChatFeedback(this.dataset.auditId,'approved')"><i class="fa-solid fa-check"></i> Đạt</button><button data-audit-id="${auditId}" onclick="reviewChatFeedback(this.dataset.auditId,'needs_review')"><i class="fa-solid fa-triangle-exclamation"></i> Xem lại</button></div></td></tr>`;
+      <td><span class="feedback-review-status ${review}">${reviewLabel}</span><textarea id="feedback-note-${auditId}" placeholder="Ghi chú kiểm duyệt">${feedbackEscape(item.reviewNote || '')}</textarea><textarea id="feedback-expected-${auditId}" maxlength="4000" aria-label="Kết quả kỳ vọng" placeholder="Kết quả kỳ vọng để đưa vào kiểm thử hồi quy">${feedbackEscape(item.reviewExpectedOutcome || '')}</textarea><div class="feedback-review-actions"><button data-audit-id="${auditId}" onclick="reviewChatFeedback(this.dataset.auditId,'approved')"><i class="fa-solid fa-check"></i> Đạt</button><button data-audit-id="${auditId}" onclick="reviewChatFeedback(this.dataset.auditId,'needs_review')"><i class="fa-solid fa-triangle-exclamation"></i> Xem lại</button></div></td></tr>`;
   }).join('') : '<tr><td colspan="5" class="chat-history-empty"><i class="fa-solid fa-inbox"></i><strong>Không có đánh giá phù hợp.</strong></td></tr>';
   if (typeof renderPaginationControls === 'function') renderPaginationControls('feedback-pagination', 'chat_feedback', items.length, renderChatFeedbackTable);
 }
 
 async function reviewChatFeedback(auditId, reviewStatus) {
   const reviewNote = document.getElementById(`feedback-note-${auditId}`)?.value || '';
+  const expectedOutcome = document.getElementById(`feedback-expected-${auditId}`)?.value || '';
   try {
-    const res = await fetch('/api/chat-feedback/review', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auditId, reviewStatus, reviewNote }) });
+    const res = await fetch('/api/chat-feedback/review', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auditId, reviewStatus, reviewNote, expectedOutcome }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
     if (typeof showToast === 'function') showToast('Đã lưu kết quả xem xét.', 'success');

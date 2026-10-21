@@ -1,0 +1,29 @@
+<section id="view-memory" class="system-tools-page memory-page" data-display="grid" style="display:none">
+  <header class="system-tools-hero">
+    <div class="system-tools-hero-icon"><i class="fa-solid fa-brain" aria-hidden="true"></i></div>
+    <div><div class="system-tools-eyebrow">NGỮ CẢNH & GHI NHỚ</div><h2>Bộ nhớ Agent</h2><p>Quản lý sở thích cá nhân, hướng dẫn tổ chức và những tác vụ trước đây.</p></div>
+  </header>
+  <section class="memory-panel" aria-labelledby="memory-list-title">
+    <header class="memory-panel-heading"><div><h3 id="memory-list-title">Quản lý bộ nhớ</h3><p>Chọn phạm vi để xem và cập nhật thông tin Agent được phép ghi nhớ.</p></div><span id="memory-total" class="memory-total">0 bộ nhớ</span></header>
+    <div class="memory-toolbar">
+      <label class="memory-scope-field">Phạm vi<select id="memory-scope" class="form-control" aria-describedby="memory-help"><option value="personal">Cá nhân</option><option value="organization">Tổ chức</option><option value="events">Tác vụ trước đây</option></select></label>
+      <label class="memory-search-field">Tìm trong bộ nhớ<span class="memory-search-input"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="memory-query" class="form-control" type="search" placeholder="Tìm theo tên hoặc nội dung…"></span></label>
+      <button id="memory-search" class="btn btn-secondary" type="button"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Tìm</button>
+      <button id="memory-new" class="btn btn-primary" type="button"><i class="fa-solid fa-plus" aria-hidden="true"></i> Thêm bộ nhớ</button>
+    </div>
+    <div class="memory-scope-help"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><p id="memory-help"></p></div>
+    <p id="memory-notice" role="status" aria-live="polite"></p>
+    <form id="memory-editor" hidden>
+      <header class="memory-editor-heading"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i><h3 id="memory-editor-title">Thêm bộ nhớ</h3></header>
+      <div class="memory-editor-grid">
+        <label>Tên bộ nhớ<input id="memory-title" class="form-control" maxlength="120" required></label>
+        <label>Hạn dùng (không bắt buộc)<input id="memory-expiry" class="form-control" type="date"></label>
+      </div>
+      <label>Nội dung<textarea id="memory-content" class="form-control" rows="4" maxlength="2000" required placeholder="Ví dụ: Tôi muốn câu trả lời ngắn gọn bằng tiếng Việt."></textarea></label>
+      <label id="memory-approve-label" hidden><input id="memory-approved" type="checkbox"> Duyệt hướng dẫn dùng chung cho tổ chức</label>
+      <div class="memory-editor-actions"><button class="btn btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu</button><button id="memory-cancel" class="btn btn-secondary" type="button">Đóng</button></div>
+    </form>
+    <div id="memory-list" class="memory-list" aria-busy="false"></div>
+    <div class="memory-pagination"><span id="memory-count"></span><div><button id="memory-prev" class="btn btn-secondary" type="button"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Trước</button><button id="memory-next" class="btn btn-secondary" type="button">Tiếp <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div>
+  </section>
+</section>

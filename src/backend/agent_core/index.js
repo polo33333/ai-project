@@ -14,9 +14,10 @@ const WorkflowEngine = require('./workflows/workflow_engine');
 const builtinWorkflows = require('./workflows/builtin_workflows');
 const workflowService = require('./workflows/workflow_service');
 const {
-  GetDateTimeTool,
+  ListSqlMetricsTool, QuerySqlMetricTool, GovernedWorkflowTool, MemoryTool,
+  GetJoinPathTool, ResolveDateRangeTool, GetDateTimeTool,
   ExportDataTool,
-  GetWorkflowDatasetTool,
+  GetWorkflowDatasetTool, ReadContextResultTool,
   PlanDataQueryTool,
   ExecuteSqlTool,
   RenderChartTool,
@@ -30,9 +31,12 @@ const {
 // Khởi tạo một ToolManager mặc định nạp sẵn toàn bộ 9 core tools
 const defaultToolManager = new ToolManager();
 defaultToolManager.registerTools([
-  new GetDateTimeTool(),
+  ...['recall_memory', 'remember_preference', 'forget_memory'].map(name => new MemoryTool(name)),
+  new ListSqlMetricsTool(), new QuerySqlMetricTool(),
+  ...['list_workflows', 'run_workflow', 'get_workflow_status', 'resume_workflow', 'cancel_workflow'].map(name => new GovernedWorkflowTool(name)),
+  new GetJoinPathTool(), new ResolveDateRangeTool(), new GetDateTimeTool(),
   new ExportDataTool(),
-  new GetWorkflowDatasetTool(),
+  new GetWorkflowDatasetTool(), new ReadContextResultTool(),
   new PlanDataQueryTool(),
   new ExecuteSqlTool(),
   new RenderChartTool(),
@@ -59,8 +63,9 @@ module.exports = {
 
   // 9 Built-in Tools
   builtins: {
+    ReadContextResultTool,
     GetWorkflowDatasetTool,
-    GetDateTimeTool,
+    GetJoinPathTool, ResolveDateRangeTool, GetDateTimeTool,
     ExportDataTool,
     PlanDataQueryTool,
     ExecuteSqlTool,

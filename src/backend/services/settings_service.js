@@ -17,8 +17,11 @@ const envValuesAtStartup = fs.existsSync(envPathAtStartup) ? parse(fs.readFileSy
 const examplePath = path.join(root, '.env.example');
 const exampleValues = fs.existsSync(examplePath) ? parse(fs.readFileSync(examplePath, 'utf8')) : {};
 const safeServerKeys = ['HOST', 'SHUTDOWN_TIMEOUT_MS', 'CORS_ALLOWED_ORIGINS', 'SESSION_TOUCH_INTERVAL_MS', 'KNOWLEDGEHUB_BACKUP_DIR'];
+// These names have no runtime consumer. Keep old env lines as comments only.
+const obsoleteKeys = new Set(['AI_MEMORY_RECENT_MESSAGES', 'AI_MEMORY_SUMMARY_CHARS', 'AI_DOCUMENT_CONTEXT_CHARS', 'AI_DOCUMENT_MIN_SCORE', 'AI_CONVERSATION_HISTORY', 'MEMORY_SEMANTIC_ROUTING_ENABLED']);
+const legacyOnly = key => /^(CHAT_ROUTING_|CHAT_QUICK_GREETING_)/.test(key) || ['AGENT_CORE_ENABLED', 'LOCAL_MODEL_HARNESS_ENABLED'].includes(key);
 const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])]
-  .filter(key => key !== 'QDRANT_EXE' && (safeServerKeys.includes(key) || key in envValuesAtStartup || key in exampleValues));
+  .filter(key => key !== 'QDRANT_EXE' && !obsoleteKeys.has(key) && (safeServerKeys.includes(key) || key in envValuesAtStartup || key in exampleValues));
 const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? exampleValues[key] ?? '']));
 Object.assign(defaults, {
   AI_MAX_TOOL_ITERATIONS: envValuesAtStartup.AI_MAX_TOOL_ITERATIONS ?? exampleValues.AI_MAX_TOOL_ITERATIONS ?? '10',
@@ -27,6 +30,7 @@ Object.assign(defaults, {
   LOCAL_MODEL_FEW_SHOT_ENABLED: envValuesAtStartup.LOCAL_MODEL_FEW_SHOT_ENABLED ?? exampleValues.LOCAL_MODEL_FEW_SHOT_ENABLED ?? 'false'
 });
 const choices = {
+  GOVERNED_CONTROLLER_MODE: ['agent', 'legacy'],
   CHAT_ROUTING_MODE: ['local_tev1', 'chat_model', 'auto'],
   CHAT_ROUTING_RETRIEVAL_MODE: ['off', 'shadow', 'on'],
   CHAT_ROUTING_RETRIEVAL_METHOD: ['lexical', 'hybrid'],
@@ -48,7 +52,9 @@ const descriptions = {
 const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT', 'CHAT_ROUTING_LOCAL_BASE_URL']);
 const schema = Object.entries(defaults).map(([key, value]) => ({
   key, defaultValue: value, label: help[key]?.[0] || key.replace(/_/g, ' '),
-  group: /^(WORKFLOW_PLUGINS_ENABLED|CHAT_ROUTING_|CHAT_QUICK_GREETING_)/.test(key) ? 'Mẫu nghiệp vụ'
+  group: legacyOnly(key) ? 'Tương thích legacy'
+    : /^(GOVERNED_)/.test(key) ? 'Điều phối agent và giới hạn'
+    : key === 'WORKFLOW_PLUGINS_ENABLED' ? 'Mẫu nghiệp vụ'
     : /^(LOCAL_MODEL|LOCAL_AI|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
     : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'
       : /^(AI_MEMORY|MEMORY_|MAX_CHAT_HISTORY)/.test(key) ? 'Bộ nhớ hội thoại'
@@ -60,7 +66,7 @@ const schema = Object.entries(defaults).map(([key, value]) => ({
   type: choices[key] ? 'select' : /^(true|false)$/.test(value) ? 'boolean'
     : /^\d+(\.\d+)?$/.test(value) ? 'number' : urlKeys.has(key) ? 'url' : 'text',
   options: choices[key], readOnly: false,
-  description: help[key]?.[1] || descriptions[key] || 'Áp dụng sau khi khởi động lại máy chủ.'
+  description: (legacyOnly(key) ? 'Chỉ áp dụng khi GOVERNED_CONTROLLER_MODE=legacy. ' : '') + (help[key]?.[1] || descriptions[key] || 'Áp dụng sau khi khởi động lại máy chủ.')
 }));
 
 function revision(text) { return crypto.createHash('sha256').update(text).digest('hex'); }
@@ -90,7 +96,8 @@ function createSettingsService(envPath = path.join(root, '.env')) {
   return {
     get() {
       const text = read(); const values = parse(text);
-      return { revision: revision(text), restartRequired: true, fields: schema.map(field => {
+      const controllerMode = values.GOVERNED_CONTROLLER_MODE ?? defaults.GOVERNED_CONTROLLER_MODE ?? 'agent';
+      return { revision: revision(text), restartRequired: true, fields: schema.filter(field => controllerMode === 'legacy' || !legacyOnly(field.key)).map(field => {
         const candidate = values[field.key] ?? defaults[field.key];
         // Never expose URL credentials or malformed values from a hand-edited file.
         let value = candidate;

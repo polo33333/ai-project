@@ -19,7 +19,7 @@ async function callOpenAI(provider, messages, tools, signal, options = {}) {
     body.tool_choice = 'auto';
   }
 
-  if (typeof options.onReasoning === 'function' && provider.supportsStreaming !== false) body.stream = true;
+  if ((typeof options.onReasoning === 'function'||typeof options.onAnswer === 'function') && provider.supportsStreaming !== false) body.stream = true;
 
   const request = () => fetch(`${provider.baseUrl}/chat/completions`, {
     method: 'POST',
@@ -72,7 +72,9 @@ async function callOpenAI(provider, messages, tools, signal, options = {}) {
       if (!choice) return;
       if (choice.finish_reason) finish_reason = choice.finish_reason;
       const delta = choice.delta || {};
+      if(delta.tool_calls?.length)options.onToolCall?.();
       message.content += delta.content || '';
+      if(delta.content)options.onAnswer?.(delta.content);
       const reasoning = delta.reasoning_content || delta.reasoning || '';
       message.reasoning_content += reasoning;
       emit(reasoning);

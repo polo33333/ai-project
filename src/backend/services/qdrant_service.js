@@ -6,6 +6,7 @@
  */
 
 const http = require('http');
+const crypto = require('node:crypto');
 
 function postJson(url, body, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
@@ -48,41 +49,8 @@ class QdrantService {
    * Helper HTTP Request for Qdrant API
    */
   async request(path, method = 'GET', body = null) {
-    return new Promise((resolve, reject) => {
-      const url = new URL(path, this.qdrantUrl);
-      const options = {
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname + url.search,
-        method: method,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      };
-
-      const req = http.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => data += chunk);
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(parsed);
-            } else {
-              reject(new Error(parsed.status?.error || `Qdrant HTTP Error ${res.statusCode}`));
-            }
-          } catch (err) {
-            reject(err);
-          }
-        });
-      });
-
-      req.on('error', (err) => reject(err));
-
-      if (body) {
-        req.write(JSON.stringify(body));
-      }
-      req.end();
+    return require('./qdrant_http').requestJson(new URL(path,this.qdrantUrl),{
+      method,body,timeoutMs:Number(process.env.QDRANT_REQUEST_TIMEOUT_MS||10000)
     });
   }
 
@@ -99,6 +67,8 @@ class QdrantService {
   }
 
   async embedTexts(texts, expectedSize = this.documentVectorSize) {
+    require('./embedding_policy').assertEnabled();
+    await require('../governance/context').refresh(`embedding:${this.embeddingModel}`, this.embeddingProvider === 'ollama' && /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(this.embeddingBaseUrl));
     const input = (Array.isArray(texts) ? texts : [texts]).map(value => String(value || ''));
     try {
       let response;
@@ -115,7 +85,11 @@ class QdrantService {
       if (vectors.some(vector => !Array.isArray(vector) || vector.length !== expectedSize)) throw new Error(`Embedding dimension does not match collection (${expectedSize})`);
       return vectors;
     } catch (error) {
-      if ((process.env.EMBEDDING_FALLBACK_MODE || 'error') !== 'deterministic') throw error;
+      if ((process.env.EMBEDDING_FALLBACK_MODE || 'error') !== 'deterministic') {
+        const endpoint = new URL(this.embeddingBaseUrl).origin;
+        throw Object.assign(new Error(`Embedding ${this.embeddingProvider}/${this.embeddingModel} at ${endpoint}: ${error.message}`),
+          { code: 'EMBEDDING_UNAVAILABLE', cause: error });
+      }
       console.warn(`[Embedding] ${this.embeddingModel} unavailable; deterministic fallback is active: ${error.message}`);
       return input.map(text => this.generateDeterministicVector(text, expectedSize));
     }
@@ -154,17 +128,18 @@ class QdrantService {
    * @param {Array} tablesStore Array of table objects from DictionaryService
    * @param {Array} glossaryStore Array of glossary objects from DictionaryService
    */
-  async syncTablesToQdrant(tablesStore, glossaryStore = [], relationshipsStore = [], domainAliases = {}) {
-    try {
-      // 1. Purge all existing collection points first to ensure inactive or deleted tables are completely removed!
-      console.log(`[Qdrant] Full schema sync started: rebuilding collection '${this.collectionName}'.`);
-      try {
-        await this.request(`/collections/${this.collectionName}`, 'DELETE');
-      } catch (e) {
-        // ignore if collection didn't exist
-      }
-      await this.ensureCollection({ reason: 'full_sync' });
+  syncTablesToQdrant(tablesStore, glossaryStore = [], relationshipsStore = [], domainAliases = {}) {
+    const snapshot = structuredClone([tablesStore, glossaryStore, relationshipsStore, domainAliases]);
+    const pending = (this.schemaSyncTail || Promise.resolve()).then(() => this.performSchemaSync(...snapshot));
+    this.schemaSyncTail = pending.catch(() => {});
+    return pending;
+  }
 
+  async performSchemaSync(tablesStore, glossaryStore = [], relationshipsStore = [], domainAliases = {}) {
+    if (!require('./embedding_policy').enabled()) return { success: true, skipped: true, mode: 'lexical', totalPoints: 0 };
+    try {
+      // Prepare all embeddings before touching the existing searchable collection.
+      const syncVersion = crypto.randomUUID();
       // 2. Filter ONLY active tables
       const activeTables = tablesStore.filter(t => t.isActive);
       const points = [];
@@ -178,7 +153,8 @@ class QdrantService {
         const aliasText = aliases.length ? ` Từ khóa nghiệp vụ: ${aliases.join(', ')}.` : '';
         const defaultsText = table.defaultMetric || table.defaultTimeColumn
           ? ` Mặc định: metric ${table.defaultMetric || 'không có'}, thời gian ${table.defaultTimeColumn || 'không có'}, tổng hợp ${table.defaultAggregation || 'SUM'}.` : '';
-        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText}${defaultsText} ${table.tableDescription || ''}. Các cột: ${visibleColumns.map(c => c.columnName).join(', ')}`;
+        const semanticText = table.semanticModel ? ` Nghiệp vụ: ${table.semanticModel.entity}. Một dòng: ${table.semanticModel.grain}. Từ đồng nghĩa: ${(table.semanticModel.aliases || []).join(', ')}. Nhóm: ${(table.semanticModel.segments || []).map(s=>s.label).join(', ')}.` : '';
+        const tableText = `Bảng CSDL ${table.tableName} DB ${table.dbName || 'SQLServer_DB'}. Domain nghiệp vụ: ${table.domain || 'chưa khai báo'}.${aliasText}${defaultsText}${semanticText} ${table.tableDescription || ''}. Các cột: ${visibleColumns.map(c => c.columnName).join(', ')}`;
         const [tableVector] = await this.embedTexts([tableText], this.vectorSize);
 
         points.push({
@@ -275,20 +251,15 @@ class QdrantService {
         }
       }
 
-      if (points.length === 0) {
-        console.log(`[Qdrant] Collection reset: 0 active tables / 0 glossary items.`);
-        return {
-          success: true,
-          indexedTables: 0,
-          indexedGlossary: 0,
-          totalPoints: 0,
-          message: 'Đã xóa toàn bộ vector trên Qdrant do không có bảng nào Active.'
-        };
+      await this.ensureCollection();
+      let upsertRes;
+      if (points.length) {
+        for (const point of points) point.payload.schemaSyncVersion = syncVersion;
+        upsertRes = await this.request(`/collections/${this.collectionName}/points?wait=true`, 'PUT', { points });
       }
-
-      // Batch upsert to Qdrant
-      const upsertRes = await this.request(`/collections/${this.collectionName}/points?wait=true`, 'PUT', {
-        points: points
+      // Prune removed/inactive entries only after the new snapshot has been written.
+      await this.request(`/collections/${this.collectionName}/points/delete?wait=true`, 'POST', {
+        filter: { must_not: [{ key: 'schemaSyncVersion', match: { value: syncVersion } }] }
       });
 
       console.log(`[Qdrant] Full schema sync completed for '${this.collectionName}': ${points.length} points, ${activeTables.length} active tables, ${relationshipsStore?.length || 0} relationships, ${glossaryStore?.length || 0} glossary terms.`);
@@ -299,7 +270,7 @@ class QdrantService {
         indexedGlossary: glossaryStore ? glossaryStore.length : 0,
         indexedRelationships: relationshipsStore ? relationshipsStore.length : 0,
         totalPoints: points.length,
-        qdrantStatus: upsertRes.status
+        qdrantStatus: upsertRes?.status
       };
     } catch (err) {
       console.error(`[Qdrant] Sync error:`, err.message);
@@ -316,8 +287,10 @@ class QdrantService {
   }
 
   async searchSchemaDetailed(queryText, limit = 5) {
+    if (!require('./embedding_policy').enabled()) return { results: [], status: 'skipped', errorCode: null, reason: 'embedding_disabled' };
     try {
-      await this.ensureCollection();
+      // Retrieval must not provision or rebuild indexes as a side effect.
+      await this.request(`/collections/${this.collectionName}`);
       const [queryVector] = await this.embedTexts([queryText], this.vectorSize);
 
       const searchRes = await this.request(`/collections/${this.collectionName}/points/search`, 'POST', {
@@ -328,8 +301,8 @@ class QdrantService {
 
       return { results: searchRes.result || [], status: 'ok', errorCode: null };
     } catch (err) {
-      console.error(`[Qdrant] Search error:`, err.message);
-      return { results: [], status: 'degraded', errorCode: 'SCHEMA_SEARCH_FAILED' };
+      console.error(err.code === 'EMBEDDING_UNAVAILABLE' ? '[Embedding] Schema search unavailable:' : '[Qdrant] Search error:', err.message);
+      return { results: [], status: 'degraded', errorCode: err.code === 'EMBEDDING_UNAVAILABLE' ? err.code : 'SCHEMA_SEARCH_FAILED' };
     }
   }
 
@@ -352,6 +325,7 @@ class QdrantService {
   }
 
   async indexDocumentChunks(document, chunks) {
+    if (!require('./embedding_policy').enabled()) return { success: true, skipped: true, mode: 'lexical', totalPoints: 0 };
     try {
       const collection = await this.ensureDocumentCollection();
       if (await this.deleteDocumentChunks(document.id) === false) {
@@ -376,6 +350,9 @@ class QdrantService {
   }
 
   async deleteDocumentChunks(documentId) {
+    // Disabled mode has no Qdrant dependency. Old points stay inaccessible through
+    // the current document scope/revision checks; rebuild vectors when re-enabled.
+    if (!require('./embedding_policy').enabled()) return true;
     try {
       const collection = await this.ensureDocumentCollection();
       await this.request(`/collections/${collection}/points/delete?wait=true`, 'POST', { filter: { must: [{ key: 'documentId', match: { value: documentId } }] } });
@@ -386,8 +363,10 @@ class QdrantService {
   }
 
   async searchDocuments(queryText, limit = 6, { documentIds = [] } = {}) {
+    if (!require('./embedding_policy').enabled()) return [];
     try {
-      const collection = await this.ensureDocumentCollection();
+      const collection = process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents';
+      await this.request(`/collections/${collection}`);
       const [queryVector] = await this.embedTexts([queryText]);
       if (!documentIds.length) return [];
       const result = await this.request(`/collections/${collection}/points/search`, 'POST', {
@@ -407,6 +386,7 @@ class QdrantService {
    * Get Qdrant collection status / stats
    */
   async getStatus() {
+    if (!require('./embedding_policy').enabled()) return { connected: false, disabled: true, embeddingEnabled: false, mode: 'lexical', collectionName: this.collectionName, url: this.qdrantUrl };
     try {
       const res = await this.request(`/collections/${this.collectionName}`);
       return {

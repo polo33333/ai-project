@@ -188,3 +188,50 @@ test('suggestion engine returns an actionable recommendation', () => {
   const suggestions = suggestForCase({ failures: ['MISSING_CHART', 'MISSING_EXPORT'] });
   assert.deepEqual(suggestions.map(item => item.action), ['auto_render_chart', 'auto_export_data']);
 });
+
+test('Vietnamese preposition ve does not require a chart', () => {
+  const plan = createRequestPlan({ question: 'Hệ thống lưu những thông tin nào về doanh nghiệp trong khu công nghiệp?' });
+  assert.equal(plan.outputs.chart, false);
+  assert.equal(createRequestPlan({ question: 'Vẽ biểu đồ doanh thu' }).outputs.chart, true);
+});
+
+test('schema descriptions require schema evidence but no record query', () => {
+  const { evaluateCompletion } = require('../src/backend/agent_core/harness/completion_policy');
+  const plan = { intent: 'schema_description', outputs: { data: false, chart: false, export: false } };
+  const args = { reply: 'Hệ thống lưu mã và tên khách hàng.', plan };
+  assert.ok(evaluateCompletion(args).failures.includes('MISSING_SCHEMA_EVIDENCE'));
+  assert.equal(evaluateCompletion({ ...args, toolCalls: [{ toolName: 'search_schema', success: true,
+    result: { tables: [{ columns: [{ name: 'CustomerName' }] }] } }] }).valid, true);
+});
+
+test('schema descriptions omit hidden columns and preserve configured labels', () => {
+  const { renderSchemaDescription } = require('../src/backend/agent_core/harness/schema_description');
+  assert.equal(renderSchemaDescription({ tables: [] }), null);
+  const reply = renderSchemaDescription({ tables: [{ tableName: 'Customers', columns: [
+    { name: 'CustomerCode', displayName: 'Customer code', description: 'Configured label' },
+    { name: 'Secret', isVisible: false }
+  ] }] });
+  assert.match(reply, /Customer code/);
+  assert.match(reply, /Configured label/);
+  assert.doesNotMatch(reply, /Secret/);
+});
+
+test('classification schema descriptions render only requested exposed criteria', () => {
+  const { renderSchemaDescription } = require('../src/backend/agent_core/harness/schema_description');
+  const selection = { tables: [{ tableName: 'M_Customer', columns: [
+    { name: 'TypeID', displayName: 'Customer type' }, { name: 'CustomerGroupID', displayName: 'Customer group' },
+    { name: 'Phone' }, { name: 'HiddenType', isVisible: false }
+  ] }] };
+  const reply = renderSchemaDescription(selection, ['TypeID', 'CustomerGroupID', 'HiddenType']);
+  assert.match(reply, /Customer type/); assert.match(reply, /Customer group/);
+  assert.doesNotMatch(reply, /Phone|HiddenType/);
+  assert.equal(renderSchemaDescription(selection, ['UnknownCriterion']), null);
+});
+
+test('lookup guidance is metadata, not a record contract', () => {
+  const { decodeIntent, createRequestContract } = require('../src/backend/agent_core/harness/request_contract');
+  const intent = decodeIntent({ operation: 'guidance', attributes: [], presentation: 'text' });
+  assert.equal(createRequestContract({ conversationState: { operation: intent.operation }, table: 'T_Contract' }, {
+    tables: [{ tableName: 'T_Contract', columns: [{ name: 'ContractNo' }] }]
+  }), null);
+});

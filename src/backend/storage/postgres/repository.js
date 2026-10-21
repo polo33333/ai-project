@@ -13,6 +13,23 @@ const sourcesByFile = new Map(sources.map(source => [source.file, source]));
 const conflict = () => Object.assign(new Error('DATA_CONFLICT: dữ liệu đã được cập nhật bởi thao tác khác. Hãy tải lại và thử lại.'), { statusCode: 409, code: 'DATA_CONFLICT' });
 const equal = (a, b) => canonical(a) === canonical(b);
 
+// Load parents needed by model normalization, but write only dirty stores.
+function commitFiles(dirty) {
+  const files = new Set(dirty);
+  const dependencies = new Map([
+    ['accounts.json', ['account_roles.json']],
+    ['account_roles.json', ['accounts.json']],
+    ['sessions.json', ['accounts.json']],
+    ['dictionary.json', ['db_sources.json']],
+    ['chat_feedback.json', ['chat_history.json']],
+    ['workflow_runs.json', ['workflows.json']],
+    ['conversation_memory.json', ['accounts.json']],
+    ['chat_history.json', ['conversation_memory.json']]
+  ]);
+  for (const file of files) for (const dependency of dependencies.get(file) || []) files.add(dependency);
+  return [...files];
+}
+
 function defaultValue(source) {
   if (source.shape === 'array') return [];
   if (source.shape === 'wrapped') return { [source.wrapper]: [] };
@@ -56,8 +73,9 @@ function appendedMessages(base, proposed) {
 
 function mergeRecord(source, base, proposed, fresh) {
   if (equal(base, fresh)) return proposed;
-  if (proposed === undefined || fresh === undefined) throw conflict();
+  // Repeated identical updates/deletions are idempotent (e.g. concurrent log trimming).
   if (equal(proposed, fresh)) return fresh;
+  if (proposed === undefined || fresh === undefined) throw conflict();
   if (source.table === 'chat_sessions') {
     if (fresh.accountId !== proposed.accountId || fresh.embedId !== proposed.embedId) throw conflict();
     const appended = appendedMessages(base, proposed);
@@ -81,6 +99,19 @@ function mergeRecord(source, base, proposed, fresh) {
     const merged = structuredClone(fresh);
     for (const key of new Set([...Object.keys(base), ...Object.keys(proposed)])) {
       if (equal(base[key], proposed[key])) continue;
+      if (source.table === 'dictionary_tables' && key === 'columns' &&
+          Array.isArray(base[key]) && Array.isArray(proposed[key]) && Array.isArray(fresh[key])) {
+        const byName = columns => new Map(columns.map(column => [column.columnName, column]));
+        const oldColumns = byName(base[key]), nextColumns = byName(proposed[key]), currentColumns = byName(fresh[key]);
+        for (const name of new Set([...oldColumns.keys(), ...nextColumns.keys()])) {
+          const old = oldColumns.get(name), next = nextColumns.get(name);
+          if (equal(old, next)) continue;
+          const value = mergeRecord({ table: 'dictionary_columns' }, old, next, currentColumns.get(name));
+          if (value === undefined) currentColumns.delete(name); else currentColumns.set(name, value);
+        }
+        merged[key] = [...currentColumns.values()];
+        continue;
+      }
       if (!equal(base[key], fresh[key]) && !equal(proposed[key], fresh[key])) {
         if (source.table === 'accounts' && key === 'lastLoginAt') { merged[key] = [fresh[key], proposed[key]].sort().at(-1); continue; }
         if(source.table==='watchfolders'&&['lastScan','scannedFiles'].includes(key)) {
@@ -107,7 +138,9 @@ function mergeDocument(source, base, proposed, fresh) {
     const old = before.get(id);
     const value = after.get(id);
     if (equal(old, value)) continue;
-    const merged = mergeRecord(source, old, value, current.get(id));
+    let merged;
+    try { merged = mergeRecord(source, old, value, current.get(id)); }
+    catch (error) { error.conflictStore = source.file; error.conflictTable = source.table; throw error; }
     if (merged === undefined) current.delete(id);
     else current.set(id, merged);
   }
@@ -117,7 +150,11 @@ function mergeDocument(source, base, proposed, fresh) {
   for (const id of after.keys()) if (current.has(id)) ordered.set(id, current.get(id));
   for (const [id, value] of current) if (!ordered.has(id)) ordered.set(id, value);
   let document;
-  if (['array', 'wrapped'].includes(source.shape)) document = [...ordered.values()];
+  if (source.table === 'system_logs') {
+    const entries = [...ordered.entries()];
+    document = [...entries.filter(([id]) => !before.has(id)), ...entries.filter(([id]) => before.has(id))].slice(0, 500).map(([, value]) => value);
+  }
+  else if (['array', 'wrapped'].includes(source.shape)) document = [...ordered.values()];
   else if (source.shape === 'singleton') document = ordered.get('default') || {};
   else document = Object.fromEntries(ordered);
   if (source.wrapper) {
@@ -201,7 +238,14 @@ class PostgresRepository {
       }
       const already = await client.query('SELECT 1 FROM app.operation_commits WHERE operation_id=$1', [work.id]);
       if (already.rowCount) return;
-      const fresh = await loadModel(client);
+      const fresh = await loadModel(client, commitFiles(work.dirty));
+      const previousAccounts = (fresh.documents.get('accounts.json') || []).map(account => ({ ...account }));
+      if (work.dirty.has('accounts.json')) require('../../services/account_constraints').validateRevisions(
+        work.baseline.get('accounts.json') || [], work.documents.get('accounts.json') || [], previousAccounts);
+      if(work.dirty.has('account_roles.json')) for(const role of work.documents.get('account_roles.json')||[]) {
+        const before=(work.baseline.get('account_roles.json')||[]).find(r=>r.id===role.id), current=(fresh.documents.get('account_roles.json')||[]).find(r=>r.id===role.id);
+        if(before&&current&&role.revision!==before.revision&&current.revision!==before.revision) throw Object.assign(new Error('Vai trò đã thay đổi.'),{statusCode:409,code:'ACCOUNT_CONFLICT'});
+      }
       for (const file of work.dirty) {
         const source = sourcesByFile.get(file);
         const empty = defaultValue(source);
@@ -209,6 +253,10 @@ class PostgresRepository {
         fresh.documents.set(file, document);
       }
       const target = buildModel(fresh.documents, { recordId, runtime: true });
+      if(work.dirty.has('accounts.json')||work.dirty.has('account_roles.json')) require('../../services/account_constraints').validateRoles(
+        fresh.documents.get('accounts.json')||[],fresh.documents.get('account_roles.json')||[]);
+      if (work.dirty.has('accounts.json')) require('../../services/account_constraints').validateTransition(
+        previousAccounts, fresh.documents.get('accounts.json') || []);
       for (const row of target.rows.ai_providers) row.is_active = row.payload.isActive === true;
       if (target.rows.ai_providers.filter(row => row.is_active).length > 1) throw conflict();
       for (const row of target.rows.chat_sessions) row.embed_id = row.payload.embedId || null;
@@ -223,7 +271,15 @@ class PostgresRepository {
       const deletions = [];
       const changes = [];
       const orderChanges = [];
+      const writableTables = new Set();
+      for (const file of work.dirty) {
+        const source = sourcesByFile.get(file);
+        writableTables.add(source.table);
+        for (const child of childTables[source.table] || []) writableTables.add(child.table);
+        if (source.table === 'chat_sessions') writableTables.add('memory_states');
+      }
       for (const table of tables) {
+        if (!writableTables.has(table)) continue;
         const existing = new Map(fresh.model.rows[table].map(row => [row.id, row]));
         const wanted = new Map(target.rows[table].map(row => [row.id, row]));
         for (const row of existing.values()) if (!wanted.has(row.id)) deletions.push([table, row]);
@@ -272,15 +328,26 @@ class PostgresRepository {
         if (selected) await client.query('UPDATE app.ai_providers SET is_active=true WHERE id=$1', [selected.id]);
       }
       // Restore unaffected children whose ordinals were moved with their parent.
-      for (const table of children) await client.query(`UPDATE app.${table} SET ordinal=ordinal-1000000 WHERE ordinal>=1000000`);
+      for (const table of children) if (writableTables.has(table)) await client.query(`UPDATE app.${table} SET ordinal=ordinal-1000000 WHERE ordinal>=1000000`);
       for (const file of target.files) {
         if (!work.dirty.has(file.file)) continue;
         await client.query(`INSERT INTO app.domain_stores(file, root) VALUES($1,$2)
           ON CONFLICT(file) DO UPDATE SET root=excluded.root, revision=app.domain_stores.revision+1`,
         [file.file, JSON.stringify(protect(file.root, `file/${file.file}`))]);
       }
-      for (const job of work.jobs) await client.query(`INSERT INTO app.outbox_jobs(id, kind, resource_id, payload) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING`,
-        [job.id, job.kind, job.resourceId, JSON.stringify(protect(job.payload, `outbox/${job.id}`))]);
+      for (const job of work.jobs) {
+        if (job.kind === 'dictionary.sync') {
+          // Lock a waiting job so a worker cannot snapshot before this write commits.
+          const pending = await client.query(`SELECT id FROM app.outbox_jobs WHERE kind=$1 AND resource_id=$2
+            AND status='pending' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [job.kind, job.resourceId]);
+          if (pending.rows[0]) {
+            await client.query("UPDATE app.outbox_jobs SET available_at=now()+interval '100 milliseconds', attempts=0, updated_at=now() WHERE id=$1", [pending.rows[0].id]);
+            continue;
+          }
+        }
+        await client.query(`INSERT INTO app.outbox_jobs(id, kind, resource_id, payload) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING`,
+          [job.id, job.kind, job.resourceId, JSON.stringify(protect(job.payload, `outbox/${job.id}`))]);
+      }
       await client.query('INSERT INTO app.operation_commits(operation_id) VALUES($1)', [work.id]);
       if(work.receipt)await client.query('INSERT INTO app.chat_request_receipts(key,body_hash,response) VALUES($1,$2,$3)',[
         work.receipt.key,work.receipt.bodyHash,JSON.stringify(encrypt(work.receipt.response,`receipt/${work.receipt.key}`))
@@ -289,4 +356,4 @@ class PostgresRepository {
   }
 }
 
-module.exports = { PostgresRepository, loadModel, mergeDocument, recordId, identity };
+module.exports = { PostgresRepository, loadModel, mergeDocument, recordId, identity, commitFiles };

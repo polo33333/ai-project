@@ -31,14 +31,17 @@ async function executePure(step, state) {
   throw error('Primitive không được hỗ trợ.');
 }
 class AutomationRuntime {
-  constructor(repository, registry, { executeSql, executeSource, authorizeContext, enabled = () => process.env.WORKFLOW_PLUGINS_ENABLED === 'true', leaseMs = 90000 } = {}) {
+  constructor(repository, registry, { executeSql, executeSource, authorizeContext, lease, enabled = () => process.env.WORKFLOW_PLUGINS_ENABLED === 'true', leaseMs = 90000 } = {}) {
     this.repository = repository; this.registry = registry; this.executeSql = executeSql || require('./sql').executeBinding;
+    this.withLease = lease || ((key, operation) => repository.lease(key, operation));
     this.executeSource = executeSource || require('./data_sources').executeSource;
     this.authorizeContext = authorizeContext || (async ownerId => {
       if (ownerId.startsWith('embed:')) { const config=require('../services/embed_chat_service').configs.find(c=>c.id===ownerId.split(':')[1] && c.isActive); if(!config) throw error('Widget đã bị tắt.',403); return {accountId:ownerId,tenantId:`embed:${config.id}`,permissions:['sql:read','knowledge:read']}; }
       const account = require('../services/auth_service').accounts.find(item => item.id === ownerId && item.isActive !== false);
       if (!account) throw error('Tài khoản không còn hoạt động.', 403);
-      return { accountId: account.id, tenantId: account.tenantId, permissions: account.role === 'admin' ? ['admin'] : ['sql:read', 'knowledge:read'] };
+      const effective=require('../services/auth_service').publicAccount(account);
+      return { accountId: account.id, tenantId: account.tenantId, role:effective.role, dataAccess:effective.dataAccess,
+        permissions: account.role === 'admin' ? ['admin'] : effective.permissions };
     });
     this.enabled = enabled; this.leaseMs = leaseMs; this.controllers = new Map(); this.jobs = new Set(); this.stopping = false;
   }
@@ -110,7 +113,15 @@ class AutomationRuntime {
       error: run.error || null, createdAt: run.createdAt, updatedAt: run.updatedAt
     };
   }
-  async list(context, conversationId) { return (await this.repository.list('runs', { ownerId: this.owner(context), conversationId })).slice(0, 100).map(run => this.view(run)); }
+  async list(context, conversationId) {
+    const governance=require('../governance/context'), principal=governance.current()&&governance.principal();
+    const visible=run=>!principal?.dataAccess||principal.role==='admin'||Object.values(run.definition.bindings||{}).every(binding=>{
+      if(binding.dbSourceId){const source=require('../services/sql_connector').dbSources.find(s=>s.id===binding.dbSourceId);return source&&governance.canRead(source,'sql');}
+      if(binding.documentId){const document=require('../knowledge_core/services/library_service').documents.find(d=>d.id===binding.documentId);return document&&governance.canRead(document,'document');}
+      return true;
+    });
+    return (await this.repository.list('runs', { ownerId: this.owner(context), conversationId })).filter(visible).slice(0, 100).map(run => this.view(run));
+  }
   async pending(context, conversationId, templateId = null) {
     const runs = await this.repository.list('runs', { ownerId: this.owner(context), conversationId, statuses: active });
     return (templateId ? runs.find(run => run.templateId === templateId) : runs[0]) || null;
@@ -154,7 +165,7 @@ class AutomationRuntime {
         }
         return this.view(saved);
       };
-      const result = storage.enabled() ? await storage.lease(key, operation) : await operation();
+      const result = await this.withLease(key, operation);
       if (result?.skipped) throw error('Hội thoại đang được cập nhật. Hãy thử lại.', 409);
       return result;
     });
@@ -189,6 +200,9 @@ class AutomationRuntime {
     this.controllers.get(id)?.abort(); return this.view(saved);
   }
   async process(id) {
+    return require('../governance/context').run(() => this.processGoverned(id));
+  }
+  async processGoverned(id) {
     if (!this.enabled() || this.stopping) return;
     let run = await this.repository.get('runs', id);
     if (!run || !['READY', 'RUNNING'].includes(run.status) || (run.lease && run.lease.expiresAt > Date.now())) return;
@@ -202,11 +216,18 @@ class AutomationRuntime {
     const token = crypto.randomUUID(); run.status = 'RUNNING'; run.lease = { token, expiresAt: Date.now() + this.leaseMs };
     try { run = await this.repository.put('runs', run, run.revision); } catch (failure) { if (failure.statusCode === 409) return; throw failure; }
     const controller = new AbortController(); this.controllers.set(id, controller);
+    let writeMayHaveOccurred = false;
     try {
       for (;;) {
         run = await this.repository.get('runs', id);
         if (run.status !== 'RUNNING' || run.lease?.token !== token || controller.signal.aborted) return;
         const context = await this.authorizeContext(run.ownerId);
+        const governance = require('../governance/context');
+        const establish = actor => governance.setPrincipal({ subject: actor.accountId.startsWith('embed:') ? actor.accountId : `account:${actor.accountId}`,
+          role: actor.role || (actor.permissions?.includes('admin') ? 'admin' : 'user'), permissions:actor.permissions, dataAccess:actor.dataAccess, tenantId: actor.tenantId, channel: actor.accountId.startsWith('embed:') ? 'embed' : 'workflow',
+          embedId: actor.accountId.startsWith('embed:') ? actor.accountId.split(':')[1] : undefined });
+        establish(context);
+        governance.current().revalidateAsync = async () => establish(await this.authorizeContext(run.ownerId));
         if (!await this.registry.canContinue(run.definition, context)) throw error('Quyền sử dụng template đã bị thu hồi.', 403);
         const step = run.definition.workflow.steps[run.nextIndex];
         const state = { input: run.input, steps: run.outputs };
@@ -231,6 +252,7 @@ class AutomationRuntime {
         run.attempts[step.id] = { count, status: 'RUNNING', startedAt: new Date().toISOString() }; run.lease.expiresAt = Date.now() + this.leaseMs;
         event(run, 'step_started', { stepId: step.id }); run = await this.repository.put('runs', run, run.revision);
         const sourceBinding=step.type==='source'?run.definition.bindings[step.config.bindingRef]:null;
+        require('./read_only_policy').assertSourceAllowed(sourceBinding);
         const timer = setTimeout(() => controller.abort(), Math.min(60000, step.timeoutMs || (sourceBinding?.type==='api'?sourceBinding.timeoutMs || 30000:45000)));
         let output, failure;
         try {
@@ -248,8 +270,11 @@ class AutomationRuntime {
             });
             output = await executePure(step, state);
           }
+          writeMayHaveOccurred = output !== undefined && step.type === 'source'
+            && require('./api_http').hasWriteEffect(run.definition.bindings[step.config.bindingRef]);
           ensure(!controller.signal.aborted, 'Tác vụ hết thời gian hoặc bị dừng.');
           if (step.outputSchema) { const failures = validateValue(output, step.outputSchema); ensure(!failures.length, 'Kết quả bước không đúng schema.'); }
+          ensure(Buffer.byteLength(JSON.stringify(output ?? null)) <= 1024 * 1024, 'Kết quả bước quá lớn.');
         } catch (caught) { failure = caught; } finally { clearTimeout(timer); }
         const fresh = await this.repository.get('runs', id);
         if (fresh.status !== 'RUNNING' || fresh.lease?.token !== token) return;
@@ -263,25 +288,29 @@ class AutomationRuntime {
           if (count < maxAttempts && step.type !== 'export' && !(step.type==='source' && require('./api_http').hasWriteEffect(run.definition.bindings[step.config.bindingRef])) && !controller.signal.aborted) { await this.repository.put('runs', run, run.revision); continue; }
           throw failure;
         }
-        ensure(Buffer.byteLength(JSON.stringify(output ?? null)) <= 1024 * 1024, 'Kết quả bước quá lớn.');
         run.outputs[step.id] = output;
         if (output?.artifact) run.artifacts.push(output.artifact);
         run.attempts[step.id].status = 'SUCCEEDED'; run.attempts[step.id].finishedAt = new Date().toISOString(); run.nextIndex++;
         run.lease.expiresAt = Date.now() + this.leaseMs; event(run, 'step_completed', { stepId: step.id });
         await this.repository.put('runs', run, run.revision);
+        writeMayHaveOccurred = false;
       }
     } catch (failure) {
       const fresh = await this.repository.get('runs', id);
       if (fresh?.status === 'RUNNING' && fresh.lease?.token === token) {
-        fresh.status = 'FAILED'; fresh.error = require('../intelligent_core/security_guard').maskSensitiveData(failure.message).slice(0, 400); fresh.lease = null; event(fresh, 'failed');
+        fresh.status = writeMayHaveOccurred ? 'NEEDS_REVIEW' : 'FAILED';
+        fresh.error = writeMayHaveOccurred ? 'API ghi đã trả kết quả nhưng chưa lưu được receipt. Kiểm tra hệ thống đích trước khi chạy lại.'
+          : require('../intelligent_core/security_guard').maskSensitiveData(failure.message).slice(0, 400);
+        fresh.lease = null; event(fresh, writeMayHaveOccurred ? 'needs_review' : 'failed');
         await this.repository.put('runs', fresh, fresh.revision);
       }
     } finally { this.controllers.delete(id); }
   }
   async export(step, state, run) {
-    const rows = resolve(step.config.data, state);
+    let rows = resolve(step.config.data, state);
     ensure(Array.isArray(rows), 'Dữ liệu xuất cần là danh sách.');
     if (!rows.length) return { empty: true, filename: null };
+    rows = require('../utils/export_safety').safeRows(require('../intelligent_core/security_guard').sanitizeTabularRows(rows));
     const format = resolve(step.config.format || 'csv', state); ensure(['csv', 'xlsx'].includes(format), 'Định dạng file chưa hỗ trợ.');
     const artifactId = crypto.randomUUID(), filename = `${String(resolve(step.config.filename || 'Bao_cao', state)).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 70)}.${format}`;
     const directory = path.join(getExportsDirectory(), 'automation'); fs.mkdirSync(directory, { recursive: true });
@@ -298,17 +327,23 @@ class AutomationRuntime {
     if (!artifact || Date.parse(artifact.expiresAt) <= Date.now()) throw error('File không tồn tại hoặc đã hết hạn.', 404);
     return { ...artifact, path: path.join(getExportsDirectory(), 'automation', path.basename(artifact.storageName)) };
   }
-  async tick() {
+  tick() {
+    if (this.polling) return this.polling;
+    this.polling = this.poll().finally(() => { this.polling = null; });
+    return this.polling;
+  }
+  async poll() {
     if (this.stopping || !this.enabled()) return;
     const runs = await this.repository.list('runs', { statuses: ['READY', 'RUNNING'] });
+    if (this.stopping) return;
     for (const run of runs) {
       if (this.jobs.size >= 2) break;
       if (this.controllers.has(run.id) || run.lease?.expiresAt > Date.now()) continue;
-      const promise = storage.run(() => this.process(run.id), { independent: true }).catch(failure => console.error('[Automation]', failure.code || failure.message)).finally(() => this.jobs.delete(promise));
+      const promise = storage.run(() => this.process(run.id), { independent: true }).catch(failure => console.error('[Automation]', require('../storage/postgres/worker_failure').describe(failure, this.repository.database?.()))).finally(() => this.jobs.delete(promise));
       this.jobs.add(promise);
     }
   }
-  start() { if (this.timer) return; this.stopping = false; this.timer = setInterval(storage.detach(() => this.tick().catch(failure => console.error('[Automation]', failure.code || failure.message))), 1000); this.timer.unref(); }
-  async stop() { this.stopping = true; clearInterval(this.timer); this.timer = null; await Promise.allSettled([...this.jobs]); }
+  start() { if (this.timer) return; this.stopping = false; this.timer = setInterval(storage.detach(() => this.tick().catch(failure => console.error('[Automation]', require('../storage/postgres/worker_failure').describe(failure, this.repository.database?.())))), 1000); this.timer.unref(); }
+  async stop() { this.stopping = true; clearInterval(this.timer); this.timer = null; if (this.polling) await this.polling.catch(() => {}); await Promise.allSettled([...this.jobs]); }
 }
 module.exports = { AutomationRuntime, executePure, terminal, active };

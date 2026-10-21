@@ -20,6 +20,24 @@ const mcpService = require('../services/mcp_service');
 // ============================================================================
 
 const TOOL_DEFINITIONS = [
+  require('../agent_core/tools/join_path').definition,
+  require('../agent_core/tools/date_range').definition,
+  { name: 'read_context_result', description: 'Read exact rows/columns from an authorized result stored in this request. Use resultId from a tool preview; limit 1–20. No cross-chat access or new SQL. Use source aggregation for totals over incomplete results.', parameters: {
+    type: 'object', additionalProperties: false, required: ['resultId'], properties: { resultId: { type: 'string' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 20 }, columns: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: { type: 'string' } } } } },
+  ...require('../memory_core/tools').definitions,
+  { name: 'list_workflows', description: 'Discover authorized workflows for the current business request. Returns 5 ranked summaries, input schemas, complete compact directory and pending runs. Ranking is not exclusion. Use templateId to inspect full instructions for a candidate, or offset to expand. Missing inputs must not exclude a matching workflow: run it with available inputs so runtime asks missing fields.', parameters: {
+    type: 'object', additionalProperties: false, properties: { query: { type: 'string', maxLength: 2000 }, templateId: { type: 'string' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 30 } } } },
+  { name: 'run_workflow', description: 'Start an authorized published workflow in the authenticated conversation. Returns runId/status immediately; do not wait for completion.', parameters: {
+    type: 'object', additionalProperties: false, required: ['templateId'], properties: { templateId: { type: 'string' }, inputs: { type: 'object' } } } },
+  ...['get_workflow_status', 'resume_workflow', 'cancel_workflow'].map(name => ({ name, description: `${name} for an owned workflow; obtain the current revision using status before resume/cancel.`, parameters: {
+    type: 'object', additionalProperties: false, required: name === 'get_workflow_status' ? ['runId'] : ['runId', 'revision'], properties: {
+      runId: { type: 'string' }, revision: { type: 'integer', minimum: 1 }, ...(name === 'resume_workflow' ? { inputs: { type: 'object' } } : {}) } } })),
+  { name: 'list_sql_metrics', description: 'List owner-approved SQL metrics with source, unit, grain and time semantics. Use these definitions before querying a business metric.',
+    parameters: { type: 'object', additionalProperties: false, properties: {} } },
+  { name: 'query_sql_metric', description: 'Query an approved versioned SQL metric using typed dates (start inclusive, end exclusive) and allowed dimensions. No arbitrary SQL or joins.',
+    parameters: { type: 'object', additionalProperties: false, required: ['metricId', 'start', 'end'], properties: {
+      metricId: { type: 'string' }, sourceId: { type: 'string' }, start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      dimensions: { type: 'array', items: { type: 'string' }, uniqueItems: true, maxItems: 10 } } } },
   {
     name: 'get_workflow_dataset',
     description: 'Read a verified dataset from a completed workflow in the current conversation. Results are paginated; use total rowCount and hasMore to avoid treating a preview as the full dataset.',
@@ -130,7 +148,7 @@ const TOOL_DEFINITIONS = [
     parameters: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { type: 'number' }, description: 'Mảng các số cần tính toán' },
+        data: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number' }, description: 'Mảng các số cần tính toán' },
         operation: { type: 'string', enum: ['min', 'max', 'avg', 'sum', 'count', 'all'], description: 'Phép tính. "all" tính tất cả cùng lúc.' }
       },
       required: ['data', 'operation']
@@ -153,7 +171,8 @@ const TOOL_DEFINITIONS = [
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Từ khóa tìm kiếm tên bảng hoặc cột' }
+        query: { type: 'string', description: 'Từ khóa tìm kiếm tên bảng hoặc cột' },
+        request: require('../agent_core/harness/request_contract').intentSchema
       },
       required: ['query']
     }
@@ -176,7 +195,7 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Câu hỏi hoặc từ khóa ngữ nghĩa cần tìm kiếm trong Vector DB' },
-        limit: { type: 'number', description: 'Số lượng kết quả liên quan nhất (mặc định 5)' }
+        limit: { type: 'integer', minimum: 1, maximum: 20, description: 'Số lượng kết quả liên quan nhất (mặc định 5)' }
       },
       required: ['query']
     }
@@ -188,36 +207,83 @@ const TOOL_DEFINITIONS = [
 // ============================================================================
 
 class ToolRegistry {
-  listTools(toolNames = null) {
-    const definitions = [...TOOL_DEFINITIONS, ...mcpService.getToolSpecs()];
-    if (!Array.isArray(toolNames)) return definitions;
+  listTools(toolNames = null, context = {}) {
+    const permissions = Array.isArray(context.permissions) ? context.permissions : [];
+    const definitions = [...TOOL_DEFINITIONS, ...mcpService.getToolSpecs().filter(tool =>
+      permissions.some(value => ['admin', '*', `mcp:${tool.serverId}:execute`].includes(value)))].filter(tool =>
+      !require('../memory_core/tools').definitions.some(item => item.name === tool.name) || require('../memory_core/tools').available());
+    const enabledDefinitions = context.includeDisabled ? definitions : definitions.filter(tool => require('../services/tool_settings_service').isEnabled(tool.name));
+    if (!Array.isArray(toolNames)) return enabledDefinitions;
     const allowed = new Set(toolNames);
-    return definitions.filter(tool => allowed.has(tool.name));
+    return enabledDefinitions.filter(tool => allowed.has(tool.name));
   }
 
-  getOpenAiToolsFormat(toolNames = null) {
-    return this.listTools(toolNames).map(t => ({
+  getOpenAiToolsFormat(toolNames = null, context = {}) {
+    return this.listTools(toolNames, context).map(t => ({
       type: 'function',
       function: { name: t.name, description: t.description, parameters: t.parameters }
     }));
   }
 
-  getGeminiToolsFormat(toolNames = null) {
+  getGeminiToolsFormat(toolNames = null, context = {}) {
     return [{
-      functionDeclarations: this.listTools(toolNames).map(t => ({
+      functionDeclarations: this.listTools(toolNames, context).map(t => ({
         name: t.name, description: t.description, parameters: t.parameters
       }))
     }];
   }
 
   async executeTool(toolName, args, context = {}) {
+    const startedAt = Date.now();
+    let result;
+    try { result = await this.executeValidatedTool(toolName, args, context); }
+    catch (error) {
+      result = { success: false, error: error.message, code: error.code || null,
+        outcome: error.name === 'AbortError' ? 'cancelled' : 'failed', effectState: 'unknown' };
+    }
+    const execution = { ...result, tool: toolName, durationMs: Date.now() - startedAt };
+    const normalized = { ...execution, result: execution.success ? (execution.result ?? result) : null };
+    return { ...execution, envelope: require('../agent_core/tools/tool_result').createToolResult(normalized, context) };
+  }
+
+  async executeValidatedTool(toolName, args, context = {}) {
+    if (!require('../services/tool_settings_service').isEnabled(toolName)) return {
+      success: false, error: 'Công cụ này đã bị quản trị viên tắt.', code: 'TOOL_DISABLED', outcome: 'denied', effectState: 'none' };
+    if (context.signal?.aborted) return { success: false, code: 'CANCELLED', outcome: 'cancelled', effectState: 'none' };
+    if (Array.isArray(context.allowedToolNames) && !context.allowedToolNames.includes(toolName)) return {
+      success: false, error: 'Tool is not enabled for this request.', code: 'TOOL_NOT_ENABLED', outcome: 'denied', effectState: 'none' };
+    if (context.executionBudget?.remainingMs() <= 0) return { success: false, error: 'Request deadline exceeded.',
+      code: 'REQUEST_DEADLINE_EXCEEDED', outcome: 'timeout', effectState: 'none' };
+    const definition = TOOL_DEFINITIONS.find(tool => tool.name === toolName);
+    if (definition) {
+      this.validators ||= new Map();
+      if (!this.validators.has(toolName)) this.validators.set(toolName, new (require('ajv'))({ strict: false, validateFormats: false }).compile(definition.parameters));
+      if (!this.validators.get(toolName)(args)) return { success: false, error: 'Invalid tool arguments.', code: 'INVALID_INPUT', outcome: 'invalid_input', effectState: 'none' };
+    }
+    const result = await this.executeLegacyTool(toolName, args, context);
+    if (Buffer.byteLength(JSON.stringify(result) || '') > 2 * 1024 * 1024) return { success: false, error: 'Tool output exceeds the permitted size.', code: 'TOOL_OUTPUT_TOO_LARGE', outcome: 'failed', effectState: 'none' };
+    if (toolName === 'export_data' && result.success) require('../governance/artifacts').register(result.result || result);
+    return result;
+  }
+
+  async executeLegacyTool(toolName, args, context = {}) {
     try {
       const mcpTool = mcpService.getToolSpecs().find(tool => tool.name === toolName);
       if (mcpTool) {
-        const result = await mcpService.executeSpec(mcpTool, args);
-        return result?.success === false ? result : { success: true, result };
+        const result = await mcpService.executeSpec(mcpTool, args, context);
+        const { envelope, ...payload } = result;
+        return result?.success === false ? payload : { success: true, result: payload,
+          effectState: envelope?.effectState || 'unknown' };
       }
       switch (toolName) {
+        case 'recall_memory': case 'remember_preference': case 'forget_memory':
+          return { success: true, result: await require('../memory_core/tools').execute(toolName, args, context) };
+        case 'list_workflows': case 'run_workflow': case 'get_workflow_status': case 'resume_workflow': case 'cancel_workflow':
+          return { success: true, result: await require('../governance/workflow_tools').execute(toolName, args, context) };
+        case 'list_sql_metrics': return { success: true, result: { metrics: require('../governance/metrics').list() } };
+        case 'query_sql_metric': return { success: true, result: await require('../governance/metrics').execute(args, context) };
+        case 'get_join_path': return { success: true, result: require('../agent_core/tools/join_path').execute(args, context) };
+        case 'resolve_date_range': return { success: true, result: require('../agent_core/tools/date_range').resolve(args) };
         case 'get_current_datetime': return this._getCurrentDateTime(args);
         case 'get_workflow_dataset': {
           const dataset = await require('../automation/conversation_memory').readDataset(args, context);
@@ -244,13 +310,16 @@ class ToolRegistry {
           return this._renderChart(args);
         case 'calculate_stats': return this._calculateStats(args);
         case 'calculate_expression': return this._calculateExpression(args);
-        case 'search_schema': return this._searchSchema(args);
+        case 'search_schema': return await this._searchSchema(args, context);
         case 'get_glossary_term': return this._getGlossaryTerm(args);
-        case 'search_knowledge_base': return await this._searchKnowledgeBase(args);
+        case 'search_knowledge_base': return await this._searchKnowledgeBase(args, context);
         default: return { success: false, error: `Tool "${toolName}" không tồn tại.` };
       }
     } catch (err) {
-      return { success: false, error: `Lỗi thực thi tool "${toolName}": ${err.message}` };
+      return { success: false, error: `Lỗi thực thi tool "${toolName}": ${err.message}`, code: err.code || null,
+        outcome: err.name === 'AbortError' ? 'cancelled' : [401, 403].includes(err.statusCode || err.status) ? 'denied'
+          : ['TOOL_TIMEOUT', 'ETIMEDOUT'].includes(err.code) ? 'timeout' : 'failed',
+        effectState: [401, 403].includes(err.statusCode || err.status) ? 'none' : 'unknown', retryable: false };
     }
   }
 
@@ -302,12 +371,14 @@ class ToolRegistry {
     }
 
     const fmt = (format || 'csv').toLowerCase();
-    const cleanFilename = (filename || `Export_Data_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+    data = require('../utils/export_safety').safeRows(securityGuard.sanitizeTabularRows(data));
+    let cleanFilename = (filename || `Export_Data_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
     const exportDir = getExportsDirectory();
 
     if (!fs.existsSync(exportDir)) {
       fs.mkdirSync(exportDir, { recursive: true });
     }
+    cleanFilename = require('../agent_core/tools/builtins').getAvailableExportBase(exportDir, cleanFilename, fmt === 'csv' ? ['.csv'] : fmt === 'pdf' ? ['.html'] : ['.xlsx', '.xls']);
 
     const keys = Object.keys(data[0] || {});
     let fullFileName = '';
@@ -315,9 +386,7 @@ class ToolRegistry {
 
     if (fmt === 'csv') {
       fullFileName = `${cleanFilename}.csv`;
-      const header = keys.join(',') + '\n';
-      const rows = data.map(row => keys.map(k => `"${String(row[k] !== undefined ? row[k] : '').replace(/"/g, '""')}"`).join(',')).join('\n');
-      fileContent = '\uFEFF' + header + rows; // UTF-8 BOM cho Excel Việt Nam
+      fileContent = require('../utils/export_safety').toCsv(data);
       fs.writeFileSync(path.join(exportDir, fullFileName), fileContent, 'utf8');
 
     } else if (fmt === 'xlsx' || fmt === 'excel') {
@@ -336,8 +405,8 @@ class ToolRegistry {
 
     } else if (fmt === 'pdf') {
       fullFileName = `${cleanFilename}.html`;
-      const ths = keys.map(k => `<th style="background:#4f46e5;color:#fff;padding:8px 12px;text-align:left;">${k}</th>`).join('');
-      const trs = data.map(row => `<tr>${keys.map(k => `<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${row[k] !== undefined ? row[k] : ''}</td>`).join('')}</tr>`).join('');
+      const ths = keys.map(k => `<th style="background:#4f46e5;color:#fff;padding:8px 12px;text-align:left;">${require('../utils/export_safety').escapeHtml(k)}</th>`).join('');
+      const trs = data.map(row => `<tr>${keys.map(k => `<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${require('../utils/export_safety').escapeHtml(row[k])}</td>`).join('')}</tr>`).join('');
       fileContent = `
         <!DOCTYPE html>
         <html>
@@ -575,7 +644,10 @@ class ToolRegistry {
     try {
       const rows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
       const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-      return { success: true, result: { rows, columns, rowCount: rows.length, sql: check.cleanedSql } };
+      const displayNames = require('../services/sql_result_labels').inferDisplayNames(check.cleanedSql,
+        dictionaryService.getGroupedTables().filter(table=>table.isActive&&table.dbSourceId===context.dbSourceId),
+        dictionaryService.getTableRelationships());
+      return { success: true, result: { rows, columns, displayNames, rowCount: rows.length, sql: check.cleanedSql } };
     } catch (err) {
       // Tự động phân tích lỗi SQL Server và đề xuất câu lệnh đã sửa cho Agent Retry Loop ⭐⭐⭐⭐
       const repairInfo = this._repairSql({ sql: check.cleanedSql, error: err.message });
@@ -685,8 +757,65 @@ class ToolRegistry {
     }
   }
 
-  _searchSchema({ query }) {
+  async _searchSchema({ query, request }, context = {}) {
     if (!query) return { success: false, error: 'Thiếu từ khóa tìm kiếm.' };
+    const requestIntent = request === undefined ? null : require('../agent_core/harness/request_contract').decodeIntent(request);
+    if (context.governedController) {
+      const connector = require('../services/sql_connector');
+      const source = context.dbSourceId ? connector.dbSources.find(item => item.id === context.dbSourceId) : connector.getDefaultDbSource();
+      if (!source) return { success: false, error: 'Chưa chọn nguồn SQL.' };
+      require('../governance/context').read(source, 'sql');
+      const schemaService = require('./schema_context_service');
+      const operation = context.conversationResolution?.operation || context.requestPlan?.conversationState?.operation || requestIntent?.operation;
+      const attributes = context.requestPlan?.conversationState?.requestedAttributes || requestIntent?.attributes || [];
+      const key=value=>String(value||'').trim().toLowerCase();
+      const exactRoots=dictionaryService.getGroupedTables().filter(t=>t.isActive&&t.dbSourceId===source.id
+        &&[t.tableName,`${t.schemaName||'dbo'}.${t.tableName}`].some(name=>key(name)===key(query)));
+      const explicitRoot = exactRoots.length===1?exactRoots[0]:schemaService.explicitListTable(context.userMessage || '', { dbSourceId: source.id });
+      const retrievalQuery = explicitRoot ? require('../utils/entity_list_query')(context.userMessage) : query;
+      let selection = await schemaService.buildSchemaContext(retrievalQuery, {
+        dbSourceId: source.id, dbName: source.dbName || source.database || null, forceRetrieval: true,
+        primaryTable: explicitRoot?.tableName || context.requestPlan?.table || null, operation, attributes, question: context.userMessage
+      });
+      if (selection.mode === 'data' && (explicitRoot||['list', 'detail', 'attribute', 'compare'].includes(operation))) {
+        const root = explicitRoot?.tableName || context.requestPlan?.table || selection.selectedTables[0];
+        const refined = schemaService.refineSchemaContext(retrievalQuery, [root], { dbSourceId: source.id, dbName: source.dbName || source.database || null, operation, attributes, question: context.userMessage });
+        if (refined) selection = { ...selection, ...refined, retrieval: selection.retrieval };
+      }
+      if (selection.mode === 'data' && ['describe','guidance'].includes(operation)) {
+        const normalize = value => String(value||'').normalize('NFC').toLocaleLowerCase('vi').trim();
+        const padded = ` ${normalize(query)} `;
+        const roots = dictionaryService.getGroupedTables().filter(table => table.isActive && table.dbSourceId===source.id
+          && [table.tableName,table.semanticModel?.entity,...(table.semanticModel?.aliases||[])]
+            .some(name=>name&&padded.includes(` ${normalize(name)} `)));
+        if(roots.length===1) {
+          const refined=schemaService.refineSchemaContext(query,[roots[0].tableName],{dbSourceId:source.id,operation,attributes});
+          if(refined)selection={...selection,...refined,retrieval:selection.retrieval};
+        }
+      }
+      const allowedTables = (source.governedPolicy?.allowedTables || []).map(name=>name.toLowerCase());
+      const blockedColumns = new Set((source.governedPolicy?.blockedColumns || []).map(name=>name.toLowerCase()));
+      const tableDirectory=dictionaryService.getGroupedTables().filter(t=>t.isActive&&t.dbSourceId===source.id
+        &&(!allowedTables.length||allowedTables.includes(t.tableName.toLowerCase())||allowedTables.includes(`${t.schemaName||'dbo'}.${t.tableName}`.toLowerCase())))
+        .map(t=>({tableName:t.tableName,entity:t.semanticModel?.entity,domain:t.domain,description:String(t.tableDescription||'').slice(0,320)}));
+      const authorizedTables = dictionaryService.getGroupedTables().filter(table => table.isActive !== false && selection.selectedTables.includes(table.tableName)
+        && (!allowedTables.length || allowedTables.includes(table.tableName.toLowerCase()) || allowedTables.includes(`${table.schemaName||'dbo'}.${table.tableName}`.toLowerCase()))
+        && (!table.dbSourceId || table.dbSourceId === source.id)).sort((a, b) => selection.selectedTables.indexOf(a.tableName) - selection.selectedTables.indexOf(b.tableName))
+        .map(table=>({...table,columns:table.columns.map(column=>blockedColumns.has(column.columnName.toLowerCase())?{...column,isVisible:false}:column)}));
+      const projected = require('../services/semantic_model').project(authorizedTables,
+        { operation, attributes: context.requestPlan?.conversationState?.requestedAttributes || requestIntent?.attributes || [] },
+        selection.mappedRelationships || [], { sourceId: source.id, policy: source.governedPolicy,
+          principal: require('../governance/context').principal(), permissions: context.permissions });
+      const tables = projected.tables;
+      const { tableCatalog, schemaContext, ...metadata } = selection;
+      return { success: true, result: { query, ...metadata, tables, tableDirectory,schemaContext, dbSourceId: source.id,
+        ...(explicitRoot && tables.some(table => table.tableName === explicitRoot.tableName) ? { requestedPrimaryTable: explicitRoot.tableName } : {}),
+        intentCatalog: authorizedTables.map(table=>({tableId:table.tableId,tableName:table.tableName,schemaName:table.schemaName||'dbo',
+          entity:table.semanticModel?.entity,segments:table.semanticModel?.segments,defaultMetric:table.defaultMetric,defaultTimeColumn:table.defaultTimeColumn,
+          columns:table.columns.filter(column=>column.isVisible!==false).map(column=>({name:column.columnName,type:column.dataType,label:column.displayName||undefined,description:column.description}))})),
+        contextRevision: projected.contextRevision, metadataCacheHit: projected.cacheHit,
+        ...(requestIntent ? { requestIntent } : {}) } };
+    }
     const q = query.toLowerCase();
     const allTables = dictionaryService.getGroupedTables();
 
@@ -730,20 +859,23 @@ class ToolRegistry {
     return { success: true, result: { term, found: false, suggestions: partials.slice(0, 5) } };
   }
 
-  async _searchKnowledgeBase({ query, limit = 5 }) {
+  async _searchKnowledgeBase({ query, limit = 5 }, context = {}) {
     if (!query) return { success: false, error: 'Thiếu từ khóa/câu hỏi tra cứu Vector DB.' };
     try {
       const safeLimit = Math.max(1, Math.min(10, Number(limit) || 5));
       const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       const queryText = normalize(query);
-      const directMatches = libraryService.getDocuments()
+      const destination = context.modelDestination;
+      const documents = libraryService.getDocuments().filter(document => !destination || require('../governance/context').canSend(document, destination.id, destination.local));
+      if (!documents.length) return { success: true, result: { query, totalResults: 0, documents: [], message: 'Không có tài liệu được cấp quyền xử lý bởi model hiện tại.' } };
+      const directMatches = documents
         .filter(item => queryText.includes(normalize(item.title)) || normalize(item.title).includes(queryText))
         .slice(0, safeLimit)
         .map(item => {
           const content = libraryService.getContent(item.id).content;
           return { score: 1, payload: { fullText: content.slice(0, 12000), title: item.title, documentId: item.id, chunkIndex: 0 } };
         });
-      const retrieval = await retrievalService.search(query, { limit: safeLimit });
+      const retrieval = await retrievalService.search(query, { limit: safeLimit, documentIds: documents.map(document => document.id), scopeMode: 'selected' });
       const vectorResults = retrieval.results;
       const seen = new Set(directMatches.map(item => item.payload.documentId));
       const results = [...directMatches, ...vectorResults.filter(item => !seen.has(item.payload?.documentId))].slice(0, safeLimit);
@@ -757,7 +889,9 @@ class ToolRegistry {
             text: r.payload?.fullText || r.payload?.text || r.payload?.content || '',
             source: r.payload?.title || r.payload?.source || 'Knowledge Base',
             documentId: r.payload?.documentId || null,
-            chunkIndex: Number(r.payload?.chunkIndex || 0)
+            chunkIndex: Number(r.payload?.chunkIndex || 0), chunkId: r.payload?.chunkId || null,
+            revision: r.payload?.revision || documents.find(document => document.id === r.payload?.documentId)?.revision || null,
+            page: r.payload?.page || null, section: r.payload?.section || null
           }))
         }
       };

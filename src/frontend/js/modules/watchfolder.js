@@ -24,6 +24,7 @@ async function fetchWatchFolderData() {
   } catch (error) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="watchfolder-state-cell error"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeWatchFolderHtml(error.message)}</td></tr>`;
     if (typeof showToast === 'function') showToast('Không thể tải cấu hình Watch Folder.', 'error');
+    return false;
   }
 }
 
@@ -100,6 +101,7 @@ function handleWatchFolderModalBackdrop(event) {
 
 async function submitWatchFolder(event) {
   event.preventDefault();
+  if (window.watchFolderSavePending) return;
   const folderPath = document.getElementById('watchfolder-path-input')?.value.trim();
   const filters = Array.from(document.querySelectorAll('input[name="watchfolder-filter"]:checked')).map(input => input.value);
   if (!folderPath) return;
@@ -108,18 +110,21 @@ async function submitWatchFolder(event) {
     return;
   }
   const button = document.getElementById('watchfolder-submit-btn');
+  window.watchFolderSavePending = true;
   if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...'; }
   try {
     const response = await fetch('/api/watchfolder/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: folderPath, filters }) });
     const data = await response.json();
     if (!response.ok || data.status === 'error') throw new Error(data.message || `HTTP ${response.status}`);
-    window.watchFoldersData = data.folders || [];
+    window.invalidateRelatedTabData?.('knowledge');
+  window.watchFoldersData = data.folders || [];
     closeWatchFolderModal();
     renderWatchFolders();
     if (typeof showToast === 'function') showToast('Đã lưu cấu hình thư mục giám sát.', 'success');
   } catch (error) {
     if (typeof showToast === 'function') showToast(`Không thể thêm thư mục: ${error.message}`, 'error');
   } finally {
+    window.watchFolderSavePending = false;
     if (button) { button.disabled = false; button.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình'; }
   }
 }
@@ -128,6 +133,7 @@ async function mutateWatchFolder(endpoint, id) {
   const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
   const data = await response.json();
   if (!response.ok || data.status === 'error') throw new Error(data.message || `HTTP ${response.status}`);
+  window.invalidateRelatedTabData?.('knowledge');
   window.watchFoldersData = data.folders || [];
   renderWatchFolders();
 }

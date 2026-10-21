@@ -96,6 +96,10 @@ async function ensurePostgres() {
 }
 
 async function ensureQdrant() {
+  if (!require('../src/backend/services/embedding_policy').enabled()) {
+    console.log('[Startup] Embedding disabled; lexical retrieval does not require Qdrant.');
+    return;
+  }
   const url = (process.env.QDRANT_URL || 'http://127.0.0.1:6333').replace(/\/$/, '');
   const headers = process.env.QDRANT_API_KEY ? { 'api-key': process.env.QDRANT_API_KEY } : {};
   if (!isLocal(url)) {
@@ -115,6 +119,7 @@ async function ensureQdrant() {
 }
 
 async function ensureOllama() {
+  if (!require('../src/backend/services/embedding_policy').enabled()) return;
   if ((process.env.EMBEDDING_PROVIDER || 'ollama').toLowerCase() !== 'ollama') return;
   const base = (process.env.EMBEDDING_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
   if (!await reachable(`${base}/api/tags`)) {

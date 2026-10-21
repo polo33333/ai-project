@@ -1,5 +1,16 @@
 // Human-readable help for every setting exposed by the settings API.
 module.exports = {
+  MEMORY_DURABLE_ENABLED: ['Bộ nhớ dài hạn', 'Bật bộ nhớ cá nhân, hướng dẫn tổ chức đã duyệt và lịch sử tác vụ. Không cấp bộ nhớ cá nhân cho embed.'],
+  MEMORY_DURABLE_CONTEXT_CHARS: ['Ngân sách bộ nhớ dài hạn', 'Giới hạn ký tự sở thích và hướng dẫn tổ chức đưa vào mỗi yêu cầu. Mặc định 2400.'],
+  MEMORY_EVENT_TTL_DAYS: ['Hạn dùng lịch sử tác vụ', 'Số ngày giữ tham chiếu tác vụ thành công. Mặc định 90; tối đa 3650.'],
+  MEMORY_EVENT_MAX_PER_USER: ['Giới hạn tác vụ mỗi người', 'Số tham chiếu tác vụ tối đa giữ cho một tài khoản. Mặc định 200; tối đa 5000.'],
+  EMBEDDING_ENABLED: ['Bật tìm kiếm bằng embedding', 'false: tìm schema bằng tên, mô tả và từ đồng nghĩa; tài liệu bằng BM25 và graph, không gọi embedding hay cần Qdrant cho retrieval. true: thêm tìm kiếm vector. Khởi động lại sau khi đổi; đồng bộ schema và lập chỉ mục lại tài liệu khi bật lại.'],
+  GOVERNED_READ_ONLY: ['Chế độ chỉ đọc của hệ thống', 'Hiển thị trạng thái triển khai chỉ đọc. SQL vẫn được kiểm soát SELECT-only; connector API/MCP có cờ riêng GOVERNED_EXTERNAL_READ_ONLY.'],
+  GOVERNED_REQUEST_MAX_TOKENS: ['Ngân sách token mỗi yêu cầu', 'Giới hạn token của vòng xử lý agent trong một yêu cầu. Tính cả các lần gọi model, không chỉ câu trả lời cuối.'],
+  GOVERNED_MODEL_CONCURRENCY: ['Số lượt gọi model đồng thời', 'Giới hạn số lượt gọi model được tiếp nhận đồng thời qua bộ điều phối.'],
+  GOVERNED_SQL_CONCURRENCY: ['Số truy vấn SQL đồng thời', 'Giới hạn số truy vấn SQL được tiếp nhận đồng thời qua bộ điều phối.'],
+  GOVERNED_EXTERNAL_READ_ONLY: ['Giới hạn connector bên thứ ba', 'false (mặc định): API/HTTP chạy đúng phương thức cấu hình, MCP dùng các capability đã kết nối và cấp quyền. true: giới hạn API và MCP chỉ đọc. Không thay đổi quy tắc SELECT-only của SQL.'],
+  GOVERNED_CONTROLLER_MODE: ['Điều khiển nghiệp vụ', 'agent: model chat chọn công cụ và workflow qua Tool Gateway, không gọi routing TEV1 (mặc định). legacy: dùng routing cũ để tương thích; vẫn giữ kiểm quyền, SQL chỉ đọc và chính sách connector bên thứ ba. Lưu và khởi động lại để đổi chế độ.'],
   CHAT_QUICK_GREETING_ENABLED: ['Trả lời chào hỏi nhanh', 'true: TEV1 nhận diện câu chỉ chào hỏi và backend trả lời mẫu, không gọi model chat; false: xử lý qua luồng chat bình thường. Chỉ áp dụng với auto/local_tev1; chào kèm yêu cầu vẫn chọn nghiệp vụ.'],
   CHAT_ROUTING_MODE: ['Model quyết định định tuyến', 'local_tev1: dùng TEV1 local; chat_model: dùng đúng model chat đã chọn; auto: TEV1 trước, chuyển một lần sang model chat nếu mơ hồ hoặc lỗi. Model trả lời luôn giữ theo lựa chọn chat. Áp dụng sau khi khởi động lại.'],
   CHAT_ROUTING_RETRIEVAL_MODE: ['Tìm nhóm nghiệp vụ', 'off: catalog đầy đủ; shadow: đo retrieval nhưng giữ quyết định cũ; on: tìm nhóm ứng viên bằng phương pháp đã chọn trước router. Không tìm được nhóm hoặc lỗi chỉ mục chuyển model chat trong auto.'],

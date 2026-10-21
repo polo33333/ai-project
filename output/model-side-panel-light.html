@@ -1,0 +1,140 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="file:///D:/Dev/ai-project/src/frontend/css/styles.css"><link rel="stylesheet" href="file:///D:/Dev/ai-project/src/frontend/css/chat-conversation.css"><style>body{display:block!important;background:#f4f5fa;margin:0;font-family:Arial}#view-page_chat{display:block!important;position:fixed;right:36px;top:180px;width:256px}#view-page_chat .page-chat-model-menu{position:relative;bottom:auto;right:auto}html[data-theme=dark] body{background:#17191e}</style></head><body><div id="view-page_chat"><button id="page-chat-model-trigger">Model</button><span id="page-chat-model-label" hidden></span><div id="page-chat-model-menu" class="page-chat-model-menu"></div><select id="page-chat-model-selector" hidden></select></div><script>function escapeChatMarkdown(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')}window.aiProvidersData=[{id:'a',model:'gemini-3.5-flash-lite',name:'Google Gemini',isActive:true},{id:'b',model:'qwen3.5:9b',name:'Ollama Local'},{id:'c',model:'gemini-2.5-flash-lite',name:'Google Gemini - Backup'}];function closePageChatMenus() {
+  closeChatModelChoices();
+  document.querySelectorAll('#page-chat-model-menu .chat-model-submenu-trigger').forEach(button => button.setAttribute('aria-expanded', 'false'));
+  document.getElementById('page-chat-model-menu')?.classList.remove('is-open');
+  document.getElementById('page-chat-add-menu')?.classList.remove('is-open');
+  document.getElementById('page-chat-model-trigger')?.setAttribute('aria-expanded', 'false');
+  document.getElementById('page-chat-add-trigger')?.setAttribute('aria-expanded', 'false');
+  const knowledgePanel = document.getElementById('page-chat-knowledge-panel');
+  if (knowledgePanel) knowledgePanel.hidden = true;
+  document.getElementById('page-chat-knowledge-toggle')?.classList.remove('is-active');
+  document.getElementById('page-chat-knowledge-toggle')?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleChatModelMenu(event) {
+  event?.stopPropagation();
+  const menu = document.getElementById('page-chat-model-menu');
+  const trigger = document.getElementById('page-chat-model-trigger');
+  const open = !menu?.classList.contains('is-open');
+  closePageChatMenus();
+  if (open) { menu?.classList.add('is-open'); trigger?.setAttribute('aria-expanded', 'true'); }
+}
+
+function closeChatModelChoices(){
+  const choices=document.getElementById('chat-model-other-menu');
+  if(choices)choices.hidden=true;
+  document.getElementById('chat-effort-model-button')?.setAttribute('aria-expanded','false');
+}
+
+function toggleChatModelChoices(event){
+  event.stopPropagation();
+  const choices=document.getElementById('chat-model-other-menu');
+  const button=document.getElementById('chat-effort-model-button');
+  if(!choices||!button)return;
+  const open=choices.hidden;
+  choices.hidden=!open;button.setAttribute('aria-expanded',String(open));
+  if(open){
+    const panel=document.getElementById('page-chat-model-menu').getBoundingClientRect();
+    choices.classList.toggle('opens-right',panel.left<choices.offsetWidth+12&&window.innerWidth-panel.right>choices.offsetWidth+12);
+    choices.querySelector('.is-selected')?.focus({preventScroll:true});
+  }
+}
+
+function getPageChatReasoningMode() {
+  return localStorage.getItem('knowledgehub_chat_reasoning_mode') === 'fast' ? 'fast' : 'medium';
+}
+
+function selectPageChatReasoningMode(mode, keepOpen = false) {
+  localStorage.setItem('knowledgehub_chat_reasoning_mode', mode === 'fast' ? 'fast' : 'medium');
+  selectPageChatModel(document.getElementById('page-chat-model-selector')?.value, !keepOpen);
+}
+
+function toggleChatModelSubmenu(event, button) {
+  event.stopPropagation();
+  const open = button.getAttribute('aria-expanded') !== 'true';
+  document.querySelectorAll('#page-chat-model-menu .chat-model-submenu-trigger').forEach(item => item.setAttribute('aria-expanded', 'false'));
+  button.setAttribute('aria-expanded', String(open));
+}
+
+function selectPageChatModel(value, closeMenu = true) {
+  const selector = document.getElementById('page-chat-model-selector');
+  if (!selector) return;
+  selector.value = value;
+  const option = selector.options[selector.selectedIndex];
+  const label = document.getElementById('page-chat-model-label');
+  if (label && option) label.innerHTML = `<span class="chat-selected-model">${escapeChatMarkdown(option.dataset.shortLabel || option.textContent)}</span><span class="chat-selected-mode">${getPageChatReasoningMode() === 'fast' ? 'Nhanh' : 'Trung bình'}</span>`;
+  const currentModel = document.getElementById('chat-menu-current-model');
+  if (currentModel && option) currentModel.textContent = option.dataset.shortLabel || option.textContent;
+  const currentMode = document.getElementById('chat-menu-current-mode');
+  if (currentMode) currentMode.textContent = getPageChatReasoningMode() === 'fast' ? 'Nhanh' : 'Trung bình';
+  const effortSlider=document.getElementById('chat-effort-slider');
+  const effortLabel=document.getElementById('chat-effort-label');
+  const effortModel=document.getElementById('chat-effort-model');
+  const effortDescription=document.getElementById('chat-effort-description');
+  const isFast=getPageChatReasoningMode()==='fast';
+  if(effortSlider){effortSlider.value=isFast?'0':'1';effortSlider.setAttribute('aria-valuetext',isFast?'Nhanh':'Trung bình');effortSlider.style.setProperty('--effort-progress',isFast?'0%':'100%');}
+  if(effortLabel)effortLabel.textContent=isFast?'Nhanh':'Trung bình';
+  if(effortModel&&option){effortModel.textContent=option.dataset.shortLabel||option.textContent;effortModel.title=option.textContent;}
+  if(effortDescription)effortDescription.textContent=isFast?'Ẩn phần suy nghĩ khi xử lý':'Hiện phần suy nghĩ khi xử lý';
+  document.querySelectorAll('.chat-reasoning-mode-option').forEach(button => {
+    button.setAttribute('aria-selected', String(button.dataset.mode === getPageChatReasoningMode()));
+  });
+  document.querySelectorAll('.page-chat-model-option').forEach(button => {
+    button.classList.toggle('is-selected', button.dataset.value === value);
+    button.setAttribute('aria-selected',String(button.dataset.value === value));
+  });
+  localStorage.setItem('knowledgehub_selected_chat_model', value);
+  if(closeMenu)closePageChatMenus();
+}
+
+async function populateChatModelSelector() {
+  const selector = document.getElementById('page-chat-model-selector');
+  const menu = document.getElementById('page-chat-model-menu');
+  if (!selector || !menu) return;
+  let providers = [];
+  try {
+    providers = window.aiProvidersData;
+    if (!providers?.length) providers = await window.loadChatProviders();
+    selector.innerHTML = '';
+    if (providers && providers.length > 0) {
+      providers.forEach(prov => {
+        const opt = document.createElement('option');
+        opt.value = prov.id || prov.model || prov.name;
+        opt.textContent = `${prov.name} (${prov.model || prov.type})`;
+        opt.dataset.shortLabel = prov.model || prov.name || 'AI';
+        selector.appendChild(opt);
+      });
+    } else {
+      selector.innerHTML = `<option value="gemini-2.5-flash" data-short-label="Gemini 2.5 Flash">Google Gemini - 2.5 Flash</option>`;
+    }
+  } catch {
+    selector.innerHTML = `<option value="gemini-2.5-flash" data-short-label="Gemini 2.5 Flash">Google Gemini - 2.5 Flash</option>`;
+  }
+
+  const savedValue = localStorage.getItem('knowledgehub_selected_chat_model');
+  const activeProvider = (providers || []).find(prov => prov.isActive);
+  const activeValue = activeProvider && (activeProvider.id || activeProvider.model || activeProvider.name);
+  const selectedValue = Array.from(selector.options).some(option => option.value === savedValue)
+    ? savedValue : (activeValue || selector.options[0]?.value || '');
+
+  const modelOptions = Array.from(selector.options).map((option, index) => {
+    const provider = (providers || [])[index] || {};
+    const description = provider.name || provider.type || 'Trợ giúp toàn diện';
+    return `<button type="button" class="page-chat-model-option" data-value="${escapeChatMarkdown(option.value)}" onclick="selectPageChatModel(this.dataset.value,false);closeChatModelChoices();document.getElementById('chat-effort-model-button').focus()" role="option">
+      <i class="fa-solid fa-check model-check"></i>
+      <span class="page-chat-model-copy"><strong>${escapeChatMarkdown(option.dataset.shortLabel || option.textContent)}</strong><span class="page-chat-model-details"><small>${escapeChatMarkdown(description)}</small>${provider.isActive ? '<span class="page-chat-model-badge">Mặc định</span>' : ''}</span></span>
+    </button>`;
+  }).join('');
+  menu.setAttribute('role', 'dialog');menu.setAttribute('aria-label','Chọn mức độ và mô hình AI');
+  menu.classList.add('chat-effort-panel');menu.onclick=event=>event.stopPropagation();
+  menu.innerHTML = `<div id="chat-model-effort-menu">
+        <div class="chat-effort-heading"><i class="fa-solid fa-bolt" aria-hidden="true"></i><div><strong id="chat-effort-label"></strong><button type="button" id="chat-effort-model-button" class="chat-effort-model-picker" aria-label="Chọn mô hình AI" aria-haspopup="listbox" aria-expanded="false" aria-controls="chat-model-other-menu" onclick="toggleChatModelChoices(event)"><span id="chat-effort-model"></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div><button type="button" class="chat-effort-reset" onclick="selectPageChatReasoningMode('medium',true)" title="Đặt lại Trung bình" aria-label="Đặt lại mức Trung bình"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button></div>
+        <div class="chat-effort-track"><input id="chat-effort-slider" type="range" min="0" max="1" step="1" value="1" aria-label="Mức độ" aria-describedby="chat-effort-description" oninput="selectPageChatReasoningMode(this.value==='0'?'fast':'medium',true)"><span class="chat-effort-stops" aria-hidden="true"><i></i><i></i></span></div>
+        <div class="chat-effort-endpoints" aria-hidden="true"><span>Nhanh</span><span>Trung bình</span></div>
+        <p id="chat-effort-description"></p>
+      </div>
+      <div id="chat-model-other-menu" class="chat-model-choice-panel" role="listbox" aria-label="Chọn mô hình AI" hidden>${modelOptions}</div>`;
+  selectPageChatModel(selectedValue);
+}
+
+populateChatModelSelector().then(()=>{toggleChatModelMenu({stopPropagation(){}});document.getElementById('chat-effort-model-button').click();});</script></body></html>

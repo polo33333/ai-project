@@ -99,11 +99,16 @@ class LoggerService {
 
     this.systemLogs.unshift(logItem);
     if (this.systemLogs.length > 500) this.systemLogs.pop();
-    this.persist();
+    StorageHelper.saveJson('logs.json', this.systemLogs);
     return logItem;
   }
 
   addChatAudit(question, replyText, sqlQuery, providerInfo, latencyMs, status = 'SUCCESS', errorReason = null, requestPayload = null) {
+    const scope = require('../governance/context').current();
+    if (scope?.finalEnvelope && scope.finalEnvelope.replyHash === crypto.createHash('sha256').update(String(replyText || '')).digest('hex')) {
+      requestPayload = { ...requestPayload, answerEnvelope: scope.finalEnvelope, evidencePayloads: scope.evidencePayloads,
+        principalRef: scope.principal?.subject || null, requestId: scope.requestId || null };
+    }
     const auditItem = {
       id: crypto.randomUUID(),
       timestamp: new Date().toLocaleString('vi-VN'),
@@ -121,7 +126,7 @@ class LoggerService {
     this.chatHistory.unshift(auditItem);
     if (this.chatHistory.length > this.maxChatHistory) this.chatHistory.length = this.maxChatHistory;
 
-    this.persist();
+    StorageHelper.saveJson('chat_history.json', this.chatHistory);
     return auditItem;
   }
 
@@ -152,7 +157,7 @@ class LoggerService {
     feedback.model = metadata.model || feedback.model || null;
     if (!existing) this.chatFeedback.unshift(feedback);
     if (this.chatFeedback.length > this.maxChatHistory) this.chatFeedback.length = this.maxChatHistory;
-    this.persist();
+    StorageHelper.saveJson('chat_feedback.json', this.chatFeedback);
     return feedback;
   }
 
@@ -164,30 +169,32 @@ class LoggerService {
     }));
   }
 
-  reviewChatFeedback(auditId, reviewStatus, reviewNote = '') {
+  reviewChatFeedback(auditId, reviewStatus, reviewNote = '', metadata = {}) {
     if (!auditId) throw new Error('Thiếu mã lượt chat.');
     if (!['pending', 'approved', 'needs_review'].includes(reviewStatus)) {
       throw new Error('Trạng thái xem xét không hợp lệ.');
     }
     const feedback = this.chatFeedback.find(item => item.auditId === auditId);
     if (!feedback) throw new Error('Không tìm thấy đánh giá cho lượt chat này.');
+    if (metadata.expectedOutcome !== undefined && (typeof metadata.expectedOutcome !== 'string' || metadata.expectedOutcome.length > 4000)) throw new Error('Kết quả kỳ vọng không hợp lệ.');
     feedback.reviewStatus = reviewStatus;
     feedback.reviewNote = String(reviewNote || '').trim().slice(0, 1000);
     feedback.reviewedAt = reviewStatus === 'pending' ? null : new Date().toISOString();
-    this.persist();
+    if (metadata.expectedOutcome !== undefined) feedback.reviewExpectedOutcome = metadata.expectedOutcome.trim();
+    feedback.reviewedBy = reviewStatus === 'pending' ? null : metadata.reviewer || null;
+    StorageHelper.saveJson('chat_feedback.json', this.chatFeedback);
     return feedback;
   }
 
   clearLogs() {
     this.systemLogs = [];
     this.addLog("INFO", "System", "Nhật ký hệ thống đã được xóa bởi Admin.");
-    this.persist();
     return true;
   }
 
   clearChatHistory() {
     this.chatHistory = [];
-    this.persist();
+    StorageHelper.saveJson('chat_history.json', this.chatHistory);
     return true;
   }
 }

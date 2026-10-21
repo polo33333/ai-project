@@ -62,7 +62,7 @@
         <div class="api-endpoint-row"><span class="api-method">POST</span><code>/api/v1/chat/completions</code></div>
         <div class="api-code-shell">
           <div class="api-code-head"><span><i class="fa-solid fa-terminal"></i> cURL</span><button onclick="copyApiDocCode(this)"><i class="fa-regular fa-copy"></i> Sao chép</button></div>
-          <pre><code>curl -X POST http://localhost:3000/api/v1/chat/completions \
+          <pre><code>curl -X POST <span data-api-origin></span>/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer kh_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -d '{
@@ -85,7 +85,7 @@
         <div class="api-code-shell">
           <div class="api-code-head"><span><i class="fa-solid fa-code"></i> HTML</span><button onclick="copyApiDocCode(this)"><i class="fa-regular fa-copy"></i> Sao chép</button></div>
           <pre><code>&lt;script
-  src="http://localhost:3000/embed/knowledgehub-chat.js?v=20260921-chart-svg-text"
+  src="<span data-api-origin></span>/embed/knowledgehub-chat.js?v=20261014"
    data-embed-id="emb_your_public_id"
   data-title="Trợ lý AI"
   data-greeting="Xin chào! Tôi có thể giúp gì cho bạn?"

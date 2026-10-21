@@ -10,6 +10,7 @@ function mentionsIdentifier(text, identifier) {
 }
 
 function createRequestPlan({ question = '', selectedTables = [], dictionaryTables = [], domainAliases } = {}) {
+  question = require('../utils/entity_list_query')(question);
   const normalized = normalize(question);
   const selectedNames = selectedTables.map(item => String(item?.tableName || item));
   const explicitTables = dictionaryTables.filter(table => mentionsIdentifier(question, table.tableName));
@@ -66,8 +67,11 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     ? Number(normalized.match(/\b(?:ds|danh sach|liet ke|top)\s+(\d+)\b/)?.[1]) || null
     : null;
   const primaryIdentityColumns = availableColumns.filter(column => column.isPrimaryKey).map(column => column.columnName);
+  const identityRoots = primaryIdentityColumns.filter(name => name.toLowerCase().endsWith('id')).map(name => name.slice(0, -2).toLowerCase());
   const secondaryIdentityColumns = availableColumns
-    .filter(column => column.isUnique || /(?:code|name)$/i.test(column.columnName))
+    .filter(column => column.isUnique || (identityRoots.length
+      ? identityRoots.some(root => ['code', 'name', 'no'].some(suffix => column.columnName.toLowerCase() === root + suffix))
+      : /(?:code|name)$/i.test(column.columnName)))
     .map(column => column.columnName);
   return {
     version: 1,
@@ -76,7 +80,10 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     table: table?.tableName || null,
     schemaName: table?.schemaName || 'dbo',
     schemaColumns: availableColumns.map(column => column.columnName),
-    identityColumns: [...new Set([...primaryIdentityColumns, ...secondaryIdentityColumns])].slice(0, 6),
+    identityColumns: table?.semanticModel?.identityFields?.length
+      ? [...new Set([...table.semanticModel.identityFields, ...table.semanticModel.summaryFields])].filter(name=>availableColumns.some(column=>column.columnName===name))
+      : [...new Set([...primaryIdentityColumns, ...secondaryIdentityColumns])].slice(0, 6),
+    displayIdentityColumns: secondaryIdentityColumns.filter(column => !primaryIdentityColumns.includes(column)),
     columnDisplayNames: Object.fromEntries((table?.columns || []).filter(column => column.displayName)
       .map(column => [column.columnName, column.displayName])),
     unfilteredList: Boolean(table && [table.tableName, table.domain, ...(aliases[table.domain] || [])].filter(Boolean)
@@ -90,7 +97,9 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     allowLatestAvailableMonths,
     outputs: {
       data: /\b(ds|danh sach|liet ke|top|chi tiet|du lieu|doanh thu|san luong|nhan vien|nv|khach hang|hop dong)\b/.test(normalized) || months !== null,
-      chart: /\b(bieu do|do thi|chart|visuali[sz]e|ve)\b/.test(normalized),
+      chart: /\b(bieu do|do thi|chart|visuali[sz]e)\b/.test(normalized)
+        || [...new Intl.Segmenter('vi', { granularity: 'word' }).segment(String(question).normalize('NFC').toLocaleLowerCase('vi'))]
+          .some(token => token.isWordLike && token.segment === 'v\u1ebd'),
       export: /\b(xuat|export|tai|download|gui)\b[^\n]{0,30}\b(file|tep|excel|xlsx|csv|pdf)\b|\b(file|tep|excel|xlsx|csv|pdf)\b[^\n]{0,30}\b(xuat|export|tai|download|gui)\b/.test(normalized)
     }
   };

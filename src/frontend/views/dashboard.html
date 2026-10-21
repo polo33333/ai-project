@@ -1,0 +1,127 @@
+      <!-- Priority Suggestion AI Banner -->
+      <div class="ai-suggestion-banner" id="ai-suggestion-banner" hidden>
+        <div class="banner-sparkle" id="banner-icon"><i class="fa-solid fa-lightbulb"></i></div>
+        <div class="banner-content">
+          <h4 id="banner-title">Kiểm tra trạng thái hệ thống</h4>
+          <p id="banner-text"></p>
+        </div>
+        <div class="banner-actions"><button class="banner-primary-action" id="banner-action-btn" onclick="runArchitectureSuggestionAction()"></button><button class="banner-dismiss-btn" onclick="dismissArchitectureSuggestion()" title="Ẩn gợi ý"><i class="fa-solid fa-xmark"></i></button></div>
+      </div>
+
+      <!-- Top Metric Cards Grid (4 Column) -->
+      <section class="metrics-grid">
+        <div class="metric-card metric-card-blue">
+          <span class="metric-main-icon blue"><i class="fa-solid fa-share-nodes"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Database đang active</span></div>
+            <div class="metric-val metric-db-name" id="val-connectors">Chưa chọn DB</div>
+            <div class="metric-sub text-green" id="val-connectors-detail">Nguồn mặc định cho AI</div>
+          </div>
+          <span class="metric-icon blue"><i class="fa-solid fa-circle"></i></span>
+        </div>
+
+        <div class="metric-card metric-card-purple">
+          <span class="metric-main-icon purple"><i class="fa-solid fa-database"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Bảng đang active</span></div>
+            <div class="metric-val" id="val-tables">0</div>
+            <div class="metric-sub text-purple" id="val-tables-detail">Thuộc database đang active</div>
+          </div>
+          <span class="metric-icon purple"><i class="fa-solid fa-layer-group"></i></span>
+        </div>
+
+        <div class="metric-card metric-card-green">
+          <span class="metric-main-icon green"><i class="fa-solid fa-comment-dots"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Text-to-SQL AI Queries</span></div>
+            <div class="metric-val" id="val-queries">0</div>
+            <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> 100% &nbsp; SELECT ONLY</div>
+          </div>
+          <span class="metric-icon green"><i class="fa-solid fa-chart-line"></i></span>
+        </div>
+
+        <div class="metric-card metric-card-orange">
+          <span class="metric-main-icon orange"><i class="fa-solid fa-database"></i></span>
+          <div class="metric-content">
+            <div class="metric-header"><span class="metric-title">Qdrant Vector DB</span></div>
+            <div class="metric-val" id="val-qdrant">0 vectors</div>
+            <div class="metric-sub text-muted" id="val-qdrant-detail">Đang kiểm tra kết nối</div>
+          </div>
+          <span class="metric-icon orange"><i class="fa-solid fa-cubes-stacked"></i></span>
+        </div>
+      </section>
+
+      <!-- Middle Section: Chart & AI Recommendation -->
+      <section class="middle-grid">
+        <div class="content-card">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tần suất gọi AI & Text-to-SQL</div>
+            <select id="dashboard-analytics-range" class="dashboard-chart-range" onchange="changeDashboardAnalyticsRange(this.value)" aria-label="Khoảng thời gian thống kê">
+              <option value="today">Hôm nay</option>
+              <option value="7d" selected>7 ngày</option>
+              <option value="30d">30 ngày</option>
+              <option value="12m">12 tháng</option>
+            </select>
+          </div>
+          <div class="chart-container" style="height: 220px; position: relative;">
+            <canvas id="analyticsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="content-card dashboard-feedback-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title"><i class="fa-solid fa-thumbs-up"></i> Đánh giá câu trả lời AI</div>
+              <div class="dashboard-feedback-summary" id="dashboard-feedback-summary">Chưa có đánh giá</div>
+            </div>
+            <select id="dashboard-feedback-range" class="dashboard-chart-range" onchange="changeDashboardFeedbackRange(this.value)" aria-label="Khoảng thời gian đánh giá">
+              <option value="today">Hôm nay</option>
+              <option value="7d" selected>7 ngày</option>
+              <option value="30d">30 ngày</option>
+              <option value="12m">12 tháng</option>
+            </select>
+          </div>
+          <div class="dashboard-feedback-chart">
+            <canvas id="dashboardFeedbackChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <div class="dashboard-activity-row">
+      <section class="content-card dashboard-activity-card" id="dashboard-activity-card" aria-labelledby="dashboard-activity-title">
+        <div class="dashboard-activity-header">
+          <div>
+            <div class="card-title" id="dashboard-activity-title"><i class="fa-solid fa-calendar-days"></i> Bản đồ nhiệt</div>
+            <div class="dashboard-activity-peak" id="dashboard-activity-peak">Chưa có dữ liệu hoạt động</div>
+          </div>
+          <select class="dashboard-activity-period" id="dashboard-activity-period" onchange="changeDashboardActivityYear(this.value)" aria-label="Chọn năm hiển thị bản đồ nhiệt"></select>
+        </div>
+        <div class="dashboard-activity-body">
+          <div class="dashboard-activity-scroll">
+            <div class="dashboard-activity-chart" id="dashboard-activity-chart" role="img" aria-label="Biểu đồ mức sử dụng AI theo ngày"></div>
+          </div>
+          <aside class="dashboard-activity-summary" aria-label="Thống kê hoạt động trong năm">
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-coins"></i> Tổng token</span><strong id="dashboard-activity-total-tokens">0</strong></div>
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-bolt"></i> Lượt gọi AI</span><strong id="dashboard-activity-total-queries">0</strong></div>
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-calendar-check"></i> Ngày hoạt động</span><strong id="dashboard-activity-active-days">0</strong></div>
+            <div class="dashboard-activity-stat"><span><i class="fa-solid fa-circle-check"></i> Thành công</span><strong id="dashboard-activity-success-rate">0%</strong></div>
+            <div class="dashboard-activity-best-month"><i class="fa-solid fa-chart-column"></i><span>Tháng nổi bật<strong id="dashboard-activity-best-month">Chưa có dữ liệu</strong></span></div>
+          </aside>
+        </div>
+        <div class="dashboard-activity-legend" aria-hidden="true">
+          <span>Ít</span><i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i><span>Nhiều</span>
+        </div>
+      </section>
+
+      <section class="dashboard-router-section">
+        <div class="content-card router-status-card">
+          <div class="card-header"><div class="card-title"><span class="router-title-icon"><i class="fa-solid fa-route"></i></span><span>Multi-LLM Router Status</span></div></div>
+          <div style="font-size: 13px; line-height: 1.8; color: var(--text-secondary);">
+            <div><span><i class="fa-solid fa-robot" style="color: #4f46e5;"></i> Primary LLM:</span><strong style="color: var(--primary);" id="dash-router-primary">Đang tải...</strong></div>
+            <div><span><i class="fa-solid fa-network-wired"></i> Fallback LLM:</span><strong id="dash-router-fallback">Chưa kích hoạt</strong></div>
+            <div><span><i class="fa-solid fa-bolt" style="color: #059669;"></i> Active Vector DB:</span><strong style="color: #059669;" id="dash-router-vector">Qdrant (6333)</strong></div>
+          </div>
+        </div>
+      </section>
+      </div>
+
