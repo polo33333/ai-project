@@ -100,8 +100,13 @@
       }
     });
     dialog.body.setAttribute('aria-busy', 'true');
+    const loading = document.createElement('div'); loading.className = 'wp-ai-loading';
+    loading.setAttribute('role', 'status');
+    loading.innerHTML = '<strong>Đang tải thiết lập kết nối…</strong><p>Đang lấy cấu hình và danh sách client của bạn.</p><div class="wp-ai-loading-placeholder" aria-hidden="true"></div><div class="wp-ai-loading-placeholder" aria-hidden="true"></div>';
+    dialog.body.appendChild(loading);
     try {
       const data = await api('/api/workflow-plugins/mcp');
+      if (!dialog.backdrop.isConnected) return;
       let config = data.settings;
       const intro = document.createElement('div'); intro.className = 'wp-ai-intro';
       intro.innerHTML = '<span class="wp-ai-intro-icon"><i class="fa-solid fa-plug" aria-hidden="true"></i></span><div><strong>Tạo nghiệp vụ bằng cuộc trò chuyện</strong><p>Kết nối một lần, sau đó mô tả yêu cầu trong Claude hoặc Codex.</p></div>';
@@ -180,7 +185,7 @@
       }
       publicOrigin.addEventListener('input', syncState); enabled.addEventListener('change', syncState); syncState();
       renderConnections(data.connections);
-      dialog.body.append(intro, host, connect, list, tokenSection);
+      dialog.body.replaceChildren(intro, host, connect, list, tokenSection);
       dialog.footer.appendChild(status);
       dialog.footer.appendChild(action('Làm mới kết nối', async () => renderConnections((await api('/api/workflow-plugins/mcp')).connections)));
       dialog.footer.appendChild(button('Đóng', () => dialog.backdrop.remove()));

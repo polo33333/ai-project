@@ -30,7 +30,10 @@ async function handle(req, res, pathname, account, readJsonBody) {
     if (management) {
       if (!account) throw error('UNAUTHENTICATED', 401);
       requireAdmin({ permissions: account.role === 'admin' ? ['admin'] : [] });
-      if (pathname === '/api/workflow-plugins/mcp' && req.method === 'GET') json(res, { settings: await access.settings(), connections: await access.connections(account) });
+      if (pathname === '/api/workflow-plugins/mcp' && req.method === 'GET') {
+        const [settings, connections] = await Promise.all([access.settings(), access.connections(account)]);
+        json(res, { settings, connections });
+      }
       else if (pathname === '/api/workflow-plugins/mcp' && req.method === 'PUT') json(res, { settings: await access.configure(await readJsonBody(req), account) });
       else if (pathname === '/api/workflow-plugins/mcp/tokens' && req.method === 'POST') {
         const body = await readJsonBody(req); const config = await access.settings();

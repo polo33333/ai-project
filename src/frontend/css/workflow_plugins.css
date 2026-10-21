@@ -1030,6 +1030,10 @@
 .wp-ai-connection-modal .wp-ai-intro { display:flex; align-items:center; gap:14px; padding:0 0 4px; }
 .wp-ai-connection-modal .wp-ai-intro-icon,.wp-ai-connection-modal .wp-ai-client-icon { display:grid; place-items:center; flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:color-mix(in srgb,var(--ai-accent) 10%,var(--ai-surface)); color:var(--ai-accent); }
 .wp-ai-connection-modal .wp-ai-intro strong { font-size:14px; }
+.wp-ai-connection-modal .wp-ai-loading { min-height:420px; padding:8px 0; }
+.wp-ai-connection-modal .wp-ai-loading strong { font-size:14px; }
+.wp-ai-connection-modal .wp-ai-loading-placeholder { height:130px; margin-top:20px; border:1px solid var(--ai-border); border-radius:16px; background:var(--ai-surface); }
+.wp-ai-connection-modal .wp-ai-loading-placeholder::before { content:''; display:block; width:55%; height:12px; margin:22px; border-radius:6px; background:var(--ai-border); box-shadow:0 28px 0 var(--ai-border); }
 .wp-ai-connection-modal .wp-ai-intro p { margin:4px 0 0; }
 .wp-ai-connection-modal .wp-ai-section { padding:18px; border:1px solid var(--ai-border); border-radius:16px; background:var(--ai-surface); }
 .wp-ai-connection-modal .wp-ai-section h3 { margin:0; font-size:14px; font-weight:650; }
@@ -1093,3 +1097,28 @@
 :root[data-theme="dark"] .wp-ai-connection-modal button.wp-ai-primary { color:#191631; }
 @media(max-width:520px) { .wp-ai-connection-modal { padding:12px; } .wp-ai-connection-modal .workflow-dialog { width:calc(100vw - 24px); max-height:calc(100dvh - 24px); border-radius:18px; } .wp-ai-connection-modal .workflow-editor-body { padding:16px; } .wp-ai-connection-modal .workflow-dialog > header,.wp-ai-connection-modal .workflow-dialog > footer { padding:14px 16px; } .wp-ai-connection-modal .wp-ai-section { padding:14px; } .wp-ai-connection-modal .wp-ai-url-row { flex-wrap:wrap; } .wp-ai-connection-modal .wp-ai-url-row input.wp-ai-endpoint { flex-basis:100%; } .wp-ai-connection-modal .wp-ai-token-grid { grid-template-columns:minmax(0,1fr) 100px; gap:10px; } .wp-ai-connection-modal .wp-ai-section > summary { align-items:flex-start; flex-direction:column; gap:5px; } .wp-ai-connection-modal .workflow-dialog > footer { flex-wrap:wrap; } .wp-ai-connection-modal .wp-ai-status:not(:empty) { flex-basis:100%; } }
 @media (max-width:600px) { .wp-execution-header { flex-wrap:wrap; gap:10px; } .wp-execution-status { margin-left:48px; } .workflow-execution-panel { padding:16px; } .workflow-execution-panel .wp-execution-actions > button { flex:1 1 auto; } .wp-form-fields { grid-template-columns:1fr; } }
+
+/* Match the table editor's type scale in the business-template editor. */
+.wp-business-editor { --wp-editor-title:20px; --wp-editor-heading:14px; --wp-editor-body:13px; --wp-editor-label:12px; --wp-editor-caption:11px; --wp-editor-check:#7561d1; font-size:var(--wp-editor-body); line-height:1.5; }
+.wp-business-editor .workflow-dialog>header>strong { font-size:var(--wp-editor-title); font-weight:650; line-height:1.35; letter-spacing:-.3px; }
+.wp-business-editor .workflow-editor-body :is(h3,h4,.wp-config-copy strong,.wp-config-panel-heading strong,.wp-inspector-heading>strong,.wp-editor-guide strong,.wp-node-title) { font-size:var(--wp-editor-heading); font-weight:600; line-height:1.5; }
+.wp-business-editor .workflow-editor-body :is(label,legend) { font-size:var(--wp-editor-label); font-weight:500; line-height:1.5; }
+.wp-business-editor .workflow-editor-body :is(input,select,textarea) { font-size:var(--wp-editor-body); font-weight:400; line-height:1.5; }
+.wp-business-editor .workflow-editor-body .wp-sql-editor { font-size:var(--wp-editor-body); }
+.wp-business-editor .workflow-editor-body :is(p,small,.wp-section-help,.wp-field-help,.wp-reference-picker,.wp-node-description,.wp-inspector-heading p),
+.wp-business-editor .wp-editor-save-note { font-size:var(--wp-editor-label); font-weight:400; line-height:1.6; }
+.wp-business-editor .workflow-editor-body :is(.wp-node-type,.wp-node-kicker,.wp-status) { font-size:var(--wp-editor-caption); line-height:1.5; }
+.wp-business-editor .workflow-editor-body summary { font-size:var(--wp-editor-label); line-height:1.5; }
+.wp-business-editor .workflow-editor-body button,
+.wp-business-editor .workflow-dialog>footer button { font-size:var(--wp-editor-body); line-height:1.5; }
+.wp-business-editor .workflow-editor-body label:has(>input[type="checkbox"]) { gap:9px; min-height:32px; cursor:pointer; align-items:center; }
+.wp-business-editor .workflow-editor-body input[type="checkbox"] { appearance:none; -webkit-appearance:none; display:inline-block; flex:0 0 18px; width:18px; height:18px; min-width:18px; min-height:18px; margin:0; padding:0; border:1.5px solid #a6b1c2; border-radius:5px; background:#fff; box-sizing:border-box; box-shadow:0 1px 2px #0f172a08; cursor:pointer; transition:background-color .15s,border-color .15s,box-shadow .15s; }
+.wp-business-editor .workflow-editor-body input[type="checkbox"]:checked { border-color:var(--wp-editor-check); background-color:var(--wp-editor-check); background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 10 3.2 3.2L15 6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-size:16px; background-position:center; background-repeat:no-repeat; }
+.wp-business-editor .workflow-editor-body input[type="checkbox"]:indeterminate { border-color:var(--wp-editor-check); background:var(--wp-editor-check) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10h10' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center/16px no-repeat; }
+.wp-business-editor .workflow-editor-body input[type="checkbox"]:hover:not(:disabled) { border-color:var(--wp-editor-check); box-shadow:0 0 0 3px #7561d112; }
+.wp-business-editor .workflow-editor-body input[type="checkbox"]:focus-visible { outline:2px solid var(--wp-editor-check); outline-offset:3px; }
+.wp-business-editor .workflow-editor-body input[type="checkbox"]:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+:root[data-theme="dark"] .wp-business-editor { --wp-editor-check:#a18ae8; }
+:root[data-theme="dark"] .wp-business-editor .workflow-editor-body input[type="checkbox"]:not(:checked):not(:indeterminate) { background:#172131; border-color:#71819a; }
+@media(prefers-reduced-motion:reduce) { .wp-business-editor .workflow-editor-body input[type="checkbox"] { transition:none; } }
+@media(forced-colors:active) { .wp-business-editor .workflow-editor-body input[type="checkbox"] { appearance:auto; -webkit-appearance:auto; } }
