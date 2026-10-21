@@ -104,3 +104,40 @@
 :root[data-theme="dark"] #view-dictionary .dictionary-query-defaults .dictionary-section-label>i { color:#a6b8d0; background:#64748b24; }
 @media(max-width:600px) { #view-dictionary .dictionary-ai-rules-section>.dictionary-semantic-settings>summary { padding:14px; } #view-dictionary .dictionary-semantic-content { padding:12px 14px 16px; } #view-dictionary .dictionary-semantic-content .dictionary-defaults-grid { grid-template-columns:1fr; } #view-dictionary .dictionary-ai-rules-section .dictionary-ai-badge { margin-left:40px; } }
 @media(forced-colors:active) { #view-dictionary .dictionary-column-visible input[type="checkbox"] { appearance:auto; } #view-dictionary .dictionary-quick-active input:checked+span>i { display:block; color:HighlightText; } #view-dictionary .dictionary-quick-active input:checked+span { background:Highlight; } }
+
+/* Shared type scale for every section of the table editor. */
+/* The page and table own scrolling; the surrounding content card expands. */
+main.main-content.dictionary-workspace { overflow-y:auto; }
+.dictionary-workspace .dashboard-overview-lower,
+.dictionary-workspace #main-view-container { flex:0 0 auto; min-height:auto; }
+.dictionary-workspace #main-view-container>#view-dictionary { height:auto; min-height:auto; grid-template-rows:auto auto; }
+#view-dictionary .dictionary-content-card,
+#view-dictionary .dictionary-content-card.is-graph-view { flex:0 0 auto; height:auto; max-height:none; overflow:visible; scrollbar-gutter:auto; }
+#view-dictionary .dictionary-list-panel { flex:0 0 auto; overflow:visible; }
+#view-dictionary .dictionary-list-panel .dictionary-table-list { display:block; flex:0 0 auto; height:auto; min-height:0; max-height:clamp(300px,60dvh,720px); overflow:auto; overscroll-behavior:auto; scrollbar-gutter:stable; padding-right:0; border:1px solid var(--border-color); border-radius:12px; }
+#view-dictionary .dictionary-table-list .dictionary-catalog { border:0; overflow:visible; }
+#view-dictionary .dictionary-catalog thead th { position:sticky; top:0; z-index:2; }
+#view-dictionary .dictionary-graph-panel { flex:0 0 auto; height:clamp(360px,65dvh,760px); }
+
+#view-dictionary .dictionary-drawer {
+  --dict-type-title:20px;
+  --dict-type-heading:14px;
+  --dict-type-body:13px;
+  --dict-type-label:12px;
+  --dict-type-caption:11px;
+  font-size:var(--dict-type-body);
+  line-height:1.5;
+}
+#view-dictionary .dictionary-drawer-header h3 { font-size:var(--dict-type-title); font-weight:650; line-height:1.35; letter-spacing:-.3px; }
+#view-dictionary .dictionary-drawer :is(.dictionary-section-label,.dictionary-semantic-heading strong) { font-size:var(--dict-type-heading); font-weight:600; line-height:1.5; }
+#view-dictionary .dictionary-drawer :is(label,.dictionary-domain-label,.dictionary-priority-field),
+#view-dictionary .dictionary-drawer .dictionary-defaults-grid label,
+#view-dictionary .dictionary-drawer .dictionary-column-fields label>span { font-size:var(--dict-type-label); font-weight:500; line-height:1.5; }
+#view-dictionary .dictionary-drawer :is(input:not([type="checkbox"]),select,textarea,.form-control) { font-family:inherit; font-size:var(--dict-type-body); font-weight:400; line-height:1.5; }
+#view-dictionary .dictionary-drawer :is(.dictionary-defaults-hint,.dictionary-ai-priority-note) { font-size:var(--dict-type-label)!important; line-height:1.6; color:var(--text-secondary,#64748b)!important; }
+#view-dictionary .dictionary-drawer-header p,
+#view-dictionary .dictionary-drawer :is(.dictionary-drawer-kicker,.dictionary-semantic-heading small,.dictionary-section-row p) { font-size:var(--dict-type-label); line-height:1.5; }
+#view-dictionary .dictionary-drawer :is(.dictionary-ai-badge,.dictionary-optional-badge,.metric-tag,.dictionary-column-meta code,.dictionary-column-derived-name>small) { font-size:var(--dict-type-caption); line-height:1.5; }
+#view-dictionary .dictionary-drawer .dictionary-column-meta strong { font-size:var(--dict-type-body); font-weight:600; line-height:1.5; }
+#view-dictionary .dictionary-drawer :is(.dictionary-relation-grid label,.dictionary-many-to-many label,.dictionary-relation-hint,.dictionary-field-relation-chip,.dictionary-semantic-advanced>summary,.dictionary-drawer-actions-bottom>span) { font-size:var(--dict-type-label); line-height:1.5; }
+#view-dictionary .dictionary-drawer :is(.btn-primary,.btn-secondary-sm,.dictionary-relation-toggle) { font-size:var(--dict-type-body); line-height:1.5; }
