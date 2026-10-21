@@ -13,6 +13,18 @@ function analyticsContext(globals = {}) {
   return context;
 }
 
+test('compact analytics preserves token estimates and reuses date formatting',()=>{
+ const context=analyticsContext();
+ const original={timestamp:'12:00:00 22/10/2026',question:'x'.repeat(800),replyText:'y'.repeat(1200),requestPayload:{providerId:'p'},status:'SUCCESS'};
+ const compact=require('../src/backend/services/analytics_summary').compact(original);
+ const providers=[{id:'p',tokenCost:1}];
+ assert.equal(context.estimateAuditRecordCost(original,providers),context.estimateAuditRecordCost(compact,providers));
+ context.getVietnamDateParts(new Date());const formatter=context.getVietnamDateParts.formatter;
+ context.getVietnamDateParts(new Date('2026-10-21T23:30:00Z'));
+ assert.equal(context.getVietnamDateParts.formatter,formatter);
+ assert.equal(context.getVietnamDateParts(new Date('2026-10-21T23:30:00Z')).day,'22');
+});
+
 test('dashboard range selectors restore and persist their last choices independently', () => {
   const values = new Map([
     ['knowledgehub.dashboard.analyticsRange', '30d'],

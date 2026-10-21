@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [Trạng thái triển khai](#trạng-thái-triển-khai).
 
-README đối chiếu với mã nguồn ngày **06/10/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
+README đối chiếu tổng thể với mã nguồn ngày **06/10/2026**; phần hiệu suất tải tab được cập nhật ngày **22/10/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -70,6 +70,31 @@ Model trả lời được ghim đầu request. TEV1 dùng API quyết định `
 - Dashboard và trang Analytics hiển thị trạng thái chờ trong khi tải dữ liệu biểu đồ, gồm tần suất gọi AI, đánh giá, bản đồ nhiệt và tỷ trọng provider.
 - MCP client kết nối server qua stdio, Streamable HTTP hoặc SSE; có handshake, discovery tools/resources và thực thi tool qua Agent Core/registry.
 - Embed Chat hiển thị bảng Markdown, biểu đồ, link xuất file; hỗ trợ `data-theme="auto|light|dark"` và preview theo Embed ID từ trang quản trị.
+
+### Hiệu suất tải tab — cập nhật 22/10/2026
+
+- Tổng quan và Analytics dùng dữ liệu thống kê rút gọn, tái sử dụng bộ định dạng ngày theo múi giờ Việt Nam; giữ nguyên số token và cách tính giá trị ước tính, kể cả nội dung có emoji.
+- Quản trị dữ liệu tải báo cáo vận hành song song với cấu hình tài nguyên/chỉ tiêu. Báo cáo chỉ đọc các trường cần cho trạng thái, độ trễ, tiêu chí, mức sử dụng và chi phí.
+- Lịch sử chat tải danh sách nhẹ; chọn **Xem JSON** để tải đầy đủ chẩn đoán và tool execution của riêng lượt đó. API chi tiết kiểm tra quyền sở hữu như danh sách.
+- Đánh giá AI chỉ tải nội dung cần cho tìm kiếm, xem câu trả lời/SQL, token và kiểm duyệt. Đào tạo AI chỉ nạp chi tiết các lượt được đánh dấu `needs_review`, giữ nguyên logic tạo báo cáo.
+- Bộ nhớ AI, xác thực Embed trong tab Tài khoản và danh sách/trạng thái sao lưu chỉ đọc các kho liên quan. Nguồn SQL không còn gọi thêm API lược đồ chỉ để cập nhật thẻ thống kê của Tổng quan.
+- Các truy vấn rút gọn không bỏ kiểm tra đăng nhập/phân quyền. API audit đầy đủ vẫn được giữ để tương thích; không dùng cache dùng chung cho lịch sử riêng của tài khoản.
+
+Kết quả đo cục bộ với **2.502 lượt chat**; đây là thời gian xử lý/đọc dữ liệu, không phải cam kết thời gian tải toàn trang qua mạng:
+
+| Phần dữ liệu | Trước | Sau |
+|---|---|---|
+| Dữ liệu lịch sử cho Tổng quan | khoảng 12,9 MB / 1,38 giây | khoảng 735 KB / 0,19 giây |
+| Danh sách Lịch sử chat | khoảng 12,9 MB / 1,40 giây | khoảng 1,07 MB / 0,15 giây |
+| Báo cáo vận hành | khoảng 1,40 giây | khoảng 0,39 giây |
+
+Đã đối chiếu số liệu thống kê, nội dung audit chi tiết và báo cáo đào tạo trước/sau trên dữ liệu hiện tại. Có thể chạy lại phép đo chỉ đọc trên instance PostgreSQL đã cấu hình:
+
+```powershell
+node scripts/audit_tab_performance.js
+```
+
+Script ghi thời gian, kích thước và kết quả đối chiếu vào `artifacts/tab-performance/audit.json`, không ghi nội dung câu hỏi hay kết quả nghiệp vụ trong báo cáo. Sau khi cập nhật mã, khởi động lại backend và tải lại trang bằng **Ctrl + F5**. Không cần migration CSDL cho đợt tối ưu này.
 
 ## Trạng thái triển khai
 
@@ -415,6 +440,12 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 | `POST` | `/api/auth/login` | Đăng nhập |
 | `POST` | `/api/auth/logout` | Đăng xuất |
 | `GET` | `/api/auth/me` | Lấy account hiện tại |
+| `GET` | `/api/chat-history?summary=1` | Thống kê nhẹ cho Tổng quan/Analytics, lọc theo quyền tài khoản |
+| `GET` | `/api/chat-history?list=1` | Danh sách audit không kèm JSON chẩn đoán đầy đủ |
+| `GET` | `/api/chat-history?id=<audit-id>` | Chi tiết một lượt chat, gồm tool execution; kiểm tra quyền sở hữu |
+| `GET` | `/api/chat-feedback?summary=1` | Thống kê đánh giá cho biểu đồ |
+| `GET` | `/api/chat-feedback?list=1` | Nội dung đánh giá và các trường audit phục vụ kiểm duyệt |
+| `GET` | `/api/governance/operations` | Báo cáo vận hành rút gọn, chỉ dành cho admin |
 | `GET` | `/api/sql/sources` | Danh sách SQL sources |
 | `POST` | `/api/sql/ingest-ddl` | Nạp schema từ DDL |
 | `POST` | `/api/sql/add-live` | Thêm live SQL Server source |
@@ -456,6 +487,14 @@ Phần lớn API yêu cầu session cookie sau khi đăng nhập.
 Xem trang **API & SDK** trong dashboard để tạo API key và cấu hình embed chat. Endpoint `/api/v1/chat/completions` hiện chỉ tương thích một phần với OpenAI API; chưa hỗ trợ đầy đủ streaming và toàn bộ tham số chuẩn.
 
 ## Kiểm tra mã nguồn
+
+Kiểm thử tập trung cho đợt tối ưu hiệu suất tải tab:
+
+```powershell
+node --require ./tests/helpers/setup_isolated_data.js --test tests/analytics.test.js tests/analytics_summary.test.js tests/audit_reader.test.js tests/governance_loading.test.js tests/tab_read_scopes.test.js
+```
+
+Các kiểm thử bao gồm phạm vi kho dữ liệu, quyền đọc audit, giải mã token đúng vị trí, tải JSON theo yêu cầu và tải song song các phần độc lập. Script đo trên dữ liệu thật ở mục hiệu suất phía trên là bước đối chiếu bổ sung; không thay thế toàn bộ bộ kiểm thử.
 
 Kết quả được ghi nhận trong [tài liệu routing](docs/CHAT_WORKFLOW_ROUTING_UX.md) ngày **04/10/2026**: **436 test đạt, 11 test bỏ qua, không có lỗi**; bộ thử routing với catalog PostgreSQL, TEV1 và Gemini đạt **8/8**. Đây là kết quả đã ghi nhận, chưa chạy lại trong lần cập nhật README này. Unit test sử dụng fixture/mock, không thay thế nghiệm thu SQL nghiệp vụ, retrieval hoặc provider thật. Test PostgreSQL cần credentials bootstrap và database test riêng.
 

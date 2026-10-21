@@ -95,9 +95,10 @@ function formatMoney(value) {
 }
 
 function getVietnamDateParts(date) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const formatter = getVietnamDateParts.formatter ||= new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'
-  }).formatToParts(date).reduce((result, part) => {
+  });
+  const parts = formatter.formatToParts(date).reduce((result, part) => {
     if (part.type !== 'literal') result[part.type] = part.value;
     return result;
   }, {});
@@ -138,7 +139,7 @@ function estimateAuditRecordCost(item = {}, providers = []) {
   const provider = findAnalyticsProvider(item, providers);
   const costPer1k = Number(provider.tokenCost || 0);
   const reportedTokens = Number(item.requestPayload?.tokenUsage?.totalTokens || 0);
-  const estimatedTokens = reportedTokens || Math.max(120, Math.round(((item.question || '').length + (item.replyText || '').length + (item.sqlQuery || '').length) / 4));
+  const estimatedTokens = reportedTokens || Number(item.estimatedTokens) || Math.max(120, Math.round(((item.question || '').length + (item.replyText || '').length + (item.sqlQuery || '').length) / 4));
   return (estimatedTokens / 1000) * costPer1k;
 }
 
@@ -222,12 +223,12 @@ async function fetchAnalyticsSourceData() {
     }
   };
   const [history, providersData, dictionary, sources, qdrant, feedback] = await Promise.all([
-    can('history.read')?safeJson('/api/chat-history', []):[],
+    can('history.read')?safeJson('/api/chat-history?summary=1', []):[],
     safeJson(window.currentAccountRole==='admin'?'/api/ai-providers':'/api/chat/providers', { providers: [] }),
     can('schema.read')?safeJson('/api/dictionary', []):[],
     can('sources.read')||(can('chat.use')&&can('sql:read'))?safeJson('/api/sql/sources', []):[],
     safeJson('/api/qdrant/status', {}),
-    can('feedback.read')?safeJson('/api/chat-feedback', []):[]
+    can('feedback.read')?safeJson('/api/chat-feedback?summary=1', []):[]
   ]);
   return {
     history: Array.isArray(history) ? history : [],
@@ -293,7 +294,7 @@ function renderDashboardActivity(history = []) {
     const key = vietnamDayKey(date);
     const entry = activity.get(key) || { queries: 0, tokens: 0 };
     const reported = Number(item.requestPayload?.tokenUsage?.totalTokens || 0);
-    const estimated = Math.max(120, Math.round(((item.question || '').length + (item.replyText || '').length + (item.sqlQuery || '').length) / 4));
+    const estimated = Number(item.estimatedTokens) || Math.max(120, Math.round(((item.question || '').length + (item.replyText || '').length + (item.sqlQuery || '').length) / 4));
     entry.queries += 1;
     entry.tokens += reported || estimated;
     activity.set(key, entry);

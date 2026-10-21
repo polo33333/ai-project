@@ -15,6 +15,35 @@ function readPolicy() {
   const file = process.env.AGENT_OPERATIONS_POLICY_FILE;
   return file ? JSON.parse(require('node:fs').readFileSync(file, 'utf8')) : {};
 }
+async function loadAudits() {
+  const storage=require('../storage');
+  if(!storage.enabled())return require('../services/logger_service').chatHistory;
+  return require('../storage/postgres/pool').transaction(storage.getPool(),async client=>{
+    const records=await client.query(`SELECT r.id,r.payload->>'status' AS status,
+      r.payload->'latencyMs' AS "latencyMs",r.payload->>'modelName' AS "modelName",
+      r.payload#>'{requestPayload,answerEnvelope,requestAssessment}' AS assessment,
+      r.payload#>'{requestPayload,tokenUsage}' AS usage,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('index',s.ordinality-1,'type','MODEL_USAGE',
+        'model',s.value->'model','inputTokens',s.value->'inputTokens','outputTokens',s.value->'outputTokens',
+        'usageAvailable',s.value->'usageAvailable') ORDER BY s.ordinality)
+        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(r.payload#>'{requestPayload,diagnostics,steps}')='array'
+          THEN r.payload#>'{requestPayload,diagnostics,steps}' ELSE '[]'::jsonb END) WITH ORDINALITY s(value,ordinality)
+        WHERE s.value->>'type'='MODEL_USAGE'),'[]'::jsonb) AS steps
+      FROM app.chat_runs r ORDER BY r.ordinal,r.id`);
+    const tools=await client.query(`SELECT parent_id,payload->>'code' AS code,
+      payload#>>'{toolResult,error,code}' AS nested_code FROM app.tool_executions
+      WHERE payload->>'code' IS NOT NULL OR payload#>>'{toolResult,error,code}' IS NOT NULL`);
+    const byRun=new Map();
+    for(const row of tools.rows){if(!byRun.has(row.parent_id))byRun.set(row.parent_id,[]);byRun.get(row.parent_id).push({code:row.code||row.nested_code});}
+    const decode=(value,path)=>value?.$khSecret===1?require('../storage/postgres/crypto').decrypt(value,path):value;
+    return records.rows.map(({id,assessment,usage,steps,...row})=>({id,...row,requestPayload:{
+      answerEnvelope:{requestAssessment:assessment},tokenUsage:decode(usage,`chat_runs/${id}/requestPayload/tokenUsage`),
+      diagnostics:{steps:steps.map(({index,...step})=>({...step,
+        inputTokens:decode(step.inputTokens,`chat_runs/${id}/requestPayload/diagnostics/steps/${index}/inputTokens`),
+        outputTokens:decode(step.outputTokens,`chat_runs/${id}/requestPayload/diagnostics/steps/${index}/outputTokens`)}))},
+      toolCalls:byRun.get(id)||[]}}));
+  },{readOnly:true});
+}
 function summarize(audits, policy = {}) {
   if (!validatePolicy(policy)) throw Object.assign(new Error('OPERATIONS_POLICY_INVALID'), { code: 'OPERATIONS_POLICY_INVALID' });
   const statuses = Object.create(null), codes = Object.create(null), timings = [], models = new Map();
@@ -87,4 +116,4 @@ function feedbackCases(feedback, audits) {
   }
   return { schemaVersion: '1', cases, skipped, warning: 'Private regression inputs; review redaction before sharing. No SQL results exported.' };
 }
-module.exports = { summarize, releaseGate, feedbackCases, readPolicy };
+module.exports = { summarize, releaseGate, feedbackCases, readPolicy, loadAudits };

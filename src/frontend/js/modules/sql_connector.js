@@ -20,7 +20,6 @@ async function fetchDbSources() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     window.dbSourcesData = await res.json();
     renderDbSourcesTable();
-    await updateDashboardSqlMetrics();
   } catch (err) {
     console.error("Lỗi nạp DB Sources:", err);
     return false;

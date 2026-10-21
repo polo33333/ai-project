@@ -6,7 +6,7 @@ window.chatHistoryData = [];
 
 async function fetchChatHistory() {
   try {
-    const res = await fetch('/api/chat-history');
+    const res = await fetch('/api/chat-history?list=1');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     window.chatHistoryData = await res.json();
     renderChatHistoryTable();
@@ -134,7 +134,6 @@ function renderChatHistoryTable() {
   const paginated = history.slice(startIndex, startIndex + state.itemsPerPage);
 
   paginated.forEach(item => {
-    const payload = getAuditPayload(item);
     const status = String(item.status || 'SUCCESS').toUpperCase();
     const isError = status === 'ERROR';
     const latency = item.latencyMs != null ? `${item.latencyMs}ms` : (item.latency || '0ms');
@@ -176,9 +175,10 @@ function renderChatHistoryTable() {
             : '<span style="color:#94a3b8;font-size:11px;">Chưa đánh giá</span>'}
       </td>
       <td>
-        <div class="chat-payload-card json-audit-card" title="Data JSON gọi AI">
-          <pre><code>${highlightAuditJson(payload.text)}</code></pre>
-        </div>
+        <details class="chat-audit-details" data-audit-id="${escapeHtml(item.id)}" ontoggle="loadChatAuditDetails(this)">
+          <summary>Xem JSON</summary>
+          <div class="chat-payload-card json-audit-card" data-audit-json></div>
+        </details>
       </td>
     `;
     tbody.appendChild(tr);
@@ -189,5 +189,21 @@ function renderChatHistoryTable() {
   }
 }
 
+async function loadChatAuditDetails(panel) {
+  if (!panel.open || panel.dataset.loading === 'true' || panel.dataset.loaded === 'true') return;
+  const host=panel.querySelector('[data-audit-json]');
+  const id=panel.dataset.auditId;
+  panel.dataset.loading='true';host.setAttribute('aria-busy','true');host.textContent='Đang tải chi tiết…';
+  try {
+    const response=await fetch('/api/chat-history?id='+encodeURIComponent(id),{cache:'no-store'});
+    const item=await response.json();
+    if(!response.ok)throw new Error(item.message||'Không tải được chi tiết.');
+    host.innerHTML='<pre><code>'+highlightAuditJson(getAuditPayload(item).text)+'</code></pre>';
+    panel.dataset.loaded='true';
+  }catch(error){host.textContent=error.message+' Đóng và mở lại để thử lại.';}
+  finally{delete panel.dataset.loading;host.removeAttribute('aria-busy');}
+}
+
+window.loadChatAuditDetails = loadChatAuditDetails;
 window.fetchChatHistory = fetchChatHistory;
 window.renderChatHistoryTable = renderChatHistoryTable;

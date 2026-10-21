@@ -6,11 +6,12 @@ const { classifyCase } = require('./failure_classifier');
 const { suggestForCase } = require('./suggestion_engine');
 const resolutionService = require('./resolution_service');
 
-function buildTrainingReport(rootDir = path.join(__dirname, '../../..')) {
+function buildTrainingReport(rootDir = path.join(__dirname, '../../..'), data = {}) {
   const cases = collectCases({
     historyFile: path.join(rootDir, 'data', 'chat_history.json'),
     feedbackFile: path.join(rootDir, 'data', 'chat_feedback.json'),
-    reviewStatus: 'needs_review'
+    reviewStatus: 'needs_review',
+    ...data
   }).map(item => {
     const detectedFailures = classifyCase(item);
     const failures = detectedFailures.length ? detectedFailures : ['REVIEW_REQUESTED'];

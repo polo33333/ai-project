@@ -1595,6 +1595,20 @@ async function handleGovernedRequest(req, res) {
     return;
   }
   if (pathname === '/api/chat-history' && req.method === 'GET') {
+    const params=new URL(req.url,'http://localhost').searchParams;
+    if(params.has('id')||params.get('list')==='1') {
+      try {
+        const reader=require('../services/audit_reader');
+        const data=params.has('id')?await reader.detail(params.get('id'),currentAccount):await reader.list(currentAccount);
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'private, no-store'});res.end(JSON.stringify(data));
+      }catch(error){res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode===404?error.message:'Không thể tải lịch sử chat.'}));}
+      return;
+    }
+    if(new URL(req.url,'http://localhost').searchParams.get('summary')==='1') {
+      const summary=await require('../services/analytics_summary').history(currentAccount);
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'private, no-store'});
+      res.end(JSON.stringify(summary));return;
+    }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     const history=loggerService.getChatHistory();
     res.end(JSON.stringify(currentAccount?.role==='admin'?history:history.filter(item=>item.requestPayload?.principalRef===`account:${currentAccount.id}`||item.requestPayload?.memoryDecision?.accountId===currentAccount.id)));
@@ -1602,7 +1616,13 @@ async function handleGovernedRequest(req, res) {
   }
 
   if (pathname === '/api/training-report' && req.method === 'GET') {
-    const report = buildTrainingReport(path.join(__dirname, '../../..'));
+    let data;
+    if(storage.enabled()) {
+      const feedback=loggerService.chatFeedback;
+      const reviewed=[...new Map(feedback.map(item=>[item.auditId,item])).values()].filter(item=>item.reviewStatus==='needs_review');
+      data={feedback,history:await require('../services/audit_reader').records(reviewed.map(item=>item.auditId).filter(Boolean))};
+    }
+    const report = buildTrainingReport(path.join(__dirname, '../../..'),data);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(report));
     return;
@@ -1650,6 +1670,15 @@ async function handleGovernedRequest(req, res) {
   }
 
   if (pathname === '/api/chat-feedback' && req.method === 'GET') {
+    if(new URL(req.url,'http://localhost').searchParams.get('list')==='1') {
+      const data=await require('../services/audit_reader').feedback();
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'private, no-store'});res.end(JSON.stringify(data));return;
+    }
+    if(new URL(req.url,'http://localhost').searchParams.get('summary')==='1') {
+      const summary=await require('../services/analytics_summary').feedback();
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'private, no-store'});
+      res.end(JSON.stringify(summary));return;
+    }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify(loggerService.getChatFeedback()));
     return;

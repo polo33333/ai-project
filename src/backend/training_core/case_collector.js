@@ -8,9 +8,9 @@ function readJson(file, fallback = []) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return fallback; }
 }
 
-function collectCases({ historyFile, feedbackFile, reviewStatus = null } = {}) {
-  const history = storage.enabled() ? StorageHelper.loadJson('chat_history.json', []) : readJson(historyFile, []);
-  const feedback = storage.enabled() ? StorageHelper.loadJson('chat_feedback.json', []) : readJson(feedbackFile, []);
+function collectCases({ historyFile, feedbackFile, reviewStatus = null, history: suppliedHistory, feedback: suppliedFeedback } = {}) {
+  const history = suppliedHistory || (storage.enabled() ? StorageHelper.loadJson('chat_history.json', []) : readJson(historyFile, []));
+  const feedback = suppliedFeedback || (storage.enabled() ? StorageHelper.loadJson('chat_feedback.json', []) : readJson(feedbackFile, []));
   const feedbackByAudit = new Map(feedback.map(item => [item.auditId, item]));
   return history.map(record => {
     const review = feedbackByAudit.get(record.id) || null;

@@ -20,7 +20,11 @@ const routes=new Map([
   ['/api/auth/me',[]], ['/api/page-chat/sessions',[]],
   ['/api/chat/attachments/file',[]],
   ['/api/accounts',[]],
+  ['/api/accounts/embed-identity',['embed_chat_configs.json']],
   ['/api/accounts/roles',['db_sources.json','library.json']],
+  ['/api/backups',[]], ['/api/backups/status',[]],
+  ['/api/memory',['long_term_memory.json','db_sources.json','library.json']],
+  ['/api/memory/events',['episodic_memory.json','db_sources.json','library.json']],
   // These definitions/runs live in their own SQL repository, not JSON stores.
   ['/api/workflow-plugins',[]], ['/api/question-templates',[]],
   // Full run views resolve presentation through the current dictionary.
@@ -34,6 +38,9 @@ const routes=new Map([
   ['/api/dictionary/sync-status',[]],
   ['/api/dictionary/domains',['domain_aliases.json']],
   ['/api/qdrant/status',[]], ['/api/settings',[]],
+  ['/api/governance/resources',['db_sources.json','library.json','ai_providers.json']],
+  ['/api/governance/metrics',['db_sources.json']],
+  ['/api/governance/operations',[]],
   ['/api/library',['library.json']],
   ['/api/providers',['ai_providers.json']],
   ['/api/glossary',['glossary.json']],
@@ -46,7 +53,7 @@ const routes=new Map([
   ['/api/mcp/servers',['mcp_servers.json']],
   ['/api/keys',['api_keys.json']],
   ['/api/tools',['mcp_servers.json','tool_settings.json']],
-  ['/api/training-report',['chat_history.json','chat_feedback.json','training_resolutions.json']],
+  ['/api/training-report',['chat_feedback.json','training_resolutions.json']],
   ['/api/training/skills',['skills.json']],
   ['/api/watchfolder',['watchfolders.json']],
   ['/api/watchfolder/logs',['watchfolder_logs.json']],
@@ -58,6 +65,10 @@ function requestStores(req) {
   // Hosted MCP executes the same authoring operations as the workflow UI.
   if (pathname.startsWith('/mcp/') || pathname.startsWith('/.well-known/')) return undefined;
   if (!pathname.startsWith('/api/')) return auth;
+  if(req.method==='GET'&&pathname==='/api/chat-history'&&(new URL(req.url,'http://localhost').searchParams.get('list')==='1'||new URL(req.url,'http://localhost').searchParams.has('id')))return auth;
+  if(req.method==='GET'&&pathname==='/api/chat-feedback'&&new URL(req.url,'http://localhost').searchParams.get('list')==='1')return auth;
+  if(req.method==='GET'&&new URL(req.url,'http://localhost').searchParams.get('summary')==='1'
+    &&['/api/chat-history','/api/chat-feedback'].includes(pathname))return auth;
   const mutation = mutations.get(`${req.method} ${pathname}`);
   if (mutation) return [...auth,...mutation];
   // Polling a run must not reconstruct the entire chat history. Run documents

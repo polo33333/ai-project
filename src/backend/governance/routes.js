@@ -16,7 +16,7 @@ async function handle(req, res, pathname, account, readBody) {
     if (req.method !== 'GET') { send(405, { message: 'Method not allowed' }); return true; }
     try {
       const operations = require('./operations');
-      send(200, operations.summarize(require('../services/logger_service').chatHistory, operations.readPolicy()));
+      send(200, operations.summarize(await operations.loadAudits(), operations.readPolicy()));
     } catch (error) { send(400, { code: error.code || 'OPERATIONS_REPORT_FAILED', message: 'Không thể tạo báo cáo vận hành. Kiểm tra cấu hình chính sách.' }); }
     return true;
   }

@@ -1,0 +1,40 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+test('governance GETs load only dependencies while mutations retain their full scope',()=>{
+ const {requestStores}=require('../src/backend/storage/request_stores');
+ const files=requestStores({method:'GET',url:'/api/governance/resources'});
+ for(const file of ['accounts.json','sessions.json','account_roles.json','db_sources.json','library.json','ai_providers.json'])assert.ok(files.includes(file));
+ assert.ok(!files.includes('chat_history.json'));
+ assert.deepEqual(requestStores({method:'GET',url:'/api/governance/operations'}),['accounts.json','sessions.json','account_roles.json']);
+ assert.deepEqual(requestStores({method:'GET',url:'/api/governance/metrics'}),['accounts.json','sessions.json','account_roles.json','db_sources.json']);
+ assert.equal(requestStores({method:'PUT',url:'/api/governance/resources'}),undefined);
+});
+test('slow operations do not delay resource selection or metric loading',async()=>{
+ const events=[],elements=new Map();
+ const element=()=>({children:[],value:'',textContent:'',replaceChildren(...nodes){this.children=nodes;},append(...nodes){this.children.push(...nodes);}});
+ const context=vm.createContext({window:{},document:{getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},createElement:element},fetch:async()=>{events.push('resources');return {ok:true,json:async()=>({resources:[],providers:[]})};}});
+ vm.runInContext(fs.readFileSync('src/frontend/js/modules/governance.js','utf8'),context);
+ let finishOperations;
+ context.window.loadAgentOperations=()=>{events.push('operations');return new Promise(resolve=>finishOperations=resolve);};
+ context.window.loadGovernedMetrics=async()=>{events.push('metrics');};
+ const request=context.window.loadGovernanceResources();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(events,['operations','resources','metrics']);
+ finishOperations();await request;
+});
+test('projected operations preserve encrypted usage at original step indices',async t=>{
+ const storage=require('../src/backend/storage'),pools=require('../src/backend/storage/postgres/pool');
+ const previous=process.env.APP_DATA_ENCRYPTION_KEY;process.env.APP_DATA_ENCRYPTION_KEY='ab'.repeat(32);
+ t.after(()=>{if(previous===undefined)delete process.env.APP_DATA_ENCRYPTION_KEY;else process.env.APP_DATA_ENCRYPTION_KEY=previous;});
+ const {encrypt}=require('../src/backend/storage/postgres/crypto');
+ const input=encrypt(12,'chat_runs/a/requestPayload/diagnostics/steps/2/inputTokens');
+ const output=encrypt(4,'chat_runs/a/requestPayload/diagnostics/steps/2/outputTokens');
+ const client={query:async sql=>({rows:sql.includes('FROM app.tool_executions')?[{parent_id:'a',code:'DENIED'}]:[{id:'a',status:'PARTIAL',latencyMs:40,modelName:'model',assessment:{complete:false},usage:null,steps:[{index:2,type:'MODEL_USAGE',model:'model',inputTokens:input,outputTokens:output}]}]})};
+ t.mock.method(storage,'enabled',()=>true);t.mock.method(storage,'getPool',()=>client);
+ t.mock.method(pools,'transaction',async(pool,fn)=>fn(pool));
+ const operations=require('../src/backend/governance/operations');
+ const raw=[{id:'a',status:'PARTIAL',latencyMs:40,modelName:'model',question:'private',requestPayload:{answerEnvelope:{requestAssessment:{complete:false}},diagnostics:{steps:[{type:'OTHER'},{type:'OTHER'},{type:'MODEL_USAGE',model:'model',inputTokens:12,outputTokens:4}]},toolCalls:[{code:'DENIED'}]}}];
+ const projected=await operations.loadAudits();
+ assert.deepEqual(operations.summarize(projected),operations.summarize(raw));
+ assert.ok(!JSON.stringify(projected).includes('private'));
+});

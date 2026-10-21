@@ -5,6 +5,8 @@
   const el = id => document.getElementById(id);
   window.loadGovernanceResources = async function () {
     if (!el('governance-resource')) return;
+    // Operations are independent of resource/metric selection.
+    const operationsRequest = window.loadAgentOperations();
     try {
       const response = await fetch('/api/governance/resources', { cache: 'no-store' }), data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Không tải được chính sách.');
@@ -20,8 +22,7 @@
       if (!resources.length) el('governance-mode').textContent += ' · Chưa có nguồn để cấu hình.';
       window.selectGovernanceResource();
       el('metric-source').replaceChildren(...resources.filter(resource => resource.type === 'sql').map(resource => { const option = document.createElement('option'); option.value = resource.id; option.textContent = resource.name; return option; }));
-      await window.loadGovernedMetrics();
-      await window.loadAgentOperations();
+      await Promise.all([window.loadGovernedMetrics(), operationsRequest]);
     } catch (error) { el('governance-message').textContent = error.message; return false; }
   };
   window.selectGovernanceResource = function () {

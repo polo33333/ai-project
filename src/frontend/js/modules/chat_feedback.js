@@ -2,7 +2,7 @@ window.chatFeedbackData = [];
 
 async function fetchChatFeedback() {
   try {
-    const res = await fetch('/api/chat-feedback');
+    const res = await fetch('/api/chat-feedback?list=1');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     window.chatFeedbackData = await res.json();
     renderChatFeedbackTable();
