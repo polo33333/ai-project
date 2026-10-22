@@ -40,10 +40,28 @@ function execute(args, context = {}) {
       return a && b && r.columnPairs?.length && r.columnPairs.every(p => visible(a, p.sourceColumn) && visible(b, p.targetColumn))
         && (!r.displayColumn || visible(b, r.displayColumn));
     });
-  const plan = require('../../services/join_planner_service').planJoin([from.tableId, to.tableId], {
+  const planner = require('../../services/join_planner_service');
+  let plan = planner.planJoin([from.tableId, to.tableId], {
     dbSourceId: source.id, maxEdges: args.maxHops || 3, relationshipIds: relationships.map(r => r.id)
   });
   if (plan.outcome !== 'ready') return { ...plan, dbSourceId: source.id, instruction };
+  // A detail query may first discover header->customer, then header->detail.
+  // Revalidate the combined paths against today's permission-filtered catalog
+  // instead of discarding the first path or trusting stale plan edges.
+  const previous = context.joinPlan;
+  if (previous?.outcome === 'ready' && previous.dbSourceId === source.id) {
+    const currentIds = new Set(relationships.map(relation => relation.id));
+    const priorEdges = previous.edges || [];
+    const priorTables = previous.tableRefs || [];
+    if (priorEdges.length && priorEdges.every(edge => currentIds.has(edge.relationshipId))
+      && priorTables.every(ref => tables.some(table => table.tableId === ref.tableId))) {
+      const ids = [...new Set([from.tableId, to.tableId, ...priorTables.map(ref => ref.tableId)])];
+      const relationshipIds = [...new Set([...plan.edges, ...priorEdges].map(edge => edge.relationshipId))];
+      const combined = planner.planJoin(ids, { dbSourceId: source.id, rootTableId: from.tableId,
+        maxEdges: args.maxHops || 3, relationshipIds });
+      if (combined.outcome === 'ready') plan = combined;
+    }
+  }
   const fanout = plan.edges.some(e => ['one-to-many', 'many-to-many'].includes(e.cardinality));
   // Keep the same backend plan used by SQL validation. Do not invent predicates.
   context.joinPlan = { ...plan, allowedTableIds: plan.tableRefs.map(t => t.tableId), allowedTableNames: plan.tableRefs.map(t => t.tableName) };
@@ -52,4 +70,24 @@ function execute(args, context = {}) {
     warnings: fanout ? ['JOIN may multiply rows. Verify measure grain and pre-aggregate the many side or use EXISTS before SUM/COUNT.'] : [], instruction };
 }
 
-module.exports = { definition, instruction, execute };
+function planForSql(sql, context = {}) {
+  if (context.joinPlan?.edges?.length || context.joinPlan?.requireMappedProjection) return null;
+  let ast;
+  try { ast = new (require('node-sql-parser/build/transactsql').Parser)().astify(sql); } catch { return null; }
+  // Only a direct, unambiguous physical-table JOIN. Derived tables, CTEs and
+  // repeated lookup roles still require an explicitly reviewed plan.
+  if (Array.isArray(ast) || ast.type !== 'select' || ast.with?.length || ast._next) return null;
+  const refs = ast.from || [];
+  if (refs.length < 2 || refs.length > 4 || refs.some(ref => !ref.table || ref.expr)) return null;
+  const names = refs.map(ref => `${ref.db || 'dbo'}.${ref.table}`);
+  if (new Set(names.map(name => name.toLowerCase())).size !== names.length) return null;
+  const scoped = { ...context, joinPlan: null };
+  for (const target of names.slice(1)) {
+    const result = execute({ fromTable: names[0], toTable: target, maxHops: 4 }, scoped);
+    if (result.outcome !== 'ready') return null;
+  }
+  context.joinPlan = scoped.joinPlan;
+  return scoped.joinPlan;
+}
+
+module.exports = { definition, instruction, execute, planForSql };

@@ -18,6 +18,19 @@ const selection = { tables: [{ tableName: 'records', columns: [
   edges: [{ fromTableRefId: 'root', displayColumn: 'label', businessRole: 'Đơn vị' }] } };
 const plan = { table: 'records', intent: 'list', identityColumns: ['code'] };
 
+test('a schema review cannot downgrade a live analytical task into description or guidance', () => {
+  const { resolveRequestIntent } = require('../src/backend/agent_core/harness/request_contract');
+  for (const operation of ['describe', 'guidance']) {
+    const declared = { operation, attributes: [], presentation: 'text' };
+    for (const original of ['analyze', 'forecast']) {
+      const intent = resolveRequestIntent(declared, { semanticIntent: declared }, { operation: original, dataUse: 'current' });
+      assert.equal(intent.operation, original);
+    }
+    assert.equal(resolveRequestIntent(declared, { semanticIntent: declared, analysisTask: 'anomaly' }).operation, 'analyze');
+    assert.equal(resolveRequestIntent(declared, { semanticIntent: declared }).operation, operation, 'Actual schema explanations remain supported');
+  }
+});
+
 test('schema-grounded review supersedes stale memory detail after root recovery', () => {
   const { resolveRequestIntent } = require('../src/backend/agent_core/harness/request_contract');
   const reviewed = { operation: 'aggregate', attributes: [], presentation: 'text' };

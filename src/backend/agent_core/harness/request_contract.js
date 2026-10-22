@@ -6,7 +6,8 @@ const intentSchema = { type: 'object', additionalProperties: false, required: ['
   operation: { enum: ['list', 'compare', 'detail', 'attribute', 'aggregate', 'describe', 'guidance'],
     description: 'describe: explain stored fields or classification criteria; guidance: lookup prerequisites/how-to, not execution; aggregate: statistics/count/sum; list/detail/attribute/compare: actual records.' },
   attributes: { type: 'array', maxItems: 32, uniqueItems: true, description: 'Only output fields/grouping dimensions explicitly requested by the user. For a general aggregate with no named output fields or dimensions use []; a category mentioned as a filter is not an output attribute. Never populate this with every discovered schema column.', items: { type: 'string', minLength: 1, maxLength: 100 } },
-  presentation: { enum: ['text', 'table', 'unspecified'] }
+  presentation: { enum: ['text', 'table', 'unspecified'] },
+  analysis: { enum: ['none', 'anomaly', 'trend', 'forecast'], description: 'Preserve the requested analytical task independently of SQL aggregation. Anomaly detection is anomaly, not just a monthly list; trend analysis is trend. Use none for simple retrieval.' }
 } };
 const validateIntent = new (require('ajv'))().compile(intentSchema);
 function decodeIntent(value) {
@@ -28,6 +29,14 @@ function resolveRequestIntent(declared, plan = {}, resolved) {
   }
   if (resolved?.relation === 'independent' && resolved.operation === 'conversation' && resolved.dataUse === 'none'
     && !['describe', 'guidance'].includes(intent.operation)) intent.operation = 'conversation';
+  // Metadata discovery may change the fact table, not replace a requested
+  // analysis of records with an explanation of how such analysis would work.
+  if ((['analyze', 'forecast'].includes(resolved?.operation) && resolved.dataUse !== 'none'
+    || plan.analysisTask && plan.analysisTask !== 'none' || intent.analysis && intent.analysis !== 'none')
+    && ['describe', 'guidance'].includes(intent.operation)) {
+    intent.operation = resolved?.operation === 'forecast' ? 'forecast' : 'analyze';
+    intent.attributes = [];
+  }
   return intent;
 }
 

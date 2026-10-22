@@ -107,6 +107,7 @@ function coversAggregateAttributes(sql, attributes = []) {
 }
 
 function canFinalizeVerifiedRead(plan, call, context = {}) {
+  if (require('./analysis_response').task(plan)) return false;
   if (!plan.outputs?.data || plan.outputs.chart || plan.outputs.export || plan.codeOnly || context.webSearch || context.knowledgeGrounding?.required) return false;
   if (!call?.success || !Array.isArray(call.result?.rows) || call.result.hasMore || call.result.truncated) return false;
   if (plan.requestContract) return require('./request_contract').assessRequestContract(plan.requestContract, call).complete;
@@ -140,6 +141,8 @@ function evaluateCompletion({ reply, plan, toolCalls = [], context = {}, finishR
     if (links.some(link => !downloads.includes(link))) failures.push('UNVERIFIED_ARTIFACT_LINK');
   }
   const text = normalize(reply);
+  if (require('./analysis_response').task(plan) && /^da tra cuu duoc/.test(text)
+    && !/tieu chi|phuong phap|nguong|baseline|criterion|method/.test(text)) failures.push('ANALYSIS_NOT_PERFORMED');
   if (context.knowledgeGrounding?.required && /khong co thong tin(?: cu the)?|hay cho (?:toi|minh) biet them/.test(text)) failures.push('UNGROUNDED_KNOWLEDGE_RESPONSE');
   if (context.webSearch && context.webSearchResultCount > 0
     && /khong duoc ket noi|khong co quyen truy cap|ngoai pham vi/.test(text)) failures.push('WEB_GROUNDING_REFUSAL');

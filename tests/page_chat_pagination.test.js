@@ -308,6 +308,12 @@ test('workflow handoff is a usable retry result while ordinary partial answers a
   assert.equal(usable({completionStatus:'SUCCESS'}),true);
   assert.equal(usable({status:'error',completionStatus:'PARTIAL',execution:{id:'run',status:'RUNNING'}}),false);
   assert.equal(usable({completionStatus:'PARTIAL',execution:{status:'RUNNING'}}),false);
+  const partial={status:'success',completionStatus:'PARTIAL',retryDisposition:'verified_partial',reply:'Chưa đủ lịch sử; đã đối chiếu dữ liệu thực tế.',toolCalls:[{name:'execute_sql_query',success:true}]};
+  assert.equal(usable(partial),true,'Verified analytical limitation replaces the old failed answer');
+  assert.equal(usable({...partial,reply:''}),false);
+  assert.equal(usable({...partial,toolCalls:[{name:'execute_sql_query',success:false}]}),false);
+  assert.equal(usable({...partial,retryDisposition:null}),false);
+  assert.equal(usable({...partial,status:'error'}),false);
 });
 test('model suggestions are bounded, deduplicated and scoped to the latest answer',async()=> {
   let calls=0;

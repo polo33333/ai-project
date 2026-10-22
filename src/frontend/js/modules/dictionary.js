@@ -56,23 +56,61 @@ function getDictionaryTables() {
   return window.groupedTablesData || [];
 }
 
+function scopeDictionaryMutationTables(tables) {
+  const sourceId = window.dictionaryWorkspaceSource?.id;
+  if (!sourceId) return tables;
+  const existingIds = new Set(getDictionaryTables().map(table => table.tableId));
+  return tables.filter(table => table.dbSourceId === sourceId || (!table.dbSourceId && existingIds.has(table.tableId)));
+}
+
+function scopeDictionaryMutationRelationships(relations) {
+  if (!window.dictionaryWorkspaceSource?.id) return relations;
+  const tables = getDictionaryTables();
+  return relations.filter(relation => (!relation.dbSourceId || relation.dbSourceId === window.dictionaryWorkspaceSource.id) && ['source', 'target'].every(side =>
+    tables.some(table => relation[side + 'TableId'] ? table.tableId === relation[side + 'TableId'] : table.tableName === relation[side + 'Table'])));
+}
+
 function findDictionaryTable(tableNameOrId) {
   return getDictionaryTables().find(t => t.tableId === tableNameOrId) || getDictionaryTables().find(t => t.tableName === tableNameOrId);
 }
 
 let dictionaryWorkspaceRequest = null;
-function fetchDataDictionary() {
-  if (dictionaryWorkspaceRequest) return dictionaryWorkspaceRequest;
-  dictionaryWorkspaceRequest = loadDictionaryWorkspace().finally(() => { dictionaryWorkspaceRequest = null; });
+let dictionaryWorkspaceGeneration = 0;
+function fetchDataDictionary({ force = false } = {}) {
+  if (dictionaryWorkspaceRequest && !force) return dictionaryWorkspaceRequest;
+  const request = loadDictionaryWorkspace(++dictionaryWorkspaceGeneration).finally(() => { if (dictionaryWorkspaceRequest === request) dictionaryWorkspaceRequest = null; });
+  dictionaryWorkspaceRequest = request;
   return dictionaryWorkspaceRequest;
 }
-async function loadDictionaryWorkspace() {
+async function loadDictionaryWorkspace(generation) {
   try {
     const res = await fetch('/api/dictionary/workspace', { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (generation !== dictionaryWorkspaceGeneration) return false;
     if (!Array.isArray(data.tables) || !Array.isArray(data.relationships) || !data.domains || typeof data.domains !== 'object' || Array.isArray(data.domains))
       throw new Error('INVALID_DICTIONARY_WORKSPACE');
+    if (window.dictionaryWorkspaceSource?.id !== data.source?.id) {
+      window.selectedDictionaryTableName = null;
+      window.selectedDictionaryTableId = null;
+      window.dictionaryGraphSelection = null;
+      window.dictionaryGraphHover = null;
+      window.pendingDictionaryRelationships = [];
+      window.pendingDictionaryRelationshipPreviews = [];
+      if (window.paginationState?.dictionary) window.paginationState.dictionary.currentPage = 1;
+      if (typeof document !== 'undefined') {
+        const viewport = document.getElementById('dictionary-graph-viewport');
+        if (viewport) delete viewport.dataset.graphCentered;
+        document.getElementById('dictionary-graph-tooltip')?.remove();
+        document.getElementById('dictionary-graph-mappings')?.remove();
+        if (typeof closeDictionaryDrawer === 'function') closeDictionaryDrawer();
+      }
+    }
+    window.dictionaryWorkspaceSource = data.source || null;
+    if (typeof document !== 'undefined') {
+      const label = document.getElementById('dictionary-current-source');
+      if (label) label.textContent = data.source ? `Nguồn đang xem: ${data.source.dbName}` : 'Chưa có nguồn CSDL mặc định';
+    }
     window.businessDomainsData = data.domains;
     window.tableRelationshipsData = data.relationships;
     window.groupedTablesData = data.tables;
@@ -81,6 +119,7 @@ async function loadDictionaryWorkspace() {
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
   } catch (err) {
+    if (generation !== dictionaryWorkspaceGeneration) return false;
     console.error('Lỗi nạp Lược đồ CSDL:', err);
     if (typeof showToast === 'function') showToast('Không thể nạp Lược đồ CSDL.', 'error');
     return false;
@@ -763,7 +802,7 @@ async function setFieldRelationshipStatus(encodedId, status, button = null) {
       body: JSON.stringify({ id, status, expectedRevision: relation.revision || 1 }) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     renderDictionaryDrawer(sourceTable);
     showToast?.(status === 'verified' ? 'Đã xác minh quan hệ để AI có thể sử dụng.' : 'Đã từ chối quan hệ.', 'success');
     await fetchDataDictionary();
@@ -791,7 +830,7 @@ async function deleteFieldRelationship(encodedId) {
     const res = await fetch('/api/dictionary/relationships/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     delete window.relationshipLineStyles[id];
     saveRelationshipDiagramState();
     if (sourceTable) renderDictionaryDrawer(sourceTable);
@@ -815,7 +854,7 @@ async function profileFieldRelationship(encodedId) {
       body: JSON.stringify({ id, expectedRevision: relation.revision || 1 }) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     renderDictionaryDrawer(sourceTable);
     const profile = data.relationship?.evidence?.profile || {};
     showToast?.(`Kiểm tra xong: ${profile.orphanRows || 0} orphan, ${profile.duplicateTargetKeys || 0} khóa đích trùng.`, 'success');
@@ -1103,8 +1142,8 @@ async function saveSelectedTableDescription() {
       body: JSON.stringify({ tableId, tableName, table, columns, relationships: window.pendingDictionaryRelationships || [] }) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.groupedTablesData = Array.isArray(data.tables) ? data.tables : getDictionaryTables();
-    window.tableRelationshipsData = Array.isArray(data.relationships) ? data.relationships : window.tableRelationshipsData;
+    window.groupedTablesData = Array.isArray(data.tables) ? scopeDictionaryMutationTables(data.tables) : getDictionaryTables();
+    window.tableRelationshipsData = Array.isArray(data.relationships) ? scopeDictionaryMutationRelationships(data.relationships) : window.tableRelationshipsData;
     renderDictionaryQuality(data.quality);
     window.invalidateRelatedTabData?.('schema');
     window.refreshDictionarySyncStatus?.();
@@ -1206,7 +1245,7 @@ async function openRelationshipDiagram() {
     const res = await fetch('/api/dictionary/relationships');
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = Array.isArray(data) ? data : [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(Array.isArray(data) ? data : []);
     populateRelationshipTableOptions();
     renderRelationshipDiagram();
   } catch (err) {
@@ -1225,7 +1264,7 @@ async function discoverDictionaryRelationships() {
     const res = await fetch('/api/dictionary/relationships/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     const selected = findDictionaryTable(window.selectedDictionaryTableId || window.selectedDictionaryTableName);
     if (selected && document.getElementById('dictionary-drawer')?.classList.contains('active')) renderDictionaryDrawer(selected);
     showToast?.(`Đã tạo ${data.created?.length || 0} đề xuất quan hệ mới.`, 'success');
@@ -1596,7 +1635,7 @@ async function createRelationshipFromPorts(source, target) {
     const res = await fetch('/api/dictionary/relationships/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     renderRelationshipDiagram();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     if (typeof showToast === 'function') showToast(`${payload.sourceTable}.${payload.sourceColumn} → ${payload.targetTable}.${payload.targetColumn}`, 'success', 'Đã tạo quan hệ');
@@ -1633,7 +1672,7 @@ async function createTableRelationship() {
     const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestPayload) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     document.getElementById('relation-description').value = '';
     cancelEditTableRelationship();
     renderRelationshipDiagram();
@@ -1686,7 +1725,7 @@ async function deleteTableRelationship(encodedId) {
     const res = await fetch('/api/dictionary/relationships/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: relationshipId }) });
     const data = await res.json();
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
-    window.tableRelationshipsData = data.relationships || [];
+    window.tableRelationshipsData = scopeDictionaryMutationRelationships(data.relationships || []);
     delete window.relationshipLineStyles[relationshipId];
     saveRelationshipDiagramState();
     renderRelationshipDiagram();

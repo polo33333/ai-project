@@ -46,15 +46,15 @@
 #view-system-tools .system-tools-catalog-counts { display:flex; gap:16px; flex:1; color:var(--tools-muted); font-size:12px; }
 #view-system-tools .system-tools-catalog-counts strong { color:var(--tools-text); font-weight:600; }
 #view-system-tools .system-tools-toolbar > button { margin-left:auto; border:1px solid var(--tools-border); background:var(--tools-surface); color:var(--tools-muted); }
-#view-system-tools .system-tools-grid { grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:20px; }
+#view-system-tools .system-tools-grid { grid-template-columns:repeat(4,minmax(0,1fr)); align-items:start; gap:14px; }
 #view-system-tools .system-tool-item { --tool-accent:#6462dc; --tool-tint:#f0efff; display:flex; flex-direction:column; border:1px solid var(--tools-border); border-radius:14px; background:var(--tools-surface); box-shadow:0 1px 2px #10182805; }
 #view-system-tools .system-tool-item:hover { border-color:#c5c5d5; box-shadow:0 5px 18px #10182808; }
 #view-system-tools .system-tool-item[data-group="SQL"], #view-system-tools .system-tool-item[data-group="Dữ liệu"] { --tool-accent:#287bc5; --tool-tint:#edf5ff; }
 #view-system-tools .system-tool-item[data-group="Tri thức"], #view-system-tools .system-tool-item[data-group="Tra cứu"] { --tool-accent:#139779; --tool-tint:#ecf9f3; }
 #view-system-tools .system-tool-item[data-group="Tính toán"], #view-system-tools .system-tool-item[data-group="Tiện ích"] { --tool-accent:#d28a28; --tool-tint:#fff7e8; }
 #view-system-tools .system-tool-item[data-group="Trực quan hóa"] { --tool-accent:#d35886; --tool-tint:#fff0f5; }
-#view-system-tools .system-tool-head { padding:18px 18px 12px; gap:12px; }
-#view-system-tools .system-tool-icon { width:44px; height:44px; border:1px solid var(--tools-border); border-radius:11px; background:var(--tool-tint); color:var(--tool-accent); font-size:20px; }
+#view-system-tools .system-tool-head { padding:14px 14px 10px; gap:10px; }
+#view-system-tools .system-tool-icon { width:36px; height:36px; border:1px solid var(--tools-border); border-radius:10px; background:var(--tool-tint); color:var(--tool-accent); font-size:17px; }
 #view-system-tools .system-tool-identity { min-width:0; }
 #view-system-tools .system-tool-identity h3 { margin:0 0 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; line-height:1.4; font-weight:650; color:var(--tools-text); }
 #view-system-tools .system-tool-identity code { font-family:inherit; font-size:11px; font-weight:400; color:var(--tools-muted); }
@@ -64,10 +64,10 @@
 #view-system-tools .system-tool-availability::after { content:''; position:absolute; top:3px; left:3px; width:14px; height:14px; background:#fff; border-radius:50%; box-shadow:0 1px 3px #0002; }
 #view-system-tools .system-tool-availability.is-available { background:#16a36a; }
 #view-system-tools .system-tool-availability.is-available::after { left:19px; }
-#view-system-tools .system-tool-item > p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:40px; height:40px; padding:0; margin:0 18px 14px; color:var(--tools-muted); font-size:12px; line-height:20px; }
-#view-system-tools .system-tool-tags { display:flex; flex-wrap:wrap; gap:6px; padding:0 18px 16px; }
+#view-system-tools .system-tool-item > p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:40px; height:40px; padding:0; margin:0 14px 10px; color:var(--tools-muted); font-size:12px; line-height:20px; }
+#view-system-tools .system-tool-tags { display:flex; flex-wrap:wrap; gap:5px; padding:0 14px 12px; }
 #view-system-tools .system-tool-tags span { padding:3px 6px; border-radius:4px; background:var(--tools-soft); color:var(--tools-muted); font-size:9px; font-weight:600; line-height:1.4; text-transform:uppercase; letter-spacing:.2px; }
-#view-system-tools .system-tool-foot { margin-top:auto; padding:11px 18px; min-height:44px; border-color:var(--tools-border); background:var(--tools-soft); }
+#view-system-tools .system-tool-foot { margin-top:auto; padding:9px 14px; min-height:38px; border-color:var(--tools-border); background:var(--tools-soft); }
 #view-system-tools .system-tool-foot button { color:var(--tools-text); font-size:12px; font-weight:500; }
 #view-system-tools .system-tool-foot button i { font-size:9px; margin-left:4px; }
 #view-system-tools .system-tool-state { display:flex; align-items:center; gap:5px; color:var(--tools-muted); font-size:10px; }
@@ -83,7 +83,8 @@
 :root[data-theme="dark"] #view-system-tools .system-tool-availability { background:#647084; }
 :root[data-theme="dark"] #view-system-tools .system-tool-availability.is-available { background:#16a36a; }
 :root[data-theme="dark"] #view-system-tools .system-tool-state.is-available { color:#70d6b1; }
-@media(max-width:1200px) { #view-system-tools .system-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(min-width:1101px) and (max-width:1450px) { #view-system-tools .system-tools-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:1100px) { #view-system-tools .system-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:700px) {
   #view-system-tools { gap:20px; }
   #view-system-tools .system-tools-grid { grid-template-columns:minmax(0,1fr); gap:14px; }

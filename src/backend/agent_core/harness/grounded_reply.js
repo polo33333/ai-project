@@ -77,7 +77,12 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
     ? `\n\nHiển thị ${columns.length}/${allColumns.length} trường kết quả.` : '';
   const scopeNotice = sqlCall?.result?.hasMore || sqlCall?.result?.truncated
     ? '\n\nNguồn trả về một phần dữ liệu; bảng này chưa bao phủ toàn bộ phạm vi yêu cầu.' : '';
-  const labels = columns.map(column => `${displayNames[column] || column}${sqlCall?.result?.units?.[column] ? ` (${sqlCall.result.units[column]})` : ''}`);
+  const usableLabel = value => typeof value === 'string' && value.trim() && !/^[-—–]+$/.test(value.trim());
+  const labels = columns.map((column, index) => {
+    const name = usableLabel(displayNames[column]) ? displayNames[column].trim()
+      : usableLabel(column) ? column : `Giá trị kết quả ${index + 1}`;
+    return `${name}${sqlCall?.result?.units?.[column] ? ` (${sqlCall.result.units[column]})` : ''}`;
+  });
   const uniqueLabels = labels.map((label, index) => labels.indexOf(label) === index ? label : `${label} (${columns[index]})`);
   const fieldLabels=uniqueLabels.filter(label=>!/(?:^id$|ID$)/.test(label)).slice(0,4);
   let introduction=`Đã tra cứu được **${rows.length}** bản ghi phù hợp với yêu cầu.`;

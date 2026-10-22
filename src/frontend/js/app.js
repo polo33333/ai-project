@@ -1211,7 +1211,7 @@ window.sendChatMessage = async function sendChatMessage() {
   const thinkingId = `copilot-thinking-${Date.now()}`;
   const progressEvents = [];
   messages.appendChild(window.ChatReasoningUI.create(thinkingId));
-  const answerPreview=window.ChatStream?.createPreview(document.getElementById(thinkingId));
+  const answerPreview=window.ChatStream?.createPreview(document.getElementById(thinkingId),{renderMarkdown:parseMarkdown});
   messages.scrollTop = messages.scrollHeight;
   const responseScroll=window.ChatStream?.followResponse(messages);
   const requestController = new AbortController();

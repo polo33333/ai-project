@@ -29,3 +29,27 @@ test('ambiguous output keys, expressions and unknown lineage are not relabeled',
  assert.deepEqual(inferDisplayNames('SELECT COUNT(*) AS Name FROM Lookup',tables,relationships),{});
  assert.deepEqual(inferDisplayNames('SELECT Name FROM (SELECT Name FROM Lookup) x',tables,relationships),{});
 });
+
+test('an unnamed SQL Server aggregate retains its proven metric label and numeric zero', () => {
+ const schema=[{tableName:'Invoices',columns:[{columnName:'ClosingBalance',displayName:'Số dư Nợ cuối kỳ'}]}];
+ const displayNames=inferDisplayNames('SELECT SUM(i.ClosingBalance) FROM Invoices i',schema);
+ assert.deepEqual(displayNames,{'':'Tổng Số dư Nợ cuối kỳ'});
+ const rows=[{'':0}];
+ const reply=buildSqlRowsFallbackReply({result:{rows,displayNames}});
+ assert.ok(reply.includes('**Tổng Số dư Nợ cuối kỳ:** 0'));
+ assert.ok(!reply.includes('**—'));
+ assert.deepEqual(rows,[{'':0}]);
+ assert.deepEqual(inferDisplayNames('SELECT SUM(i.ClosingBalance), MAX(i.ClosingBalance) FROM Invoices i',schema),{});
+ assert.deepEqual(inferDisplayNames('SELECT SUM(i.ClosingBalance) FROM Invoices i',[{...schema[0],columns:[{...schema[0].columns[0],isVisible:false}]}]),{});
+});
+
+test('unresolved or placeholder result names never become a dash label', () => {
+ for(const displayNames of [{},{'':'—'},{'':'   '}]) {
+  const reply=buildSqlRowsFallbackReply({result:{rows:[{'':0}],displayNames}});
+  assert.ok(reply.includes('**Giá trị kết quả 1:** 0'));
+  assert.ok(!reply.includes('**—'));
+ }
+ const reply=buildSqlRowsFallbackReply({result:{rows:[{'':null}]}},{},{forceTable:true});
+ assert.ok(reply.includes('| Giá trị kết quả 1 |'));
+ assert.ok(reply.includes('| — |'));
+});

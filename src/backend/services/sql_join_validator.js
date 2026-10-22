@@ -153,7 +153,18 @@ function validateEnrichmentProjection(select, refs, plan, bindings) {
   }
   // Aggregated measures do not project a record's mapped ID/display fields.
   // Relationship and grain checks still run independently for these JOINs.
-  if(!plan.requireMappedProjection&&columns.length&&columns.every(c=>c.expr?.type==='aggr_func'))return {valid:true};
+  // Ratios, NULLIF/CAST/ROUND and arithmetic around aggregates still return
+  // scalar measures. A raw column outside an aggregate is not such a measure.
+  let hasAggregate = false;
+  const scalarMeasure = node => {
+    if (!node || typeof node !== 'object') return true;
+    if (node.type === 'aggr_func') { hasAggregate = true; return true; }
+    if (node.type === 'column_ref' || node.type === 'star' || node.type === 'select') return false;
+    return Object.values(node).every(value => Array.isArray(value)
+      ? value.every(scalarMeasure) : scalarMeasure(value));
+  };
+  if (!plan.requireMappedProjection && columns.length
+    && columns.every(column => scalarMeasure(column.expr)) && hasAggregate) return { valid: true };
   if (!bindings.length) {
     const root = plan.tableRefs?.find(ref=>key(ref.tableName)===refs[0]?.tableName && key(ref.schemaName || 'dbo')===refs[0]?.schemaName) || plan.tableRefs?.[0];
     const rootAliases = refs.filter(ref => ref.tableName === key(root?.tableName)).map(ref => ref.alias);

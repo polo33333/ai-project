@@ -3,6 +3,36 @@
   const escape = value => String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
   const keyOf = event => JSON.stringify([event.reasoningId || '', event.iteration || 0]);
   const nearBottom = node => node && node.scrollHeight - node.clientHeight - node.scrollTop <= 48;
+  function stopStatusTyping(root) {
+    clearInterval(root._statusTypingTimer);
+    root._statusTypingTimer = null;
+  }
+  function typeStatus(root, element, value) {
+    const target = String(value || '');
+    if (!element || root._statusTypingTarget === target) return;
+    stopStatusTyping(root);
+    root._statusTypingTarget = target;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || document.hidden) {
+      element.textContent = target;
+      return;
+    }
+    const points = Array.from(target);
+    let shown = 0;
+    element.textContent = '';
+    const paint = () => {
+      shown = Math.min(points.length, shown + 2);
+      element.textContent = points.slice(0, shown).join('');
+      if (shown >= points.length) stopStatusTyping(root);
+    };
+    if (!points.length) return;
+    paint();
+    if (shown < points.length) root._statusTypingTimer = setInterval(paint, 24);
+    if (root.remove && !root._statusRemoveWrapped) {
+      const remove = root.remove.bind(root);
+      root._statusRemoveWrapped = true;
+      root.remove = () => { stopStatusTyping(root); remove(); };
+    }
+  }
   function animateOrb(root) {
     const canvas = root.querySelector('canvas.chat-thinking-spinner');
     const ctx = canvas?.getContext('2d');
@@ -54,6 +84,8 @@
       toggle.setAttribute('aria-label',content.hidden ? 'Mở nội dung suy nghĩ' : 'Thu gọn nội dung suy nghĩ');
     };
     animateOrb(root);
+    const current = root.querySelector('.chat-thinking-copy span');
+    if (current) typeStatus(root, current, current.textContent);
     return root;
   }
   function update(root, event = {}, label = '') {
@@ -61,7 +93,7 @@
     if (root._hideReasoning && event.type === 'reasoning_delta') return;
     const current = root.querySelector('.chat-thinking-copy span');
     if (event.type !== 'reasoning_delta') {
-      if (!root._reasoningRecords?.size && current) current.textContent = label || 'Đang chuẩn bị câu trả lời…';
+      if (!root._reasoningRecords?.size && current) typeStatus(root, current, label || 'Đang chuẩn bị câu trả lời…');
       return;
     }
     if (!event.delta) return;
@@ -110,6 +142,7 @@
         root.remove = () => { root._reasoningStopped = true; clearInterval(root._typingTimer); root._typingTimer = null; remove(); };
       }
     }
+    stopStatusTyping(root);
     if (current) current.textContent = '';
     content.hidden = root._reasoningCollapsed === true;
     const toggle = root.querySelector('.chat-thinking-toggle');
@@ -160,5 +193,5 @@
     observeContent();
     watcher.observers=[mutations,resize];activityWatchers.set(container,watcher);watcher.update();
   }
-  window.ChatReasoningUI = { create, update, render, stripCompleted, watchActivity };
+  window.ChatReasoningUI = { create, update, render, stripCompleted, watchActivity, stopStatusTyping };
 })();

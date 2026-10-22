@@ -19,6 +19,42 @@ function fixture(t) {
 }
 const args = { fromTable: 'dbo.A', toTable: 'B' };
 
+test('direct SQL resolves missing JOIN metadata without guessing keys or bypassing source policy', t => {
+  const context=fixture(t), {planForSql}=require('../src/backend/agent_core/tools/join_path');
+  const {validateSqlAgainstJoinPlan}=require('../src/backend/services/sql_join_validator');
+  const sql='SELECT a.Id FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id';
+  assert.ok(planForSql(sql,context));
+  assert.equal(validateSqlAgainstJoinPlan(sql,context.joinPlan).valid,true);
+  assert.equal(validateSqlAgainstJoinPlan(sql.replace('b.Id=c.Id','b.Id=c.WrongId'),context.joinPlan).valid,false);
+  assert.equal(planForSql(sql,context),null,'An existing explicit plan is preserved');
+  dictionary.tableRelationships[0].status='suggested';
+  const denied={permissions:['sql:read'],dbSourceId:'src'};
+  assert.equal(planForSql(sql,denied),null);assert.equal(denied.joinPlan,undefined);
+  assert.equal(planForSql('SELECT a.Id FROM A a JOIN A b ON a.Id=b.Id',denied),null);
+});
+
+test('sequential path discovery retains both verified joins for one query', t => {
+  const context = fixture(t);
+  execute({ fromTable: 'Bridge', toTable: 'A' }, context);
+  const combined = execute({ fromTable: 'Bridge', toTable: 'B' }, context);
+  assert.deepEqual(new Set(combined.tableRefs.map(ref => ref.tableName)), new Set(['A', 'Bridge', 'B']));
+  assert.equal(combined.edges.length, 2);
+  const { validateSqlAgainstJoinPlan } = require('../src/backend/services/sql_join_validator');
+  assert.equal(validateSqlAgainstJoinPlan('SELECT b.Id FROM Bridge b JOIN A a ON b.Id=a.Id JOIN B c ON b.Id=c.Id', context.joinPlan).valid, true);
+  assert.equal(validateSqlAgainstJoinPlan('SELECT b.Id FROM Bridge b JOIN A a ON b.Id=a.Id JOIN B c ON b.Id=c.OtherId', context.joinPlan).valid, false);
+});
+
+test('path accumulation never revives revoked relationships or another source plan', t => {
+  const context = fixture(t);
+  execute({ fromTable: 'Bridge', toTable: 'A' }, context);
+  dictionary.tableRelationships[0].status = 'suggested';
+  assert.deepEqual(execute({ fromTable: 'Bridge', toTable: 'B' }, context).tableRefs.map(ref => ref.tableName), ['Bridge', 'B']);
+  dictionary.tableRelationships[0].status = 'verified';
+  execute({ fromTable: 'Bridge', toTable: 'A' }, context);
+  context.joinPlan.dbSourceId = 'other';
+  assert.deepEqual(execute({ fromTable: 'Bridge', toTable: 'B' }, context).tableRefs.map(ref => ref.tableName), ['Bridge', 'B']);
+});
+
 test('join tool reuses planner, installs validation plan and flags fanout', t => {
   const context = fixture(t), result = execute(args, context);
   assert.equal(result.outcome, 'ready');

@@ -89,7 +89,7 @@
   }catch(error){onAnswer?.({type:'answer_reset'});throw error;}
   finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
  }
- function createPreview(host){
+ function createPreview(host,{renderMarkdown}={}){
   let id=null,seq=0,text='',shown=0,node=null,frame=null,disposed=false,live=false,deadline=null,finishResolve=null;
   function settle(){finishResolve?.();finishResolve=null;deadline=null;}
   function clear(){if(frame!==null)clearTimeout(frame);frame=null;settle();node?.remove();node=null;text='';shown=0;id=null;seq=0;host.classList.remove('has-answer-preview');}
@@ -103,7 +103,17 @@
    shown=instant?text.length:Math.min(text.length,shown+Math.max(24,Math.ceil((text.length-shown)/ticks)));
    // Do not split a UTF-16 surrogate pair between paints.
    if(shown<text.length&&text.charCodeAt(shown-1)>=0xD800&&text.charCodeAt(shown-1)<=0xDBFF)shown++;
-   node.textContent=text.slice(0,shown);if(follow)scroller.scrollTop=scroller.scrollHeight;
+   const visible=text.slice(0,shown);
+   if(typeof renderMarkdown==='function'){
+    const previous=[...node.querySelectorAll('.chat-markdown-table-wrap,.kh-embed-table-wrap')].map(wrapper=>({left:wrapper.scrollLeft,widths:[...wrapper.querySelectorAll('col')].map(col=>parseFloat(col.style.width)||0)}));
+    node.innerHTML=renderMarkdown(visible);
+    node.querySelectorAll('.chat-markdown-table-wrap,.kh-embed-table-wrap').forEach((wrapper,index)=>{
+     const prior=previous[index];if(!prior)return;
+     let width=0;wrapper.querySelectorAll('col').forEach((col,column)=>{const size=Math.max(parseFloat(col.style.width)||0,prior.widths[column]||0);col.style.width=size+'px';width+=size;});
+     wrapper.querySelector('table')?.style.setProperty('--chat-table-width',width+'px');wrapper.scrollLeft=prior.left;
+    });
+   }else node.textContent=visible;
+   if(follow)scroller.scrollTop=scroller.scrollHeight;
    if(shown<text.length)schedule();else settle();
   }
   return {update(event){
@@ -114,7 +124,7 @@
    }
    if(event.type==='answer_reset'){if(!event.id||id===event.id)clear();return;}
    if(event.type==='answer_start'){
-    clear();id=event.id;live=event.verified===false||event.animate===true;node=document.createElement('div');node.className='chat-answer-preview';node.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.8;color:inherit;';
+    clear();id=event.id;live=event.verified===false||event.animate===true;node=document.createElement('div');node.className='chat-answer-preview';node.style.cssText=`white-space:${typeof renderMarkdown==='function'?'normal':'pre-wrap'};overflow-wrap:anywhere;font:inherit;line-height:1.8;color:inherit;`;
     node.setAttribute('aria-label','Câu trả lời đang được tạo');host.append(node);host.classList.add('has-answer-preview');return;
    }
    if(event.type!=='answer_delta'||event.id!==id||!Number.isInteger(event.seq)||event.seq!==seq+1||typeof event.delta!=='string')return;

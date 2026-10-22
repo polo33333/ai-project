@@ -838,7 +838,7 @@
       }
       const streamUI=await streamApi();
       if(requestVersion!==conversationVersion)return;
-      answerPreview=streamUI.createPreview(thinking);
+      answerPreview=streamUI.createPreview(thinking,{renderMarkdown:renderRichText});
       const response = await fetch(`${apiBase}/api/embed/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: activeRequest.signal, body: JSON.stringify({ identityToken:requestIdentityToken, embedId, question, sessionId,workflowToken, history: history.slice(-20), preview: isPreview, stream: true }) });
       const data = await readChatResponse(response, progress => {
         if (requestVersion !== conversationVersion) return;

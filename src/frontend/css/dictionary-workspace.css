@@ -124,6 +124,7 @@ main.main-content.dictionary-workspace { overflow-y:hidden; }
 #view-dictionary .dictionary-graph-help i { color:var(--dict-accent); }
 #view-dictionary .dictionary-graph-viewport { background-size:24px 24px; background-image:radial-gradient(color-mix(in srgb,var(--text-muted) 22%,transparent) .8px,transparent .8px); border-color:var(--border-color); border-radius:12px; }
 #view-dictionary .dictionary-card-graph { min-width:0; min-height:0; }
+.dictionary-source-label { padding:7px 10px; border:1px solid var(--border-color); border-radius:8px; color:var(--text-secondary); font-size:12px; }
 #view-dictionary .dictionary-graph-cluster { position:absolute; box-sizing:border-box; border:1px solid color-mix(in srgb,var(--dict-accent) 14%,transparent); border-radius:18px; background:color-mix(in srgb,var(--dict-accent) 2%,var(--dict-surface)); pointer-events:none; padding:9px 14px; color:var(--text-secondary); }
 #view-dictionary .dictionary-graph-cluster strong { font-size:13px; }
 #view-dictionary .dictionary-graph-cluster small { margin-left:10px; font-size:11px; }

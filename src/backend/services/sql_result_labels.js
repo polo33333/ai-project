@@ -16,8 +16,12 @@ function inferDisplayNames(sql, tables = [], relationships = []) {
     const { mandatoryEqualityPairs } = require('./sql_join_validator');
     const pairs = refs.flatMap(ref => mandatoryEqualityPairs(ref.on).pairs);
     const labels = {}, seen = new Set();
+    const unnamedExpressions = (ast.columns || []).filter(p => !p.as && p.expr?.type !== 'column_ref');
     for (const projection of ast.columns || []) {
-      const expr = projection.expr;
+      const aggregate = projection.expr?.type === 'aggr_func' ? key(projection.expr.name) : null;
+      const prefixes = { sum: 'Tổng', avg: 'Trung bình', min: 'Nhỏ nhất', max: 'Lớn nhất', count: 'Số giá trị có dữ liệu của' };
+      if (aggregate && !prefixes[aggregate]) continue;
+      const expr = aggregate ? projection.expr.args?.expr : projection.expr;
       if (expr?.type !== 'column_ref' || expr.column === '*') continue;
       const candidates = refs.filter(ref => ref.table && (!expr.table || ref.alias === key(expr.table))
         && ref.table.columns.some(c => key(c.columnName) === key(expr.column) && c.isVisible !== false));
@@ -31,8 +35,12 @@ function inferDisplayNames(sql, tables = [], relationships = []) {
             && pairs.some(q => (q.leftAlias === source.alias && q.leftColumn === key(p.sourceColumn) && q.rightAlias === target.alias && q.rightColumn === key(p.targetColumn))
               || (q.rightAlias === source.alias && q.rightColumn === key(p.sourceColumn) && q.leftAlias === target.alias && q.leftColumn === key(p.targetColumn))))));
       const roleNames = [...new Set(roles.map(r => r.businessRole))];
-      const label = roleNames.length === 1 ? roleNames[0] : column.displayName;
-      const output = projection.as || expr.column;
+      const baseLabel = roleNames.length === 1 ? roleNames[0] : column.displayName;
+      const label = aggregate && baseLabel ? `${prefixes[aggregate]} ${baseLabel}` : baseLabel;
+      // SQL Server returns an empty result key for a single unnamed expression.
+      // Multiple unnamed expressions cannot be bound safely by that shared key.
+      if (aggregate && !projection.as && unnamedExpressions.length !== 1) continue;
+      const output = projection.as || (aggregate ? '' : expr.column);
       if (seen.has(output)) { delete labels[output]; continue; }
       seen.add(output);
       if (label) labels[output] = label;

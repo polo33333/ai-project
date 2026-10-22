@@ -48,6 +48,16 @@ test('join validator rejects a missing composite key predicate', () => {
   assert.match(result.error, /thiếu đủ khóa JOIN/);
 });
 
+test('weighted scalar measures skip display-only requirements but retain join and grain checks', () => {
+  const p = { ...plan, purpose: 'enrichment', edges: [{ ...plan.edges[0], cardinality: 'many-to-one', businessRole: 'Customer', displayColumn: 'Name' }] };
+  const join = ' FROM Orders o LEFT JOIN Customers c ON o.TenantID=c.TenantID AND o.CustomerID=c.ID';
+  assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount)/NULLIF(SUM(o.Qty),0) AS WeightedPrice, COUNT(*) AS InvoiceCount' + join, p).valid, true);
+  assert.equal(validateSqlAgainstJoinPlan('SELECT CAST(SUM(o.Amount) AS DECIMAL(18,2)) AS Total, 1 AS Flag' + join, p).valid, true);
+  assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(c.Balance)/NULLIF(SUM(o.Qty),0) AS WrongPrice' + join, p).code, 'JOIN_GRAIN_UNSAFE');
+  assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount)/NULLIF(SUM(o.Qty),0) AS WeightedPrice FROM Orders o LEFT JOIN Customers c ON o.CustomerID=c.ID', p).code, 'JOIN_RELATIONSHIP_MISSING');
+  assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount) AS Total, c.Code' + join + ' GROUP BY c.Code', p).code, 'JOIN_PROJECTION_INVALID');
+});
+
 test('join validator rejects a key hidden below OR', () => {
   const result = validateSqlAgainstJoinPlan('SELECT o.ID FROM Orders o JOIN Customers c ON o.TenantID = c.TenantID AND (o.CustomerID = c.ID OR 1 = 1)', plan);
   assert.equal(result.valid, false);

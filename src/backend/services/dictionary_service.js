@@ -160,6 +160,23 @@ class DictionaryService {
     return this.tablesStore.filter(table=>sources.some(source=>source.id===table.dbSourceId));
   }
 
+  getWorkspaceForSource(source, sources = []) {
+    if (!source) return { source: null, tables: [], relationships: [] };
+    const available = this.getGroupedTables();
+    const legacyUnambiguous = sources.filter(item => String(item.dbName || '').toLowerCase() === String(source.dbName || '').toLowerCase()).length === 1;
+    const tables = available.filter(table => table.dbSourceId === source.id || (!table.dbSourceId && legacyUnambiguous && table.dbName && String(table.dbName).toLowerCase() === String(source.dbName || '').toLowerCase()));
+    const ids = new Set(tables.map(table => table.tableId).filter(Boolean));
+    const relationships = this.getTableRelationships().filter(relation => {
+      if (relation.dbSourceId && relation.dbSourceId !== source.id) return false;
+      return ['source', 'target'].every(side => {
+        if (relation[side + 'TableId']) return ids.has(relation[side + 'TableId']);
+        const candidates = available.filter(table => table.tableName === relation[side + 'Table'] && (!relation.dbSourceId || table.dbSourceId === relation.dbSourceId));
+        return candidates.length === 1 && tables.includes(candidates[0]);
+      });
+    });
+    return { source: { id: source.id, dbName: source.dbName }, tables, relationships };
+  }
+
   normalizeDomain(value) {
     const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
     return normalized.replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || null;

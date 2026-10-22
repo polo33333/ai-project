@@ -274,7 +274,7 @@ test('configured detail segment anchors aggregate root and structured SQL passes
  const harness=new Harness({toolManager:manager,dispatch:async(provider,messages,defs)=>{
   if(messages[0]?.content?.startsWith('Return JSON only with operation')) {
    assert.ok(JSON.parse(messages.at(-1).content).tables.find(table=>table.tableName==='Costs').columns.some(c=>c.name==='Amount'));
-   return {content:JSON.stringify({operation:'aggregate',attributes:[],presentation:'table',dataQuery:{table:'Costs',operation:'aggregate',segment:'operations',measures:[{column:'Amount',aggregation:'SUM'}]}})};
+   return {content:JSON.stringify({operation:'aggregate',analysis:'none',attributes:[],presentation:'table',dataQuery:{table:'Costs',operation:'aggregate',segment:'operations',measures:[{column:'Amount',aggregation:'SUM'}]}})};
   }
   if(!defs.length)return {content:JSON.stringify({filters:[{table:'Costs',column:'Category',value:21,evidence:'Category = 21'}]})};
   if(!messages.some(m=>m.role==='tool'))return {tool_calls:[tool('list_workflows',{}),tool('search_schema',{query:'electricity operations',request:{operation:'aggregate',attributes:[],presentation:'table'}})]};

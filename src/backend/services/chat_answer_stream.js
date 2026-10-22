@@ -43,12 +43,12 @@ function createAnswerStream(callback,{signal,enabled=process.env.CHAT_ANSWER_STR
    current.visible=finalText;return;
   }
   reset();
-  // Reveal only the verified introduction. Structured blocks are rendered
-  // from the canonical final payload, never as partially typed tables/JSON.
+  // Verified Markdown tables can reveal progressively through the rich preview.
+  // Keep raw code/JSON and HTML blocks for the canonical final renderer.
   const lines=finalText.split('\n');
   const structured=lines.findIndex(line=>{
    const value=line.trimStart();
-   return ['|','```','~~~','<','{','['].some(prefix=>value.startsWith(prefix));
+   return ['```','~~~','<','{','['].some(prefix=>value.startsWith(prefix));
   });
   const introduction=(structured<0?finalText:lines.slice(0,structured).join('\n')).trimEnd();
   if(!introduction.trim())return;

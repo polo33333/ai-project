@@ -5,6 +5,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+test('mutation responses cannot add another database source back into the selected workspace', () => {
+  const context = vm.createContext({ window: {}, console, document: { addEventListener() {} } });
+  vm.runInContext(fs.readFileSync('src/frontend/js/modules/dictionary.js', 'utf8'), context);
+  Object.assign(context.window, { dictionaryWorkspaceSource: { id: 'one' }, groupedTablesData: [
+    { tableId: 'one:A', tableName: 'A', dbSourceId: 'one' }, { tableId: 'one:B', tableName: 'B', dbSourceId: 'one' }
+  ] });
+  context.tables = [...context.window.groupedTablesData, { tableId: 'two:A', tableName: 'A', dbSourceId: 'two' }];
+  context.relations = [{ sourceTableId: 'one:A', targetTableId: 'one:B' }, { sourceTableId: 'two:A', targetTableId: 'one:B' }];
+  assert.equal(vm.runInContext('scopeDictionaryMutationTables(tables).length', context), 2);
+  assert.equal(vm.runInContext('scopeDictionaryMutationRelationships(relations).length', context), 1);
+});
+
 test('drawer, list toggle and column edits send the selected identity for same-named tables', async () => {
   const requests = [];
   const context = { window: {}, console,

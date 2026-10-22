@@ -281,6 +281,9 @@ class ExecuteSqlTool extends BaseTool {
       throw new Error(check.error || 'Câu lệnh SQL không an toàn.');
     }
     const { validateSqlAgainstJoinPlan } = require('../../../services/sql_join_validator');
+    // Resolve missing metadata with the same permission-filtered planner as
+    // get_join_path; SQL still passes the exact key and grain checks below.
+    const resolvedJoinPlan = require('../join_path').planForSql(check.cleanedSql, context);
     const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
     if (!joinCheck.valid) throw Object.assign(new Error(joinCheck.error), { code: joinCheck.code, details: joinCheck.details });
 
@@ -296,6 +299,8 @@ class ExecuteSqlTool extends BaseTool {
         dictionaryService.getGroupedTables().filter(table=>table.isActive&&table.dbSourceId===context.dbSourceId),
         dictionaryService.getTableRelationships()),
       rowCount: rows.length,
+      ...(resolvedJoinPlan ? { joinPlanResolution: { source: 'verified_catalog', planId: resolvedJoinPlan.planId,
+        relationshipIds: resolvedJoinPlan.edges.map(edge => edge.relationshipId) } } : {}),
       ...(Object.keys(units).length?{units}:{}),
       ...(args.query ? { hasMore: rows.length >= (args.query.limit || 100)
         && !(Number.isInteger(args.query.limit) && context.requestPlan?.requestedRowLimit === args.query.limit)

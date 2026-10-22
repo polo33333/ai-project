@@ -942,6 +942,7 @@ function formatExecutionTime(value) {
 }
 
 function disposeThinkingBubble(root) {
+  if (root) window.ChatReasoningUI?.stopStatusTyping(root);
   if (root?._elapsedTimer) clearInterval(root._elapsedTimer);
   const current = root?.querySelector('.chat-thinking-copy span');
   if (current?._typingTimer) clearInterval(current._typingTimer);
@@ -1435,6 +1436,10 @@ function isPageChatRetryResultUsable(data) {
   if (!data || data.status==='error' || ['ERROR','CANCELLED'].includes(data.completionStatus)) return false;
   if (data.execution) return Boolean(data.execution.id) &&
     ['CREATED','WAITING_INPUT','READY','RUNNING','NEEDS_REVIEW','SUCCEEDED'].includes(data.execution.status);
+  if (data.completionStatus==='PARTIAL' && data.retryDisposition==='verified_partial') {
+    return typeof data.reply==='string' && Boolean(data.reply.trim()) &&
+      Boolean(data.toolCalls?.some(call=>call.success && ['execute_sql_query','query_sql_metric'].includes(call.name)));
+  }
   return data.completionStatus==='SUCCESS';
 }
 
@@ -1534,7 +1539,7 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
   // Thinking Bubble
   const thinkingId = `thinking-${Date.now()}`;
   const thinkingDiv = createThinkingBubble(thinkingId);
-  const answerPreview=window.ChatStream?.createPreview(thinkingDiv);
+  const answerPreview=window.ChatStream?.createPreview(thinkingDiv,{renderMarkdown:parseMarkdown});
   const progressEvents = [];
   window.pageChatPendingThinking = { sessionId: session.id, node: thinkingDiv, retryRecord:retryContext?.record };
   if (isRetry) { retryContext.node.before(thinkingDiv); retryContext.node.style.setProperty('display','none','important'); }

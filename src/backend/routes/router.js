@@ -166,6 +166,7 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
   }));
   return {
     answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(coreResult),
+    retryDisposition: require('../services/chat_retry_policy').disposition(coreResult),
     status: coreResult.success ? 'success' : 'error', completionStatus: coreResult.trace?.completionStatus || (coreResult.success ? 'PARTIAL' : 'ERROR'), reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
     executionTime: `${execMs}ms`, executionMode: coreResult.executionMode, auditId, tokenUsage: coreResult.tokenUsage || null,
     providerFallbacks: coreResult.providerFallbacks || [], contextSelection: coreResult.contextSelection || null,
@@ -639,9 +640,10 @@ async function handleGovernedRequest(req, res) {
 
   // 2. Data Dictionary APIs (Grouped Tables & Active Toggle)
   if (pathname === '/api/dictionary/workspace' && req.method === 'GET') {
+    const workspace = dictionaryService.getWorkspaceForSource(sqlConnector.getDefaultDbSource(), sqlConnector.dbSources);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ tables: dictionaryService.getGroupedTables(), domains: domainAliasService.getDomainAliases(),
-      relationships: dictionaryService.getTableRelationships(), quality: require('../services/schema_quality').audit(dictionaryService.getGroupedTables(), dictionaryService.getTableRelationships()) }));
+    res.end(JSON.stringify({ ...workspace, domains: domainAliasService.getDomainAliases(),
+      quality: require('../services/schema_quality').audit(workspace.tables, workspace.relationships) }));
     return;
   }
   if (pathname === '/api/dictionary' && req.method === 'GET') {

@@ -152,6 +152,7 @@ async function setDefaultDbSource(id) {
     if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
     window.invalidateRelatedTabData?.('sql');
     await fetchDbSources();
+    if (typeof fetchDataDictionary === 'function') await fetchDataDictionary({ force: true });
     if (typeof showToast === 'function') showToast('Đã đặt nguồn CSDL mặc định.', 'success');
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể đặt nguồn mặc định: ${err.message}`, 'error');

@@ -164,18 +164,48 @@ test('live and verified answers paint progressively and final waits for pending 
  }
 });
 
-test('verified business replies reveal prose only and retain structured results for final rendering',()=>{
+test('rich preview renders table rows progressively using the final Markdown parser',async()=>{
+ const timers=new Map();let next=0;
+ const host={children:[],classList:{add(){},remove(){}},append(node){this.children.push(node);},closest:()=>null};
+ const context=vm.createContext({window:{},URL,Date,
+  setTimeout:fn=>{timers.set(++next,fn);return next;},clearTimeout:id=>timers.delete(id),
+  document:{createElement(){return {style:{},querySelectorAll(){return [];},setAttribute(){},remove(){host.children=[];}};}}});
+ const source=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+ vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'),source.indexOf('// Render Chart.js')),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ const preview=context.window.ChatStream.createPreview(host,{renderMarkdown:context.parseMarkdown});
+ const flush=()=>{const jobs=[...timers.values()];timers.clear();jobs.forEach(fn=>fn());};
+ const text='| Name | Value |\n| --- | --- |\n'+Array.from({length:30},(_,i)=>`| Row ${i} | ${i} |`).join('\n')+'\n| Unsafe | <script>alert(1)</script> |';
+ preview.update({type:'answer_start',id:'table',verified:true,animate:true});
+ preview.update({type:'answer_delta',id:'table',seq:1,delta:text});
+ for(let i=0;i<3;i++)flush();
+ assert.match(host.children[0].innerHTML,/chat-markdown-table-wrap/);
+ assert.doesNotMatch(host.children[0].innerHTML,/Row 29/);
+ const complete=preview.update({type:'answer_complete'});
+ for(let i=0;i<100&&timers.size;i++)flush();
+ await complete;
+ assert.equal(host.children[0].innerHTML,context.parseMarkdown(text));
+ assert.match(host.children[0].innerHTML,/Row 29/);
+ assert.doesNotMatch(host.children[0].innerHTML,/<script>/);
+ preview.update({type:'answer_reset'});
+ assert.equal(host.children.length,0);
+});
+
+test('verified business replies reveal Markdown tables but retain code and JSON for final rendering',()=>{
  for(const executionMode of ['sql','workflow']){
   const events=[],stream=createAnswerStream(event=>events.push(event));
   stream.begin(false).push('<final_answer>Unverified draft ');
   assert.equal(events.length,0);
   stream.commit({success:true,completionStatus:'SUCCESS',executionMode,replyText:'Verified introduction.\n\n| Column |\n| --- |\n'});
   assert.equal(events[0].verified,true);assert.equal(events[0].animate,true);
-  assert.equal(events.filter(event=>event.type==='answer_delta').map(event=>event.delta).join(''),'Verified introduction.');
+  assert.equal(events.filter(event=>event.type==='answer_delta').map(event=>event.delta).join(''),'Verified introduction.\n\n| Column |\n| --- |');
  }
  const events=[],stream=createAnswerStream(event=>events.push(event));
  stream.commit({success:true,completionStatus:'SUCCESS',replyText:'| Column |\n| --- |'});
- assert.equal(events.length,0,'a table-only result is rendered directly from final');
+ assert.equal(events.filter(event=>event.type==='answer_delta').map(event=>event.delta).join(''),'| Column |\n| --- |');
+ const codeEvents=[],codeStream=createAnswerStream(event=>codeEvents.push(event));
+ codeStream.commit({success:true,completionStatus:'SUCCESS',replyText:'Introduction.\n\n```json\n{"private":"value"}\n```'});
+ assert.equal(codeEvents.filter(event=>event.type==='answer_delta').map(event=>event.delta).join(''),'Introduction.');
 });
 
 test('verification retains the same preview and emits only its missing tail',()=>{
