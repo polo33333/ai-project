@@ -59,7 +59,7 @@ function renderGlossaryTable() {
   if (items.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="system-logs-empty">
+        <td colspan="5" class="system-logs-empty">
           <i class="fa-solid fa-book-bookmark"></i>
           <strong>Chưa có thuật ngữ phù hợp.</strong>
         </td>
@@ -73,11 +73,12 @@ function renderGlossaryTable() {
   const startIndex = (state.currentPage - 1) * state.itemsPerPage;
   const paginatedItems = items.slice(startIndex, startIndex + state.itemsPerPage);
 
-  tbody.innerHTML = paginatedItems.map(item => {
+  tbody.innerHTML = paginatedItems.map((item, index) => {
     const term = escapeGlossaryHtml(item.term);
     const encodedTerm = encodeURIComponent(item.term || '');
     return `
       <tr>
+        <td class="glossary-index">${startIndex + index + 1}</td>
         <td>
           <div class="glossary-term-cell">
             <strong>${term}</strong>

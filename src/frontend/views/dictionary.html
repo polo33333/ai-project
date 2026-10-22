@@ -82,11 +82,13 @@
       </div>
       <div id="dictionary-graph-empty" class="dictionary-graph-empty" hidden><i class="fa-solid fa-share-nodes"></i><strong>Chưa có bảng đang bật phù hợp</strong><span>Hãy bật bảng cho AI hoặc thay đổi từ khóa tìm kiếm.</span></div>
     </div>
+    <button id="dictionary-graph-fullscreen" class="dictionary-graph-fullscreen" onclick="toggleDictionaryGraphFullscreen()" aria-label="Toàn màn hình" aria-pressed="false" title="Toàn màn hình"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
     <div class="dictionary-graph-controls" aria-label="Điều khiển graph">
       <button onclick="zoomDictionaryGraph(-0.1)" title="Thu nhỏ"><i class="fa-solid fa-minus"></i></button>
       <span id="dictionary-graph-zoom">100%</span>
       <button onclick="zoomDictionaryGraph(0.1)" title="Phóng to"><i class="fa-solid fa-plus"></i></button>
-      <button onclick="fitDictionaryGraph()" title="Vừa màn hình"><i class="fa-solid fa-expand"></i></button>
+      <button onclick="fitDictionaryGraph()" title="Căn vừa sơ đồ" aria-label="Căn vừa sơ đồ"><i class="fa-solid fa-arrows-to-circle"></i></button>
+      <button onclick="toggleDictionaryGraphFullscreen()" title="Toàn màn hình" aria-label="Toàn màn hình"><i class="fa-solid fa-expand"></i></button>
     </div>
   </div>
 

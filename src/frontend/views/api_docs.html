@@ -23,7 +23,7 @@
     <div class="data-table-container api-keys-table-wrap">
       <table class="custom-table">
         <thead>
-          <tr>
+          <tr><th class="row-index" scope="col">STT</th>
             <th style="width: 21%;">Ứng dụng</th>
             <th style="width: 34%;">API Secret Key</th>
             <th style="width: 11%;">Ngày tạo</th>
@@ -35,6 +35,7 @@
         <tbody id="api-keys-tbody"></tbody>
       </table>
     </div>
+    <div id="api-keys-pagination" class="pagination-wrapper"></div>
   </section>
 
   <section class="api-embed-admin-section">
@@ -45,6 +46,7 @@
     <div class="embed-config-layout">
       <div id="embed-config-list" class="embed-config-list"><div class="embed-config-empty">Chưa có cấu hình Embed.</div></div>
     </div>
+    <div id="embed-configs-pagination" class="pagination-wrapper"></div>
   </section>
 
   <section class="api-integration-section">

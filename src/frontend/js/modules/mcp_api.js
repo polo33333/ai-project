@@ -43,16 +43,19 @@ function renderMcpServersTable() {
   if (!tbody) return;
   const servers = window.mcpServersData || [];
 
+  const page = window.getAdminListPage(servers, 'mcp_servers');
+  window.renderPaginationControls('mcp-servers-pagination', 'mcp_servers', servers.length, renderMcpServersTable);
   if (servers.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="system-logs-empty"><i class="fa-solid fa-cube"></i><strong>Chưa có MCP Server nào.</strong></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="system-logs-empty"><i class="fa-solid fa-cube"></i><strong>Chưa có MCP Server nào.</strong></td></tr>`;
     return;
   }
 
-  tbody.innerHTML = servers.map(server => {
+  tbody.innerHTML = page.items.map((server, index) => {
     const status = String(server.status || 'disconnected').toUpperCase();
     const statusClass = status === 'CONNECTED' ? 'green' : status === 'ERROR' ? 'red' : 'yellow';
     return `
       <tr>
+        <td class="row-index">${page.start + index + 1}</td>
         <td><strong>${escapeMcpApiHtml(server.name)}</strong></td>
         <td><span class="metric-tag purple">${escapeMcpApiHtml(server.protocol || '-')}</span></td>
         <td><code class="table-code">${escapeMcpApiHtml(server.endpoint || '-')}</code></td>
@@ -188,13 +191,16 @@ function renderApiKeysTable() {
   const keys = window.apiKeysData || [];
   const countEl = document.getElementById('api-key-count');
   if (countEl) countEl.textContent = keys.length;
+  const page = window.getAdminListPage(keys, 'api_keys');
+  window.renderPaginationControls('api-keys-pagination', 'api_keys', keys.length, renderApiKeysTable);
   if (keys.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="system-logs-empty"><i class="fa-solid fa-key"></i><strong>Chưa có API Key nào.</strong></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="system-logs-empty"><i class="fa-solid fa-key"></i><strong>Chưa có API Key nào.</strong></td></tr>`;
     return;
   }
 
-  tbody.innerHTML = keys.map(key => `
+  tbody.innerHTML = page.items.map((key, index) => `
     <tr>
+      <td class="row-index">${page.start + index + 1}</td>
       <td><strong>${escapeMcpApiHtml(key.name)}</strong></td>
       <td>
         <div class="api-key-cell">
@@ -274,13 +280,15 @@ function renderEmbedConfigs() {
   const configs = window.embedConfigsData || [];
   if (count) count.textContent = configs.length;
   if (!list) return;
+  const page = window.getAdminListPage(configs, 'embed_configs');
+  window.renderPaginationControls('embed-configs-pagination', 'embed_configs', configs.length, renderEmbedConfigs);
   if (configs.length === 0) {
     list.innerHTML = '<div class="embed-config-empty"><i class="fa-solid fa-window-restore"></i><span>Chưa có cấu hình Embed.</span></div>';
     return;
   }
-  list.innerHTML = configs.map(config => `
+  list.innerHTML = page.items.map((config, index) => `
     <article class="embed-config-item ${config.isActive ? '' : 'inactive'}">
-      <div class="embed-config-main"><span class="embed-config-icon"><i class="fa-solid fa-comments"></i></span><div><strong>${escapeMcpApiHtml(config.name)}</strong><code>${escapeMcpApiHtml(config.id)}</code></div></div>
+      <div class="embed-config-main"><span class="embed-config-index" aria-label="STT ${page.start + index + 1}">${page.start + index + 1}</span><span class="embed-config-icon"><i class="fa-solid fa-comments"></i></span><div><strong>${escapeMcpApiHtml(config.name)}</strong><code>${escapeMcpApiHtml(config.id)}</code></div></div>
       <div class="embed-config-domains">${(config.allowedOrigins || []).filter(origin => origin && String(origin).toLowerCase() !== 'null').map(origin => `<span><i class="fa-solid fa-globe"></i>${escapeMcpApiHtml(origin)}</span>`).join('') || '<span class="empty"><i class="fa-solid fa-circle-exclamation"></i>Chưa cấu hình domain</span>'}</div>
       <div class="embed-config-meta"><span>${escapeMcpApiHtml(config.rateLimit)} req/phút</span><span>Tối đa ${escapeMcpApiHtml(config.maxRows)} dòng</span></div>
       <div class="embed-config-actions">

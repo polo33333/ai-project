@@ -88,10 +88,13 @@ function renderAiProvidersTable() {
   const activeProv = providers.find(p => p.isActive) || null;
   renderActiveProvider(activeProv);
 
+  const page = window.getAdminListPage(providers, 'ai_providers');
+  window.renderPaginationControls('ai-providers-pagination', 'ai_providers', providers.length, renderAiProvidersTable);
+
   if (providers.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="system-logs-empty">
+        <td colspan="7" class="system-logs-empty">
           <i class="fa-solid fa-network-wired"></i>
           <strong>Chưa có AI Provider nào được cấu hình.</strong>
         </td>
@@ -100,7 +103,7 @@ function renderAiProvidersTable() {
     return;
   }
 
-  tbody.innerHTML = providers.map(prov => {
+  tbody.innerHTML = page.items.map((prov, index) => {
     const isActive = !!prov.isActive;
     const priority = Number(prov.priority) || 999;
     const rawStatus = String(prov.status || 'standby').toLowerCase();
@@ -112,6 +115,7 @@ function renderAiProvidersTable() {
     const id = escapeProviderHtml(prov.id);
     return `
       <tr class="${isActive ? 'provider-row-active' : ''}">
+        <td class="row-index">${page.start + index + 1}</td>
         <td>
           <div class="provider-name-cell">
             <span class="provider-icon"><i class="fa-solid fa-robot"></i></span>

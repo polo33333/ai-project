@@ -70,6 +70,9 @@ function showToast(message, type = 'success', title = '') {
 // Universal Pagination State Manager
 window.paginationState = {
   accounts: { currentPage: 1, itemsPerPage: 10 },
+  api_keys: { currentPage: 1, itemsPerPage: 10 },
+  embed_configs: { currentPage: 1, itemsPerPage: 10 },
+  mcp_servers: { currentPage: 1, itemsPerPage: 10 },
   dictionary: { currentPage: 1, itemsPerPage: 10 },
   glossary: { currentPage: 1, itemsPerPage: 10 },
   ai_providers: { currentPage: 1, itemsPerPage: 10 },
@@ -79,6 +82,14 @@ window.paginationState = {
   system_logs: { currentPage: 1, itemsPerPage: 10 },
   library: { currentPage: 1, itemsPerPage: 10 },
   watchfolder_logs: { currentPage: 1, itemsPerPage: 10 }
+};
+
+window.getAdminListPage = function getAdminListPage(items, stateKey) {
+  const state = window.paginationState[stateKey] ||= { currentPage: 1, itemsPerPage: 10 };
+  state.itemsPerPage = [10, 20, 50, 100].includes(Number(state.itemsPerPage)) ? Number(state.itemsPerPage) : 10;
+  state.currentPage = Math.min(Math.max(1, Math.floor(Number(state.currentPage) || 1)), Math.max(1, Math.ceil(items.length / state.itemsPerPage)));
+  const start = (state.currentPage - 1) * state.itemsPerPage;
+  return { items: items.slice(start, start + state.itemsPerPage), start };
 };
 
 window.renderPaginationControls = function renderPaginationControls(containerId, stateKey, totalItems, onPageChangeCallback) {

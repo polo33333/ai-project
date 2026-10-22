@@ -17,7 +17,7 @@
     <div class="data-table-container">
       <table class="custom-table">
         <thead>
-          <tr>
+          <tr><th class="row-index" scope="col">STT</th>
             <th style="width: 18%;">Tên MCP Server</th>
             <th style="width: 10%;">Protocol</th>
             <th style="width: 28%;">Endpoint / Command</th>
@@ -30,6 +30,7 @@
         <tbody id="mcp-servers-tbody"></tbody>
       </table>
     </div>
+    <div id="mcp-servers-pagination" class="pagination-wrapper"></div>
   </div>
 
   <section class="content-card" id="mcp-read-only-review" hidden style="margin-bottom:20px">

@@ -2183,13 +2183,15 @@ code {
   padding-bottom: 11px;
 }
 
-.glossary-table td:nth-child(1),
 .glossary-table td:nth-child(2),
-.glossary-table td:nth-child(3) {
+.glossary-table td:nth-child(3),
+.glossary-table td:nth-child(4) {
   text-align: left;
 }
 
-.glossary-table td:nth-child(3) .metric-tag {
+.glossary-table .glossary-index { width:54px; padding-left:8px; padding-right:8px; text-align:center; color:var(--text-muted); font-size:12px; font-variant-numeric:tabular-nums; }
+
+.glossary-table td:nth-child(4) .metric-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2327,12 +2329,14 @@ code {
 #sql-sources-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 1510px;
+  min-width: 1329px;
 }
 
 .sql-sources-card .data-table-container {
-  height: min(500px, calc(100vh - 350px));
-  min-height: 240px;
+  height: auto;
+  min-height: 0;
+  max-height: min(560px, calc(100vh - 280px));
+  flex: 0 0 auto;
   overflow: auto;
 }
 
@@ -2345,8 +2349,8 @@ code {
   text-align: right;
 }
 
-#sql-sources-table th:nth-child(6),
-#sql-sources-table td:nth-child(6) {
+#sql-sources-table th:nth-child(7),
+#sql-sources-table td:nth-child(7) {
   overflow: hidden;
   white-space: nowrap;
 }
@@ -2362,7 +2366,19 @@ code {
   justify-content: space-between;
   align-items: center;
   margin-top: 12px;
+  gap:12px;
+  flex-wrap:wrap;
 }
+
+#sql-sources-table .sql-source-index { width:54px; min-width:54px; padding:12px 8px; text-align:center; color:var(--text-muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.sql-pagination-summary { color:var(--text-muted); font-size:12px; }
+.sql-pagination-controls,.sql-pagination-controls nav,.sql-pagination-controls label { display:flex; align-items:center; gap:6px; }
+.sql-pagination-controls { flex-wrap:wrap; gap:14px; color:var(--text-muted); font-size:12px; }
+.sql-pagination-controls select { padding:6px 26px 6px 10px; border:1px solid var(--border-color); border-radius:8px; color:var(--text-primary); background:var(--bg-primary,#fff); font:inherit; }
+.sql-pagination-controls nav button { min-width:30px; height:30px; padding:4px 8px; }
+.sql-pagination-controls nav button.is-current { color:#fff; background:var(--primary-color,#6253dc); border-color:var(--primary-color,#6253dc); }
+.sql-pagination-controls nav button:disabled { opacity:.4; cursor:default; }
+.custom-table .row-index,.accounts-table .row-index { width:54px; min-width:54px; padding-left:8px; padding-right:8px; text-align:center; color:var(--text-muted); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 .dictionary-page-card {
   position: relative;

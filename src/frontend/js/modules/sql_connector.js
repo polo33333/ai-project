@@ -4,6 +4,35 @@
 
 window.dbSourcesData = [];
 window.editingDbSourceId = null;
+window.dbSourcesPage = 1;
+window.dbSourcesPageSize = 10;
+
+function getDbSourcesPage(sources, page, pageSize) {
+  const size = [10, 20, 50].includes(Number(pageSize)) ? Number(pageSize) : 10;
+  const pages = Math.max(1, Math.ceil(sources.length / size));
+  const current = Math.min(pages, Math.max(1, Math.floor(Number(page) || 1)));
+  const start = (current - 1) * size;
+  return { items: sources.slice(start, start + size), page: current, size, pages, start, total: sources.length };
+}
+
+function changeDbSourcesPage(page) {
+  window.dbSourcesPage = page;
+  renderDbSourcesTable();
+}
+
+function changeDbSourcesPageSize(size) {
+  window.dbSourcesPageSize = Number(size);
+  window.dbSourcesPage = 1;
+  renderDbSourcesTable();
+}
+
+function renderDbSourcesPagination(data) {
+  const root = document.getElementById('sql-pagination');
+  if (!root) return;
+  const start = Math.max(1, Math.min(data.page - 2, data.pages - 4));
+  const pages = Array.from({ length: Math.min(5, data.pages) }, (_, index) => start + index);
+  root.innerHTML = `<div class="sql-pagination-summary">Hiển thị <strong>${data.total ? data.start + 1 : 0}–${Math.min(data.start + data.size, data.total)}</strong> / ${data.total} nguồn CSDL</div><div class="sql-pagination-controls"><label>Số dòng <select aria-label="Số dòng mỗi trang" onchange="changeDbSourcesPageSize(this.value)">${[10, 20, 50].map(size => `<option value="${size}" ${size === data.size ? 'selected' : ''}>${size}</option>`).join('')}</select></label><nav aria-label="Phân trang nguồn CSDL"><button type="button" class="btn-secondary-sm" onclick="changeDbSourcesPage(1)" ${data.page === 1 ? 'disabled' : ''} aria-label="Trang đầu">«</button><button type="button" class="btn-secondary-sm" onclick="changeDbSourcesPage(${data.page - 1})" ${data.page === 1 ? 'disabled' : ''} aria-label="Trang trước">‹</button>${pages.map(page => `<button type="button" class="btn-secondary-sm ${page === data.page ? 'is-current' : ''}" ${page === data.page ? 'aria-current="page"' : ''} onclick="changeDbSourcesPage(${page})">${page}</button>`).join('')}<button type="button" class="btn-secondary-sm" onclick="changeDbSourcesPage(${data.page + 1})" ${data.page === data.pages ? 'disabled' : ''} aria-label="Trang sau">›</button><button type="button" class="btn-secondary-sm" onclick="changeDbSourcesPage(${data.pages})" ${data.page === data.pages ? 'disabled' : ''} aria-label="Trang cuối">»</button></nav></div>`;
+}
 
 function escapeDbSourceHtml(value) {
   return String(value ?? '')
@@ -41,10 +70,15 @@ function renderDbSourcesTable() {
 
   const sources = window.dbSourcesData || [];
 
+  const pagination = getDbSourcesPage(sources, window.dbSourcesPage, window.dbSourcesPageSize);
+  window.dbSourcesPage = pagination.page;
+  window.dbSourcesPageSize = pagination.size;
+  renderDbSourcesPagination(pagination);
+
   if (sources.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" style="text-align: center; padding: 30px; color: var(--text-muted);">
+        <td colspan="8" style="text-align: center; padding: 30px; color: var(--text-muted);">
           <i class="fa-solid fa-plug" style="font-size: 24px; color: #cbd5e1; margin-bottom: 8px; display: block;"></i>
           <strong>Chưa có Nguồn Database SQL Server nào được nạp.</strong>
         </td>
@@ -53,13 +87,14 @@ function renderDbSourcesTable() {
     return;
   }
 
-  sources.forEach((src) => {
+  pagination.items.forEach((src, index) => {
     const sourceId = escapeDbSourceHtml(src.id);
     const isDefault = !!src.isDefault;
     const tr = document.createElement('tr');
     if (isDefault) tr.classList.add('db-source-default');
     tr.style.borderBottom = '1px solid #f1f5f9';
     tr.innerHTML = `
+      <td class="sql-source-index">${pagination.start + index + 1}</td>
       <td style="vertical-align: middle; padding: 14px;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #ffffff; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;">

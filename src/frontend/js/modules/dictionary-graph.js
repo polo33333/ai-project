@@ -42,8 +42,14 @@ function setDictionaryView(view) {
   if (window.dictionaryView === 'graph') renderDictionaryGraph(); else renderDataDictionary();
 }
 
-function selectDictionaryGraphTable(encodedTableName) {
+async function selectDictionaryGraphTable(encodedTableName) {
   const tableName = decodeURIComponent(encodedTableName);
+  hideDictionaryGraphTooltip();
+  if (document.getElementById('dictionary-graph-panel')?.classList.contains('is-fullscreen') || document.fullscreenElement === document.getElementById('dictionary-graph-panel')) {
+    window.dictionaryGraphSelection = tableName;
+    focusDictionaryGraphTable(tableName);
+    return;
+  }
   window.dictionaryGraphSelection = tableName;
   renderDictionaryGraph();
   openDictionaryDrawer(encodeURIComponent(tableName));
@@ -62,6 +68,55 @@ function buildDictionaryAliasAssignments(tables) {
   return assignments;
 }
 
+function buildDictionaryClusterLayout(tables, relationships, viewportWidth = 1280, viewportHeight = 720) {
+  const groups = new Map();
+  const degrees = new Map();
+  relationships.forEach(r => [r.sourceTable, r.targetTable].forEach(name => degrees.set(name, (degrees.get(name) || 0) + 1)));
+  tables.forEach(table => {
+    const key = table.domain || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(table);
+  });
+  const ordered = [...groups].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  const cellWidth = 220, rowHeight = 76, padding = 12, header = 34, gap = 14;
+  let best;
+  // Pack small domains into gaps instead of allocating a full row to every cluster.
+  for (let columns = 3; columns <= 10; columns++) {
+    const skyline = Array(columns).fill(16);
+    const positions = new Map(), clusters = [];
+    ordered.forEach(([domain, original]) => {
+      const members = [...original].sort((a, b) => (degrees.get(b.tableName) || 0) - (degrees.get(a.tableName) || 0) || a.tableName.localeCompare(b.tableName));
+      const span = Math.min(columns, Math.max(1, Math.min(3, Math.ceil(Math.sqrt(members.length)))));
+      let column = 0, y = Infinity;
+      for (let i = 0; i <= columns - span; i++) {
+        const top = Math.max(...skyline.slice(i, i + span));
+        if (top < y) { column = i; y = top; }
+      }
+      const x = 16 + column * (cellWidth + gap);
+      const width = span * cellWidth + (span - 1) * gap;
+      const height = header + Math.ceil(members.length / span) * rowHeight + padding;
+      members.forEach((table, i) => positions.set(table.tableName, {
+        x: x + padding + (i % span) * (cellWidth + gap),
+        y: y + header + Math.floor(i / span) * rowHeight
+      }));
+      clusters.push({ domain, x, y, width, height, count: members.length });
+      for (let i = column; i < column + span; i++) skyline[i] = y + height + gap;
+    });
+    const width = Math.max(1, ...clusters.map(c => c.x + c.width + 16));
+    const height = Math.max(1, ...clusters.map(c => c.y + c.height + 16));
+    const scale = Math.min(1, Math.max(1, viewportWidth - 40) / width, Math.max(1, viewportHeight - 40) / height);
+    const score = scale - width * height * 1e-10;
+    if (!best || score > best.score) best = { positions, clusters, width, height, score };
+  }
+  return best;
+}
+
+function dictionaryGraphMappingLabel(relation) {
+  const pairs = relation.columnPairs?.length ? relation.columnPairs : [{ sourceColumn: relation.sourceColumn, targetColumn: relation.targetColumn }];
+  return pairs.filter(pair => pair.sourceColumn && pair.targetColumn)
+    .map(pair => `${pair.sourceColumn} → ${pair.targetColumn}`).join(' · ') || 'Chưa có ánh xạ khóa';
+}
+
 function renderDictionaryGraph() {
   const { domains } = renderDictionaryOverview();
   const graph = document.getElementById('dictionary-domain-graph');
@@ -75,12 +130,11 @@ function renderDictionaryGraph() {
   empty.hidden = tables.length > 0;
   nodesRoot.innerHTML = '';
   graph.classList.toggle('has-selection', Boolean(window.dictionaryGraphSelection));
-  if (!tables.length) { dbRoot.hidden = true; graph.style.width = '100%'; graph.style.height = '100%'; drawDictionaryGraphEdges(); return; }
+  if (!tables.length) { document.getElementById('dictionary-graph-mappings')?.remove(); dbRoot.hidden = true; graph.style.width = '100%'; graph.style.height = '100%'; drawDictionaryGraphEdges(); return; }
 
-  // Stable rows make table names readable and keep targets still while inspecting relations.
-  const columnCount = Math.max(2, Math.min(6, Math.floor((viewport.clientWidth || 1200) / 230)));
-  const canvasWidth = columnCount * 230 + 48;
-  const canvasHeight = Math.ceil(tables.length / columnCount) * 110 + 48;
+  const layout = buildDictionaryClusterLayout(tables, getVerifiedDictionaryGraphRelationships(), viewport.clientWidth || 1280, viewport.clientHeight || 720);
+  const canvasWidth = layout.width;
+  const canvasHeight = layout.height;
   const centerX = canvasWidth / 2, centerY = canvasHeight / 2;
   graph.style.width = canvasWidth + 'px'; graph.style.height = canvasHeight + 'px';
   graph.classList.add('dictionary-card-graph');
@@ -108,35 +162,27 @@ function renderDictionaryGraph() {
       markup.push(`<div class="dictionary-orbit-item ${table.domain ? '' : 'is-unassigned'}" data-radius-x="${radiusX}" data-radius-y="${radiusY}" data-base-angle="${angle}" data-speed="${speed}" style="left:${centerX - 75}px;top:${centerY - 20}px;transform:translate3d(${orbitX}px,${orbitY}px,0);--domain-border:${palette.border};--domain-fill:${palette.fill};--domain-accent:${palette.accent}">${satellites}<button class="dictionary-graph-node ${selected ? 'selected' : ''} ${related ? 'related' : ''}" data-table="${escapeDictHtml(table.tableName)}" onclick="selectDictionaryGraphTable('${encodeURIComponent(table.tableName)}')"><span class="dictionary-node-icon"><i class="fa-solid fa-table"></i></span><span class="dictionary-node-copy"><strong>${escapeDictHtml(table.tableName)}</strong><small>${escapeDictHtml(table.tableDescription || `${(table.columns || []).length} cột dữ liệu`)}</small></span><span class="dictionary-node-meta">${escapeDictHtml(dictionaryDomainLabel(table.domain))} · ${(table.columns || []).length} cột${relationTotal ? ` · ${relationTotal} nối` : ''}</span></button></div>`);
     });
   });
-  nodesRoot.innerHTML = markup.join('');
+  nodesRoot.innerHTML = layout.clusters.map(cluster => `<div class="dictionary-graph-cluster" style="left:${cluster.x}px;top:${cluster.y}px;width:${cluster.width}px;height:${cluster.height}px"><strong>${escapeDictHtml(dictionaryDomainLabel(cluster.domain))}</strong><small>${cluster.count} bảng</small></div>`).join('') + markup.join('');
   window.dictionaryGraphHover = null;
   nodesRoot.querySelectorAll('.dictionary-orbit-item').forEach((item, index) => {
-    item.style.left = (24 + index % columnCount * 230) + 'px';
-    item.style.top = (24 + Math.floor(index / columnCount) * 110) + 'px';
+    const position = layout.positions.get(tables[index].tableName);
+    item.style.left = position.x + 'px';
+    item.style.top = position.y + 'px';
     item.style.transform = 'none';
     const node = item.querySelector('.dictionary-graph-node');
-    node.title = node.textContent.trim();
-    node.addEventListener('pointerenter', () => focusDictionaryGraphTable(node.dataset.table));
-    node.addEventListener('pointerleave', () => focusDictionaryGraphTable(null));
-    node.addEventListener('focus', () => focusDictionaryGraphTable(node.dataset.table));
-    node.addEventListener('blur', () => focusDictionaryGraphTable(null));
+    const table = tables[index];
+    node.setAttribute('aria-label', table.tableName);
+    node.addEventListener('pointerenter', event => { focusDictionaryGraphTable(node.dataset.table); showDictionaryGraphTooltip(table, node, event); });
+    node.addEventListener('focus', () => { focusDictionaryGraphTable(node.dataset.table); showDictionaryGraphTooltip(table, node); });
   });
   applyDictionaryGraphZoom();
   focusDictionaryGraphTable(null);
   requestAnimationFrame(() => {
     if (viewport.dataset.graphCentered !== '1') {
       fitDictionaryGraph(false);
-      // Start with readable labels; the fit control remains available for an overview.
-      if (window.dictionaryGraphZoom < .9) {
-        window.dictionaryGraphZoom = .9;
-        applyDictionaryGraphZoom();
-        viewport.scrollTop = 0;
-        viewport.scrollLeft = 0;
-        drawDictionaryGraphEdges();
-      }
       viewport.dataset.graphCentered = '1';
     } else {
-      drawDictionaryGraphEdges();
+      fitDictionaryGraph(false);
     }
   });
   if (window.dictionaryGraphAnimationFrame) cancelAnimationFrame(window.dictionaryGraphAnimationFrame);
@@ -151,10 +197,30 @@ function focusDictionaryGraphTable(tableName) {
   const relations = getVerifiedDictionaryGraphRelationships();
   graph?.querySelectorAll('.dictionary-graph-node').forEach(node => {
     const name = node.dataset.table;
+    node.classList.toggle('is-focused', name === selected);
     node.classList.toggle('is-emphasized', name === selected || relations.some(r =>
       (r.sourceTable === selected && r.targetTable === name) || (r.targetTable === selected && r.sourceTable === name)));
   });
   drawDictionaryGraphEdges();
+  let panel = document.getElementById('dictionary-graph-mappings');
+  if (!panel && graph?.parentElement) {
+    panel = document.createElement('aside');
+    panel.id = 'dictionary-graph-mappings';
+    panel.className = 'dictionary-graph-mappings';
+    document.getElementById('dictionary-graph-details').appendChild(panel);
+  }
+  if (panel) {
+    panel.hidden = !selected;
+    const mapped = relations.filter(r => r.sourceTable === selected || r.targetTable === selected);
+    panel.innerHTML = `<header class="dictionary-mappings-header"><strong>${escapeDictHtml(selected || '')} · Ánh xạ khóa</strong><button type="button" class="dictionary-mappings-close" onclick="closeDictionaryGraphMappings()" aria-label="Đóng ánh xạ khóa">&times;</button></header>` + (mapped.map(r => `<div><span>${escapeDictHtml(r.sourceTable)} → ${escapeDictHtml(r.targetTable)}</span><code>${escapeDictHtml(dictionaryGraphMappingLabel(r))}</code><small>${escapeDictHtml(r.cardinality || '')}</small></div>`).join('') || '<p>Không có quan hệ đã xác minh.</p>');
+  }
+}
+
+function closeDictionaryGraphMappings() {
+  window.dictionaryGraphSelection = null;
+  window.dictionaryGraphHover = null;
+  hideDictionaryGraphTooltip();
+  focusDictionaryGraphTable(null);
 }
 
 function graphPoint(element, graphRect, scale, side = 'center') {
@@ -188,15 +254,82 @@ function drawDictionaryGraphEdges() {
     hierarchy.push(`<path d="M ${from.x} ${from.y} L ${to.x} ${to.y}" class="dictionary-hierarchy-edge table-db ${wrapper.classList.contains('is-unassigned') ? 'unassigned' : ''}" marker-end="url(#dictionary-hierarchy-arrow)"></path>`);
     wrapper.querySelectorAll('.dictionary-table-alias').forEach(alias => { const [a, b] = nearestGraphPoints(alias, nodeIcon, graphRect, scale); hierarchy.push(`<path d="M ${a.x} ${a.y} L ${b.x} ${b.y}" class="dictionary-hierarchy-edge alias-table" marker-end="url(#dictionary-hierarchy-arrow)"></path>`); });
   });
-  const relations = getVerifiedDictionaryGraphRelationships().map(relation => {
-    const source = graph.querySelector(`.dictionary-graph-node[data-table="${CSS.escape(relation.sourceTable)}"] .dictionary-node-icon`); const target = graph.querySelector(`.dictionary-graph-node[data-table="${CSS.escape(relation.targetTable)}"] .dictionary-node-icon`); if (!source || !target) return '';
+  const nodeBounds = [...graph.querySelectorAll('.dictionary-graph-node.is-emphasized')].map(node => {
+    const rect = node.getBoundingClientRect();
+    return { name: node.dataset.table, x: (rect.left - graphRect.left) / scale, y: (rect.top - graphRect.top) / scale, width: rect.width / scale, height: rect.height / scale };
+  });
+  const relations = getVerifiedDictionaryGraphRelationships().filter(relation => selected && (relation.sourceTable === selected || relation.targetTable === selected)).map((relation, index) => {
+    const source = graph.querySelector(`.dictionary-graph-node[data-table="${CSS.escape(relation.sourceTable)}"]`); const target = graph.querySelector(`.dictionary-graph-node[data-table="${CSS.escape(relation.targetTable)}"]`); if (!source || !target) return '';
     const [from, to] = nearestGraphPoints(source, target, graphRect, scale); const middleX = (from.x + to.x) / 2; const active = selected && (relation.sourceTable === selected || relation.targetTable === selected); const muted = selected && !active;
-    return `<path d="M ${from.x} ${from.y} C ${middleX} ${from.y}, ${middleX} ${to.y}, ${to.x} ${to.y}" class="dictionary-domain-edge ${active ? 'active' : ''} ${muted ? 'muted' : ''}" marker-end="url(#dictionary-relation-arrow)"></path>`;
+    const relatedNode = relation.sourceTable === selected ? target : source;
+    const color = escapeDictHtml(getComputedStyle(relatedNode).getPropertyValue('--domain-accent').trim() || '#64748b');
+    const arrowId = `dictionary-relation-arrow-${index}`;
+    const crossingRects = dictionaryGraphCrossingRects(nodeBounds, relation.sourceTable, relation.targetTable);
+    const maskId = `dictionary-edge-outside-${index}`;
+    const clipId = `dictionary-edge-inside-${index}`;
+    const curve = `M ${from.x} ${from.y} C ${middleX} ${from.y}, ${middleX} ${to.y}, ${to.x} ${to.y}`;
+
+    const mapping = escapeDictHtml(dictionaryGraphMappingLabel(relation));
+    const title = escapeDictHtml(`${relation.sourceTable} → ${relation.targetTable}: ${dictionaryGraphMappingLabel(relation)}`);
+    return `<defs><mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${graph.offsetWidth}" height="${graph.offsetHeight}" style="mask-type:luminance"><rect x="0" y="0" width="${graph.offsetWidth}" height="${graph.offsetHeight}" fill="white"></rect><g fill="black">${crossingRects}</g></mask><clipPath id="${clipId}" clipPathUnits="userSpaceOnUse">${crossingRects}</clipPath><marker id="${arrowId}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:${color}"></path></marker></defs><path style="--relation-color:${color}" d="${curve}" mask="url(#${maskId})" class="dictionary-domain-edge ${active ? 'active' : ''} ${muted ? 'muted' : ''}" marker-end="url(#${arrowId})"><title>${title}</title></path><path style="--relation-color:${color}" d="${curve}" clip-path="url(#${clipId})" class="dictionary-domain-edge active crosses-node"></path><circle class="dictionary-edge-source-dot" cx="${from.x}" cy="${from.y}" r="${4 / scale}" style="--relation-color:${color}"></circle>${active ? `<g class="dictionary-edge-badge" style="--relation-color:${color}" data-anchor-x="${middleX}" data-anchor-y="${(from.y + to.y) / 2}"><title>${title}</title><line class="dictionary-edge-label-leader"></line><rect rx="8"></rect><text x="0" y="0" style="font-size:${13 / scale}px" class="dictionary-domain-edge-label">${mapping}</text></g>` : ''}`;
   }).join('');
   svg.innerHTML = `<defs><marker id="dictionary-hierarchy-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z"></path></marker><marker id="dictionary-relation-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z"></path></marker></defs>${[...orbitGuides.values()].join('')}${hierarchy.join('')}${relations}`;
+  placeDictionaryGraphEdgeLabels(graph, svg, graphRect, scale);
+}
+
+function dictionaryGraphCrossingRects(nodes, sourceTable, targetTable) {
+  return nodes.filter(node => node.name !== sourceTable && node.name !== targetTable)
+    .map(node => `<rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="${node.height / 2}"></rect>`).join('');
+}
+
+function findDictionaryGraphLabelPosition(anchor, width, height, bounds, occupied) {
+  let best;
+  for (const dy of [-24, 24, -52, 52, -84, 84, -120, 120, -164, 164, -210, 210, -260, 260]) {
+    for (const dx of [0, -80, 80, -160, 160, -260, 260]) {
+      const x = Math.max(8, Math.min(anchor.x + dx - width / 2, bounds.width - width - 8));
+      const y = Math.max(8, Math.min(anchor.y + dy - height / 2, bounds.height - height - 8));
+      const collisions = occupied.reduce((sum, box) => sum + (x < box.x + box.width + 5 && x + width + 5 > box.x && y < box.y + box.height + 5 && y + height + 5 > box.y ? 1 : 0), 0);
+      const score = collisions * 100000 + Math.hypot(x + width / 2 - anchor.x, y + height / 2 - anchor.y);
+      if (!best || score < best.score) best = { x, y, width, height, score };
+    }
+  }
+  return best;
+}
+
+function placeDictionaryGraphEdgeLabels(graph, svg, graphRect, scale) {
+  const occupied = [...graph.querySelectorAll('.dictionary-graph-node')].map(node => {
+    const rect = node.getBoundingClientRect();
+    return { x: (rect.left - graphRect.left) / scale, y: (rect.top - graphRect.top) / scale, width: rect.width / scale, height: rect.height / scale };
+  });
+  svg.querySelectorAll('.dictionary-edge-badge').forEach(badge => {
+    // Keep all labels above paths, even paths added later in the relationship list.
+    svg.appendChild(badge);
+    const text = badge.querySelector('text');
+    const size = text.getBBox();
+    const width = size.width + 20, height = size.height + 12;
+    const anchor = { x: Number(badge.dataset.anchorX), y: Number(badge.dataset.anchorY) };
+    const box = findDictionaryGraphLabelPosition(anchor, width, height, { width: graph.offsetWidth, height: graph.offsetHeight }, occupied);
+    occupied.push(box);
+    const background = badge.querySelector('rect');
+    for (const [key, value] of Object.entries({ x: box.x, y: box.y, width, height })) background.setAttribute(key, value);
+    text.setAttribute('x', box.x + width / 2);
+    text.setAttribute('y', box.y + 6 - size.y);
+    const leader = badge.querySelector('line');
+    for (const [key, value] of Object.entries({ x1: anchor.x, y1: anchor.y, x2: box.x + width / 2, y2: box.y + height / 2 })) leader.setAttribute(key, value);
+  });
 }
 
 function ensureDictionaryGraphInteractions(viewport) {
+  const panel = document.getElementById('dictionary-graph-panel');
+  if (panel && !document.getElementById('dictionary-graph-details')) {
+    const details = document.createElement('aside');
+    details.id = 'dictionary-graph-details';
+    details.className = 'dictionary-graph-details';
+    details.setAttribute('aria-label', 'Chi ti\u1ebft b\u1ea3ng v\u00e0 quan h\u1ec7');
+    details.innerHTML = '<div class="dictionary-details-empty"><i class="fa-solid fa-diagram-project" aria-hidden="true"></i><strong>Chi ti\u1ebft b\u1ea3ng</strong><p>R\u00ea ho\u1eb7c ch\u1ecdn m\u1ed9t b\u1ea3ng \u0111\u1ec3 xem m\u00f4 t\u1ea3 v\u00e0 \u00e1nh x\u1ea1 kh\u00f3a.</p></div>';
+    panel.appendChild(details);
+    panel.classList.add('has-details-rail');
+  }
   if (viewport.dataset.graphInteractions === '1') return; viewport.dataset.graphInteractions = '1';
   viewport.addEventListener('wheel', event => {
     event.preventDefault();
@@ -206,6 +339,62 @@ function ensureDictionaryGraphInteractions(viewport) {
     window.dictionaryGraphZoom = nextScale; applyDictionaryGraphZoom(); viewport.scrollLeft = logicalX * nextScale - pointerX; viewport.scrollTop = logicalY * nextScale - pointerY; drawDictionaryGraphEdges();
   }, { passive: false });
 }
+
+function hideDictionaryGraphTooltip() {
+  const tooltip = document.getElementById('dictionary-graph-tooltip');
+  if (tooltip) tooltip.hidden = true;
+}
+
+function showDictionaryGraphTooltip(table, node, event) {
+  let tooltip = document.getElementById('dictionary-graph-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.id = 'dictionary-graph-tooltip';
+    tooltip.className = 'dictionary-graph-tooltip';
+    tooltip.setAttribute('role', 'region');
+    document.getElementById('dictionary-graph-details').prepend(tooltip);
+  }
+  const description = String(table.tableDescription || '').trim();
+  tooltip.innerHTML = `<span class="dictionary-tooltip-kicker">${escapeDictHtml(dictionaryDomainLabel(table.domain))}</span><strong>${escapeDictHtml(table.tableName)}</strong>${description ? `<p>${escapeDictHtml(description)}</p>` : ''}<small>${(table.columns || []).length} cột · Chọn để xem cấu trúc</small>`;
+  tooltip.hidden = false;
+  node.setAttribute('aria-describedby', tooltip.id);
+
+}
+
+
+function syncDictionaryGraphFullscreen(expanded) {
+  const panel = document.getElementById('dictionary-graph-panel');
+  panel?.classList.toggle('is-fullscreen', expanded);
+  const button = document.getElementById('dictionary-graph-fullscreen');
+  button?.setAttribute('aria-pressed', String(expanded));
+  button?.setAttribute('aria-label', expanded ? 'Thoát toàn màn hình' : 'Toàn màn hình');
+  if (button) button.innerHTML = `<i class="fa-solid ${expanded ? 'fa-compress' : 'fa-expand'}" aria-hidden="true"></i>`;
+  hideDictionaryGraphTooltip();
+  requestAnimationFrame(() => { if (window.dictionaryView === 'graph') renderDictionaryGraph(); });
+}
+
+async function toggleDictionaryGraphFullscreen() {
+  const panel = document.getElementById('dictionary-graph-panel');
+  if (!panel) return;
+  if (document.fullscreenElement === panel) { await document.exitFullscreen(); return; }
+  if (panel.classList.contains('is-fullscreen')) { syncDictionaryGraphFullscreen(false); return; }
+  try {
+    if (!panel.requestFullscreen) throw new Error('Fullscreen unavailable');
+    await panel.requestFullscreen({ navigationUI: 'hide' });
+    syncDictionaryGraphFullscreen(true);
+  } catch {
+    syncDictionaryGraphFullscreen(true);
+    if (typeof showToast === 'function') showToast('Trình duyệt đang chặn toàn màn hình. Nhấn F11 để ẩn thanh trình duyệt.', 'warn');
+  }
+}
+
+document.addEventListener('fullscreenchange', () => syncDictionaryGraphFullscreen(document.fullscreenElement === document.getElementById('dictionary-graph-panel')));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    hideDictionaryGraphTooltip();
+    if (!document.fullscreenElement && document.getElementById('dictionary-graph-panel')?.classList.contains('is-fullscreen')) syncDictionaryGraphFullscreen(false);
+  }
+});
 
 function startDictionaryGraphAnimation() {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || window.dictionaryGraphAnimationFrame) return;
