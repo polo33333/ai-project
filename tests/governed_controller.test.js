@@ -36,6 +36,32 @@ test('the verified join path is carried into the next SQL tool context',async()=
  assert(executed);assert(result.trace.steps.some(s=>s.type==='VERIFIED_JOIN_PLAN_INSTALLED'));
 });
 
+test('reused schema cannot erase a verified three-table JOIN path acquired later',async()=>{
+ const Base=require('../src/backend/agent_core/tools/base_tool'),Manager=require('../src/backend/agent_core/tools/tool_manager'),Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
+ const manager=new Manager();
+ const register=(name,run)=>{const tool=new Base({name,description:name,parameters:{type:'object',properties:{sql:{type:'string'},query:{type:'string'},fromTable:{type:'string'},toTable:{type:'string'}}}});tool.run=run;manager.registerTool(tool);};
+ const refs=[{tableId:'o',tableName:'Orders'},{tableId:'h',tableName:'Headers'},{tableId:'c',tableName:'Customers'}];
+ const edges=[{relationshipId:'oh',fromTableId:'o',toTableId:'h',columnPairs:[{sourceColumn:'HeaderID',targetColumn:'ID'}],cardinality:'many-to-one'},
+  {relationshipId:'hc',fromTableId:'h',toTableId:'c',columnPairs:[{sourceColumn:'CustomerID',targetColumn:'ID'}],cardinality:'many-to-one'}];
+ const initial={outcome:'ready',dbSourceId:'fixture',tableRefs:refs.slice(0,2),edges:edges.slice(0,1)};
+ register('list_workflows',async()=>({workflows:[]}));
+ let searches=0;
+ register('search_schema',async()=>{searches++;return {mode:'data',dbSourceId:'fixture',selectedTables:['Orders'],tables:[{tableName:'Orders',columns:[{name:'Amount'}]}],joinPlan:structuredClone(initial)};});
+ register('get_join_path',async()=>({outcome:'ready',verified:true,dbSourceId:'fixture',tableRefs:refs,edges}));
+ let checked=false;
+ register('execute_sql_query',async(args,context)=>{
+  assert.ok(context.joinPlan.tableRefs.some(ref=>ref.tableName==='Customers'),'Customer scope from get_join_path must survive schema reuse');
+  assert.equal(require('../src/backend/services/sql_join_validator').validateSqlAgainstJoinPlan(args.sql,context.joinPlan).valid,true);
+  checked=true;return {rows:[{Total:25}],sql:args.sql};
+ });
+ const call=(name,args)=>({tool_calls:[{id:name,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
+ const sql='SELECT SUM(o.Amount) AS Total FROM Orders o JOIN Headers h ON o.HeaderID=h.ID JOIN Customers c ON h.CustomerID=c.ID';
+ const responses=[call('list_workflows',{}),call('search_schema',{query:'Orders'}),call('search_schema',{query:'Headers'}),call('get_join_path',{fromTable:'Orders',toTable:'Customers'}),call('search_schema',{query:'Customers'}),call('execute_sql_query',{sql})];
+ const result=await new Harness({toolManager:manager,dispatch:async()=>responses.shift()||{content:'25'}}).run({userMessage:'Sum orders for customer',provider:{id:'fixture',supportsToolCalling:true},context:{governedController:true,lockProvider:true,dbSourceId:'fixture',mode:'data',requestPlan:{table:'Orders',intent:'aggregate',schemaColumns:['Amount'],outputs:{data:true},schemaScope:{filters:[]},conversationState:{operation:'aggregate',requestedAttributes:[]}}}});
+ assert.equal(searches,2,'Third search is the bounded schema reuse path');
+ assert.ok(checked);assert.equal(result.trace.completionStatus,'SUCCESS');
+});
+
 test('an exact authorized schema lookup replaces a stale root and narrows aggregate discovery',async t=>governance.run(async()=>{
  governance.setPrincipal({subject:'account:root-recovery',role:'admin'});
  const connector=require('../src/backend/services/sql_connector'),dictionary=require('../src/backend/services/dictionary_service');

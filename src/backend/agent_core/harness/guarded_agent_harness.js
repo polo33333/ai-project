@@ -720,6 +720,14 @@ class GuardedAgentHarness {
                 catch (error) { plan.schemaScope = { invalid: true, filters: [] }; trace.steps.push({ type: 'SCHEMA_SCOPE_RESOLUTION_FAILED', code: error.message }); }
                 trace.steps.push({ type: 'SCHEMA_SCOPE_RESOLVED', filters: plan.schemaScope.filters });
               }
+              // Reuse returns an older metadata snapshot, not a new scope
+              // decision. Keep paths verified after that snapshot was taken.
+              if (reuseSchema && toolContext.joinPlan?.outcome === 'ready'
+                && selection.dbSourceId === toolContext.dbSourceId
+                && toolContext.joinPlan.dbSourceId === selection.dbSourceId) {
+                selection.joinPlan = structuredClone(toolContext.joinPlan);
+                trace.steps.push({ type: 'VERIFIED_JOIN_PLAN_RETAINED', reason: 'schema_reuse', edgeCount: selection.joinPlan.edges?.length || 0 });
+              }
               toolContext.selectedTables = selection.selectedTables;
               toolContext.dbSourceId = selection.dbSourceId || toolContext.dbSourceId;
               toolContext.joinPlan = selection.joinPlan;
