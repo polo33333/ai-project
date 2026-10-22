@@ -109,7 +109,7 @@
 /* The page and table own scrolling; the surrounding content card expands. */
 main.main-content.dictionary-workspace { overflow-y:auto; }
 .dictionary-workspace .dashboard-overview-lower,
-.dictionary-workspace #main-view-container { flex:0 0 auto; min-height:auto; }
+.dictionary-workspace #main-view-container { flex:0 0 auto; flex-direction:column; width:100%; min-width:0; min-height:auto; box-sizing:border-box; }
 .dictionary-workspace #main-view-container>#view-dictionary { height:auto; min-height:auto; grid-template-rows:auto auto; }
 #view-dictionary .dictionary-content-card,
 #view-dictionary .dictionary-content-card.is-graph-view { flex:0 0 auto; height:auto; max-height:none; overflow:visible; scrollbar-gutter:auto; }
@@ -118,6 +118,30 @@ main.main-content.dictionary-workspace { overflow-y:auto; }
 #view-dictionary .dictionary-table-list .dictionary-catalog { border:0; overflow:visible; }
 #view-dictionary .dictionary-catalog thead th { position:sticky; top:0; z-index:2; }
 #view-dictionary .dictionary-graph-panel { flex:0 0 auto; height:clamp(360px,65dvh,760px); }
+#view-dictionary .dictionary-graph-help { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 12px; font-size:12px; line-height:1.5; }
+#view-dictionary .dictionary-graph-help>span:first-child { color:var(--text-primary); font-size:13px; font-weight:600; }
+#view-dictionary .dictionary-graph-help i { color:var(--dict-accent); }
+#view-dictionary .dictionary-graph-viewport { background-size:24px 24px; background-image:radial-gradient(color-mix(in srgb,var(--text-muted) 22%,transparent) .8px,transparent .8px); border-color:var(--border-color); border-radius:12px; }
+#view-dictionary .dictionary-card-graph { min-width:0; min-height:0; }
+#view-dictionary .dictionary-card-graph .dictionary-orbit-item { width:200px; height:76px; will-change:auto; }
+#view-dictionary .dictionary-card-graph .dictionary-graph-node { display:grid; grid-template-columns:30px minmax(0,1fr); grid-template-rows:28px 20px; gap:0 9px; width:100%; height:100%; min-height:0; padding:12px; border:1px solid var(--border-color); border-left:3px solid var(--domain-accent); border-radius:10px; background:var(--dict-surface); box-shadow:0 2px 6px #0f172a06; text-align:left; }
+#view-dictionary .dictionary-card-graph .dictionary-node-icon { grid-row:1/3; width:30px; min-width:30px; max-width:30px; height:30px; min-height:30px; max-height:30px; margin-top:5px; border:0; border-radius:8px; box-shadow:none; transform:none; }
+#view-dictionary .dictionary-card-graph .dictionary-node-copy { max-width:none; align-self:center; }
+#view-dictionary .dictionary-card-graph .dictionary-node-copy strong { font-size:13px; font-weight:600; text-shadow:none; color:var(--text-primary); }
+#view-dictionary .dictionary-card-graph .dictionary-node-copy small { display:none; }
+#view-dictionary .dictionary-card-graph .dictionary-node-meta { display:block; grid-column:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:400; color:var(--text-secondary); }
+#view-dictionary .dictionary-card-graph .dictionary-table-alias,
+#view-dictionary .dictionary-card-graph .dictionary-orbit-guide,
+#view-dictionary .dictionary-card-graph .dictionary-hierarchy-edge { display:none; }
+#view-dictionary .dictionary-card-graph .dictionary-domain-edge { opacity:.24; stroke-width:1.25; }
+#view-dictionary .dictionary-card-graph .dictionary-domain-edge.active { opacity:1; stroke:var(--dict-accent); stroke-width:2; }
+#view-dictionary .dictionary-card-graph .dictionary-domain-edge.muted { opacity:.05; }
+#view-dictionary .dictionary-card-graph.has-focus .dictionary-graph-node:not(.is-emphasized) { opacity:.35; }
+#view-dictionary .dictionary-card-graph .dictionary-graph-node:is(:hover,:focus-visible,.selected) { border-color:var(--dict-accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--dict-accent) 12%,transparent); transform:none; outline:none; }
+#view-dictionary .dictionary-card-graph .dictionary-graph-node.selected .dictionary-node-icon { box-shadow:none; }
+#view-dictionary .dictionary-graph-controls { bottom:16px; left:16px; border-color:var(--border-color); border-radius:10px; box-shadow:0 4px 16px #0f172a0d; }
+#view-dictionary .dictionary-graph-controls button { width:36px; height:36px; color:var(--text-secondary); }
+#view-dictionary .dictionary-graph-controls span { font-size:12px; min-width:54px; color:var(--text-primary); }
 
 #view-dictionary .dictionary-drawer {
   --dict-type-title:20px;

@@ -77,28 +77,16 @@ function renderDictionaryGraph() {
   graph.classList.toggle('has-selection', Boolean(window.dictionaryGraphSelection));
   if (!tables.length) { dbRoot.hidden = true; graph.style.width = '100%'; graph.style.height = '100%'; drawDictionaryGraphEdges(); return; }
 
-  const assignedTables = tables.filter(table => table.domain);
-  const unassignedTables = tables.filter(table => !table.domain);
-  const rings = [];
-  for (let start = 0; start < assignedTables.length; start += 10) {
-    rings.push({ tables: assignedTables.slice(start, start + 10), radius: 260 + rings.length * 175, direction: rings.length % 2 === 0 ? 1 : -1 });
-  }
-  const unassignedStartRadius = Math.max(460, 260 + Math.max(1, rings.length) * 190);
-  for (let start = 0; start < unassignedTables.length; start += 16) {
-    const unassignedRingIndex = Math.floor(start / 16);
-    rings.push({ tables: unassignedTables.slice(start, start + 16), radius: unassignedStartRadius + unassignedRingIndex * 190, direction: unassignedRingIndex % 2 === 0 ? -1 : 1 });
-  }
-  const largestRadius = Math.max(...rings.map(ring => ring.radius), 260);
-  const canvasWidth = Math.max(viewport.clientWidth, largestRadius * 2 + 280, 1080);
-  const orbitVerticalRatio = .82;
-  const canvasHeight = Math.max(720, largestRadius * 2 * orbitVerticalRatio + 280);
-  const centerX = canvasWidth / 2; const centerY = canvasHeight / 2;
-  graph.style.width = `${canvasWidth}px`; graph.style.height = `${canvasHeight}px`;
-  const dbNames = [...new Set(tables.map(table => table.dbName).filter(Boolean))];
-  const dbLabel = dbNames.length === 1 ? dbNames[0] : `${dbNames.length || 1} nguồn CSDL`;
-  dbRoot.hidden = false; dbRoot.style.left = `${centerX - 75}px`; dbRoot.style.top = `${centerY - 22}px`;
-  dbRoot.innerHTML = `<span><i class="fa-solid fa-database"></i></span><div><strong>${escapeDictHtml(dbLabel)}</strong><small>${tables.length} bảng active · ${domains.length} domain</small></div>`;
-
+  // Stable rows make table names readable and keep targets still while inspecting relations.
+  const columnCount = Math.max(2, Math.min(6, Math.floor((viewport.clientWidth || 1200) / 230)));
+  const canvasWidth = columnCount * 230 + 48;
+  const canvasHeight = Math.ceil(tables.length / columnCount) * 110 + 48;
+  const centerX = canvasWidth / 2, centerY = canvasHeight / 2;
+  graph.style.width = canvasWidth + 'px'; graph.style.height = canvasHeight + 'px';
+  graph.classList.add('dictionary-card-graph');
+  dbRoot.hidden = true;
+  const rings = [{ tables, radius: 0, direction: 0 }];
+  const orbitVerticalRatio = 1;
   const domainIndexes = new Map(domains.sort((a, b) => a.localeCompare(b, 'vi')).map((domain, index) => [domain, index]));
   const aliasAssignments = buildDictionaryAliasAssignments(tables);
   const verifiedRelationships = getVerifiedDictionaryGraphRelationships();
@@ -121,16 +109,52 @@ function renderDictionaryGraph() {
     });
   });
   nodesRoot.innerHTML = markup.join('');
+  window.dictionaryGraphHover = null;
+  nodesRoot.querySelectorAll('.dictionary-orbit-item').forEach((item, index) => {
+    item.style.left = (24 + index % columnCount * 230) + 'px';
+    item.style.top = (24 + Math.floor(index / columnCount) * 110) + 'px';
+    item.style.transform = 'none';
+    const node = item.querySelector('.dictionary-graph-node');
+    node.title = node.textContent.trim();
+    node.addEventListener('pointerenter', () => focusDictionaryGraphTable(node.dataset.table));
+    node.addEventListener('pointerleave', () => focusDictionaryGraphTable(null));
+    node.addEventListener('focus', () => focusDictionaryGraphTable(node.dataset.table));
+    node.addEventListener('blur', () => focusDictionaryGraphTable(null));
+  });
   applyDictionaryGraphZoom();
+  focusDictionaryGraphTable(null);
   requestAnimationFrame(() => {
     if (viewport.dataset.graphCentered !== '1') {
       fitDictionaryGraph(false);
+      // Start with readable labels; the fit control remains available for an overview.
+      if (window.dictionaryGraphZoom < .9) {
+        window.dictionaryGraphZoom = .9;
+        applyDictionaryGraphZoom();
+        viewport.scrollTop = 0;
+        viewport.scrollLeft = 0;
+        drawDictionaryGraphEdges();
+      }
       viewport.dataset.graphCentered = '1';
     } else {
       drawDictionaryGraphEdges();
     }
   });
-  startDictionaryGraphAnimation();
+  if (window.dictionaryGraphAnimationFrame) cancelAnimationFrame(window.dictionaryGraphAnimationFrame);
+  window.dictionaryGraphAnimationFrame = null;
+}
+
+function focusDictionaryGraphTable(tableName) {
+  window.dictionaryGraphHover = tableName;
+  const graph = document.getElementById('dictionary-domain-graph');
+  const selected = tableName || window.dictionaryGraphSelection;
+  graph?.classList.toggle('has-focus', Boolean(selected));
+  const relations = getVerifiedDictionaryGraphRelationships();
+  graph?.querySelectorAll('.dictionary-graph-node').forEach(node => {
+    const name = node.dataset.table;
+    node.classList.toggle('is-emphasized', name === selected || relations.some(r =>
+      (r.sourceTable === selected && r.targetTable === name) || (r.targetTable === selected && r.sourceTable === name)));
+  });
+  drawDictionaryGraphEdges();
 }
 
 function graphPoint(element, graphRect, scale, side = 'center') {
@@ -149,7 +173,7 @@ function drawDictionaryGraphEdges() {
   const graph = document.getElementById('dictionary-domain-graph'); const svg = document.getElementById('dictionary-domain-edges'); const dbRoot = document.getElementById('dictionary-db-root');
   if (!graph || !svg || !dbRoot) return;
   svg.setAttribute('width', graph.offsetWidth); svg.setAttribute('height', graph.offsetHeight);
-  const graphRect = graph.getBoundingClientRect(); const scale = window.dictionaryGraphZoom || 1; const selected = window.dictionaryGraphSelection; const hierarchy = [];
+  const graphRect = graph.getBoundingClientRect(); const scale = window.dictionaryGraphZoom || 1; const selected = window.dictionaryGraphHover || window.dictionaryGraphSelection; const hierarchy = [];
   const orbitGuides = new Map();
   const dbIcon = dbRoot.querySelector(':scope > span');
   graph.querySelectorAll('.dictionary-orbit-item').forEach(wrapper => {
