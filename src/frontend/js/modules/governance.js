@@ -3,7 +3,27 @@
   let resources = [];
   const fields = ['subjects', 'roles', 'embedIds', 'modelDestinations', 'allowedTables', 'blockedColumns'];
   const el = id => document.getElementById(id);
+  function initializeGovernancePanels() {
+    document.querySelectorAll('#view-data-governance > .settings-governance-card').forEach((card, index) => {
+      const heading = card.querySelector('.settings-governance-heading');
+      const body = card.querySelector('.settings-governance-body');
+      if (!heading || !body || heading.querySelector('.settings-panel-toggle')) return;
+      body.id ||= `governance-panel-${index}`;
+      const toggle = document.createElement('button');
+      toggle.type = 'button'; toggle.className = 'settings-panel-toggle';
+      toggle.setAttribute('aria-controls', body.id);
+      const update = collapsed => {
+        card.classList.toggle('is-collapsed', collapsed); body.hidden = collapsed;
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-label', `${collapsed ? 'Mở rộng' : 'Thu gọn'} ${heading.querySelector('h3').textContent}`);
+        toggle.innerHTML = `<i class="fa-solid fa-chevron-${collapsed ? 'down' : 'up'}" aria-hidden="true"></i>`;
+      };
+      toggle.onclick = () => update(toggle.getAttribute('aria-expanded') === 'true');
+      heading.append(toggle); update(false);
+    });
+  }
   window.loadGovernanceResources = async function () {
+    initializeGovernancePanels();
     if (!el('governance-resource')) return;
     // Operations are independent of resource/metric selection.
     const operationsRequest = window.loadAgentOperations();

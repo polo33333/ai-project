@@ -4,6 +4,14 @@
     <div><div class="card-title">Quản trị dữ liệu</div><p>Quản lý quyền truy cập, phạm vi xử lý và các chỉ tiêu SQL được phê duyệt.</p></div>
     <span class="metric-tag purple">Chỉ dành cho admin</span>
   </header>
+  <section class="settings-governance-card agent-operations" aria-labelledby="operations-title">
+    <header class="settings-governance-heading">
+      <span class="settings-governance-icon"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i></span>
+      <div class="settings-governance-heading-copy"><h3 id="operations-title">Chất lượng và vận hành Agent</h3><p>Tổng hợp các lượt đã lưu; không hiển thị nội dung hội thoại.</p></div>
+      <button id="operations-refresh" class="btn-secondary-sm" type="button" onclick="loadAgentOperations()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button>
+    </header>
+    <div class="settings-governance-body"><dl id="operations-summary" class="operations-summary"></dl><ul id="operations-alerts" aria-live="polite"></ul><p id="operations-message" role="status"></p></div>
+  </section>
   <section class="settings-governance-card" aria-labelledby="governance-title">
     <header class="settings-governance-heading">
       <span class="settings-governance-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
@@ -63,12 +71,5 @@
   </section>
 
 
-  <section class="settings-governance-card agent-operations" aria-labelledby="operations-title">
-    <header class="settings-governance-heading">
-      <span class="settings-governance-icon"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i></span>
-      <div class="settings-governance-heading-copy"><h3 id="operations-title">Chất lượng và vận hành Agent</h3><p>Tổng hợp các lượt đã lưu; không hiển thị nội dung hội thoại.</p></div>
-      <button id="operations-refresh" class="btn-secondary-sm" type="button" onclick="loadAgentOperations()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button>
-    </header>
-    <div class="settings-governance-body"><dl id="operations-summary" class="operations-summary"></dl><ul id="operations-alerts" aria-live="polite"></ul><p id="operations-message" role="status"></p></div>
-  </section>
+
 </section>

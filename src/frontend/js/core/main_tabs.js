@@ -1,4 +1,42 @@
 const MAIN_TAB_STORAGE_KEY = 'knowledgehub.activeMainTab';
+function initializePagePanelToggles(view) {
+  const selectors = {
+    'view-accounts': ':scope > .system-tools-card',
+    'view-ai-providers': ':scope > .content-card',
+    'view-api-docs': ':scope > .api-keys-section, :scope > .api-embed-admin-section, :scope > .api-integration-section'
+  };
+  if (!selectors[view.id]) return;
+  view.querySelectorAll(selectors[view.id]).forEach((panel, index) => {
+    if (panel.classList.contains('page-collapsible-panel')) return;
+    let heading = panel.querySelector(':scope > header, :scope > .card-header, :scope > .api-section-heading, :scope > .accounts-roles-heading');
+    if (!heading) {
+      heading = document.createElement('header');
+      const title = document.createElement('h3'); title.textContent = 'Danh sách tài khoản';
+      heading.append(title); panel.prepend(heading);
+    }
+    if (view.id === 'view-accounts' && !heading.querySelector('.embed-section-icon')) {
+      const copy = heading.firstElementChild;
+      const titleGroup = document.createElement('div'); titleGroup.className = 'embed-section-title';
+      const badge = document.createElement('span'); badge.className = 'embed-section-icon';
+      const symbol = document.createElement('i');
+      symbol.className = panel.classList.contains('accounts-roles-section') ? 'fa-solid fa-user-shield' : 'fa-solid fa-users';
+      symbol.setAttribute('aria-hidden', 'true'); badge.append(symbol);
+      copy.replaceWith(titleGroup); titleGroup.append(badge, copy);
+    }
+    panel.classList.add('page-collapsible-panel'); heading.classList.add('page-panel-heading');
+    const title = heading.querySelector('h3, .card-title')?.textContent.trim() || 'khối nội dung';
+    panel.id ||= `${view.id}-panel-${index}`;
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'page-panel-toggle';
+    const update = collapsed => {
+      panel.classList.toggle('is-collapsed', collapsed);
+      button.setAttribute('aria-expanded', String(!collapsed));
+      button.setAttribute('aria-label', `${collapsed ? 'Mở rộng' : 'Thu gọn'} ${title}`);
+      button.innerHTML = `<i class="fa-solid fa-chevron-${collapsed ? 'down' : 'up'}" aria-hidden="true"></i>`;
+    };
+    button.onclick = () => update(button.getAttribute('aria-expanded') === 'true');
+    heading.append(button); update(false);
+  });
+}
 const MAIN_TAB_ALIASES = Object.freeze({
   dashboard: 'overview',
   sql_connector: 'sql',
@@ -256,6 +294,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     if (navigationVersion !== mainTabNavigationVersion) return;
 
     if (targetView) {
+      initializePagePanelToggles(targetView);
       targetView.style.display = targetView.dataset.display || 'block';
     } else {
       throw new Error(`Không tìm thấy view: ${targetId}`);

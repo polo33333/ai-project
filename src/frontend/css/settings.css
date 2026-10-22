@@ -60,6 +60,12 @@ main.main-content.settings-workspace { display:block; overflow-y:auto; overscrol
 #view-settings .settings-panel-toggle:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
 #view-settings .settings-qdrant-main { min-width:0; }
 #view-settings [hidden] { display:none !important; }
+#view-data-governance [hidden] { display:none !important; }
+#view-data-governance { align-content:start; grid-auto-rows:max-content; }
+#view-data-governance .settings-panel-toggle { display:inline-flex; align-items:center; justify-content:center; flex:0 0 30px; width:30px; height:30px; padding:0; border:1px solid var(--border-color); border-radius:7px; color:var(--text-secondary); background:var(--bg-card); cursor:pointer; }
+#view-data-governance .settings-panel-toggle:hover { color:var(--primary); border-color:var(--primary); }
+#view-data-governance .settings-panel-toggle:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+#view-data-governance .settings-governance-card.is-collapsed { min-height:0; height:auto; }
 @media(max-width:760px) {
   #view-settings .settings-toolbar { display:grid; grid-template-columns:minmax(0,1fr) 34px; gap:12px; padding:14px; }
   #view-settings .settings-toolbar-title { grid-column:1; grid-row:1; width:auto; }
