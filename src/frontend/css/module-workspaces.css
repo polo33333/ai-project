@@ -739,8 +739,10 @@ main.main-content.training-workspace { overflow-y: hidden; }
 .accounts-table { width:100%; min-width:740px; border-collapse:collapse; text-align:left; font-size:12px; }
 .accounts-table th { padding:12px 16px; color:var(--text-secondary); background:var(--bg-secondary, #f8fafc); font-weight:600; }
 .accounts-table td { padding:14px 16px; border-top:1px solid var(--border-color); color:var(--text-primary); }
-.accounts-table td:first-child strong,.accounts-table td:first-child > span { display:block; }
-.accounts-table td:first-child > span { color:var(--text-muted); font-size:11px; margin-top:4px; }
+.accounts-table .accounts-identity-cell > strong,.accounts-table .accounts-identity-cell > span { display:block; }
+.accounts-table .accounts-identity-cell > strong { font-size:13px; line-height:1.5; }
+.accounts-table .accounts-identity-cell > span { margin-top:4px; color:var(--text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.accounts-table .accounts-identity-label { color:var(--text-muted); font-weight:400; }
 .accounts-table tbody tr:hover { background:var(--bg-secondary, #f8fafc); }
 .accounts-badge { display:inline-flex; border-radius:20px; padding:5px 9px; background:var(--bg-secondary, #f1f5f9); color:var(--text-secondary); font-size:11px; white-space:nowrap; }
 .accounts-badge.admin { background:rgba(99,102,241,.1); color:#6366f1; }
