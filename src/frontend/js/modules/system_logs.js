@@ -116,20 +116,36 @@ async function fetchDashboardLogs() {
   }
 }
 
+function searchSystemLogs() {
+  if (window.paginationState?.system_logs) window.paginationState.system_logs.currentPage = 1;
+  renderLogsTable();
+}
+
+function filterSystemLogs(logs, query) {
+  const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+  return terms.length ? logs.filter(log => {
+    const text = normalize(JSON.stringify(log));
+    return terms.every(term => text.includes(term));
+  }) : logs;
+}
+
 function renderLogsTable() {
   const tbody = document.getElementById('system-logs-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const logs = window.systemLogsData || [];
-  renderLogStats(logs);
+  const allLogs = window.systemLogsData || [];
+  const query = document.getElementById('system-logs-search')?.value || '';
+  const logs = filterSystemLogs(allLogs, query);
+  renderLogStats(allLogs);
 
   if (logs.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="4" class="system-logs-empty">
           <i class="fa-solid fa-list-check"></i>
-          <strong>Chưa có nhật ký hoạt động nào.</strong>
+          <strong>${query.trim() ? 'Không tìm thấy nhật ký phù hợp.' : 'Chưa có nhật ký hoạt động nào.'}</strong>
         </td>
       </tr>
     `;
@@ -140,6 +156,7 @@ function renderLogsTable() {
   }
 
   const state = (window.paginationState && window.paginationState.system_logs) || { currentPage: 1, itemsPerPage: 10 };
+  state.currentPage = Math.min(Math.max(1, state.currentPage), Math.max(1, Math.ceil(logs.length / state.itemsPerPage)));
   const startIndex = (state.currentPage - 1) * state.itemsPerPage;
   const paginated = logs.slice(startIndex, startIndex + state.itemsPerPage);
 

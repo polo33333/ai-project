@@ -3,7 +3,7 @@
   <section class="system-tools-hero audit-page-hero">
     <div class="system-tools-hero-icon audit-chat-history-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
     <div>
-      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-clock-rotate-left" style="color: #4f46e5;"></i> Lịch sử Trò chuyện & Gọi AI</div>
+      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-clock-rotate-left" style="color: #4f46e5;"></i> Lịch sử Trò chuyện</div>
       <p class="chat-history-subtitle">
         Theo dõi câu hỏi, model xử lý, dữ liệu JSON gửi AI, truy vấn phát sinh, độ trễ và trạng thái.
       </p>
@@ -45,6 +45,10 @@
   <!-- Chat History Table -->
   <section class="audit-data-panel" aria-label="Lịch sử yêu cầu AI">
   <div class="module-section-heading"><div><h3>Lịch sử yêu cầu AI</h3><p>Đối chiếu nội dung, model xử lý và kết quả của từng yêu cầu.</p></div></div>
+  <label class="chat-history-search" for="chat-history-search">
+    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+    <input type="search" id="chat-history-search" placeholder="Tìm câu hỏi, model, nguồn chat, trạng thái…" aria-label="Tìm kiếm lịch sử trò chuyện" oninput="searchChatHistory()">
+  </label>
   <div class="system-tools-card data-table-container chat-history-table-wrap">
     <table class="custom-table chat-history-table">
       <thead>

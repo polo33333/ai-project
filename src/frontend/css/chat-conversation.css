@@ -247,7 +247,8 @@ main.main-content.chat-workspace-page {
 #view-page_chat #quick-prompts-bar.has-contextual-suggestions::before { content:'Gợi ý trả lời'; flex:0 0 auto; padding-right:2px; color:var(--conversation-muted); font-size:11px; }
 #view-page_chat .chat-workspace:has(#quick-prompts-bar > button) #page-chat-messages-container { padding-bottom:calc(var(--page-chat-composer-height,140px) + 24px) !important; scroll-padding-bottom:calc(var(--page-chat-composer-height,140px) + 24px); }
 #view-page_chat .page-chat-composer { position:relative; display:grid !important; grid-template-columns:36px minmax(0,1fr) auto !important; align-items:center; gap:0 8px !important; min-height:56px; padding:8px !important; border:1px solid var(--border-color,#e2e8f0); border-radius:30px; overflow:visible; box-shadow:none !important; }
-#view-page_chat .page-chat-composer:focus-within { border-color:var(--conversation-accent,#8e86df); box-shadow:none !important; }
+#view-page_chat .page-chat-composer { background:color-mix(in srgb,var(--conversation-surface,#fff) 94%,var(--conversation-accent,#7561d1) 6%) !important; border-color:color-mix(in srgb,var(--conversation-border,#dfe6f0) 60%,var(--conversation-accent,#7561d1) 40%); box-shadow:0 4px 18px #28345414 !important; }
+#view-page_chat .page-chat-composer:focus-within { border-color:var(--conversation-accent,#8e86df); box-shadow:0 0 0 3px color-mix(in srgb,var(--conversation-accent,#7561d1) 12%,transparent),0 4px 18px #28345414 !important; }
 #view-page_chat .page-chat-composer #page-chat-user-input { grid-column:2; grid-row:1; min-height:36px; height:36px; max-height:140px; margin:0; padding:7px 2px; line-height:22px; font-size:14px; }
 #view-page_chat .page-chat-input-line { grid-column:2; grid-row:1; display:flex; align-items:center; gap:5px; min-width:0; }
 #view-page_chat .page-chat-input-line #page-chat-user-input { flex:1 1 0; min-width:0; width:0; }

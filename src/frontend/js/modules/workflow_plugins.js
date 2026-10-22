@@ -109,7 +109,7 @@
       if (!dialog.backdrop.isConnected) return;
       let config = data.settings;
       const intro = document.createElement('div'); intro.className = 'wp-ai-intro';
-      intro.innerHTML = '<span class="wp-ai-intro-icon"><i class="fa-solid fa-plug" aria-hidden="true"></i></span><div><strong>Tạo nghiệp vụ bằng cuộc trò chuyện</strong><p>Kết nối một lần, sau đó mô tả yêu cầu trong Claude hoặc Codex.</p></div>';
+      intro.innerHTML = '<span class="wp-ai-intro-icon"><i class="fa-solid fa-plug" aria-hidden="true"></i></span><div><strong>Tạo nghiệp vụ bằng cuộc trò chuyện</strong><p>Cho phép Claude hoặc Codex tạo và cập nhật mẫu nghiệp vụ qua MCP.</p></div>';
       const host = document.createElement('section'); host.className = 'wp-ai-section wp-ai-host';
       const hostHeading = document.createElement('div'); hostHeading.className = 'wp-ai-section-heading';
       hostHeading.innerHTML = '<h3>Thiết lập kết nối</h3>';
@@ -221,7 +221,36 @@
     dialog.footer.append(note, button('Đóng', () => dialog.backdrop.remove()));
   }
   let codeFieldId=0;
+  function formatBusinessSql(sql) {
+    // Keep quoted values, identifiers and comments intact; only change whitespace.
+    const tokens = String(sql).match(/--[^\r\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'|"(?:""|[^"])*"|\[(?:\]\]|[^\]])*\]|\s+|[(),;]|[^\s(),'"\[;]+/g) || [];
+    let result = '', depth = 0, clause = '';
+    const newline = (indent = '') => { result = result.trimEnd() + '\n' + indent; };
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index];
+      if (/^\s+$/.test(token)) { if (result && !/\s$/.test(result)) result += ' '; continue; }
+      const keyword = token.toUpperCase();
+      if (depth === 0 && /^(SELECT|FROM|WHERE|HAVING|JOIN|LEFT|RIGHT|INNER|FULL|CROSS|ORDER|GROUP|UNION|EXCEPT|INTERSECT|OFFSET|FETCH)$/.test(keyword)) {
+        // JOIN belongs on the same line as its LEFT/INNER/etc. modifier.
+        if (!(keyword === 'JOIN' && /\b(?:LEFT|RIGHT|INNER|FULL|CROSS)(?:\s+OUTER)?\s*$/i.test(result))) {
+          if (result.trim()) newline();
+          clause = keyword;
+        }
+      } else if (depth === 0 && /^(ON|AND|OR)$/.test(keyword)) newline('  ');
+      if (token === '(') depth++;
+      if (token === ')') { depth = Math.max(0, depth - 1); result = result.trimEnd(); }
+      if (token === ',') {
+        result = result.trimEnd() + ',';
+        if (depth === 0 && /^(SELECT|ORDER|GROUP)$/.test(clause)) newline('  ');
+        continue;
+      }
+      result += token;
+      if (token.startsWith('--') || token === ';') newline();
+    }
+    return result.trim();
+  }
   function codeField(input,language) {
+    if (language === 'sql') input.value = formatBusinessSql(input.value);
     input.id ||= `wp-code-input-${++codeFieldId}`;input.parentElement.setAttribute('for',input.id);
     const shell=document.createElement('div');shell.className='wp-code-editor';shell.dataset.language=language;input.parentElement.insertBefore(shell,input);
     const toolbar=document.createElement('div');toolbar.className='wp-code-toolbar';toolbar.append(typeBadge(language.toUpperCase()));
@@ -234,6 +263,7 @@
     copy.setAttribute('aria-label', copy.title);
     copy.addEventListener('pointerdown', event => event.preventDefault()); toolbar.appendChild(copy);
     if(language==='json'){const format=button('Định dạng',()=>{try{input.value=JSON.stringify(JSON.parse(input.value),null,2);input.dispatchEvent(new Event('input',{bubbles:true}));}catch(_){notify('JSON chưa hợp lệ, hãy kiểm tra nội dung trước khi định dạng.',true);}});format.setAttribute('aria-label','Định dạng JSON');toolbar.appendChild(format);}
+    if(language==='sql'){const format=button('Định dạng',()=>{input.value=formatBusinessSql(input.value);input.dispatchEvent(new Event('input',{bubbles:true}));});format.setAttribute('aria-label','Định dạng SQL');toolbar.appendChild(format);}
     const surface=document.createElement('div');surface.className='wp-code-surface';const preview=document.createElement('pre');preview.setAttribute('aria-hidden','true');preview.className='wp-code-highlight';
     shell.append(toolbar,surface);surface.append(preview,input);input.classList.add('wp-code-input');input.spellcheck=false;input.setAttribute('autocapitalize','off');input.wrap='off';
     function highlight(line) {
@@ -584,7 +614,7 @@
     const matches = definition => (!state.domain || definition.domain === state.domain) && `${definition.name} ${definition.description || ''} ${(definition.tags || []).join(' ')}`.toLocaleLowerCase().includes(state.search.toLocaleLowerCase());
     search.oninput = () => { state.search = search.value; render(); const input = document.querySelector('#wp-toolbar input'); input.focus(); input.setSelectionRange(state.search.length, state.search.length); }; domains.onchange = () => { state.domain = domains.value; render(); };
     if (state.admin) {
-      const connectAI = button('Kết nối AI', aiConnectionDialog); connectAI.classList.add('wp-ai-connect'); connectAI.prepend(icon('fa-plug')); toolbarActions.appendChild(connectAI);
+      const connectAI = button('Kết nối Claude / Codex', aiConnectionDialog); connectAI.classList.add('wp-ai-connect'); connectAI.title = 'Cho phép Claude hoặc Codex tạo và cập nhật mẫu nghiệp vụ qua MCP.'; connectAI.prepend(icon('fa-plug')); toolbarActions.appendChild(connectAI);
       if (!state.settings.enabled && !state.settings.disabledByEnvironment) toolbarActions.appendChild(button('Bật workflow/plugin', async () => { await api('/api/workflow-plugins/settings', 'PUT', { enabled: true, revision: state.settings.revision }); await refresh(); }));
       const importButton = button('Import gói', () => importDialog()); importButton.prepend(icon('fa-arrow-up-from-bracket')); toolbarActions.appendChild(importButton);
       const createButton = button('Tạo mẫu', () => editDialog({ draft: blankBundle(), revision: null })); createButton.className = 'btn-primary wp-create-template'; createButton.prepend(icon('fa-plus')); toolbarActions.appendChild(createButton);

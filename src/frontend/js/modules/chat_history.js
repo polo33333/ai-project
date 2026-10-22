@@ -106,20 +106,37 @@ function renderChatHistoryStats(history) {
 }
 
 
+function searchChatHistory() {
+  if (window.paginationState?.chat_history) window.paginationState.chat_history.currentPage = 1;
+  renderChatHistoryTable();
+}
+
+function filterChatHistory(history, query) {
+  const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+  return terms.length ? history.filter(item => {
+    const source = getChatSource(item);
+    const text = normalize(JSON.stringify(item) + ' ' + source.label + ' ' + source.detail);
+    return terms.every(term => text.includes(term));
+  }) : history;
+}
+
 function renderChatHistoryTable() {
   const tbody = document.getElementById('page-chat-history-tbody') || document.getElementById('chat-history-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const history = window.chatHistoryData || [];
-  renderChatHistoryStats(history);
+  const query = document.getElementById('chat-history-search')?.value || '';
+  const allHistory = window.chatHistoryData || [];
+  const history = filterChatHistory(allHistory, query);
+  renderChatHistoryStats(allHistory);
 
   if (history.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="8" class="chat-history-empty">
           <i class="fa-solid fa-clock-rotate-left"></i>
-          <strong>Chưa có lịch sử gọi AI nào.</strong>
+          <strong>${query.trim() ? 'Không tìm thấy trò chuyện phù hợp.' : 'Chưa có lịch sử trò chuyện nào.'}</strong>
         </td>
       </tr>
     `;
@@ -130,6 +147,7 @@ function renderChatHistoryTable() {
   }
 
   const state = (window.paginationState && window.paginationState.chat_history) || { currentPage: 1, itemsPerPage: 10 };
+  state.currentPage = Math.min(Math.max(1, state.currentPage), Math.max(1, Math.ceil(history.length / state.itemsPerPage)));
   const startIndex = (state.currentPage - 1) * state.itemsPerPage;
   const paginated = history.slice(startIndex, startIndex + state.itemsPerPage);
 

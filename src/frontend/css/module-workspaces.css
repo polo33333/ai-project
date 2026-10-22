@@ -727,6 +727,10 @@ main.main-content.training-workspace { overflow-y: hidden; }
 @media(max-width:850px) { .embed-auth-layout { grid-template-columns:1fr; gap:24px; } .embed-auth-policy { border-left:0; border-top:1px solid var(--border-color); padding:22px 0 0; } }
 @media(max-width:550px) { .embed-section-heading { flex-wrap:wrap; gap:12px; } .embed-section-title { align-items:flex-start; } .embed-widget-picker { grid-template-columns:1fr; padding:14px; gap:8px; } .embed-field-grid { grid-template-columns:1fr; } .embed-auth-footer { flex-wrap:wrap; } .embed-auth-footer .btn-primary { margin-left:auto; } .embed-sessions-note > span:last-child { width:100%; margin-left:13px; } }
 .accounts-page > .system-tools-card { padding:20px; }
+.accounts-page > .system-tools-card:has(.accounts-toolbar) { min-height:0; align-self:start; }
+.accounts-page .accounts-message { margin:12px 0 8px; }
+.accounts-page #accounts-pagination { margin-top:16px; padding-top:16px; }
+.accounts-page .accounts-role-guide { margin-top:16px; }
 .accounts-page .system-tools-hero > button { margin-left:auto; white-space:nowrap; }
 .accounts-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .accounts-toolbar .search-input-wrapper { flex:1; min-width:220px; }

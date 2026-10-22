@@ -3,7 +3,7 @@
   <section class="system-tools-hero audit-page-hero">
     <div class="system-tools-hero-icon audit-system-logs-icon"><i class="fa-solid fa-terminal"></i></div>
     <div>
-      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-terminal" style="color: #4f46e5;"></i> Nhật ký Hệ thống & Error Audit</div>
+      <div class="card-title" style="font-size: 19px;"><i class="fa-solid fa-terminal" style="color: #4f46e5;"></i> Nhật ký hệ thống</div>
       <p class="system-logs-subtitle">
         Theo dõi hoạt động hệ thống, lỗi kết nối SQL Server, đồng bộ Qdrant Vector và cảnh báo theo thời gian thực.
       </p>
@@ -49,6 +49,10 @@
   <!-- System Logs Table -->
   <section class="audit-data-panel" aria-label="Dòng sự kiện hệ thống">
   <div class="module-section-heading"><div><h3>Dòng sự kiện hệ thống</h3><p>Xem mức độ, nguồn phát sinh và nội dung từng sự kiện.</p></div></div>
+  <label class="chat-history-search" for="system-logs-search">
+    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+    <input type="search" id="system-logs-search" placeholder="Tìm nội dung, phân hệ, cấp độ…" aria-label="Tìm kiếm nhật ký hệ thống" oninput="searchSystemLogs()">
+  </label>
   <div class="system-tools-card data-table-container system-logs-table-wrap">
     <table class="custom-table system-logs-table">
       <thead>

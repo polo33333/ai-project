@@ -25,11 +25,9 @@
     if (backup) panelToggle(backup, backup.querySelector('.settings-backup-heading'), [...backup.children].filter(node => !node.matches('header')));
     const panel = root.querySelector('.settings-panel');
     if (panel) panelToggle(panel, panel.querySelector('.settings-toolbar'), [...panel.children].filter(node => !node.matches('.settings-toolbar')));
-    const qdrant = root.querySelector('.settings-qdrant-card');
     root.querySelectorAll('.settings-governance-card').forEach(card => {
       panelToggle(card, card.querySelector('.settings-governance-heading'), [card.querySelector('.settings-governance-body')]);
     });
-    if (qdrant) panelToggle(qdrant, qdrant.querySelector('.settings-qdrant-main'), [...qdrant.children].filter(node => !node.matches('.settings-qdrant-main,.settings-qdrant-icon')));
     const search = el('settings-search')?.closest('.settings-search-wrap');
     const content = root.querySelector('.settings-content');
     if (search && content && search.parentElement !== content) content.prepend(search);

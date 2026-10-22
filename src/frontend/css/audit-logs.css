@@ -535,3 +535,11 @@
   color: #cbd5e1;
   font-size: 24px;
 }
+:is(#view-chat-history,#view-system-logs) .chat-history-search { display:flex; align-items:center; gap:12px; padding:10px 14px; border:0; border-radius:12px; background:#f5f6fa; color:var(--text-secondary,#64748b); }
+.chat-history-search input { flex:1; min-width:0; width:100%; border:0; outline:none; box-shadow:none; padding:0; background:transparent; color:var(--text-primary,#334155); font:inherit; font-size:13px; }
+:is(#view-chat-history,#view-system-logs) .chat-history-search input:is(:focus,:focus-visible) { border:0 !important; outline:none !important; box-shadow:none !important; background:transparent; }
+:is(#view-chat-history,#view-system-logs) .chat-history-search:focus-within { box-shadow:0 0 0 2px #8b7cf426; }
+:is(#view-chat-history,#view-system-logs) .chat-history-search input::placeholder { color:#7b879b; opacity:1; }
+:is(#view-chat-history,#view-system-logs) .audit-data-panel > .chat-history-search { box-sizing:border-box; width:calc(100% - 40px); margin:16px 20px; min-height:40px; }
+:root[data-theme="dark"] :is(#view-chat-history,#view-system-logs) .chat-history-search { background:var(--bg-secondary,#1c283b); }
+@media(max-width:700px) { :is(#view-chat-history,#view-system-logs) .audit-data-panel > .chat-history-search { width:calc(100% - 32px); margin:16px; } }

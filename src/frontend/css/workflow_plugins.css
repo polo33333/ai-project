@@ -387,7 +387,9 @@
 .wp-config-copy small { color:#8090a6; font-size:12px; font-weight:400; line-height:1.5; }
 .wp-config-section > summary > i:last-child { margin-left:auto; color:#94a3b8; font-size:11px; transition:transform .15s; }
 .wp-config-section[open] > summary > i:last-child { transform:rotate(180deg); }
-.wp-business-editor .workflow-editor-body > .wp-config-section { padding:0 0 12px; margin:0 0 16px; border-bottom:1px solid #e9edf5; }
+.wp-business-editor .workflow-editor-body > .wp-config-section { box-sizing:border-box; width:100%; padding:16px; margin:0 0 16px; border:1px solid #e0dcf5; border-radius:14px; background:#f5f3ff; }
+.wp-business-editor .workflow-editor-body > .wp-config-section > summary { padding:0; border-radius:8px; }
+.wp-business-editor .workflow-editor-body > .wp-config-section > summary:hover { background:#eeebfc; }
 .wp-business-editor .workflow-editor-body > .wp-config-section .wp-selector-bar { margin:16px 0 0; padding:16px 20px; border-radius:12px; background:#f8fafc; }
 :root[data-theme="dark"] .wp-business-editor .workflow-editor-body > .wp-config-section .wp-selector-bar { background:#1b273b; }
 .wp-business-editor .wp-package-fields { margin:16px 0 4px; padding:20px; background:#f8fafc; border-radius:12px; gap:18px 24px; }
@@ -1122,3 +1124,6 @@
 :root[data-theme="dark"] .wp-business-editor .workflow-editor-body input[type="checkbox"]:not(:checked):not(:indeterminate) { background:#172131; border-color:#71819a; }
 @media(prefers-reduced-motion:reduce) { .wp-business-editor .workflow-editor-body input[type="checkbox"] { transition:none; } }
 @media(forced-colors:active) { .wp-business-editor .workflow-editor-body input[type="checkbox"] { appearance:auto; -webkit-appearance:auto; } }
+
+:root[data-theme="dark"] .wp-business-editor .workflow-editor-body > .wp-config-section { background:#24243c; border-color:#484064; }
+@media(max-width:700px) { .wp-business-editor .workflow-editor-body > .wp-config-section { padding:12px; } }

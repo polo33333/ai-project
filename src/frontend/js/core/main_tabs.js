@@ -137,7 +137,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
       system_tools: 'Công cụ hệ thống',
       watchfolder: 'Thư mục giám sát',
       system_logs: 'Nhật ký hệ thống',
-      chat_history: 'Lịch sử trò chuyện & Gọi AI',
+      chat_history: 'Lịch sử Trò chuyện',
       chat_feedback: 'Đánh giá chất lượng AI',
       training_core: 'Training Core',
       api_docs: 'API tích hợp',

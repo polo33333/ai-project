@@ -106,18 +106,19 @@
 @media(forced-colors:active) { #view-dictionary .dictionary-column-visible input[type="checkbox"] { appearance:auto; } #view-dictionary .dictionary-quick-active input:checked+span>i { display:block; color:HighlightText; } #view-dictionary .dictionary-quick-active input:checked+span { background:Highlight; } }
 
 /* Shared type scale for every section of the table editor. */
-/* The page and table own scrolling; the surrounding content card expands. */
-main.main-content.dictionary-workspace { overflow-y:auto; }
+/* Fit the workspace to the viewport and keep table scrolling inside the panel. */
+main.main-content.dictionary-workspace { overflow-y:hidden; }
 .dictionary-workspace .dashboard-overview-lower,
-.dictionary-workspace #main-view-container { flex:0 0 auto; flex-direction:column; width:100%; min-width:0; min-height:auto; box-sizing:border-box; }
-.dictionary-workspace #main-view-container>#view-dictionary { height:auto; min-height:auto; grid-template-rows:auto auto; }
+.dictionary-workspace #main-view-container { flex:1 1 0; flex-direction:column; width:100%; min-width:0; min-height:0; overflow:hidden; box-sizing:border-box; }
+.dictionary-workspace #main-view-container>#view-dictionary { height:100%; min-height:0; grid-template-rows:auto minmax(0,1fr); }
 #view-dictionary .dictionary-content-card,
-#view-dictionary .dictionary-content-card.is-graph-view { flex:0 0 auto; height:auto; max-height:none; overflow:visible; scrollbar-gutter:auto; }
-#view-dictionary .dictionary-list-panel { flex:0 0 auto; overflow:visible; }
-#view-dictionary .dictionary-list-panel .dictionary-table-list { display:block; flex:0 0 auto; height:auto; min-height:0; max-height:clamp(300px,60dvh,720px); overflow:auto; overscroll-behavior:auto; scrollbar-gutter:stable; padding-right:0; border:1px solid var(--border-color); border-radius:12px; }
+#view-dictionary .dictionary-content-card.is-graph-view { flex:1 1 0; height:100%; min-height:0; max-height:100%; overflow:auto; scrollbar-gutter:auto; }
+#view-dictionary .dictionary-content-card > :not(.dictionary-list-panel):not(.dictionary-graph-panel) { flex-shrink:0; }
+#view-dictionary .dictionary-list-panel { flex:1 1 0; min-height:0; overflow:hidden; }
+#view-dictionary .dictionary-list-panel .dictionary-table-list { display:block; flex:1 1 0; height:auto; min-height:0; max-height:none; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding-right:0; border:1px solid var(--border-color); border-radius:12px; }
 #view-dictionary .dictionary-table-list .dictionary-catalog { border:0; overflow:visible; }
 #view-dictionary .dictionary-catalog thead th { position:sticky; top:0; z-index:2; }
-#view-dictionary .dictionary-graph-panel { flex:0 0 auto; height:clamp(360px,65dvh,760px); }
+#view-dictionary .dictionary-graph-panel { flex:1 1 0; min-height:0; height:auto; }
 #view-dictionary .dictionary-graph-help { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 12px; font-size:12px; line-height:1.5; }
 #view-dictionary .dictionary-graph-help>span:first-child { color:var(--text-primary); font-size:13px; font-weight:600; }
 #view-dictionary .dictionary-graph-help i { color:var(--dict-accent); }

@@ -19,7 +19,7 @@ const exampleValues = fs.existsSync(examplePath) ? parse(fs.readFileSync(example
 const safeServerKeys = ['HOST', 'SHUTDOWN_TIMEOUT_MS', 'CORS_ALLOWED_ORIGINS', 'SESSION_TOUCH_INTERVAL_MS', 'KNOWLEDGEHUB_BACKUP_DIR'];
 // These names have no runtime consumer. Keep old env lines as comments only.
 const obsoleteKeys = new Set(['AI_MEMORY_RECENT_MESSAGES', 'AI_MEMORY_SUMMARY_CHARS', 'AI_DOCUMENT_CONTEXT_CHARS', 'AI_DOCUMENT_MIN_SCORE', 'AI_CONVERSATION_HISTORY', 'MEMORY_SEMANTIC_ROUTING_ENABLED']);
-const legacyOnly = key => /^(CHAT_ROUTING_|CHAT_QUICK_GREETING_)/.test(key) || ['AGENT_CORE_ENABLED', 'LOCAL_MODEL_HARNESS_ENABLED'].includes(key);
+const legacyOnly = key => /^(CHAT_ROUTING_|CHAT_QUICK_GREETING_)/.test(key) || ['AGENT_CORE_ENABLED', 'AI_MAX_TOOL_ITERATIONS'].includes(key);
 const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])]
   .filter(key => key !== 'QDRANT_EXE' && !obsoleteKeys.has(key) && (safeServerKeys.includes(key) || key in envValuesAtStartup || key in exampleValues));
 const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? exampleValues[key] ?? '']));
@@ -55,7 +55,7 @@ const schema = Object.entries(defaults).map(([key, value]) => ({
   group: legacyOnly(key) ? 'Tương thích legacy'
     : /^(GOVERNED_)/.test(key) ? 'Điều phối agent và giới hạn'
     : key === 'WORKFLOW_PLUGINS_ENABLED' ? 'Mẫu nghiệp vụ'
-    : /^(LOCAL_MODEL|LOCAL_AI|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
+    : /^(LOCAL_MODEL|LOCAL_AI|MODEL_DATA_INTENT|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
     : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'
       : /^(AI_MEMORY|MEMORY_|MAX_CHAT_HISTORY)/.test(key) ? 'Bộ nhớ hội thoại'
       : /^(WEB_SEARCH)/.test(key) ? 'Tìm kiếm web'

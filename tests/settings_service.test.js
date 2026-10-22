@@ -11,6 +11,21 @@ function fixture(t, text) {
   return { service: createSettingsService(file), file };
 }
 
+test('settings classify active local harness and legacy tool loop by their runtime consumers', t => {
+  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\n');
+  const fields = service.get().fields;
+  assert.ok(fields.some(field => field.key === 'LOCAL_MODEL_HARNESS_ENABLED'));
+  assert.ok(!fields.some(field => field.key === 'AI_MAX_TOOL_ITERATIONS'));
+  const planner = fields.find(field => field.key === 'MODEL_DATA_INTENT_PLANNER_ENABLED');
+  const harness = fields.find(field => field.key === 'LOCAL_MODEL_HARNESS_ENABLED');
+  assert.equal(planner.group, harness.group);
+  for (const key of ['QDRANT_EXE', 'AI_MEMORY_RECENT_MESSAGES', 'AI_MEMORY_SUMMARY_CHARS', 'AI_DOCUMENT_CONTEXT_CHARS', 'AI_DOCUMENT_MIN_SCORE', 'AI_CONVERSATION_HISTORY', 'MEMORY_SEMANTIC_ROUTING_ENABLED']) {
+    assert.ok(!fields.some(field => field.key === key), key);
+  }
+  fs.writeFileSync(file, 'GOVERNED_CONTROLLER_MODE=legacy\n');
+  assert.ok(service.get().fields.some(field => field.key === 'AI_MAX_TOOL_ITERATIONS'));
+});
+
 test('agent settings hide legacy and unused keys and expose the real embedding switch', t => {
   const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\nEMBEDDING_ENABLED=true\nAI_MEMORY_SUMMARY_CHARS=4000\n');
   let before = service.get();
