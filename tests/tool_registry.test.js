@@ -81,6 +81,14 @@ test('SQL tool rejects JOIN execution without a backend plan when planner is ena
   const previous = process.env.SQL_JOIN_PLANNER_ENABLED;
   t.after(() => { if (previous === undefined) delete process.env.SQL_JOIN_PLANNER_ENABLED; else process.env.SQL_JOIN_PLANNER_ENABLED = previous; });
   process.env.SQL_JOIN_PLANNER_ENABLED = 'true';
+  const dictionary = require('../src/backend/services/dictionary_service');
+  const oldSources = sqlConnector.dbSources, oldTables = dictionary.tablesStore, oldRelations = dictionary.tableRelationships;
+  t.after(() => { sqlConnector.dbSources = oldSources; dictionary.tablesStore = oldTables; dictionary.tableRelationships = oldRelations; });
+  sqlConnector.dbSources = [{ id: 'db-src-test', dbName: 'TEST' }];
+  const { withIdentity } = require('../src/backend/services/schema_identity');
+  dictionary.tablesStore = ['Orders', 'Customers'].map(tableName => withIdentity({ dbSourceId: 'db-src-test', dbName: 'TEST', schemaName: 'dbo', tableName, isActive: true, columns: [{ columnName: 'ID' }, { columnName: 'CustomerID' }] }));
+  dictionary.tableRelationships = [];
+
   const response = await new ExecuteSqlTool().execute(
     { sql: 'SELECT o.ID FROM Orders o JOIN Customers c ON o.CustomerID = c.ID' },
     { permissions: ['sql:read'], dbSourceId: 'db-src-test' }

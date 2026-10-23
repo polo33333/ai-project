@@ -336,6 +336,25 @@ test('pending turn is isolated from successful messages and cleared on success',
   }
 });
 
+test('pending temporal clarification exposes only a source-scoped task, never fabricated record evidence', () => {
+  const previous = process.env.MEMORY_PENDING_TURN_ENABLED;
+  process.env.MEMORY_PENDING_TURN_ENABLED = 'true';
+  try {
+    const memory = service();
+    memory.recordPendingTurn({ sessionId: 'time-window', question: 'Which records expire soon?', currentPlan: { dbSourceId: 'allowed' },
+      completionStatus: 'PARTIAL', responseEvaluation: { failures: ['TEMPORAL_HORIZON_REQUIRED'] } });
+    const context = memory.getResolutionContext({ sessionId: 'time-window' }, { dbSourceId: 'allowed' });
+    assert.equal(context.candidates[0].kind, 'task');
+    assert.equal(context.candidates[0].data.clarification, 'temporal_horizon');
+    assert.equal(context.candidates[0].data.rows, undefined);
+    assert.equal(context.candidates[0].data.key, undefined);
+    assert.equal(memory.getResolutionContext({ sessionId: 'time-window' }, { dbSourceId: 'other' }).candidates.length, 0);
+  } finally {
+    if (previous === undefined) delete process.env.MEMORY_PENDING_TURN_ENABLED;
+    else process.env.MEMORY_PENDING_TURN_ENABLED = previous;
+  }
+});
+
 test('context budget keeps newest optional messages within the available estimate', () => {
   const result = fitOptionalMessages([
     { role: 'user', content: 'a'.repeat(100) },

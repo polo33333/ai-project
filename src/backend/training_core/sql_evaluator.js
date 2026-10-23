@@ -30,10 +30,11 @@ function evaluateSql(sql = '', plan = {}) {
   for (const column of plan.requiredColumns || []) {
     if (!hasIdentifier(text, column)) violations.push(`MISSING_COLUMN:${column}`);
   }
-  const aggregation = /^(?:SUM|AVG|MIN|MAX|COUNT)$/.test(String(plan.aggregation || '').toUpperCase())
-    ? String(plan.aggregation).toLowerCase() : '(?:sum|avg|min|max|count)';
-  if (plan.metric && plan.intent === 'aggregate_timeseries' && !new RegExp(`\\b${aggregation}\\s*\\(\\s*\\[?${String(plan.metric).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?`, 'i').test(text)) {
+  if (plan.metric && (['aggregate', 'aggregate_timeseries'].includes(plan.intent) || plan.conversationState?.operation === 'aggregate') && !matchesAggregate(text, plan.metric, plan.aggregation)) {
     violations.push(`WRONG_METRIC:${plan.metric}`);
+  }
+  for (const measure of plan.requiredMeasures || []) {
+    if (!matchesAggregate(text, `${measure.table}.${measure.column}`, measure.aggregation)) violations.push(`WRONG_METRIC:${measure.column}`);
   }
   if (plan.timeColumn && !hasIdentifier(text, plan.timeColumn)) violations.push(`WRONG_TIME_COLUMN:${plan.timeColumn}`);
   if (plan.temporalMonths && !/\bgroup\s+by\b/i.test(text)) violations.push('MISSING_TIME_BUCKET');
@@ -41,3 +42,29 @@ function evaluateSql(sql = '', plan = {}) {
 }
 
 module.exports = { evaluateSql };
+
+// Only a projected aggregate of the requested physical column is evidence.
+// Mentions in comments, predicates or another aggregate's alias are insufficient.
+function matchesAggregate(sql, metric, aggregation) {
+  try {
+    const parsed = new (require('node-sql-parser').Parser)().astify(sql, { database: 'TransactSQL' });
+    const statement = Array.isArray(parsed) ? parsed[0] : parsed;
+    const parts = String(metric).replace(/[\[\]]/g, '').toLowerCase().split('.');
+    const name = parts.pop();
+    const qualifier = parts.pop();
+    const visit = node => {
+      if (!node || typeof node !== 'object') return false;
+      if (node.type === 'aggr_func') {
+        const expr = node.args?.expr;
+        if (aggregation && String(node.name).toUpperCase() !== String(aggregation).toUpperCase()) return false;
+        if (expr?.type !== 'column_ref' || String(expr.column).toLowerCase() !== name) return false;
+        if (!qualifier) return true;
+        const source = !expr.table && statement.from?.length === 1 ? statement.from[0]
+          : (statement.from || []).find(item => String(item.as || item.table).toLowerCase() === String(expr.table).toLowerCase());
+        return String(expr.table).toLowerCase() === qualifier || String(source?.table).toLowerCase() === qualifier;
+      }
+      return Object.values(node).some(value => Array.isArray(value) ? value.some(visit) : visit(value));
+    };
+    return (statement.columns || []).some(column => visit(column.expr));
+  } catch { return false; }
+}

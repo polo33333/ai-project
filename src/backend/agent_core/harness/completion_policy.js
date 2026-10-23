@@ -32,13 +32,31 @@ function blockingSqlViolation(evaluation) {
     || item.startsWith('UNKNOWN_COLUMN:'));
 }
 
+function assessSqlEvidence(call, plan = {}) {
+  if (!['execute_sql_query', 'query_sql_metric'].includes(call?.toolName)) return null;
+  const failures = [];
+  if (!call.success) failures.push('SQL_EXECUTION_FAILED');
+  else if (!Array.isArray(call.result?.rows)) failures.push('SQL_ROWS_UNAVAILABLE');
+  else {
+    const actualSource = call.result.dbSourceId || call.result.sourceId;
+    if (plan.dbSourceId && actualSource && plan.dbSourceId !== actualSource) failures.push('SQL_SOURCE_MISMATCH');
+    if (call.toolName === 'query_sql_metric') {
+      if (!call.result.metricId || !call.result.metricVersion) failures.push('SQL_METRIC_UNVERIFIED');
+    } else {
+      const sql = call.result.sql || call.args?.sql || '';
+      failures.push(...require('../../memory_core/result_scope').assess(call, plan.followupScope));
+      failures.push(...require('../../services/request_time').validateSql(sql, plan.requestTime, plan.temporalTables || []).violations);
+      if (plan.schemaScope?.invalid) failures.push('SQL_SCOPE_UNRESOLVED');
+      else if (!require('./schema_scope').matchesScope(sql, plan.schemaScope?.filters)) failures.push('SQL_SCOPE_MISMATCH');
+      failures.push(...evaluateSql(sql, plan).violations.map(code => `SQL_PLAN_${code}`));
+      if (plan.conversationState?.operation === 'aggregate' && !isAggregateSql(sql)) failures.push('SQL_AGGREGATION_REQUIRED');
+    }
+  }
+  return { accepted: failures.length === 0, failures };
+}
+
 function qualifiedSql(toolCalls, plan) {
-  const calls = toolCalls.filter(call => call.success && Array.isArray(call.result?.rows)
-    && ((call.toolName === 'query_sql_metric' && call.result.metricId && call.result.metricVersion)
-      || (call.toolName === 'execute_sql_query' && !plan.schemaScope?.invalid
-        && require('./schema_scope').matchesScope(call.result?.sql || call.args?.sql || '', plan.schemaScope?.filters)
-        && evaluateSql(call.result?.sql || call.args?.sql || '', plan).valid
-        && (plan.conversationState?.operation !== 'aggregate' || isAggregateSql(call.result?.sql || call.args?.sql || '')))));
+  const calls = toolCalls.filter(call => assessSqlEvidence(call, plan)?.accepted);
   if (plan.requestContract) {
     const missing = call => require('./request_contract').assessRequestContract(plan.requestContract, call).fields.filter(field => field.status === 'not_queried').length;
     calls.sort((a, b) => missing(b) - missing(a));
@@ -53,13 +71,20 @@ function dropsAggregateScope(sql, previousCalls = []) {
     try {
       const parsed = new (require('node-sql-parser').Parser)().astify(text, { database: 'TransactSQL' });
       const statement = Array.isArray(parsed) ? parsed[0] : parsed;
-      if (statement.from?.length !== 1 || !statement.from[0].table || !isAggregateSql(text)) return null;
+      if (!statement.from?.length || statement.from.some(source => !source.table) || !isAggregateSql(text)) return null;
+      const sources = statement.from.map(source => ({
+        alias: String(source.as || source.table).toLowerCase(),
+        name: JSON.stringify([source.db || 'dbo', source.table]).toLowerCase()
+      }));
+      if (new Set(sources.map(source => source.name)).size !== sources.length) return null;
       const canonical = node => Array.isArray(node) ? node.map(canonical) : node && typeof node === 'object'
-        ? Object.fromEntries(Object.keys(node).sort().filter(name => name !== 'parentheses' && !(node.type === 'column_ref' && name === 'table'))
-          .map(name => [name, canonical(node[name])])) : node;
+        ? Object.fromEntries(Object.keys(node).sort().filter(name => name !== 'parentheses')
+          .map(name => [name, node.type === 'column_ref' && name === 'table'
+            ? sources.find(source => source.alias === String(node[name]).toLowerCase())?.name || (sources.length === 1 ? sources[0].name : node[name])
+            : node.type === 'column_ref' && name === 'column' ? String(node[name]).toLowerCase() : canonical(node[name])])) : node;
       const predicates = node => !node ? [] : node.type === 'binary_expr' && node.operator === 'AND'
         ? [...predicates(node.left), ...predicates(node.right)] : [JSON.stringify(canonical(node))];
-      return { table: JSON.stringify([statement.from[0].db, statement.from[0].table]).toLowerCase(), predicates: predicates(statement.where) };
+      return { tables: sources.map(source => source.name), predicates: [statement.where, ...statement.from.map(source => source.on)].flatMap(predicates) };
     } catch { return null; }
   };
   const next = scope(sql);
@@ -67,7 +92,7 @@ function dropsAggregateScope(sql, previousCalls = []) {
   return previousCalls.some(call => {
     if (!call.success || call.toolName !== 'execute_sql_query') return false;
     const prior = scope(call.result?.sql || call.args?.sql || '');
-    return prior?.table === next.table && prior.predicates.some(predicate => !next.predicates.includes(predicate));
+    return prior?.tables.every(table => next.tables.includes(table)) && prior.predicates.some(predicate => !next.predicates.includes(predicate));
   });
 }
 
@@ -129,7 +154,19 @@ function evaluateCompletion({ reply, plan, toolCalls = [], context = {}, finishR
   const evaluatedCalls = toolCalls.filter(call => call.toolName !== 'execute_sql_query' || qualifiedSql([call], plan).length);
   const base = evaluateResponse({ reply, plan, toolCalls: evaluatedCalls });
   const failures = base.failures.filter(item => !(plan.codeOnly && item === 'SQL_ONLY_ANSWER'));
+  if (failures.includes('MISSING_SQL')) {
+    const attempted = toolCalls.map(call => assessSqlEvidence(call, plan)).filter(Boolean);
+    // Successful execution and usable evidence are separate states. Give the
+    // repair loop the actual failed invariant instead of asking it to rerun
+    // metadata discovery after SQL has already returned rows.
+    const reasons = attempted.at(-1)?.failures;
+    if (reasons?.length) failures.splice(failures.indexOf('MISSING_SQL'), 1, ...reasons);
+    else if (attempted.length) failures.splice(failures.indexOf('MISSING_SQL'), 1, 'SQL_SCOPE_CHANGED');
+  }
   if (!plan.codeOnly && raw) failures.push('RAW_TOOL_ANSWER');
+  if (plan.calculationUnverified) failures.push('CALCULATION_NOT_VERIFIED');
+  if (plan.memoryUnresolved) failures.push('MEMORY_REFERENCE_UNRESOLVED');
+  if (plan.requestTime?.needsHorizon) failures.push('TEMPORAL_HORIZON_REQUIRED');
   if (plan.intent === 'schema_description' && !toolCalls.some(call => call.toolName === 'search_schema' && call.success
     && call.result?.tables?.some(table => table.columns?.length))) failures.push('MISSING_SCHEMA_EVIDENCE');
   if (['length', 'MAX_TOKENS', 'max_tokens'].includes(finishReason)) failures.push('TRUNCATED_ANSWER');
@@ -194,4 +231,4 @@ function validateOutputData(name, args, sqlCalls) {
   });
 }
 
-module.exports = { isCodeRequest, resolvePlan, blockingSqlViolation, qualifiedSql, dropsAggregateScope, canFinalizeVerifiedRead, isRawAnswer, evaluateCompletion, stableFingerprint, validateOutputData };
+module.exports = { isCodeRequest, resolvePlan, blockingSqlViolation, assessSqlEvidence, qualifiedSql, dropsAggregateScope, canFinalizeVerifiedRead, isRawAnswer, evaluateCompletion, stableFingerprint, validateOutputData };

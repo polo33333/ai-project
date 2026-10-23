@@ -45,6 +45,21 @@ test('inline export link is removed when a separate download action is available
   assert.equal(context.result, 'Đã xuất file thành công.');
 });
 
+test('multiple grouped exports retain their labels and counts without a duplicate fallback card', () => {
+  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const context = vm.createContext({});
+  vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('\nfunction splitMarkdownTableRow')), context);
+  vm.runInContext(source.slice(source.indexOf('function renderPageChatDownloadAction'), source.indexOf('\nfunction typeThinkingText')), context);
+  const reply = '- [Nam](/api/exports/men.xlsx) — 7 bản ghi\n- [Nữ](/api/exports/women.xlsx) — 2 bản ghi';
+  context.reply = reply;
+  assert.equal(vm.runInContext("stripInlineDownloadLink(reply, '/api/exports/men.xlsx')", context), reply);
+  assert.equal(vm.runInContext("renderPageChatDownloadAction('/api/exports/men.xlsx', parseMarkdownInline(reply))", context), '');
+  const card = vm.runInContext("renderPageChatDownloadAction('/api/exports/men.xlsx', '', {label:'Nam',summary:'7 bản ghi'})", context);
+  assert.match(card, />Nam<\/span>/);
+  assert.match(card, /7 bản ghi · Bảng tính · XLSX/);
+  assert.match(card, /href="\/api\/exports\/men.xlsx"/);
+});
+
 test('modal and standalone embed renderers hide paths while retaining export links',()=>{
   const value='[Tải](/api/exports/report.xlsx) (file:///C:/Users/Admin/AppData/Local/Temp/report.xlsx)';
   const page=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
@@ -92,6 +107,8 @@ test('chat result renderers convert ISO database dates to Vietnamese display for
   assert.equal(pageContext.yes, 'Có');
   assert.equal(pageContext.no, 'Không');
   assert.equal(pageContext.number, '0');
+  assert.equal(vm.runInContext("formatChatDisplayValue(6652704, 'Tiền hóa đơn (VNĐ)')", pageContext), '6.652.704 ₫');
+  assert.equal(vm.runInContext("formatChatDisplayValue('001234', 'EmployeeID')", pageContext), '001234');
 
   const embed = fs.readFileSync('src/frontend/embed/knowledgehub-chat.js', 'utf8');
   assert.match(embed, /formatDisplayValue\(row\[cellIndex\]/);

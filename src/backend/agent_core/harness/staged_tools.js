@@ -1,5 +1,5 @@
 'use strict';
-function select(definitions, { completed = [], catalog = false, workflowReference = false, scopedAggregate = false, operation, workflowOperations = [] } = {}) {
+function select(definitions, { completed = [], catalog = false, workflowReference = false, scopedAggregate = false, schemaRepairNeeded = false, operation, workflowOperations = [] } = {}) {
   const done = new Set(completed);
   const allowed = new Set(['list_workflows', 'search_schema', 'search_knowledge_base', 'get_glossary_term',
     'get_current_datetime', 'resolve_date_range', 'calculate_expression', 'calculate_stats', 'list_sql_metrics',
@@ -15,7 +15,7 @@ function select(definitions, { completed = [], catalog = false, workflowReferenc
     for (const name of ['get_workflow_status', 'resume_workflow', 'cancel_workflow']) allowed.add(name);
   }
   if (done.has('search_schema') && (catalog || done.has('list_workflows'))) allowed.add('execute_sql_query');
-  if (completed.filter(name => name === 'search_schema').length >= 2) allowed.delete('search_schema');
+  if (completed.filter(name => name === 'search_schema').length >= (schemaRepairNeeded ? 4 : 2)) allowed.delete('search_schema');
   if (done.has('search_schema')) allowed.add('get_join_path');
   if (done.has('list_sql_metrics')) allowed.add('query_sql_metric');
   if (workflowReference) allowed.add('get_workflow_dataset');

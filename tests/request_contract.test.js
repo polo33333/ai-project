@@ -18,6 +18,28 @@ const selection = { tables: [{ tableName: 'records', columns: [
   edges: [{ fromTableRefId: 'root', displayColumn: 'label', businessRole: 'Đơn vị' }] } };
 const plan = { table: 'records', intent: 'list', identityColumns: ['code'] };
 
+test('explicit fields from authorized joined tables bind to their physical projections', () => {
+  const contract = createRequestContract({ table: 'Headers', conversationState: { operation: 'detail', requestedAttributes: ['Price', 'Qty'] } },
+    { dbSourceId: 'source', tables: [{ tableName: 'Headers', columns: [{ name: 'ID' }] },
+      { tableName: 'Details', dbSourceId: 'source', columns: [{ name: 'Price' }, { name: 'Qty' }] }] });
+  assert.deepEqual(contract.completeness.unresolved, []);
+  assert.deepEqual(contract.attributes.map(field => field.mappedSource.table), ['Details', 'Details']);
+  const result = { sql: 'SELECT d.Price AS UnitPrice, d.Qty AS Quantity FROM Headers h JOIN Details d ON d.HeaderID=h.ID', rows: [{ UnitPrice: 10, Quantity: 2 }] };
+  assert.equal(assessRequestContract(contract, { result }).complete, true);
+  assert.equal(assessRequestContract(contract, { result: { ...result, sql: 'SELECT h.Price AS UnitPrice, h.Qty AS Quantity FROM Headers h' } }).complete, false);
+});
+
+test('cross-table criteria never guess hidden, ambiguous or other-source fields', () => {
+  const tables = [{ tableName: 'Headers', columns: [{ name: 'ID' }] },
+    { tableName: 'A', columns: [{ name: 'Value' }, { name: 'Secret', isVisible: false }] },
+    { tableName: 'B', columns: [{ name: 'Value' }] },
+    { tableName: 'OtherSource', dbSourceId: 'private', columns: [{ name: 'Balance' }] }];
+  const contract = createRequestContract({ table: 'Headers', conversationState: { operation: 'detail', requestedAttributes: ['Value', 'Secret', 'Balance'] } }, { tables, dbSourceId: 'allowed' });
+  assert.equal(contract.attributes.length, 0);
+  assert.deepEqual(contract.completeness.unresolved.map(field => field.reason), ['ambiguous', 'not_exposed', 'not_exposed']);
+});
+
+
 test('a schema review cannot downgrade a live analytical task into description or guidance', () => {
   const { resolveRequestIntent } = require('../src/backend/agent_core/harness/request_contract');
   for (const operation of ['describe', 'guidance']) {

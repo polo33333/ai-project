@@ -89,7 +89,23 @@ function createRequestContract(plan = {}, selection = {}) {
       if (matches.length === 1) {
         const column = matches[0];
         add(column.name || column.columnName, [column.label, column.displayName, plan.columnDisplayNames?.[column.name || column.columnName]], attribute);
-      } else unresolved.push({ requestedAs: attribute, reason: matches.length ? 'ambiguous' : 'not_exposed' });
+      } else if (matches.length) unresolved.push({ requestedAs: attribute, reason: 'ambiguous' });
+      else {
+        // Explicit outputs may belong to a joined detail/lookup table. Resolve
+        // only a unique visible match in the current authorized schema; SQL
+        // still has to pass JOIN validation and project that physical column.
+        const related = (selection.tables || []).filter(item => item !== table && item.isActive !== false
+          && (!selection.dbSourceId || !item.dbSourceId || item.dbSourceId === selection.dbSourceId))
+          .flatMap(item => (item.columns || []).filter(column => column.isVisible !== false
+            && [column.name, column.columnName, column.label, column.displayName, column.description]
+              .some(value => value && key(value) === key(attribute)))
+            .map(column => ({ table: item.tableName, column })));
+        if (related.length === 1) {
+          const { table: sourceTable, column } = related[0];
+          add(column.name || column.columnName, [column.label, column.displayName], attribute,
+            { table: sourceTable, column: column.name || column.columnName });
+        } else unresolved.push({ requestedAs: attribute, reason: related.length ? 'ambiguous' : 'not_exposed' });
+      }
     }
   } else {
     for (const column of columns.filter(column => (!summaryList || listIdentity.has(column.name || column.columnName))

@@ -10,6 +10,15 @@ const candidates = [{ id: 'e1', kind: 'entity', data: { key: { EmployeeCode: 'NV
 function result(patch = {}) { return { relation: 'followup', operation: 'attribute', cardinality: 'single',
   attributes: ['address'], selectedIds: ['e1'], clarification: '', dataUse: 'none', ...patch }; }
 const response = value => ({ content: JSON.stringify(value) });
+
+test('a pending time-window task resolves collection parameters but never proves a single entity or historical dataset', () => {
+  const tasks = [{ id: 'task:temporal-horizon', kind: 'task', data: { clarification: 'temporal_horizon', question: 'Which records expire soon?' } }];
+  const selection = result({ operation: 'list', cardinality: 'collection', attributes: [], selectedIds: ['task:temporal-horizon'], dataUse: 'current' });
+  assert.equal(resolver.decode(response(selection), tasks).selected[0].kind, 'task');
+  for (const patch of [{ operation: 'attribute', cardinality: 'single' }, { dataUse: 'historical' }]) {
+    assert.throws(() => resolver.decode(response({ ...selection, ...patch }), tasks), /MEMORY_RESOLUTION_MISSING_REFERENCE/);
+  }
+});
 test('resolver reconstructs only verified entity IDs and keeps requested attributes', () => {
   const value = resolver.decode(response(result()), candidates);
   assert.equal(value.selected[0], candidates[0]); assert.deepEqual(value.attributes, ['address']);

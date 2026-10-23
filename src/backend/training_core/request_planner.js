@@ -80,6 +80,8 @@ function createRequestPlan({ question = '', selectedTables = [], dictionaryTable
     table: table?.tableName || null,
     schemaName: table?.schemaName || 'dbo',
     schemaColumns: availableColumns.map(column => column.columnName),
+    recordIdentityColumns: primaryIdentityColumns.length ? primaryIdentityColumns
+      : (table?.semanticModel?.identityFields || []).filter(name => availableColumns.some(column => column.columnName === name)),
     identityColumns: table?.semanticModel?.identityFields?.length
       ? [...new Set([...table.semanticModel.identityFields, ...table.semanticModel.summaryFields])].filter(name=>availableColumns.some(column=>column.columnName===name))
       : [...new Set([...primaryIdentityColumns, ...secondaryIdentityColumns])].slice(0, 6),

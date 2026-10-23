@@ -1,7 +1,7 @@
 'use strict';
 const fail=code=>Object.assign(new Error(code),{code,statusCode:400});
 const field={type:'string',minLength:1,maxLength:128};
-const dateOffset={type:'object',additionalProperties:false,required:['anchorDate','offsetDays'],properties:{anchorDate:{type:'string',minLength:10,maxLength:10},offsetDays:{type:'integer',minimum:-36600,maximum:36600}}};
+const dateOffset={type:'object',additionalProperties:false,required:['anchorDate','offsetDays'],properties:{anchorDate:{type:'string',pattern:'^(today|[0-9]{4}-[0-9]{2}-[0-9]{2})$',description:'Use today for the authoritative backend request date; use a literal only for an explicitly requested historical anchor.'},offsetDays:{type:'integer',minimum:-36600,maximum:36600}}};
 const schema={type:'object',additionalProperties:false,required:['table','operation'],properties:{
  table:{...field,description:'Use the exact tableName from the authorized schema, not an invented or translated table name.'},operation:{enum:['list','detail','compare','aggregate']},fields:{type:'array',maxItems:32,uniqueItems:true,items:field},
  segment:field,limit:{type:'integer',minimum:1,maximum:100},
@@ -13,7 +13,7 @@ const schema={type:'object',additionalProperties:false,required:['table','operat
  filters:{type:'array',maxItems:20,items:{type:'object',additionalProperties:false,required:['column','operator'],properties:{column:field,operator:{enum:['eq','gte','lt','contains','in','isNotNull']},value:{anyOf:[{type:['string','number','boolean','array'],maxLength:500,maxItems:100,items:{type:['string','number','boolean'],maxLength:500}},dateOffset]},values:{type:'array',minItems:1,maxItems:100,items:{type:['string','number','boolean'],maxLength:500},description:'Use a values array with operator=in, for example multiple requested employee codes.'}}}}
 }};
 const valid=new(require('ajv'))({strict:false}).compile(schema);
-function compile(input,tables,scope={},contract=null) {
+function compile(input,tables,scope={},contract=null,requestTime=null) {
  if(!valid(input))throw fail('SEMANTIC_QUERY_INVALID');
  const key=value=>String(value||'').normalize('NFC').trim().toLocaleLowerCase('vi');
  const supplied=key(input.table);
@@ -107,8 +107,11 @@ function compile(input,tables,scope={},contract=null) {
   if(value&&typeof value==='object'){
    const column=visible.find(column=>column.columnName===f.column);
    if(!['date','datetime','datetime2','smalldatetime','datetimeoffset'].includes(String(column.dataType).toLowerCase())||!['eq','gte','lt'].includes(f.operator))throw fail('SEMANTIC_DATE_FILTER_INVALID');
-   const date=new Date(value.anchorDate+'T00:00:00.000Z');
-   if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value.anchorDate)throw fail('SEMANTIC_DATE_FILTER_INVALID');
+   const anchor=value.anchorDate==='today' ? requestTime?.today || require('../agent_core/tools/date_range').resolve({unit:'day'}).start : value.anchorDate;
+   if(requestTime?.relative && !requestTime.allowedDates.includes(anchor))throw fail('TEMPORAL_REFERENCE_MISMATCH');
+   if(requestTime?.needsHorizon && value.offsetDays>0)throw fail('TEMPORAL_HORIZON_REQUIRED');
+   const date=new Date(anchor+'T00:00:00.000Z');
+   if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==anchor)throw fail('SEMANTIC_DATE_FILTER_INVALID');
    date.setUTCDate(date.getUTCDate()+value.offsetDays);value=date.toISOString().slice(0,10);
   }
   if(f.operator==='contains') {if(typeof f.value!=='string')throw fail('SEMANTIC_FILTER_TYPE');const v=Array.from(f.value,char=>({'%':'[%]','_':'[_]','[':'[[]'}[char]||char)).join('');return `${c} LIKE ${literal('%'+v+'%')}`;}

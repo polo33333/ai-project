@@ -11,6 +11,21 @@ test('malformed or empty conflict assessments fail closed',async()=>{
   await assert.rejects(()=>assessCalculation(async()=>({content:'not JSON'}),'question',{expression:'100+120'}),{code:'CALCULATION_ASSESSMENT_INVALID'});
   await assert.rejects(()=>assessCalculation(async()=>({content:'{"allowed":false,"answer":""}'}),'question',{expression:'100+120'}),{code:'CALCULATION_ASSESSMENT_INVALID'});
 });
+
+test('calculation review receives already verified source rows and incomplete-preview status',async()=>{
+ const evidence=[{sql:'SELECT Period, Amount FROM Records',dbSourceId:'allowed',rows:[{Period:'A',Amount:100},{Period:'B',Amount:80}],previewOnly:false}];
+ let request;
+ await assessCalculation(async(defs,messages)=>{request=JSON.parse(messages.at(-1).content);return {content:'{"allowed":true,"answer":""}'};},'Compare B with A',{expression:'80-100'},evidence);
+ assert.deepEqual(request.evidence,evidence);
+});
+
+test('an unverified data calculation cannot pass completion merely because SQL rows exist',()=>{
+ const {evaluateCompletion}=require('../src/backend/agent_core/harness/completion_policy');
+ const plan={table:'Records',outputs:{data:true},calculationUnverified:true};
+ const result=evaluateCompletion({reply:'Please provide the values again.',plan,toolCalls:[{toolName:'execute_sql_query',success:true,result:{sql:'SELECT Amount FROM Records',rows:[{Amount:100}]}}]});
+ assert.ok(result.failures.includes('CALCULATION_NOT_VERIFIED'));
+ assert.equal(result.valid,false);
+});
 test('guarded calculator never executes an expression rejected for source conflict',async t=>{
   const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
   const manager=require('../src/backend/agent_core').defaultToolManager;

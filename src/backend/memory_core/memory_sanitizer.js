@@ -42,6 +42,7 @@ function sanitizeMessages(messages = [], maxChars = 12000) {
 }
 
 function sanitizeObject(value, depth = 0) {
+  if (value instanceof Date) return value.toISOString();
   if (depth > 5 || value === null || value === undefined) return value ?? null;
   if (typeof value === 'string') return maskSensitive(value).slice(0, 4000);
   if (typeof value !== 'object') return value;

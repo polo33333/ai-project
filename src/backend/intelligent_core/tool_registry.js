@@ -283,8 +283,10 @@ class ToolRegistry {
         case 'list_sql_metrics': return { success: true, result: { metrics: require('../governance/metrics').list() } };
         case 'query_sql_metric': return { success: true, result: await require('../governance/metrics').execute(args, context) };
         case 'get_join_path': return { success: true, result: require('../agent_core/tools/join_path').execute(args, context) };
-        case 'resolve_date_range': return { success: true, result: require('../agent_core/tools/date_range').resolve(args) };
-        case 'get_current_datetime': return this._getCurrentDateTime(args);
+        case 'resolve_date_range': return { success: true, result: require('../agent_core/tools/date_range').resolve(args,
+          context.requestTime?.resolvedAt ? new Date(context.requestTime.resolvedAt) : new Date()) };
+        case 'get_current_datetime': return this._getCurrentDateTime(args,
+          context.requestTime?.resolvedAt ? new Date(context.requestTime.resolvedAt) : new Date());
         case 'get_workflow_dataset': {
           const dataset = await require('../automation/conversation_memory').readDataset(args, context);
           const offset = Number.isInteger(args.offset) && args.offset >= 0 ? args.offset : 0;
@@ -325,9 +327,8 @@ class ToolRegistry {
 
   // ─── Tool Implementations ────────────────────────────────────────────────
 
-  _getCurrentDateTime({ timezone = 'Asia/Ho_Chi_Minh' } = {}) {
+  _getCurrentDateTime({ timezone = 'Asia/Ho_Chi_Minh' } = {}, now = new Date()) {
     const tz = timezone || 'Asia/Ho_Chi_Minh';
-    const now = new Date();
     const parts = new Intl.DateTimeFormat('vi-VN', {
       timeZone: tz,
       weekday: 'long',

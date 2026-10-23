@@ -71,7 +71,9 @@ function execute(args, context = {}) {
 }
 
 function planForSql(sql, context = {}) {
-  if (context.joinPlan?.edges?.length || context.joinPlan?.requireMappedProjection) return null;
+  const previous = context.joinPlan;
+  if (previous?.dbSourceId && context.dbSourceId && previous.dbSourceId !== context.dbSourceId)
+    throw Object.assign(new Error('JOIN_PLAN_SOURCE_MISMATCH'), { code: 'JOIN_PLAN_SOURCE_MISMATCH' });
   let ast;
   try { ast = new (require('node-sql-parser/build/transactsql').Parser)().astify(sql); } catch { return null; }
   // Only a direct, unambiguous physical-table JOIN. Derived tables, CTEs and
@@ -81,13 +83,40 @@ function planForSql(sql, context = {}) {
   if (refs.length < 2 || refs.length > 4 || refs.some(ref => !ref.table || ref.expr)) return null;
   const names = refs.map(ref => `${ref.db || 'dbo'}.${ref.table}`);
   if (new Set(names.map(name => name.toLowerCase())).size !== names.length) return null;
-  const scoped = { ...context, joinPlan: null };
-  for (const target of names.slice(1)) {
-    const result = execute({ fromTable: names[0], toTable: target, maxHops: 4 }, scoped);
+  const physical = ref => `${ref.schemaName || 'dbo'}.${ref.tableName}`.toLowerCase();
+  const priorRefs = previous?.tableRefs || [];
+  const covered = new Set(priorRefs.map(physical));
+  if (previous?.edges?.length && names.every(name => covered.has(name.toLowerCase()))) return null;
+  // A narrow schema refresh must not make an authorized related-code filter
+  // impossible. Extend only simple physical-table plans; never collapse two
+  // lookup roles/self joins or replace a fully specified existing path.
+  if (new Set(priorRefs.map(physical)).size !== priorRefs.length) return null;
+  const rootRef = priorRefs.find(ref => ref.tableId === previous?.rootTableId);
+  if (previous?.expectedGrain === 'root' && !rootRef) return null;
+  const root = rootRef && names.some(name => name.toLowerCase() === physical(rootRef))
+    ? `${rootRef.schemaName || 'dbo'}.${rootRef.tableName}` : names[0];
+  if (previous?.expectedGrain === 'root' && rootRef && physical(rootRef) !== root.toLowerCase()) return null;
+  const scoped = { ...context, joinPlan: previous || null };
+  for (const target of names.filter(name => name.toLowerCase() !== root.toLowerCase())) {
+    const result = execute({ fromTable: root, toTable: target, maxHops: 4 }, scoped);
     if (result.outcome !== 'ready') return null;
   }
-  context.joinPlan = scoped.joinPlan;
-  return scoped.joinPlan;
+  let candidate = scoped.joinPlan;
+  if (!candidate) return null;
+  // The planner above rechecks current visibility, source policy and verified
+  // relations. Retain every existing constraint rather than weakening a
+  // mapped-projection or grain requirement while adding a table.
+  if (previous?.edges?.some(edge => !candidate.edges.some(next => next.relationshipId === edge.relationshipId))) return null;
+  candidate = { ...candidate,
+    ...(previous?.requireMappedProjection ? { requireMappedProjection: true } : {}),
+    ...(previous?.purpose ? { purpose: previous.purpose } : {}),
+    ...(previous?.expectedGrain ? { expectedGrain: previous.expectedGrain, rootTableId: previous.rootTableId } : {}) };
+  // Do not install a broader scope for SQL with invented keys, unsafe fanout
+  // or missing mapped output. The original scope remains intact on failure.
+  if (!require('../../services/sql_join_validator').validateSqlAgainstJoinPlan(sql, candidate).valid) return null;
+  candidate.resolutionReason = previous?.edges?.length ? 'expanded_scope' : 'missing_metadata';
+  context.joinPlan = candidate;
+  return candidate;
 }
 
 module.exports = { definition, instruction, execute, planForSql };

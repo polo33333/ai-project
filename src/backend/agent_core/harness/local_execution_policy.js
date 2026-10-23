@@ -22,9 +22,9 @@ function getRequestPolicy(plan = {}, context = {}) {
 
 function validateCallAgainstPolicy(call, args, policy, successfulCalls = []) {
   if (call.name !== 'execute_sql_query') return { valid: true };
-  const sqlCalls = successfulCalls.filter(item => item.toolName === 'execute_sql_query').length;
+  const sqlCalls = successfulCalls.filter(item => item.toolName === 'execute_sql_query' && item.effectState !== 'not_executed' && item.outcome !== 'rejected').length;
   if (sqlCalls >= policy.maxSqlCalls) {
-    return { valid: false, category: 'SQL_BUDGET_EXCEEDED', error: `SQL call budget (${policy.maxSqlCalls}) is exhausted. Use the existing SQL result and call render_chart now.` };
+    return { valid: false, category: 'SQL_BUDGET_EXCEEDED', error: `SQL call budget (${policy.maxSqlCalls}) is exhausted. Use only existing verified results and state any missing result groups or evidence.` };
   }
   if (!policy.chartRequired || !policy.temporalMonths) return { valid: true };
   const sql = String(args.sql || '');

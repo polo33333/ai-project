@@ -422,7 +422,7 @@ function renderDictionaryDrawer(table) {
         </div>
         <div class="dictionary-column-fields">
           <label><span>Tên hiển thị</span>${mappedRelationship
-            ? `<div class="form-control dictionary-column-display-name dictionary-column-derived-name" title="Tên hiển thị lấy từ vai trò của quan hệ"><i class="fa-solid fa-link"></i><span>${escapeDictHtml(mappedRelationship.businessRole)}</span><small>Quan hệ</small></div>`
+            ? `<div class="form-control dictionary-column-display-name dictionary-column-derived-name" title="${escapeDictHtml(mappedRelationship.businessRole)} — Tên hiển thị lấy từ vai trò của quan hệ"><i class="fa-solid fa-link"></i><span>${escapeDictHtml(mappedRelationship.businessRole)}</span><small>Quan hệ</small></div>`
             : `<input class="form-control dictionary-column-display-name" data-column="${escapeDictHtml(col.columnName)}" value="${escapeDictHtml(col.displayName || '')}" placeholder="VD: Số HĐ">`}</label>
           <label><span>Mô tả cho AI</span><textarea class="form-control dictionary-column-description" data-column="${escapeDictHtml(col.columnName)}" rows="1" placeholder="Ý nghĩa nghiệp vụ của cột...">${escapeDictHtml(col.description || col.columnDescription || '')}</textarea></label>
         </div>

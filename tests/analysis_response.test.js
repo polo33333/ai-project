@@ -4,6 +4,12 @@ const analysis=require('../src/backend/agent_core/harness/analysis_response');
 const {canFinalizeVerifiedRead}=require('../src/backend/agent_core/harness/completion_policy');
 const source={toolName:'execute_sql_query',success:true,args:{sql:'SELECT YEAR(DocDate) AS Nam, MONTH(DocDate) AS Thang, SUM(Qty) AS TongSanLuong FROM Usage GROUP BY YEAR(DocDate), MONTH(DocDate)'},result:{rows:[{Nam:2024,Thang:2,TongSanLuong:3287},{Nam:2024,Thang:1,TongSanLuong:60192}]}};
 
+test('an empty requested record group does not turn all multi-group results into insufficient analysis history',()=>{
+ const empty={toolName:'execute_sql_query',success:true,result:{sql:'SELECT ID FROM Records',rows:[]}};
+ assert.equal(analysis.emptyReply(empty,{analysisTask:'trend',semanticGroups:[{label:'Expired'},{label:'Upcoming'}]}),null);
+ assert.ok(analysis.emptyReply(empty,{analysisTask:'trend'}));
+});
+
 test('an omitted analysis classification is explicitly resolved instead of silently becoming a plain aggregate',async()=>{
  let stage;
  assert.equal(await analysis.resolveTask(async(defs,messages,name)=>{stage=name;assert.equal(defs.length,0);assert.equal(messages.at(-1).content,'Find unusual months');return {content:'{"analysis":"anomaly"}'};},'Find unusual months'),'anomaly');

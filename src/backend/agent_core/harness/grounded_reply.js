@@ -84,6 +84,8 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
     return `${name}${sqlCall?.result?.units?.[column] ? ` (${sqlCall.result.units[column]})` : ''}`;
   });
   const uniqueLabels = labels.map((label, index) => labels.indexOf(label) === index ? label : `${label} (${columns[index]})`);
+  const valueCell = (column, value) => markdownCell(require('./money_display').format(value,
+    `${column} ${displayNames[column] || ''}`, sqlCall.result.units?.[column]), sqlCall.result.units?.[column]);
   const fieldLabels=uniqueLabels.filter(label=>!/(?:^id$|ID$)/.test(label)).slice(0,4);
   let introduction=`Đã tra cứu được **${rows.length}** bản ghi phù hợp với yêu cầu.`;
   if(fieldLabels.length)introduction+=' Thông tin gồm '+fieldLabels.map(label=>`**${markdownCell(label)}**`).join(', ')+'.';
@@ -105,7 +107,7 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
     .filter(item=>item.count>0).slice(0,2);
   const missingNotice=missing.length ? '\n\nTrong các dòng trả về, dữ liệu còn thiếu ở '+missing.map(item=>`**${markdownCell(item.label)}** (${item.count}/${rows.length} dòng)`).join(', ')+'.' : '';
   if (rows.length === 1 && !options.forceTable) {
-    const details = columns.map((column, index) => `- **${markdownCell(uniqueLabels[index])}:** ${markdownCell(rows[0]?.[column], sqlCall.result.units?.[column])}`).join('\n');
+    const details = columns.map((column, index) => `- **${markdownCell(uniqueLabels[index])}:** ${valueCell(column, rows[0]?.[column])}`).join('\n');
     return `${introduction}${orderingNotice}\n\n${details}${missingNotice}${columnNotice}${scopeNotice}`;
   }
 
@@ -125,13 +127,13 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
       ? markdownCell(row[identityColumn]) : `Đối tượng ${index + 1}`);
     const header = `| Tiêu chí | ${identities.join(' | ')} |`;
     const separator = `| --- | ${visibleRows.map(() => '---').join(' | ')} |`;
-    const body = columns.map((column, index) => `| ${markdownCell(uniqueLabels[index])} | ${visibleRows.map(row => markdownCell(row[column], sqlCall.result.units?.[column])).join(' | ')} |`).join('\n');
+    const body = columns.map((column, index) => `| ${markdownCell(uniqueLabels[index])} | ${visibleRows.map(row => valueCell(column, row[column])).join(' | ')} |`).join('\n');
     const remainder = rows.length > visibleRows.length ? `\n\nHiển thị ${visibleRows.length}/${rows.length} đối tượng.` : '';
     return `${header}\n${separator}\n${body}${remainder}${columnNotice}${scopeNotice}`;
   }
   const header = `| ${uniqueLabels.map(markdownCell).join(' | ')} |`;
   const separator = `| ${columns.map(() => '---').join(' | ')} |`;
-  const body = visibleRows.map(row => `| ${columns.map(column => markdownCell(row?.[column], sqlCall.result.units?.[column])).join(' | ')} |`).join('\n');
+  const body = visibleRows.map(row => `| ${columns.map(column => valueCell(column, row?.[column])).join(' | ')} |`).join('\n');
   const remainder = rows.length > visibleRows.length ? `\n\nHiển thị ${visibleRows.length}/${rows.length} kết quả.` : '';
   return `${introduction}${orderingNotice}\n\n${header}\n${separator}\n${body}${remainder}${missingNotice}${columnNotice}${scopeNotice}`;
 }

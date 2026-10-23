@@ -28,3 +28,13 @@ test('the API payload carries the verified-partial disposition to the retry butt
  const failed=sandbox.buildChatClientPayload({...result,trace:{completionStatus:'PARTIAL',steps:[]}},100,'failed-audit');
  assert.equal(sandbox.isPageChatRetryResultUsable(failed),false);
 });
+
+test('a grounded time-window clarification replaces a retry result without accepting failed SQL or other incomplete criteria',()=>{
+ const r={success:true,replyText:'Three expired records; please specify the upcoming window.',
+  toolCalls:[{toolName:'execute_sql_query',success:true,result:{rows:[{ID:1}]}}],
+  trace:{completionStatus:'PARTIAL',steps:[],sqlEvidence:[{index:0,assessment:{accepted:true}}],
+   training:{plan:{requestTime:{needsHorizon:true}},responseEvaluation:{failures:['TEMPORAL_HORIZON_REQUIRED']}}}};
+ assert.equal(disposition(r),'verified_partial');
+ assert.equal(disposition({...r,trace:{...r.trace,sqlEvidence:[{index:0,assessment:{accepted:false}}]}}),null);
+ assert.equal(disposition({...r,trace:{...r.trace,training:{...r.trace.training,responseEvaluation:{failures:['TEMPORAL_HORIZON_REQUIRED','CONTRACT_FIELDS_NOT_QUERIED']}}}}),null);
+});

@@ -79,7 +79,7 @@ function isCollectionReference(questionText) {
   const text = normalize(questionText).trim();
   return hasReferencePronoun(questionText)
     && (/(?:^|\s)(?:\d+|cac|nhung)(?:\s|$)[\s\S]*(?:nay|do|tren|vua roi)\b/.test(text)
-      || /\b(?:danh sach|ket qua|du lieu)[\s\S]*(?:nay|do|tren|vua roi)\b/.test(text));
+      || /\b(?:ds|danh sach|ket qua|du lieu)[\s\S]*(?:nay|do|tren|vua roi)\b/.test(text));
 }
 
 function isShortContextualFollowup(questionText) {

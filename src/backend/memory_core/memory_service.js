@@ -147,6 +147,9 @@ class MemoryService {
     if (!policy.isEnabled() || !session) return { candidates: [], recent: [] };
     const candidates = [];
     const pending = policy.pendingTurnEnabled() && this.isPendingTurnValid(session.pendingTurn) ? session.pendingTurn : null;
+    if (pending?.failures?.includes('TEMPORAL_HORIZON_REQUIRED') && pending.dbSourceId
+      && pending.dbSourceId === currentPlan.dbSourceId) candidates.push({ id: 'task:temporal-horizon', kind: 'task', data: {
+        clarification: 'temporal_horizon', question: pending.question, dbSourceId: pending.dbSourceId, updatedAt: pending.updatedAt } });
     const referenceCutoff = pending ? Date.parse(pending.updatedAt) : 0;
     const fresh = value => value?.updatedAt && Date.parse(value.updatedAt) <= Date.now()
       && Date.parse(value.updatedAt) >= referenceCutoff
@@ -169,11 +172,17 @@ class MemoryService {
         updatedAt: dataset.updatedAt } });
     }
     const entity = session.references.lastEntity;
+    if (pending?.followupBase?.datasets?.every(item => item.scope) && pending.followupBase.dbSourceId === currentPlan.dbSourceId
+      && require('./reference_store').isValid(pending.followupBase)) {
+      candidates.push({ id: 'dataset:pending-base', kind: 'dataset', data: { ...pending.followupBase, pendingBase: true } });
+    }
     if (!candidates.length && fresh(entity) && !entity.runId) candidates.push({ id: 'entity:0', kind: 'entity', data: {
       table: entity.table, dbSourceId: entity.dbSourceId, runId: entity.runId,
       filters: entity.filters, updatedAt: entity.updatedAt } });
     if (fresh(dataset)) candidates.push({ id: 'dataset:latest', kind: 'dataset', data: {
       table: dataset.table, dbSourceId: dataset.dbSourceId, runId: dataset.runId, field: dataset.field,
+      datasets: dataset.datasets, identityColumns: dataset.identityColumns, displayNames: dataset.displayNames,
+      queryScope: dataset.queryScope,
       rowCount: dataset.rowCount, columns: dataset.columns || dataset.requiredColumns || [], updatedAt: dataset.updatedAt } });
     const recent = sanitizeMessages(session.messages.slice(-4), 1000);
     if (pending) recent.push({ role: 'user', content: pending.question }, { role: 'assistant', content: 'Yêu cầu này chưa hoàn tất; chưa có tham chiếu đối tượng được xác minh cho lượt này.' });
@@ -242,6 +251,8 @@ class MemoryService {
       completionStatus: String(completionStatus || 'UNKNOWN').slice(0, 40),
       failures: Array.isArray(responseEvaluation?.failures)
         ? responseEvaluation.failures.filter(item => typeof item === 'string').slice(0, 10) : [],
+      dbSourceId: currentPlan?.dbSourceId || null,
+      followupBase: currentPlan?.followupScope || null,
       scope: policy.getDomain(currentPlan?.table),
       updatedAt: now
     });

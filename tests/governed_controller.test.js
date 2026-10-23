@@ -56,9 +56,9 @@ test('reused schema cannot erase a verified three-table JOIN path acquired later
  });
  const call=(name,args)=>({tool_calls:[{id:name,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
  const sql='SELECT SUM(o.Amount) AS Total FROM Orders o JOIN Headers h ON o.HeaderID=h.ID JOIN Customers c ON h.CustomerID=c.ID';
- const responses=[call('list_workflows',{}),call('search_schema',{query:'Orders'}),call('search_schema',{query:'Headers'}),call('get_join_path',{fromTable:'Orders',toTable:'Customers'}),call('search_schema',{query:'Customers'}),call('execute_sql_query',{sql})];
+ const responses=[call('list_workflows',{}),call('search_schema',{query:'Orders'}),call('search_schema',{query:'Headers'}),call('get_join_path',{fromTable:'Orders',toTable:'Customers'}),call('search_schema',{query:'Headers'}),call('execute_sql_query',{sql})];
  const result=await new Harness({toolManager:manager,dispatch:async()=>responses.shift()||{content:'25'}}).run({userMessage:'Sum orders for customer',provider:{id:'fixture',supportsToolCalling:true},context:{governedController:true,lockProvider:true,dbSourceId:'fixture',mode:'data',requestPlan:{table:'Orders',intent:'aggregate',schemaColumns:['Amount'],outputs:{data:true},schemaScope:{filters:[]},conversationState:{operation:'aggregate',requestedAttributes:[]}}}});
- assert.equal(searches,2,'Third search is the bounded schema reuse path');
+ assert.equal(searches,2,'Only an identical source/query may reuse a schema snapshot');
  assert.ok(checked);assert.equal(result.trace.completionStatus,'SUCCESS');
 });
 
@@ -293,7 +293,7 @@ test('configured detail segment anchors aggregate root and structured SQL passes
  t.mock.method(require('../src/backend/services/dictionary_service'),'getGroupedTables',()=>tables);
  t.mock.method(manager.getTool('list_workflows'),'run',async()=>({workflows:[]}));
  t.mock.method(manager.getTool('search_schema'),'run',async()=>({mode:'data',dbSourceId:'fixture-source',selectedTables:['Parent','Costs'],requestIntent:{operation:'list',attributes:['Invented'],presentation:'table'},
-  intentCatalog:tables.map(table=>({tableName:table.tableName,schemaName:'dbo',columns:table.columns.map(c=>({name:c.columnName}))})),
+  intentCatalog:tables.map(table=>({tableName:table.tableName,schemaName:'dbo',columns:table.columns.map(c=>({name:c.columnName,type:c.dataType}))})),
   tables:tables.map(table=>({...table,columns:table.columns.filter(c=>c.columnName==='ID').map(c=>({name:c.columnName,type:c.dataType,description:c.description}))}))}));
  t.mock.method(manager.getTool('execute_sql_query'),'run',async args=>({rows:[{SUM_Amount:12}],rowCount:1,sql:args.sql}));
  const tool=(name,args)=>({id:name,type:'function',function:{name,arguments:JSON.stringify(args)}});

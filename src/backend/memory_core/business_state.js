@@ -7,6 +7,7 @@ function fromPlan(plan = {}, updatedAt = new Date().toISOString()) {
     operation: plan.conversationState?.operation || null,
     requestedAttributes: plan.conversationState?.requestedAttributes || [],
     categoryFilters: plan.schemaScope?.invalid ? [] : plan.schemaScope?.filters || [],
+    groups: plan.semanticGroups ? structuredClone(plan.semanticGroups) : null,
     query: plan.semanticQuery ? Object.fromEntries(['table', 'operation', 'filters', 'segment', 'dimensions', 'measures', 'time']
       .filter(key => plan.semanticQuery[key] !== undefined).map(key => [key, plan.semanticQuery[key]])) : null,
     metric: plan.metric || null, timeColumn: plan.timeColumn || null, updatedAt,

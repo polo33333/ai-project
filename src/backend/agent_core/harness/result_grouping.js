@@ -20,7 +20,10 @@ function partition(call, requested, names={}) {
   if(!fields.length||!Array.isArray(rows))return null;
   const labels={...names,...call.result.displayNames};
   const columns=[...new Set([...(call.result.columns||[]).filter(c=>typeof c==='string'),...rows.flatMap(r=>Object.keys(r))])];
-  const selected=fields.map(field=>columns.filter(column=>[column,labels[column]].some(v=>key(v)===key(field))));
+  const selected=fields.map(field=>{
+    const exact=columns.filter(column=>key(column)===key(field));
+    return exact.length?exact:columns.filter(column=>[column,labels[column]].some(v=>[field,labels[field]].filter(Boolean).some(requested=>key(v)===key(requested))));
+  });
   if(selected.some(matches=>matches.length!==1))return null;
   const keys=selected.map(matches=>matches[0]);
   if(rows.some(row=>keys.some(column=>!Object.hasOwn(row,column))))return null;

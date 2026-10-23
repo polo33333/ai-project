@@ -70,7 +70,7 @@ test('chart output stage runs after agent round limit and discloses short covera
   const harness = new Harness({ toolManager: manager, maxIterations: 1,
     dispatch: async (provider, messages, definitions) => definitions.length === 1 && definitions[0].function.name === 'render_chart'
       ? invoke('render_chart', { labels: ['2024-01', '2024-02'], datasets: [{ label: 'Qty', data: [12, 15] }] }) : invoke('execute_sql_query', { sql }) });
-  const result = await harness.run({ userMessage: 'vẽ biểu đồ 7 tháng', provider: { id: 'test', supportsToolCalling: true },
+  const result = await harness.run({ userMessage: 'vẽ biểu đồ 7 tháng có dữ liệu', provider: { id: 'test', supportsToolCalling: true },
     context: { lockProvider: true, mode: 'data', requestPlan: { table: 'TestRows', temporalMonths: 7, timeColumn: 'D', outputs: { data: true, chart: true }, conversationState: { operation: 'aggregate' } } } });
   assert.ok(result.toolCalls.some(call => call.toolName === 'render_chart' && call.success));
   assert.ok(result.replyText.includes('chưa đủ 7 tháng'));

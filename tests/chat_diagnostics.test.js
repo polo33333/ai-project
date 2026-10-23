@@ -12,6 +12,15 @@ test('audit captures rejection decisions without raw prompts or SQL', () => {
   assert.equal(JSON.stringify(result).includes('private'), false);
 });
 
+test('SQL evidence audit records acceptance and causes without result rows or query text', () => {
+  const result = buildChatDiagnostics({ sqlEvidence: [{ index: 2, toolName: 'execute_sql_query',
+    sql: 'private query', assessment: { accepted: false, failures: ['SQL_AGGREGATION_REQUIRED'], rows: [{ private: 1 }] } }],
+    steps: [{ type: 'SQL_EVIDENCE_ASSESSED', accepted: false, failures: ['SQL_AGGREGATION_REQUIRED'], sql: 'private query' }] });
+  assert.deepEqual(result.sqlEvidence, [{ index: 2, toolName: 'execute_sql_query', accepted: false, failures: ['SQL_AGGREGATION_REQUIRED'] }]);
+  assert.equal(result.steps[0].accepted, false);
+  assert.equal(JSON.stringify(result).includes('private'), false);
+});
+
 test('audit keeps routing mode, models and escalation without prompts, inputs or credentials', () => {
   const result = buildChatDiagnostics({ workflowRouting: { requestId: 'request', routingMode: 'auto',
     decisionSource: 'chat_model', routingModel: 'chosen-model', chatModel: 'chosen-model',

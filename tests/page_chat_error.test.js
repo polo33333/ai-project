@@ -21,7 +21,7 @@ test('chat displays backend failure in an assistant bubble and releases composer
     renderQuickPrompts() {},
     document: { getElementById: id => id === 'page-chat-user-input' ? input : id === 'page-chat-messages-container' ? container : null, createElement: node },
     getCurrentChatSession: () => ({ id: 'conversation', history: [] }),
-    updatePageChatCharacterCount: noop, renderPageChatAttachments: noop,
+    renderPageChatQuestionActions: noop, updatePageChatCharacterCount: noop, renderPageChatAttachments: noop,
     escapeChatMarkdown: value => value, appendChatMessage: message => messages.push(message),
     createThinkingBubble: node, disposeThinkingBubble: noop,
     setPageChatResponding: value => { window.pageChatIsResponding = value; },

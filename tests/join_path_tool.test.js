@@ -44,6 +44,63 @@ test('sequential path discovery retains both verified joins for one query', t =>
   assert.equal(validateSqlAgainstJoinPlan('SELECT b.Id FROM Bridge b JOIN A a ON b.Id=a.Id JOIN B c ON b.Id=c.OtherId', context.joinPlan).valid, false);
 });
 
+test('a narrow existing detail/header plan expands to an authorized lookup without changing its grain', t => {
+  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  execute({ fromTable: 'Bridge', toTable: 'A' }, context);
+  context.joinPlan.expectedGrain = 'root';
+  const root = context.joinPlan.rootTableId;
+  const sql = 'SELECT b.Id FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id';
+  assert.equal(require('../src/backend/services/sql_join_validator').validateSqlAgainstJoinPlan(sql, context.joinPlan).valid, false);
+  const resolved = planForSql(sql, context);
+  assert.ok(resolved);
+  assert.deepEqual(new Set(resolved.tableRefs.map(ref => ref.tableName)), new Set(['A', 'Bridge', 'B']));
+  assert.equal(resolved.expectedGrain, 'root');
+  assert.equal(resolved.rootTableId, root);
+  assert.equal(require('../src/backend/services/sql_join_validator').validateSqlAgainstJoinPlan(sql, resolved).valid, true);
+});
+
+test('scope expansion never installs invented keys or drops mapped projection constraints', t => {
+  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  execute({ fromTable: 'Bridge', toTable: 'A' }, context);
+  context.joinPlan.requireMappedProjection = true;
+  const old = context.joinPlan;
+  const wrong = 'SELECT b.Id FROM Bridge b JOIN A a ON b.Id=a.Id JOIN B c ON b.Id=c.WrongId';
+  assert.equal(planForSql(wrong, context), null);
+  assert.equal(context.joinPlan, old);
+  const resolved = planForSql(wrong.replace('c.WrongId', 'c.Id'), context);
+  assert.equal(resolved.requireMappedProjection, true);
+});
+
+test('existing scope cannot grow through revoked, hidden, ambiguous or policy-denied lookups', t => {
+  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  execute({ fromTable: 'Bridge', toTable: 'A' }, context);
+  const old = context.joinPlan;
+  const sql = 'SELECT b.Id FROM Bridge b JOIN A a ON b.Id=a.Id JOIN B c ON b.Id=c.Id';
+  dictionary.tableRelationships[1].status = 'suggested';
+  assert.equal(planForSql(sql, context), null); assert.equal(context.joinPlan, old);
+  dictionary.tableRelationships[1].status = 'verified';
+  dictionary.tablesStore[2].columns[0].isVisible = false;
+  assert.equal(planForSql(sql, context), null);
+  dictionary.tablesStore[2].columns[0].isVisible = true;
+  dictionary.tableRelationships.push({ ...dictionary.tableRelationships[1], id: 'alternative' });
+  assert.equal(planForSql(sql, context), null);
+  dictionary.tableRelationships.pop();
+  connector.dbSources[0].governedPolicy = { allowedTables: ['A', 'Bridge'] };
+  assert.throws(() => planForSql(sql, context), { code: 'JOIN_TABLE_UNAVAILABLE' });
+  assert.equal(context.joinPlan, old);
+  assert.throws(() => planForSql(sql, { ...context, dbSourceId: 'other' }), { code: 'JOIN_PLAN_SOURCE_MISMATCH' });
+});
+
+test('scope expansion retains parent fanout protection', t => {
+  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  execute({ fromTable: 'A', toTable: 'Bridge' }, context);
+  context.joinPlan.expectedGrain = 'root';
+  const previous = context.joinPlan;
+  assert.equal(planForSql('SELECT a.Id FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id', context), null);
+  assert.equal(context.joinPlan, previous);
+  assert.equal(planForSql('SELECT SUM(a.Id) AS Total FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id', context), null);
+});
+
 test('path accumulation never revives revoked relationships or another source plan', t => {
   const context = fixture(t);
   execute({ fromTable: 'Bridge', toTable: 'A' }, context);

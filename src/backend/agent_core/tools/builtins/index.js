@@ -40,7 +40,7 @@ class GetDateTimeTool extends BaseTool {
 
   async run(args, context = {}) {
     const tz = args?.timezone || 'Asia/Ho_Chi_Minh';
-    const now = new Date();
+    const now = context.requestTime?.resolvedAt ? new Date(context.requestTime.resolvedAt) : new Date();
     const parts = new Intl.DateTimeFormat('vi-VN', {
       timeZone: tz,
       weekday: 'long',
@@ -300,6 +300,7 @@ class ExecuteSqlTool extends BaseTool {
         dictionaryService.getTableRelationships()),
       rowCount: rows.length,
       ...(resolvedJoinPlan ? { joinPlanResolution: { source: 'verified_catalog', planId: resolvedJoinPlan.planId,
+        reason: resolvedJoinPlan.resolutionReason, tables: resolvedJoinPlan.tableRefs.map(ref => `${ref.schemaName || 'dbo'}.${ref.tableName}`),
         relationshipIds: resolvedJoinPlan.edges.map(edge => edge.relationshipId) } } : {}),
       ...(Object.keys(units).length?{units}:{}),
       ...(args.query ? { hasMore: rows.length >= (args.query.limit || 100)
@@ -606,7 +607,8 @@ module.exports = {
   },
   ResolveDateRangeTool: class ResolveDateRangeTool extends BaseTool {
     constructor() { super(require('../date_range').definition); }
-    async run(args) { return require('../date_range').resolve(args); }
+    async run(args, context = {}) { return require('../date_range').resolve(args,
+      context.requestTime?.resolvedAt ? new Date(context.requestTime.resolvedAt) : new Date()); }
   },
   ReadContextResultTool: class ReadContextResultTool extends BaseTool {
     constructor() { super(require('../../../intelligent_core/tool_registry').listTools().find(tool => tool.name === 'read_context_result')); }

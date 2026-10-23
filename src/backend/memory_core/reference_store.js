@@ -88,7 +88,13 @@ function datasetEntityKeys(rows = [], plan = {}) {
 
 function deriveReferences({ currentPlan = {}, toolCalls = [], now = new Date().toISOString() } = {}) {
   const updates = {};
-  const sqlCall = [...toolCalls].reverse().find(call => call.toolName === 'execute_sql_query' && call.success && Array.isArray(call.result?.rows));
+  const identityPlan = currentPlan.recordIdentityColumns?.length ? { ...currentPlan, identityColumns: currentPlan.recordIdentityColumns } : currentPlan;
+  const accepted = toolCalls.filter(call => call.toolName === 'execute_sql_query' && call.success && Array.isArray(call.result?.rows)
+    && (!(call.result.sql || call.args?.sql) || require('../agent_core/harness/completion_policy').assessSqlEvidence(call, currentPlan)?.accepted));
+  const selected = currentPlan.semanticGroups
+    ? require('../agent_core/harness/semantic_groups').results(currentPlan.semanticGroups, accepted).map(group => group.call).filter(Boolean)
+    : accepted.slice(-1);
+  const sqlCall = selected.at(-1);
   if (sqlCall && currentPlan.table) {
     updates.lastDataset = sanitizeObject({
       table: currentPlan.table,
@@ -96,13 +102,25 @@ function deriveReferences({ currentPlan = {}, toolCalls = [], now = new Date().t
       timeColumn: currentPlan.timeColumn || null,
       requiredColumns: currentPlan.requiredColumns || [],
       dbSourceId: currentPlan.dbSourceId || null,
-      rowCount: sqlCall.result.rows.length,
+      rowCount: selected.reduce((sum, call) => sum + call.result.rows.length, 0),
       queryScope: { question: currentPlan.question || null, unfilteredList: currentPlan.unfilteredList === true,
         temporalMonths: currentPlan.temporalMonths || null },
-      entityKeys: datasetEntityKeys(sqlCall.result.rows, currentPlan),
+      entityKeys: selected.flatMap(call => datasetEntityKeys(call.result.rows, identityPlan)),
+      identityColumns: identityPlan.identityColumns || [],
+      displayNames: currentPlan.columnDisplayNames || {},
+      columns: [...new Set(selected.flatMap(call => call.result.columns?.length ? call.result.columns : call.result.rows.flatMap(row => Object.keys(row))))],
+      datasets: selected.map(call => {
+        const entityKeys = datasetEntityKeys(call.result.rows, identityPlan);
+        return { label: currentPlan.semanticGroups?.[call.semanticGroup]?.label || null,
+          scope: require('./result_scope').describe(call.result.sql || call.args?.sql || ''),
+          rowCount: call.result.rows.length, entityKeys,
+          identityComplete: Boolean(identityPlan.identityColumns?.length && !call.result.hasMore && !call.result.truncated
+            && entityKeys.length === call.result.rows.length && entityKeys.every(row => identityPlan.identityColumns.every(column => Object.hasOwn(row, column)))) };
+      }),
       updatedAt: now
     });
-    const firstRow = sqlCall.result.rows.length === 1 ? sqlCall.result.rows[0] : null;
+    const allRows = selected.flatMap(call => call.result.rows);
+    const firstRow = allRows.length === 1 ? allRows[0] : null;
     const filters = firstRow && pickEntityFilters(Object.fromEntries(Object.entries(firstRow).map(([key, value]) => [
       Object.entries(currentPlan.columnDisplayNames || {}).find(([, alias]) => alias === key)?.[0] || key, value
     ])));
@@ -112,7 +130,9 @@ function deriveReferences({ currentPlan = {}, toolCalls = [], now = new Date().t
   }
   const exportCall = [...toolCalls].reverse().find(call => call.toolName === 'export_data' && call.success && call.result?.downloadUrl);
   if (exportCall) {
-    updates.lastExport = sanitizeObject({ downloadUrl: exportCall.result.downloadUrl, table: currentPlan.table || null, updatedAt: now });
+    updates.lastExport = sanitizeObject({ downloadUrl: exportCall.result.downloadUrl, table: currentPlan.table || null, updatedAt: now,
+      files: toolCalls.filter(call => call.toolName === 'export_data' && call.success && call.result?.downloadUrl)
+        .map(call => ({ label: call.exportGroup || call.result.fileName, downloadUrl: call.result.downloadUrl, rowCount: call.result.recordCount })) });
   }
   return updates;
 }

@@ -641,6 +641,9 @@ function stripInlineDownloadLink(value, downloadUrl) {
   const url = String(downloadUrl || '').trim();
   if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return text;
   const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Multiple export links carry group labels and row counts in their list items.
+  // Keep them in place so the card upgrader can preserve that association.
+  if ((text.match(/\]\(\s*\/api\/exports\//g) || []).length > 1) return text;
   return text
     .replace(new RegExp(`\\[[^\\]]*\\]\\(\\s*${escapedUrl}\\s*\\)`, 'gi'), '')
     .replace(new RegExp(escapedUrl, 'gi'), '')
@@ -698,7 +701,22 @@ function isBooleanDisplayColumn(columnName = '') {
     || /^(?:co|da|duoc|kichhoat|hieuluc)/.test(normalized);
 }
 
+function formatMoneyDisplayValue(value, label = '', unit = '') {
+  const text = String(label) + ' ' + String(unit || '');
+  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd');
+  const currency = /\b(?:VND|VNd|dong)\b|₫/i.test(normalized) ? 'VND'
+    : /\b(USD|EUR|GBP|JPY)\b/i.exec(text)?.[1]?.toUpperCase();
+  const monetary = currency || /amount|money|price|balance|\b(?:tien|gia|cong no|doanh thu|chi phi)\b/i.test(normalized);
+  if (!monetary || value === null || value === undefined || value === ''
+    || !(typeof value === 'number' || typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value))
+    || !Number.isFinite(Number(value))) return value;
+  return new Intl.NumberFormat('vi-VN', { ...(currency ? { style: 'currency', currency } : {}),
+    minimumFractionDigits: 0, maximumFractionDigits: 20 }).format(value);
+}
+
 function formatChatDisplayValue(value, columnName = '') {
+  const money = formatMoneyDisplayValue(value, columnName);
+  if (money !== value) return String(money);
   if (value === true || String(value).toLowerCase() === 'true') return 'Có';
   if (value === false || String(value).toLowerCase() === 'false') return 'Không';
   if (isBooleanDisplayColumn(columnName) && (value === 1 || String(value) === '1')) return 'Có';
@@ -949,9 +967,10 @@ function disposeThinkingBubble(root) {
   root._elapsedTimer = null;
 }
 
-function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '') {
+function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '', details = {}) {
   const url = String(downloadUrl || '').trim();
   if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return '';
+  if (renderedAnswer.includes(`href="${escapeChatMarkdown(url)}"`)) return '';
   let filename = url.split('/').pop().split(/[?#]/)[0];
   try { filename = decodeURIComponent(filename); } catch (_) { /* Retain malformed encoded names as text. */ }
   const extension = filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase() || 'FILE';
@@ -959,7 +978,7 @@ function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '') {
   const html = ['HTML','HTM'].includes(extension);
   const icon = spreadsheet ? 'fa-file-excel' : html ? 'fa-globe' : extension === 'PDF' ? 'fa-file-pdf' : 'fa-file-lines';
   const kind = spreadsheet ? 'Bảng tính' : html ? 'Mã' : 'Tài liệu';
-  return `<div class="page-chat-download-card"><span class="page-chat-download-icon" aria-hidden="true"><i class="fa-solid ${icon}"></i></span><span class="page-chat-download-info"><span class="page-chat-download-name" title="${escapeChatMarkdown(filename)}">${escapeChatMarkdown(filename)}</span><span class="page-chat-download-meta">${kind} · ${extension}</span></span><a class="page-chat-download-button" href="${escapeChatMarkdown(url)}" download aria-label="Tải xuống ${escapeChatMarkdown(filename)}">Tải xuống</a></div>`;
+  return `<div class="page-chat-download-card"><span class="page-chat-download-icon" aria-hidden="true"><i class="fa-solid ${icon}"></i></span><span class="page-chat-download-info"><span class="page-chat-download-name" title="${escapeChatMarkdown(filename)}">${escapeChatMarkdown(details.label || filename)}</span><span class="page-chat-download-meta">${details.summary ? escapeChatMarkdown(details.summary) + ' · ' : ''}${kind} · ${extension}</span></span><a class="page-chat-download-button" href="${escapeChatMarkdown(url)}" download aria-label="Tải xuống ${escapeChatMarkdown(filename)}">Tải xuống</a></div>`;
 }
 
 function typeThinkingText(element, value, streamKey = null) {
@@ -1075,11 +1094,19 @@ function enhanceAssistantMessageNode(node) {
   bubble.classList.add('chat-ai-message-bubble');
   // Upgrade saved page-chat answers as they are mounted, without changing history.
   bubble.querySelectorAll('a.chat-download-link').forEach(link => {
-    const card = renderPageChatDownloadAction(link.getAttribute('href'));
+    const item = link.closest('li');
+    const standalone = item && item.querySelectorAll('a').length === 1 && !item.querySelector('ul,ol,table');
+    const label = link.textContent.trim();
+    const summary = standalone ? item.textContent.replace(link.textContent, '').replace(/^\s*[—–-]\s*/, '').trim() : '';
+    const card = renderPageChatDownloadAction(link.getAttribute('href'), '', { label, summary });
     if (!card) return;
     const wrapper = document.createElement('div');
     wrapper.innerHTML = card;
-    link.replaceWith(wrapper.firstElementChild);
+    if (standalone) {
+      item.classList.add('page-chat-download-item');
+      item.replaceChildren(wrapper.firstElementChild);
+      item.parentElement.classList.add('page-chat-download-list');
+    } else link.replaceWith(wrapper.firstElementChild);
   });
   bubble.querySelectorAll('.chat-citation-heading a[href*="/api/library/"][href$="/file"]').forEach(link => {
     const match = link.getAttribute('href')?.match(/\/api\/library\/([^/]+)\/file$/);

@@ -16,7 +16,7 @@ async function resolveTask(dispatch, question) {
 const instruction = 'For analysis requests, a table of observations alone is not a finished answer. State the evaluation criterion/method, reference baseline, numeric comparison, coverage/missing data and conclusion in the first response. Distinguish an observed change from a validated anomaly. Never invent a threshold, usual consumption, seasonality, cause or missing months. If no approved/user-supplied criterion exists and history is insufficient, explain that limitation and what evidence is needed; do not assert an anomaly. A large month-to-month change alone does not establish an anomaly.';
 
 function emptyReply(source, plan) {
-  if (!task(plan) || !source?.success || !Array.isArray(source.result?.rows)
+  if (plan.semanticGroups?.length || !task(plan) || !source?.success || !Array.isArray(source.result?.rows)
     || source.result.rows.length || source.result.hasMore || source.result.truncated) return null;
   return '**Chưa đủ dữ liệu để phân tích:** Truy vấn đã thực hiện thành công nhưng không tìm thấy bản ghi phù hợp trong phạm vi đã lọc.'
     + '\n\nVì chưa có số liệu trong khoảng này, chưa thể đối chiếu với mức tham chiếu hoặc xác nhận điểm bất thường. Không có bản ghi không có nghĩa là mức tiêu thụ bằng 0 hoặc không có bất thường.'

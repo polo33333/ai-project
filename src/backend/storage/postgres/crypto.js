@@ -37,6 +37,7 @@ function decrypt(value, context) {
 // headers/request snapshots: credentials can appear anywhere in legacy payloads.
 const secretField = /password|secret|token|api.?key|authorization|cookie|connection.?string|headers|^env$/i;
 function protect(value, context, reverse = false) {
+  if (value instanceof Date) return value.toISOString();
   if (reverse && value && value.$khSecret === 1) return decrypt(value, context);
   if (Array.isArray(value)) return value.map((entry, i) => protect(entry, `${context}/${i}`, reverse));
   if (!value || typeof value !== 'object') return value;

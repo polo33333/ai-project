@@ -51,10 +51,14 @@ async function dispatchToProvider(provider, messages, tools, signal, options = {
   const budget = options.executionBudget || require('../../governance/context').current()?.executionBudget;
   return require('../../governance/admission').model.run(async () => {
     const estimated = Math.ceil(JSON.stringify([messages, tools]).length / 3) + (Number(provider.maxTokens) || 4096);
-    const receipt = budget?.reserveUsage({ tokens: estimated, cost: estimated * (Number(provider.costPerToken) || 0), purpose: options.purpose || 'work' });
+    // Provider settings and analytics store tokenCost in currency per 1K tokens.
+    const unitCost = Number.isFinite(Number(provider.costPerToken)) && Number(provider.costPerToken) >= 0
+      ? Number(provider.costPerToken) : Math.max(0, Number(provider.tokenCost) || 0) / 1000;
+    const receipt = budget?.reserveUsage({ tokens: estimated, cost: estimated * unitCost, purpose: options.purpose || 'work' });
     let response;
     try { response = await dispatchUnchecked(provider, messages, tools, signal, options); return response; }
-    finally { if (receipt !== undefined) budget.reconcileUsage(receipt, { tokens: response?.usage?.totalTokens, cost: response?.usage?.cost }); }
+    finally { if (receipt !== undefined) budget.reconcileUsage(receipt, { tokens: response?.usage?.totalTokens,
+      cost: response?.usage?.cost ?? (Number.isFinite(response?.usage?.totalTokens) ? response.usage.totalTokens * unitCost : undefined) }); }
   }, {
     signal, timeoutMs: Math.min(10000, budget?.remainingMs() ?? 10000)
   });
