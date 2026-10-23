@@ -165,7 +165,6 @@
     paused = !paused;
     motion.setAttribute('aria-pressed', String(paused));
     motion.setAttribute('aria-label', paused ? 'Tiếp tục trình chiếu' : 'Tạm dừng trình chiếu');
-    motion.textContent = paused ? '▷' : 'Ⅱ';
     if (!paused) { hover = false; focused = false; }
     updateClock();
   });
