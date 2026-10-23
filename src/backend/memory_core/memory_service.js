@@ -57,6 +57,36 @@ class MemoryService {
 
   persist() { this._save(this.store); }
 
+  requestView({ sessionId, accountId, question, history = [], retry = false, latest = false }) {
+    const session = this.getSession(sessionId, true, accountId);
+    if (!session) return this;
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ question, history: sanitizeMessages(history) })).digest('hex');
+    session.retrySnapshots ||= [];
+    if (!retry) {
+      if (!session.retrySnapshots.some(item => item.key === fingerprint)) {
+        const snapshot = structuredClone(session); delete snapshot.retrySnapshots;
+        session.retrySnapshots.push({ key: fingerprint, state: snapshot });
+        session.retrySnapshots = session.retrySnapshots.slice(-8);
+        this.persist();
+      }
+      return this;
+    }
+    const saved = session.retrySnapshots.find(item => item.key === fingerprint);
+    const expectedUpdatedAt = session.updatedAt;
+    // Old sessions may have no checkpoint. Use only the bounded transcript,
+    // never today's pending turn, references, workflow or later SQL results.
+    const state = saved ? structuredClone(saved.state) : this.migrateSession({ accountId, messages: sanitizeMessages(history) }, sessionId);
+    const key = Object.keys(this.store.sessions).find(key => this.store.sessions[key] === session);
+    const view = new MemoryService({ store: { sessions: { [key]: state } }, save() {} });
+    view.retryContextSource = saved ? 'checkpoint' : 'bounded_history';
+    view.commitRetry = () => {
+      if (!latest || this.store.sessions[key] !== session || session.updatedAt !== expectedUpdatedAt) return;
+      const current = view.getSession(sessionId, false, accountId);
+      if (current) { this.store.sessions[key] = { ...structuredClone(current), retrySnapshots: session.retrySnapshots }; this.persist(); }
+    };
+    return view;
+  }
+
   setDocumentState(sessionId, accountId, state) {
     const session = this.getSession(sessionId, Boolean(state), accountId);
     if (!session) return;

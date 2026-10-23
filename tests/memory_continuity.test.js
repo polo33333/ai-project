@@ -108,7 +108,9 @@ test('authorized date predicates remain valid when date columns are deferred fro
     intentCatalog: [{ tableName: 'Records', columns: [{ name: 'ID', type: 'INT' }, { name: 'DueDate', type: 'DATE' }] }] });
   const today = require('../src/backend/services/request_time').create('hiện tại cái nào hết hạn').today;
   const responses = [toolCall('search_schema', { query: 'Records' }), toolCall('execute_sql_query', { sql: `SELECT ID FROM Records WHERE DueDate < N'${today}'` })];
-  const result = await new Harness({ toolManager: tools, dispatch: async () => responses.shift() || { content: 'done' } }).run({
+  const result = await new Harness({ toolManager: tools, dispatch: async (_, messages) => messages[0]?.content?.startsWith('Return JSON only with operation')
+    ? {content:JSON.stringify({operation:'list',analysis:'none',attributes:['ID'],presentation:'table'})}
+    : responses.shift() || { content: 'done' } }).run({
     userMessage: 'hiện tại cái nào hết hạn', provider: { id: 'test', supportsToolCalling: true }, context: {
       governedController: true, lockProvider: true, dbSourceId: 'source', mode: 'data',
       requestPlan: { table: 'Records', intent: 'list', schemaColumns: ['ID'], identityColumns: ['ID'], outputs: { data: true },

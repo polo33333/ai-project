@@ -1243,7 +1243,8 @@ async function handleGovernedRequest(req, res) {
       const { question, message, history:suppliedHistory, providerId, sessionId, knowledgeSearchEnabled, knowledgeSourceIds, dbSourceId, webSearch, retryMessageIndex, continuationContext } = require('../services/chat_request_context').normalize(await readJsonBody(req));
       const retryState=await require('../services/page_chat_history_service').assertCanChat(currentAccount?.id,sessionId,retryMessageIndex);
       const history=require('../services/chat_request_context').normalize({history:retryState?.history || suppliedHistory}).history;
-      const queryText = String(question || message || '').trim();
+      const queryText = String(retryState?.question || question || message || '').trim();
+      const requestMemory = conversationMemoryService.requestView({sessionId,accountId:currentAccount?.id || null,question:queryText,history,retry:retryMessageIndex!==undefined,latest:retryState?.latest});
       if (!queryText) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: 'Câu hỏi không được để trống.' }));
@@ -1261,7 +1262,7 @@ async function handleGovernedRequest(req, res) {
       const coreResult = await intelligentCore.chat(queryText, {
         providerId: providerId || null,
         history: memoryHistory,
-        continuationContext,
+        continuationContext, memoryService:requestMemory,
         useTools: true,
         knowledgeSearchEnabled: knowledgeSearchEnabled !== false,
         knowledgeSourceIds: Array.isArray(knowledgeSourceIds) ? knowledgeSourceIds : [],
@@ -1282,7 +1283,7 @@ async function handleGovernedRequest(req, res) {
       payload.streaming=coreResult.trace?.streaming;
       payload.memoryDecision = coreResult.trace?.memoryDecision || null;
       const auditStatus = coreResult.trace?.completionStatus || 'PARTIAL';
-      const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
+      const memoryPersistence = requestMemory.persistSuccessfulExchange({
         sessionId: normalizedSessionId,
         accountId: currentAccount?.id || null,
         question: queryText,
@@ -1292,8 +1293,9 @@ async function handleGovernedRequest(req, res) {
         completionStatus: auditStatus,
         responseEvaluation: coreResult.trace?.training?.responseEvaluation
       });
+      if(memoryPersistence.persisted) requestMemory.commitRetry?.();
       const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
-        : conversationMemoryService.recordPendingTurn({
+        : requestMemory.recordPendingTurn({
           sessionId: normalizedSessionId, accountId: currentAccount?.id || null, question: queryText,
           currentPlan: coreResult.trace?.training?.plan, completionStatus: auditStatus,
           responseEvaluation: coreResult.trace?.training?.responseEvaluation
@@ -1343,7 +1345,8 @@ async function handleGovernedRequest(req, res) {
       const { question, message, model, history:suppliedHistory, providerId, sessionId, knowledgeSearchEnabled, knowledgeSourceIds, dbSourceId, webSearch, retryMessageIndex, continuationContext } = require('../services/chat_request_context').normalize(await readJsonBody(req));
       const retryState=await require('../services/page_chat_history_service').assertCanChat(currentAccount?.id,sessionId,retryMessageIndex);
       const history=require('../services/chat_request_context').normalize({history:retryState?.history || suppliedHistory}).history;
-      const queryText = question || message || '';
+      const queryText = String(retryState?.question || question || message || '').trim();
+      const requestMemory = conversationMemoryService.requestView({sessionId,accountId:currentAccount?.id || null,question:queryText,history,retry:retryMessageIndex!==undefined,latest:retryState?.latest});
       auditQuestionText = queryText || 'N/A';
       auditProviderId = providerId || null;
 
@@ -1360,7 +1363,7 @@ async function handleGovernedRequest(req, res) {
       const coreResult = await intelligentCore.chat(queryText, {
         providerId: providerId || null,
         history: memoryHistory,
-        continuationContext,
+        continuationContext, memoryService:requestMemory,
         useTools: true,
         knowledgeSearchEnabled: knowledgeSearchEnabled !== false,
         knowledgeSourceIds: Array.isArray(knowledgeSourceIds) ? knowledgeSourceIds : [],
@@ -1476,7 +1479,7 @@ async function handleGovernedRequest(req, res) {
       loggerService.addLog('INFO', 'AI Chat',
         `Chat OK | Tools: ${toolCallsSummary.length} | ${execMs}ms (${coreResult.usedProvider?.name || 'AI'})`
       );
-      const memoryPersistence = conversationMemoryService.persistSuccessfulExchange({
+      const memoryPersistence = requestMemory.persistSuccessfulExchange({
         sessionId: conversationMemoryService.normalizeSessionId(sessionId),
         accountId: currentAccount?.id || null,
         question: queryText,
@@ -1486,8 +1489,9 @@ async function handleGovernedRequest(req, res) {
         completionStatus: coreResult.trace?.completionStatus,
         responseEvaluation: coreResult.trace?.training?.responseEvaluation
       });
+      if(memoryPersistence.persisted) requestMemory.commitRetry?.();
       const pendingPersistence = memoryPersistence.persisted ? { recorded: false, reason: 'successful_exchange' }
-        : conversationMemoryService.recordPendingTurn({
+        : requestMemory.recordPendingTurn({
           sessionId: conversationMemoryService.normalizeSessionId(sessionId), accountId: currentAccount?.id || null,
           question: queryText, currentPlan: coreResult.trace?.training?.plan,
           completionStatus: coreResult.trace?.completionStatus,

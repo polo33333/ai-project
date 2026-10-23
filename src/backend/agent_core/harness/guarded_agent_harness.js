@@ -745,7 +745,7 @@ class GuardedAgentHarness {
               toolResult: execution.envelope ? resultMetadata : null, durationMs: execution.durationMs });
             if (context.governedController && call.name === 'search_schema' && execution.success && execution.result?.mode === 'data') {
               const selection = execution.result;
-              if (!plan.semanticIntentReviewed && selection.tables?.some(table=>table.semanticModel)) {
+              if (!plan.semanticIntentReviewed && selection.tables?.some(table=>table.semanticModel || selection.intentCatalog?.some(item=>item.columns?.some(column=>column.type)) && table.columns?.length)) {
                 plan.semanticIntentReviewed = true;
                 try {
                   const visiblePair=(tableName,column)=>selection.intentCatalog?.some(t=>t.tableName===tableName&&t.columns.some(c=>c.name===column));

@@ -639,6 +639,7 @@ class ToolRegistry {
       return { success: false, error: check.error };
     }
     const { validateSqlAgainstJoinPlan } = require('../services/sql_join_validator');
+    require('../agent_core/tools/join_path').planForSql(check.cleanedSql, context);
     const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
     if (!joinCheck.valid) return { success: false, error: joinCheck.error, code: joinCheck.code, details: joinCheck.details };
 

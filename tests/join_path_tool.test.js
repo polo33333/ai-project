@@ -19,6 +19,20 @@ function fixture(t) {
 }
 const args = { fromTable: 'dbo.A', toTable: 'B' };
 
+test('registry SQL uses the same verified JOIN resolver as the built-in executor', async t => {
+  const old=process.env.SQL_JOIN_PLANNER_ENABLED;process.env.SQL_JOIN_PLANNER_ENABLED='true';
+  t.after(()=>{if(old===undefined)delete process.env.SQL_JOIN_PLANNER_ENABLED;else process.env.SQL_JOIN_PLANNER_ENABLED=old});
+  const context=fixture(t), registry=require('../src/backend/intelligent_core/tool_registry');
+  let reads=0;
+  t.mock.method(connector,'executeSqlQuery',async()=>{reads++;return [{Id:1}]});
+  const sql='SELECT a.Id FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id';
+  const result=await registry.executeTool('execute_sql_query',{sql},context);
+  assert.equal(result.success,true,JSON.stringify(result)); assert.equal(reads,1);
+  assert.equal(context.joinPlan.outcome,'ready');
+  const failed=await registry.executeTool('execute_sql_query',{sql:sql.replace('c.Id','c.WrongId')},{permissions:['sql:read'],dbSourceId:'src'});
+  assert.equal(failed.success,false);assert.equal(reads,1);
+});
+
 test('direct SQL resolves missing JOIN metadata without guessing keys or bypassing source policy', t => {
   const context=fixture(t), {planForSql}=require('../src/backend/agent_core/tools/join_path');
   const {validateSqlAgainstJoinPlan}=require('../src/backend/services/sql_join_validator');

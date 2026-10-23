@@ -124,6 +124,7 @@ class IntelligentCore {
   }
 
   async _chat(userMessage, options = {}) {
+    const memoryService = options.memoryService || require('../memory_core').memoryService;
     const governedController = require('../governance/controller').enabled();
     const { providerId, history = [], useTools = true, knowledgeSearchEnabled = true, knowledgeSourceIds = [], webSearch = false } = options;
 

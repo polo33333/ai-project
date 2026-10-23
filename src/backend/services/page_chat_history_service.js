@@ -44,15 +44,35 @@ function retryTurn(session,index) {
   let historyIndex=-1;
   const normalize=value=>String(value || '').replace(/<[^>]*>/g,' ').replace(/[#*_`]/g,'').replace(/\s+/g,' ').trim();
   const oldText=normalize(answer.html);
+  const sameAnswer = item => answer.content ? item.content===answer.content : normalize(item.html)===oldText;
+  let occurrence=0;
+  for(let i=0;i<=index;i++) {
+    if(session.messages[i].role!=='assistant' || !sameAnswer(session.messages[i]))continue;
+    let prior=i-1;while(prior>=0&&session.messages[prior].role!=='user')prior--;
+    if(prior>=0&&(session.messages[prior].requestMessage||session.messages[prior].content)===question)occurrence++;
+  }
+  const matches=[];
   for(let i=0;i<session.history.length-1;i++) {
     if (session.history[i].role==='user' && session.history[i].content===question &&
-        session.history[i+1].role==='assistant' && (answer.content ? session.history[i+1].content===answer.content : oldText.includes(normalize(session.history[i+1].content)))) historyIndex=i;
+        session.history[i+1].role==='assistant' && (answer.content ? session.history[i+1].content===answer.content : oldText.includes(normalize(session.history[i+1].content)))) matches.push(i);
   }
+  historyIndex=matches[occurrence-1]??-1;
   let contextEnd=historyIndex>=0 ? historyIndex : session.history.length;
   if(historyIndex<0) for(let i=index+1;i<session.messages.length;i++) {
     const next=session.messages[i]; if(next.role!=='user') continue;
     const match=session.history.findIndex(item=>item.role==='user' && item.content===(next.requestMessage || next.content));
     if(match>=0) { contextEnd=match; break; }
+  }
+  if (historyIndex < 0) {
+    // Failed answers may never enter history. Anchor to the preceding saved
+    // answer, rather than including the failed turn or later conversation.
+    let precedingEnd = 0;
+    for (let i=0;i<userIndex;i++) {
+      const prior=session.messages[i]; if(prior.role!=='assistant' || !prior.content) continue;
+      const match=session.history.findIndex((item,j)=>j<contextEnd && item.role==='assistant' && item.content===prior.content);
+      if(match>=0) precedingEnd=Math.max(precedingEnd,match+1);
+    }
+    contextEnd=precedingEnd;
   }
   return {question,historyIndex,contextEnd};
 }
@@ -63,7 +83,7 @@ async function assertCanChat(owner,id,retryMessageIndex) {
   const session=decrypt(row.payload,context(owner,id));
   if (retryMessageIndex!==undefined) {
     const turn=retryTurn(session,retryMessageIndex);
-    return {history:session.history.slice(0,turn.contextEnd).slice(-20)};
+    return {history:session.history.slice(0,turn.contextEnd).slice(-20), latest: !session.messages.slice(retryMessageIndex+1).some(item=>item.role==='user'), question: turn.question};
   }
   const pending=session.messages.at(-1)?.role==='user';
   if (session.messages.length+(pending?1:2)>HARD_MESSAGES ||
