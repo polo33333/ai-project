@@ -240,6 +240,27 @@ class PlanDataQueryTool extends BaseTool {
 }
 
 // ─── 4. Execute SQL Query ───────────────────────────────────────────────────
+// The planner exposes the user's explicit "top/liệt kê N" as rowLimit.
+function requestedRowLimit(plan) { return plan?.rowLimit ?? plan?.requestedRowLimit ?? null; }
+
+// Raw SQL capped by TOP/FETCH that returned the full cap may have more rows.
+// It is complete only when the user asked for exactly that many rows, or for a
+// small ordered ranking ("top 5 theo doanh thu"). A large ordered cap is a page.
+const MAX_RANKING_ROWS = 20;
+function sqlLimitState(sql, returnedCount, plan) {
+  let statement;
+  try {
+    const parsed = new (require('node-sql-parser').Parser)().astify(sql, { database: 'TransactSQL' });
+    statement = Array.isArray(parsed) ? parsed[0] : parsed;
+  } catch { return {}; }
+  const appliedLimit = Number(statement?.top?.value ?? statement?.limit?.fetch?.value?.value);
+  if (!Number.isInteger(appliedLimit) || statement.top?.percent) return {};
+  const requestedLimit = requestedRowLimit(plan);
+  const ranking = Boolean(statement.orderby) && appliedLimit <= MAX_RANKING_ROWS;
+  const hasMore = returnedCount >= appliedLimit && requestedLimit !== appliedLimit && !ranking;
+  return { hasMore, completeness: { status: hasMore ? 'partial' : 'complete', requestedLimit, appliedLimit, returnedCount } };
+}
+
 class ExecuteSqlTool extends BaseTool {
   constructor() {
     super({
@@ -304,8 +325,9 @@ class ExecuteSqlTool extends BaseTool {
         relationshipIds: resolvedJoinPlan.edges.map(edge => edge.relationshipId) } } : {}),
       ...(Object.keys(units).length?{units}:{}),
       ...(args.query ? { hasMore: rows.length >= (args.query.limit || 100)
-        && !(Number.isInteger(args.query.limit) && context.requestPlan?.requestedRowLimit === args.query.limit)
-        && (args.query.operation !== 'aggregate' || args.query.dimensions?.length > 0 || Boolean(args.query.time)) } : {}),
+        && !(Number.isInteger(args.query.limit) && requestedRowLimit(context.requestPlan) === args.query.limit)
+        && (args.query.operation !== 'aggregate' || args.query.dimensions?.length > 0 || Boolean(args.query.time)) }
+        : sqlLimitState(check.cleanedSql, rows.length, context.requestPlan)),
       sql: check.cleanedSql
     };
   }

@@ -138,9 +138,10 @@ test('shared harness selects permitted memory but cannot claim an unqueried addr
   const value = await harness.run({ userMessage: 'address of the employee above', provider: { id: 'fixture', supportsToolCalling: true },
     context: { governedController: true, lockProvider: true, mode: 'general',
       requestPlan: { outputs: { data: false } }, resolutionContext: { candidates, recent: [] } } });
-  assert.equal(calls, 4); assert.equal(value.tokenUsage.inputTokens, 70);
+  // The repeated unsupported answer adds no evidence, so the second repair is skipped.
+  assert.equal(calls, 3); assert.equal(value.tokenUsage.inputTokens, 50);
   assert.equal(value.trace.completionStatus, 'PARTIAL');
-  assert.equal(value.trace.executionBudget.repairAttempts, 2);
+  assert.equal(value.trace.executionBudget.repairAttempts, 1);
   assert.equal(value.trace.training.plan.presentation, 'table');
   assert.equal(value.trace.steps.find(step => step.type === 'MODEL_USAGE').stage, 'memory_resolution');
 });

@@ -715,6 +715,8 @@ header.top-bar {
 }
 .logout-confirm-dialog h3 { margin: 0 0 8px; font-size: 17px; }
 .logout-confirm-dialog p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+.logout-confirm-dialog .logout-error { margin-top: 12px; color: var(--danger, #ef4444); }
+.logout-confirm-dialog .logout-error:empty { display: none; }
 .logout-confirm-actions { display: flex; justify-content: center; gap: 10px; margin-top: 22px; }
 .logout-cancel-btn,
 .logout-submit-btn { width: 112px; height: 38px; padding: 0 14px; border-radius: 9px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
@@ -723,6 +725,7 @@ header.top-bar {
 .logout-submit-btn { border: 1px solid #dc2626; background: #dc2626; color: #fff; }
 .logout-submit-btn:hover { background: #b91c1c; border-color: #b91c1c; }
 .logout-submit-btn:disabled { opacity: .7; cursor: wait; }
+.logout-submit-btn[aria-busy="true"] { width: auto; min-width: 112px; white-space: nowrap; }
 
 .account-password-dialog { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; text-align: left; padding: 28px; }
 .account-password-icon { width: 44px; height: 44px; display: grid; place-items: center; margin-bottom: 16px; border-radius: 12px; color: var(--primary, #6366f1); background: rgba(99,102,241,.1); font-size: 18px; }

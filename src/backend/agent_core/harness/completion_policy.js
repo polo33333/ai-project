@@ -179,8 +179,12 @@ function evaluateCompletion({ reply, plan, toolCalls = [], context = {}, finishR
     if (links.some(link => !downloads.includes(link))) failures.push('UNVERIFIED_ARTIFACT_LINK');
   }
   const text = normalize(reply);
-  if (require('./analysis_response').task(plan) && /^da tra cuu duoc/.test(text)
-    && !/tieu chi|phuong phap|nguong|baseline|criterion|method/.test(text)) failures.push('ANALYSIS_NOT_PERFORMED');
+  const analysisCriterion = /tieu chi|phuong phap|nguong|baseline|criterion|method|muc tham chieu|trung binh|do lech|z-?score|tu phan vi|\biqr\b/.test(text);
+  if (require('./analysis_response').task(plan) && /^da tra cuu duoc/.test(text) && !analysisCriterion) failures.push('ANALYSIS_NOT_PERFORMED');
+  // An anomaly verdict needs its criterion in the answer. Stating that the
+  // evidence is insufficient is the correct answer without one, not a verdict.
+  else if (require('./analysis_response').task(plan) === 'anomaly' && /bat thuong|anomal|outlier/.test(text) && !analysisCriterion
+    && !/chua du|khong du|chua (?:the )?(?:xac nhan|ket luan)|khong the (?:xac nhan|ket luan)|insufficient/.test(text)) failures.push('ANALYSIS_CRITERION_MISSING');
   if (context.knowledgeGrounding?.required && /khong co thong tin(?: cu the)?|hay cho (?:toi|minh) biet them/.test(text)) failures.push('UNGROUNDED_KNOWLEDGE_RESPONSE');
   if (context.webSearch && context.webSearchResultCount > 0
     && /khong duoc ket noi|khong co quyen truy cap|ngoai pham vi/.test(text)) failures.push('WEB_GROUNDING_REFUSAL');
@@ -203,9 +207,19 @@ function evaluateCompletion({ reply, plan, toolCalls = [], context = {}, finishR
   return { valid: unique.length === 0, score: Math.max(0, 1 - unique.length * 0.2), failures: unique };
 }
 
+// SQL is compared by its parsed form, so whitespace, keyword case and bracket
+// quoting variants of the same statement are the same attempt. Other strings
+// collapse whitespace only; their case may carry meaning.
+function canonicalSql(sql) {
+  try {
+    const Parser = require('node-sql-parser').Parser, parser = new Parser();
+    return parser.sqlify(parser.astify(sql, { database: 'TransactSQL' }), { database: 'TransactSQL' });
+  } catch { return String(sql).replace(/\s+/g, ' ').trim(); }
+}
 function stableFingerprint(name, args) {
-  const canonical = value => Array.isArray(value) ? value.map(canonical)
-    : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  const canonical = (value, field) => Array.isArray(value) ? value.map(item => canonical(item))
+    : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key], key)]))
+      : typeof value === 'string' ? field === 'sql' ? canonicalSql(value) : value.replace(/\s+/g, ' ').trim() : value;
   return `${name}:${JSON.stringify(canonical(args))}`;
 }
 

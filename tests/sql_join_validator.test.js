@@ -39,7 +39,12 @@ test('root aggregates filtered through a mapped relation do not require unreques
  const join='FROM Orders o LEFT JOIN Customers c ON o.TenantID=c.TenantID AND o.CustomerID=c.ID WHERE c.Code=\'C002\'';
  assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount) AS InvoiceTotal '+join,p).valid,true);
  assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(c.Balance) AS RepeatedBalance '+join,p).code,'JOIN_GRAIN_UNSAFE');
- assert.equal(validateSqlAgainstJoinPlan('SELECT o.ID, c.Name '+join,p).code,'JOIN_PROJECTION_INVALID');
+ // Result labels name an unaliased display column by its role; a custom header is still rejected.
+ assert.equal(validateSqlAgainstJoinPlan('SELECT o.ID, c.Name '+join,p).valid,true);
+ assert.equal(validateSqlAgainstJoinPlan('SELECT o.ID, c.Name AS KhachHang '+join,p).code,'JOIN_PROJECTION_INVALID');
+ // A filter-only lookup may use INNER JOIN: the WHERE predicate already drops unmatched rows.
+ assert.equal(validateSqlAgainstJoinPlan('SELECT SUM(o.Amount) AS InvoiceTotal '+join.replace('LEFT JOIN','JOIN'),p).valid,true);
+ assert.equal(validateSqlAgainstJoinPlan('SELECT o.ID, c.Name FROM Orders o JOIN Customers c ON o.TenantID=c.TenantID AND o.CustomerID=c.ID',p).code,'JOIN_PRESERVATION_REQUIRED');
 });
 
 test('join validator rejects a missing composite key predicate', () => {

@@ -793,6 +793,19 @@ main.main-content.training-workspace { overflow-y: hidden; }
 .accounts-override-label { display:block; }
 .accounts-role-editor { z-index:1310; }
 @media(max-width:520px) { .accounts-permission-grid { grid-template-columns:1fr; } .accounts-roles-heading { align-items:flex-start; flex-direction:column; } }
+
+/* Account, embed identity and operations status colors follow the shared theme. */
+:root[data-theme="dark"] .embed-section-icon { background:var(--primary-light); color:var(--primary); }
+:root[data-theme="dark"] .embed-auth-note i { color:var(--primary); }
+:root[data-theme="dark"] .accounts-badge.admin { background:var(--primary-light); color:var(--primary); }
+:root[data-theme="dark"] :is(.accounts-badge.active,.embed-state-badge.is-enabled) { background:var(--success-bg); color:var(--success-text); }
+:root[data-theme="dark"] .embed-session-status.is-online { color:var(--success-text); }
+:root[data-theme="dark"] .accounts-badge.locked { background:var(--danger-bg); color:var(--danger-text); }
+:root[data-theme="dark"] :is(.accounts-editor .accounts-message,.embed-auth-footer p.is-error) { color:var(--danger-text); }
+:root[data-theme="dark"] .agent-operations .operations-stat { background:var(--dark-raised); }
+:root[data-theme="dark"] .operations-stat-icon.indigo { background:var(--primary-light); color:var(--primary); }
+:root[data-theme="dark"] .operations-stat-icon.amber { background:var(--warning-bg); color:var(--warning-text); }
+:root[data-theme="dark"] .operations-stat-icon.red { background:var(--danger-bg); color:var(--danger-text); }
 #app-sidebar .nav-section[hidden] { display:none !important; }
 .page-collapsible-panel > .page-panel-heading { display:flex; align-items:center; gap:12px; }
 .page-collapsible-panel > .page-panel-heading > :first-child { flex:1 1 auto; min-width:0; }

@@ -29,9 +29,9 @@
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
-  <link rel="stylesheet" href="css/styles.css?v=20261021-thinking-text-height">
+  <link rel="stylesheet" href="css/styles.css?v=20261024-logout">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
-  <link rel="stylesheet" href="css/audit-logs.css?v=20260912-review-panel">
+  <link rel="stylesheet" href="css/audit-logs.css?v=20261024-control-surfaces">
   <link rel="stylesheet" href="css/provider-management.css">
   <link rel="stylesheet" href="css/knowledge-library.css?v=20260913-preview-inner-scroll">
   <link rel="stylesheet" href="css/relationship-diagram.css">
@@ -41,10 +41,10 @@
   <link rel="stylesheet" href="css/system-tools.css?v=20261015-catalog-hero">
   <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
   <link rel="stylesheet" href="css/workspace.css?v=20261020-chat-thread">
-  <link rel="stylesheet" href="css/module-workspaces.css?v=20261018-embed-identity-ui">
+  <link rel="stylesheet" href="css/module-workspaces.css?v=20261024-account-operations-theme">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
-  <link rel="stylesheet" href="css/theme.css?v=20261021-effort-track">
-  <link rel="stylesheet" href="css/settings.css?v=20261012-governance-width">
+  <link rel="stylesheet" href="css/theme.css?v=20261024-surface-aliases">
+  <link rel="stylesheet" href="css/settings.css?v=20261024-backup-theme">
   <link rel="stylesheet" href="css/memory.css?v=20261012-agent-memory-ui">
   <link rel="stylesheet" href="css/ui-foundation.css?v=20261015-composer-focus">
   <link rel="stylesheet" href="css/chat-conversation.css?v=20261023-reasoning-resume-v2">
@@ -469,6 +469,7 @@
       <div class="logout-confirm-icon"><i class="fa-solid fa-arrow-right-from-bracket"></i></div>
       <h3 id="logout-confirm-title">Xác nhận đăng xuất</h3>
       <p id="logout-confirm-description">Bạn có chắc muốn đăng xuất khỏi KnowledgeHub AI?</p>
+      <p id="logout-error" class="logout-error" role="alert"></p>
       <div class="logout-confirm-actions">
         <button id="logout-cancel-btn" type="button" class="logout-cancel-btn" onclick="closeLogoutConfirmation()">Hủy</button>
         <button id="logout-confirm-btn" type="button" class="logout-submit-btn" onclick="performLogout()">
@@ -590,21 +591,21 @@
   <script src="js/modules/watchfolder.js?v=20261015-training-loading"></script>
   <script src="js/modules/system_tools.js?v=20261015-catalog-hero"></script>
   <script src="js/modules/governance.js?v=20261022-parallel-load"></script>
-  <script src="js/modules/accounts.js?v=20261018-embed-identity-ui"></script>
+  <script src="js/modules/accounts.js?v=20261023-login-route"></script>
   <script src="js/modules/memory.js?v=20261015-tab-data"></script>
-  <script src="js/modules/settings.js?v=20261015-tab-data"></script>
+  <script src="js/modules/settings.js?v=20261024-harness-pipeline"></script>
   <script src="js/modules/workflows.js?v=20260926-phase1"></script>
   <script src="js/modules/workflow_plugins.js?v=20261022-mcp-loading"></script>
-  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261022-mcp-loading">
+  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261024-control-surfaces">
   <!-- Main App Router Script -->
   <script src="js/sidebar.js?v=20260906-null-safe-footer"></script>
   <script src="js/notifications.js?v=1.0.1"></script>
-  <link rel="stylesheet" href="css/tab_loading.css?v=20261015-training-loading">
+  <link rel="stylesheet" href="css/tab_loading.css?v=20261024-loading-layout-v2">
   <script src="js/core/tab_data.js?v=20261015-training-loading"></script>
   <script src="js/core/view_loader.js?v=20261017-account-roles"></script>
   <script src="js/core/main_tabs.js?v=20261017-account-roles"></script>
-  <script src="js/app.js?v=20261021-hidden-tabs"></script>
-  <script src="js/tab_loading.js?v=20261015-training-loading"></script>
+  <script src="js/app.js?v=20261024-logout"></script>
+  <script src="js/tab_loading.js?v=20261024-loading-layout-v2"></script>
 </body>
 </html>
 

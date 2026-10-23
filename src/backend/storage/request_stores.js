@@ -4,6 +4,7 @@
 const auth=['accounts.json','sessions.json','account_roles.json'];
 const dictionaryFiles=['dictionary.json','table_relationships.json','db_sources.json','domain_aliases.json','glossary.json','logs.json'];
 const mutations=new Map([
+  ['POST /api/auth/logout',[]],
   ['POST /api/chat/attachments',[]],
   ['POST /api/page-chat/sessions',['ai_providers.json']],
   ['PUT /api/settings',[]],

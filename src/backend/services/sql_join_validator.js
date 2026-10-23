@@ -111,14 +111,38 @@ function aliasesForEdge(edge, plan, refs) {
   return { from: refs.filter(ref => ref.tableName === key(from?.tableName)).map(ref => ref.alias),
     to: refs.filter(ref => ref.tableName === key(to?.tableName)).map(ref => ref.alias) };
 }
-function validateGrain(select, refs, plan, usedEdges) {
+// True when every column an aggregate reads, through COALESCE/CAST/CASE or
+// arithmetic, belongs to the repeated side. Mixed row-level expressions such
+// as SUM(detail.Qty * header.Price) are evaluated at the detail grain and pass.
+// COUNT(*) reads no column; unqualified columns in a JOIN are not attributable.
+function readsOnly(aggregate, aliases) {
+  const columns = require('./sql_expression').columnRefs(aggregate.args?.expr);
+  return columns.length > 0 && columns.every(column => aliases.includes(key(column.table)));
+}
+// A table's rows are not repeated only when every other joined table is a
+// many-to-one lookup reachable from it. Two facts sharing a lookup
+// (debt -> customer <- electricity output) repeat each other's rows, although
+// each JOIN alone matches a verified relationship.
+function unrepeatedAliases(refs, bindings) {
+  const lookups = new Map(refs.map(ref => [ref.alias, new Set()]));
+  for (const { edge, fromAlias, toAlias } of bindings) {
+    if (edge.cardinality !== 'one-to-many') lookups.get(fromAlias)?.add(toAlias);
+    if (edge.cardinality !== 'many-to-one') lookups.get(toAlias)?.add(fromAlias);
+  }
+  return new Set(refs.map(ref => ref.alias).filter(start => {
+    const reached = new Set([start]);
+    for (const alias of reached) for (const next of lookups.get(alias) || []) reached.add(next);
+    return refs.every(ref => reached.has(ref.alias));
+  }));
+}
+function validateGrain(select, refs, plan, usedEdges, bindings = []) {
   const aggregates = [];
   (select.columns || []).forEach(column => walk(column.expr, node => { if (node.type === 'aggr_func') aggregates.push(node); }));
   for(const edge of usedEdges.filter(item=>item.cardinality==='many-to-one')) {
     const aliases=aliasesForEdge(edge,plan,refs);
     for(const aggregate of aggregates) {
-      const argument=aggregate.args?.expr,name=key(aggregate.name);
-      if(argument?.type!=='column_ref'||!aliases.to.includes(key(argument.table))||(name==='count'&&aggregate.args?.distinct))continue;
+      const name=key(aggregate.name);
+      if(!readsOnly(aggregate,aliases.to)||(name==='count'&&aggregate.args?.distinct))continue;
       if(['sum','count','avg'].includes(name))return failure('JOIN_GRAIN_UNSAFE',
         'Aggregate trên bảng đích N:1 có thể lặp giá trị theo các dòng bảng nguồn; cần DISTINCT phù hợp hoặc tổng hợp đúng grain trước JOIN.');
     }
@@ -126,8 +150,7 @@ function validateGrain(select, refs, plan, usedEdges) {
   for (const edge of usedEdges.filter(item => item.cardinality === 'one-to-many')) {
     const aliases = aliasesForEdge(edge, plan, refs);
     for (const aggregate of aggregates) {
-      const argument = aggregate.args?.expr;
-      if (argument?.type !== 'column_ref' || !aliases.from.includes(key(argument.table))) continue;
+      if (!readsOnly(aggregate, aliases.from)) continue;
       const name = key(aggregate.name);
       if (name === 'count' && aggregate.args?.distinct) continue;
       if (['sum', 'count', 'avg'].includes(name)) return failure('JOIN_GRAIN_UNSAFE',
@@ -139,6 +162,16 @@ function validateGrain(select, refs, plan, usedEdges) {
       if (parentProjected) return failure('JOIN_GRAIN_UNSAFE',
         'JOIN một-nhiều có thể lặp dòng của thực thể chính; hãy dùng EXISTS, aggregate bảng con trước, hoặc yêu cầu grain chi tiết cha-con.');
     }
+  }
+  const unrepeated = unrepeatedAliases(refs, bindings);
+  const physical = new Set(refs.map(ref => ref.alias));
+  for (const aggregate of aggregates) {
+    const name = key(aggregate.name);
+    if (!['sum', 'count', 'avg'].includes(name) || (name === 'count' && aggregate.args?.distinct)) continue;
+    // Columns of derived tables/CTEs or unqualified columns are not attributable here.
+    const aliases = require('./sql_expression').columnRefs(aggregate.args?.expr).map(column => key(column.table));
+    if (aliases.length && aliases.every(alias => physical.has(alias) && !unrepeated.has(alias))) return failure('JOIN_GRAIN_UNSAFE',
+      `${name.toUpperCase()} đọc bảng bị lặp dòng do JOIN qua bảng dùng chung (fan trap); hãy tổng hợp từng bảng giao dịch riêng trước khi JOIN, hoặc dùng EXISTS để lọc.`);
   }
   return { valid: true };
 }
@@ -199,12 +232,22 @@ function validateEnrichmentProjection(select, refs, plan, bindings) {
     const mappedDisplay = columns.find(column => column.expr?.type === 'column_ref'
       && key(column.expr.table) === toAlias && key(column.expr.column) === key(edge.displayColumn));
     if (!mappedDisplay) return failure('JOIN_PROJECTION_INVALID', `SQL thiếu cột hiển thị ${edge.displayColumn} của quan hệ ${edge.relationshipId}.`);
-    if (String(mappedDisplay.as || '').trim() !== String(edge.businessRole).trim()) return failure('JOIN_PROJECTION_INVALID',
+    // The result labels map an unaliased display column to its business role;
+    // only a different custom header is rejected.
+    const header = String(mappedDisplay.as || '').trim();
+    if (header && header !== String(edge.businessRole).trim() && key(header) !== key(edge.displayColumn)) return failure('JOIN_PROJECTION_INVALID',
       `Cột ${edge.displayColumn} phải dùng đúng tiêu đề "${edge.businessRole}".`);
   }
   return { valid: true };
 }
 
+// True when a mandatory (AND-level) WHERE predicate rejects NULL rows of alias.
+function filtersAlias(where, alias) {
+  const conjuncts = node => node?.type === 'binary_expr' && String(node.operator).toUpperCase() === 'AND' ? [...conjuncts(node.left), ...conjuncts(node.right)] : [node];
+  return conjuncts(where).some(node => node?.type === 'binary_expr'
+    && ['=', 'IN', 'LIKE', '>', '>=', '<', '<=', 'BETWEEN'].includes(String(node.operator).toUpperCase())
+    && require('./sql_expression').columnRefs(node.left).some(column => key(column.table) === alias));
+}
 function validateSelect(select, ctes, plan) {
   const refs = (select.from || []).filter(item => item.table && !ctes.has(key(item.table))).map(tableRef);
   if (!refs.length) return { valid: true, usedEdges: [] };
@@ -229,7 +272,10 @@ function validateSelect(select, ctes, plan) {
         toAlias: key(refForEdge(plan, edge, 'to')?.tableName) === ref.tableName ? ref.alias : left.alias }; break; }
     }
     if (!match) return failure('JOIN_RELATIONSHIP_MISSING', `SQL thiếu đủ khóa JOIN hoặc quan hệ đã xác minh cho bảng ${ref.tableName}.`, { tableName: ref.tableName });
-    if (plan.purpose === 'enrichment' && key(match.edge.joinType || 'LEFT') === 'left' && ref.join !== 'left join') {
+    // An INNER JOIN whose lookup is also filtered in WHERE (e.g. customer code)
+    // returns the same rows as LEFT JOIN + that filter; it drops nothing extra.
+    if (plan.purpose === 'enrichment' && key(match.edge.joinType || 'LEFT') === 'left' && ref.join !== 'left join'
+      && !filtersAlias(select.where, ref.alias)) {
       return failure('JOIN_PRESERVATION_REQUIRED',
         `Quan hệ bổ sung ${match.edge.relationshipId} cần LEFT JOIN để giữ bản ghi của bảng gốc khi thiếu dữ liệu liên kết.`);
     }
@@ -237,7 +283,7 @@ function validateSelect(select, ctes, plan) {
     bindings.push(match);
     prior.push(ref);
   }
-  const grain = validateGrain(select, refs, plan, usedEdges);
+  const grain = validateGrain(select, refs, plan, usedEdges, bindings);
   if (!grain.valid) return grain;
   const projection = validateEnrichmentProjection(select, refs, plan, bindings);
   if (!projection.valid) return projection;

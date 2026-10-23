@@ -1,0 +1,115 @@
+'use strict';
+
+// Live harness evaluation against the configured provider and SQL source.
+// Runs in-process with the same scopes the HTTP router builds (storage ->
+// governance -> admin principal -> memory request view -> core.chat -> memory
+// persistence). SQL sources are only read. Each case uses its own "eval-"
+// chat session, so cases never share memory.
+//
+//   node scripts/eval/live_harness_eval.js --label v1 [--only id1,id2] [--repeat 1]
+//
+// The harness pipeline is chosen by HARNESS_PIPELINE (unset = current loop).
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const root = path.resolve(__dirname, '../..');
+const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, list) =>
+  value.startsWith('--') ? [...pairs, [value.slice(2), list[index + 1]?.startsWith('--') ? true : list[index + 1] ?? true]] : pairs, []));
+const label = String(args.label || process.env.HARNESS_PIPELINE || 'v1');
+const only = args.only ? new Set(String(args.only).split(',')) : null;
+const fixture = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/live_eval_cases.json'), 'utf8'));
+const cases = fixture.cases.filter(item => !only || only.has(item.id));
+
+const digits = text => String(text).replace(/(\d)[.,\s](?=\d)/g, '$1');
+const fold = text => String(text).normalize('NFC').toLocaleLowerCase('vi');
+function matches(reply, item) {
+  if (typeof item === 'string') return fold(reply).includes(fold(item));
+  if (item.num !== undefined) return new RegExp(`(^|\\D)${item.num}(\\D|$)`).test(digits(reply));
+  if (item.re) return new RegExp(item.re, 'iu').test(reply);
+  return false;
+}
+function score(reply, testCase, tools = []) {
+  const missing = (testCase.must || []).filter(item => !matches(reply, item));
+  const forbidden = (testCase.mustNot || []).filter(item => matches(reply, item));
+  const missingTools = (testCase.mustTools || []).filter(name => !(tools || []).includes(name));
+  return { passed: !missing.length && !forbidden.length && !missingTools.length, missing, forbidden, ...(missingTools.length ? { missingTools } : {}) };
+}
+
+async function ask(storage, account, sessionId, question, history) {
+  const governance = require(path.join(root, 'src/backend/governance/context'));
+  return storage.run(() => governance.run(async () => {
+    governance.setPrincipal({ subject: `account:${account.id}`, role: account.role, permissions: account.permissions,
+      dataAccess: account.dataAccess, tenantId: account.tenantId, channel: 'chat' });
+    governance.current().requestId = crypto.randomUUID();
+    const { memoryService } = require(path.join(root, 'src/backend/memory_core'));
+    const { core } = require(path.join(root, 'src/backend/intelligent_core'));
+    const session = memoryService.normalizeSessionId(sessionId);
+    const requestMemory = memoryService.requestView({ sessionId: session, accountId: account.id, question, history });
+    const started = Date.now();
+    const result = await core.chat(question, { history, memoryService: requestMemory, useTools: true,
+      knowledgeSearchEnabled: true, knowledgeSourceIds: [], permissions: account.role === 'admin' ? ['admin'] : account.permissions,
+      session: { id: session, accountId: account.id, tenantId: account.tenantId } });
+    const latencyMs = Date.now() - started;
+    const persisted = requestMemory.persistSuccessfulExchange({ sessionId: session, accountId: account.id, question,
+      reply: result.replyText, currentPlan: result.trace?.training?.plan, toolCalls: result.toolCalls || [],
+      completionStatus: result.trace?.completionStatus, responseEvaluation: result.trace?.training?.responseEvaluation });
+    if (persisted.persisted) requestMemory.commitRetry?.();
+    else requestMemory.recordPendingTurn?.({ sessionId: session, accountId: account.id, question, currentPlan: result.trace?.training?.plan,
+      completionStatus: result.trace?.completionStatus, responseEvaluation: result.trace?.training?.responseEvaluation });
+    const steps = result.trace?.steps || [];
+    const usage = steps.filter(step => step.type === 'MODEL_USAGE');
+    return { reply: String(result.replyText || ''), latencyMs, status: result.trace?.completionStatus || null,
+      stopReason: result.trace?.stopReason || null, modelCalls: result.trace?.executionBudget?.modelCalls ?? usage.length,
+      inputTokens: usage.reduce((sum, step) => sum + (step.inputTokens || step.inputTokensEstimated || 0), 0),
+      stages: usage.map(step => step.stage), sql: (result.toolCalls || []).filter(call => call.toolName === 'execute_sql_query').map(call => ({ ok: call.success, sql: call.args?.sql, error: call.error })),
+      failures: result.trace?.training?.responseEvaluation?.failures || [],
+      pipeline: result.trace?.pipeline || 'v1', tools: (result.toolCalls || []).filter(call => call.success).map(call => call.toolName), steps: steps.filter(step => /^V2_/.test(step.type)) };
+  }), { independent: true });
+}
+
+const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); return sorted.length ? sorted[Math.floor((sorted.length - 1) * q)] : null; };
+
+(async () => {
+  process.chdir(root);
+  const storage = require(path.join(root, 'src/backend/storage'));
+  storage.loadEnvironment();
+  await storage.bootstrapStorage();
+  const account = await storage.run(() => structuredClone(storage.read('accounts.json', []).find(item => item.role === 'admin' && item.isActive !== false)), { files: ['accounts.json'] });
+  if (!account) throw new Error('No active admin account for evaluation.');
+  const runId = `${label}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const results = [];
+  for (const testCase of cases) {
+    const sessionId = `eval-${runId}-${testCase.id}`;
+    const history = [], turns = [];
+    for (const question of testCase.turns) {
+      let turn;
+      try { turn = await ask(storage, account, sessionId, question, structuredClone(history)); }
+      catch (error) { turn = { reply: '', error: error.code || error.message, latencyMs: null, modelCalls: null, inputTokens: null, status: 'EXCEPTION', failures: [] }; }
+      turns.push({ question, ...turn });
+      history.push({ role: 'user', content: question }, { role: 'assistant', content: turn.reply });
+    }
+    const final = turns.at(-1);
+    const verdict = score(final.reply, testCase, final.tools);
+    results.push({ id: testCase.id, group: testCase.group, ...verdict, turns });
+    console.log(`${verdict.passed ? 'PASS' : 'FAIL'} ${testCase.id} | ${final.status} | calls ${turns.map(t => t.modelCalls).join('+')} | ${turns.map(t => t.latencyMs).join('+')}ms`
+      + (verdict.passed ? '' : ` | missing ${JSON.stringify(verdict.missing)} forbidden ${JSON.stringify(verdict.forbidden)} tools ${JSON.stringify(verdict.missingTools || [])} | ${final.reply.replace(/\s+/g, ' ').slice(0, 140)}`));
+  }
+  const allTurns = results.flatMap(item => item.turns);
+  const summary = { label, runId, cases: results.length, passed: results.filter(item => item.passed).length,
+    accuracy: results.length ? +(results.filter(item => item.passed).length / results.length).toFixed(3) : null,
+    genericFailure: allTurns.filter(turn => /^Chưa thể hoàn tất/.test(turn.reply)).length,
+    partial: allTurns.filter(turn => turn.status !== 'SUCCESS').length, turns: allTurns.length,
+    modelCalls: { p50: quantile(allTurns.map(t => t.modelCalls), 0.5), p90: quantile(allTurns.map(t => t.modelCalls), 0.9), total: allTurns.reduce((s, t) => s + (t.modelCalls || 0), 0) },
+    latencyMs: { p50: quantile(allTurns.map(t => t.latencyMs), 0.5), p90: quantile(allTurns.map(t => t.latencyMs), 0.9) },
+    inputTokens: { p50: quantile(allTurns.map(t => t.inputTokens), 0.5), p90: quantile(allTurns.map(t => t.inputTokens), 0.9) },
+    byGroup: Object.fromEntries([...new Set(results.map(item => item.group))].map(group => {
+      const list = results.filter(item => item.group === group);
+      return [group, `${list.filter(item => item.passed).length}/${list.length}`];
+    })) };
+  const outDir = path.join(root, 'artifacts', 'live-eval');
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, `${runId}.json`), JSON.stringify({ summary, results }, null, 2));
+  console.log(JSON.stringify(summary, null, 2));
+  await storage.close();
+})().catch(error => { console.error('EVAL_FAILED', error.code || '', error.message); process.exitCode = 1; });

@@ -11,6 +11,37 @@ function fixture(t, text) {
   return { service: createSettingsService(file), file };
 }
 
+test('harness pipeline is selectable, persists v1/v2 and rejects unsupported modes without changing runtime', t => {
+  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\nHARNESS_PIPELINE=v1\n');
+  const runtime = process.env.HARNESS_PIPELINE;
+  let before = service.get();
+  const field = before.fields.find(field => field.key === 'HARNESS_PIPELINE');
+  assert.equal(field.type, 'select');
+  assert.equal(field.group, 'Điều phối agent và giới hạn');
+  assert.equal(field.value, 'v1');
+  assert.deepEqual(field.options, ['v1', 'v2']);
+  for (const value of ['v2', 'v1']) {
+    const saved = service.save({ revision: before.revision, values: { HARNESS_PIPELINE: value } });
+    assert.equal(saved.restartRequired, true);
+    assert.match(fs.readFileSync(file, 'utf8'), new RegExp('^HARNESS_PIPELINE=' + value + '$', 'm'));
+    before = service.get();
+    assert.equal(before.fields.find(field => field.key === 'HARNESS_PIPELINE').value, value);
+    assert.equal(process.env.HARNESS_PIPELINE, runtime);
+  }
+  const unchanged = fs.readFileSync(file, 'utf8');
+  for (const value of ['v3', 'auto', '']) {
+    assert.throws(() => service.save({ revision: before.revision, values: { HARNESS_PIPELINE: value } }), error => error.statusCode === 400);
+    assert.equal(fs.readFileSync(file, 'utf8'), unchanged);
+  }
+});
+
+test('an unset harness flag displays the v1 runtime fallback without enabling v2', t => {
+  const { service } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\n');
+  const field = service.get().fields.find(field => field.key === 'HARNESS_PIPELINE');
+  assert.equal(field.value, 'v1');
+  assert.equal(field.source, 'Mặc định');
+});
+
 test('settings classify active local harness and legacy tool loop by their runtime consumers', t => {
   const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\n');
   const fields = service.get().fields;

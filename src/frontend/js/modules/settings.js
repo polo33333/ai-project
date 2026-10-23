@@ -55,7 +55,9 @@
     control.setAttribute('aria-label', field.label);
     if (control.tagName === 'SELECT') {
       const labels = {auto:'Tự động · TEV1 trước, model chat dự phòng',local_tev1:'TEV1 local · không dự phòng routing',chat_model:'Model chat · quyết định trực tiếp',ollama:'Ollama · chạy nội bộ',openai:'API tương thích OpenAI',error:'Dừng và báo lỗi',deterministic:'Vector dự phòng',production:'Production · vận hành',development:'Development · phát triển',test:'Test · kiểm thử',postgres:'PostgreSQL',json:'JSON file'};
-      const options = (field.options || []).map(option => [option, labels[option] || option]);
+      const optionLabels = field.key === 'HARNESS_PIPELINE'
+        ? { v1: 'V1 · Vòng lặp công cụ hiện tại', v2: 'V2 · Lập kế hoạch dữ liệu trước' } : labels;
+      const options = (field.options || []).map(option => [option, optionLabels[option] || option]);
       options.forEach(([optionValue, label]) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = label; control.append(option); });
     } else {
       control.type = field.type === 'number' ? 'number' : field.type === 'url' ? 'url' : 'text';

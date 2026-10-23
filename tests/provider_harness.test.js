@@ -65,7 +65,9 @@ test('requested table presentation renders verified rows even when model answers
 test('persistent SQL-only answers stop within repair budget and never enter successful memory', async () => {
   const s = setup(Array(6).fill(fixture.response));
   const result = await s.run();
-  assert.equal(s.requests.length, 3);
+  // One repair; the identical answer with no new evidence stops as REPAIR_NO_PROGRESS.
+  assert.equal(s.requests.length, 2);
+  assert.equal(result.trace.stopReason, 'REPAIR_NO_PROGRESS');
   assert.equal(s.executed.length, 0);
   assert.equal(result.trace.completionStatus, 'PARTIAL');
   assert.doesNotMatch(result.replyText, /SELECT|```/);

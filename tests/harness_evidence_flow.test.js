@@ -37,7 +37,7 @@ test('a successful raw read is repaired immediately with its actual evidence fai
   assert.deepEqual(result.trace.sqlEvidence.map(item => item.assessment.accepted), [false, true]);
 });
 
-test('third distinct schema lookup executes rather than masquerading as the previous result', async () => {
+test('schema lookup beyond the stage budget is rejected at dispatch, not silently executed', async () => {
   const queries = [];
   const manager = fixture(async args => {
     queries.push(args.query);
@@ -46,8 +46,12 @@ test('third distinct schema lookup executes rather than masquerading as the prev
   const responses = [call('list_workflows', {}), ...['First', 'Second', 'Amount'].map(query => call('search_schema', { query })),
     call('execute_sql_query', { sql: 'SELECT SUM(Amount) AS Amount FROM Records' })];
   const result = await run(manager, async () => responses.shift() || { content: '25' });
-  assert.deepEqual(queries, ['First', 'Second', 'Amount']);
-  assert.equal(result.toolCalls.filter(item => item.toolName === 'search_schema').at(-1).result.tables[0].columns[0].name, 'Amount');
+  // The stage removed search_schema after two lookups; the third call is a
+  // rejected attempt, never a reused or masqueraded previous result.
+  assert.deepEqual(queries, ['First', 'Second']);
+  const third = result.toolCalls.filter(item => item.toolName === 'search_schema').at(-1);
+  assert.equal(third.code, 'TOOL_NOT_IN_STAGE');
+  assert.equal(third.effectState, 'not_executed');
   assert.equal(result.trace.completionStatus, 'SUCCESS');
 });
 

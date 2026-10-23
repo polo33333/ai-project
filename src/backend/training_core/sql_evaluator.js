@@ -45,26 +45,25 @@ module.exports = { evaluateSql };
 
 // Only a projected aggregate of the requested physical column is evidence.
 // Mentions in comments, predicates or another aggregate's alias are insufficient.
+// The whole projected expression must be that aggregate (CAST/ROUND/ISNULL
+// wrappers keep its value); SUM(x) * 0 or SUM(x) / 2 is a different measure.
 function matchesAggregate(sql, metric, aggregation) {
   try {
+    const { unwrapValuePreserving, sourceForColumn } = require('../services/sql_expression');
     const parsed = new (require('node-sql-parser').Parser)().astify(sql, { database: 'TransactSQL' });
     const statement = Array.isArray(parsed) ? parsed[0] : parsed;
     const parts = String(metric).replace(/[\[\]]/g, '').toLowerCase().split('.');
     const name = parts.pop();
     const qualifier = parts.pop();
-    const visit = node => {
-      if (!node || typeof node !== 'object') return false;
-      if (node.type === 'aggr_func') {
-        const expr = node.args?.expr;
-        if (aggregation && String(node.name).toUpperCase() !== String(aggregation).toUpperCase()) return false;
-        if (expr?.type !== 'column_ref' || String(expr.column).toLowerCase() !== name) return false;
-        if (!qualifier) return true;
-        const source = !expr.table && statement.from?.length === 1 ? statement.from[0]
-          : (statement.from || []).find(item => String(item.as || item.table).toLowerCase() === String(expr.table).toLowerCase());
-        return String(expr.table).toLowerCase() === qualifier || String(source?.table).toLowerCase() === qualifier;
-      }
-      return Object.values(node).some(value => Array.isArray(value) ? value.some(visit) : visit(value));
+    const matches = node => {
+      if (node?.type !== 'aggr_func') return false;
+      const expr = node.args?.expr;
+      if (aggregation && String(node.name).toUpperCase() !== String(aggregation).toUpperCase()) return false;
+      if (expr?.type !== 'column_ref' || String(expr.column).toLowerCase() !== name) return false;
+      if (!qualifier) return true;
+      const source = sourceForColumn(expr, statement.from || []);
+      return String(source ? source.table : expr.table).toLowerCase() === qualifier;
     };
-    return (statement.columns || []).some(column => visit(column.expr));
+    return (statement.columns || []).some(column => matches(unwrapValuePreserving(column.expr)));
   } catch { return false; }
 }

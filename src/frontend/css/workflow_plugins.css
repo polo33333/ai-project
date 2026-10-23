@@ -833,6 +833,7 @@
 #wp-drafts-section > .wp-section-heading h3 { font-size:24px; color:#123269; letter-spacing:-.4px; }
 #wp-drafts-section > .wp-section-heading p { font-size:13px; color:#7387a9; }
 #workflow-plugin-panel #wp-drafts-section #wp-toolbar { flex:1; justify-content:flex-end; margin:0 0 0 auto; padding:0; border:0; background:transparent; }
+:root[data-theme="dark"] #workflow-plugin-panel #wp-drafts-section #wp-toolbar { background:transparent !important; box-shadow:none; }
 #wp-drafts-section #wp-toolbar .wp-search-box { flex:0 1 250px; background:#f0f4fa; border:0; border-radius:15px; }
 #wp-drafts-section #wp-toolbar .wp-refresh { margin-left:0; }
 .wp-layout-switch { display:flex; gap:6px; order:2; }
@@ -842,7 +843,7 @@
 .wp-loading-detail { display:block; margin-top:2px; font-size:11px; color:#94a3b8; }
 .wp-library-loader { display:block; width:20px; height:20px; box-sizing:border-box; border:2px solid #e3e8ff; border-top-color:#6370ef; border-radius:50%; animation:wp-loading-spin .9s linear infinite; }
 @keyframes wp-loading-spin { to { transform:rotate(360deg); } }
-.wp-skeleton-card { min-width:0; padding:24px; border:1px solid var(--border-color,#e5edf8); border-radius:24px; background:var(--bg-primary,#fff); box-shadow:0 4px 16px rgb(40 88 170 / 4%); }
+.wp-skeleton-card { min-width:0; padding:24px; border:1px solid var(--border-color,#e5edf8); border-radius:24px; background:var(--bg-card,#fff); box-shadow:0 4px 16px rgb(40 88 170 / 4%); }
 .wp-skeleton-heading { display:flex; align-items:center; gap:18px; margin-bottom:28px; }
 .wp-skeleton-heading > div { flex:1; min-width:0; }
 .wp-skeleton-card :is(.wp-skeleton-icon,.wp-skeleton-line,.wp-skeleton-chips span,.wp-skeleton-footer span) { display:block; background:linear-gradient(100deg,#edf1f8 20%,#f8faff 45%,#edf1f8 70%); background-size:250% 100%; animation:wp-skeleton-shimmer 1.8s ease-in-out infinite; border-radius:7px; }
@@ -870,8 +871,10 @@
 #wp-drafts-section #wp-toolbar .wp-layout-switch { order:3; gap:4px; padding:3px; border:1px solid var(--border-color,#e4eaf4); border-radius:11px; }
 #wp-drafts-section #wp-toolbar .wp-layout-switch button { width:32px; height:32px; min-height:32px; border:0; border-radius:8px; }
 #wp-drafts-section #wp-toolbar .wp-toolbar-actions button { height:40px; min-height:40px; padding:0 12px; border-radius:10px; white-space:nowrap; font-size:12px; }
-#wp-drafts-section #wp-toolbar .wp-layout-switch { border:0; background:var(--bg-secondary,#f0f4fa); }
-#wp-drafts-section #wp-toolbar .wp-layout-switch button:not([aria-pressed="true"]) { background:var(--bg-primary,#f8faff); color:#64748b; }
+#wp-drafts-section #wp-toolbar .wp-layout-switch { border:0; background:var(--bg-hover,#f0f4fa); }
+#wp-drafts-section #wp-toolbar .wp-layout-switch button:not([aria-pressed="true"]) { background:var(--bg-card,#f8faff); color:var(--text-secondary,#64748b); }
+#wp-drafts-section #wp-toolbar .wp-layout-switch button:not([aria-pressed="true"]):is(:hover,:focus-visible) { background:var(--primary-light,#eef2ff); color:var(--primary,#4f46e5); }
+#wp-drafts-section #wp-toolbar .wp-layout-switch button:focus-visible { outline:2px solid var(--primary,#4f46e5); outline-offset:2px; }
 .wp-toolbar-actions { gap:6px; padding-left:0; border-left:0; }
 .wp-editor-guide { padding:14px 16px; margin-bottom:16px; border:1px solid #e1e7ff; border-radius:12px; background:#f5f7ff; color:#41517a; }
 .wp-editor-guide strong { font-size:14px; }
@@ -997,6 +1000,9 @@
 /* A user-picked fill owns its foreground in both themes, including controls. */
 :root[data-theme="dark"] #workflow-plugin-panel #wp-toolbar :is(.wp-search-box,.wp-domain-filter,.wp-toolbar-icon) { background:var(--wp-raised); color:var(--text-secondary); }
 :root[data-theme="dark"] #workflow-plugin-panel #wp-toolbar .wp-search-box:focus-within { background:var(--wp-input); box-shadow:0 0 0 2px var(--primary); }
+:root[data-theme="dark"] #workflow-plugin-panel #wp-toolbar .wp-domain-filter select { background:transparent !important; box-shadow:none !important; }
+:root[data-theme="dark"] #workflow-plugin-panel #wp-toolbar .wp-domain-filter:focus-within { box-shadow:0 0 0 2px var(--primary); }
+:root[data-theme="dark"] #workflow-plugin-panel #wp-toolbar .wp-domain-filter option { background:var(--wp-input); color:var(--text-primary); }
 :root[data-theme="dark"] #workflow-plugin-panel #wp-toolbar .wp-toolbar-icon:hover { background:var(--primary-light); color:var(--primary); }
 :root[data-theme="dark"] #workflow-plugin-panel #wp-packages :is(.wp-template-description,.wp-template-stats) { color:var(--text-secondary); }
 :root[data-theme="dark"] #wp-packages .wp-card-tags > span { background:var(--dark-raised); color:var(--text-secondary); }

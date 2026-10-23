@@ -257,7 +257,7 @@ async function loadCurrentAccount() {
     const res = await fetch('/api/auth/me');
     const data = await res.json();
     if (!data.authenticated) {
-      window.location.href = '/login.html';
+      window.location.href = '/login';
       return;
     }
     const nameEl = document.getElementById('account-display-name');
@@ -283,7 +283,7 @@ async function loadCurrentAccount() {
     if (nameEl) nameEl.textContent = data.account?.displayName || data.account?.username || 'Admin AI';
     if (roleEl) roleEl.textContent = data.account?.roleLabel || (data.account?.role === 'admin' ? 'Quản trị viên' : 'Thành viên');
   } catch {
-    window.location.href = '/login.html';
+    window.location.href = '/login';
   }
 }
 
@@ -300,15 +300,16 @@ function selectAccountTab(tab) {
 
 const AUTH_HEARTBEAT_INTERVAL_MS = 4 * 60 * 1000;
 let authHeartbeatTimer = null;
+let logoutInProgress = false;
 
 async function refreshActiveSession() {
-  if (document.hidden) return;
+  if (document.hidden || logoutInProgress) return;
   try {
     const response = await fetch('/api/auth/me', { cache: 'no-store' });
     if (!response.ok) return;
     const data = await response.json();
     if (!data.authenticated && !window.pageChatRequestController && !window.copilotRequestController) {
-      window.location.href = '/login.html';
+      window.location.href = '/login';
     }
   } catch {
     // A temporary network interruption must not sign out an active user.
@@ -364,11 +365,12 @@ async function submitChangePassword(event) {
   try {
     const response=await fetch('/api/auth/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:document.getElementById('password-current').value,newPassword})});
     const data=await response.json();if(!response.ok)throw new Error(data.message||'Không thể đổi mật khẩu.');
-    closeChangePassword();window.location.href='/login.html';
+    closeChangePassword();window.location.href='/login';
   }catch(err){error.textContent=err.message;}finally{button.disabled=false;}
 }
 
 function closeLogoutConfirmation() {
+  if (logoutInProgress) return;
   const modal = document.getElementById('logout-confirm-modal');
   if (!modal) return;
   modal.classList.remove('show');
@@ -376,28 +378,59 @@ function closeLogoutConfirmation() {
 }
 
 function logoutAccount() {
+  if (logoutInProgress) return;
   const modal = document.getElementById('logout-confirm-modal');
   if (!modal) return performLogout();
+  const error = document.getElementById('logout-error');
+  if (error) error.textContent = '';
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
   window.setTimeout(() => document.getElementById('logout-cancel-btn')?.focus(), 0);
 }
 
 async function performLogout() {
+  if (logoutInProgress) return;
+  logoutInProgress = true;
   const confirmButton = document.getElementById('logout-confirm-btn');
+  const modal = document.getElementById('logout-confirm-modal');
+  const error = document.getElementById('logout-error');
+  const originalContent = confirmButton?.innerHTML;
+  const controls = [...(modal?.querySelectorAll('button') || [])];
+  if (error) error.textContent = '';
+  controls.forEach(button => { button.disabled = true; });
   if (confirmButton) {
     confirmButton.disabled = true;
+    confirmButton.setAttribute('aria-busy', 'true');
     confirmButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang đăng xuất';
   }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
   try {
-    await fetch('/api/auth/logout', { method: 'POST' });
-  } finally {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST', cache: 'no-store', signal: controller.signal
+    });
+    if (!response.ok) throw new Error('LOGOUT_FAILED');
     try {
       localStorage.removeItem(MAIN_TAB_STORAGE_KEY);
     } catch {
       // Continue logout even when browser storage is unavailable.
     }
-    window.location.href = '/login.html';
+    window.location.replace('/login');
+  } catch (cause) {
+    const message = cause.name === 'AbortError'
+      ? 'Máy chủ phản hồi chậm. Vui lòng thử đăng xuất lại.'
+      : 'Chưa thể đăng xuất. Vui lòng kiểm tra kết nối và thử lại.';
+    if (error) error.textContent = message;
+    else window.showToast?.(message, 'error');
+    logoutInProgress = false;
+    controls.forEach(button => { button.disabled = false; });
+    if (confirmButton) {
+      confirmButton.disabled = false;
+      confirmButton.setAttribute('aria-busy', 'false');
+      confirmButton.innerHTML = originalContent;
+    }
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 

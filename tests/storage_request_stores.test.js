@@ -4,6 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { requestStores } = require('../src/backend/storage/request_stores');
 
+test('logout only loads fresh authentication, regardless of unrelated history or schema size', () => {
+  assert.deepEqual(requestStores({ method: 'POST', url: '/api/auth/logout' }),
+    ['accounts.json', 'sessions.json', 'account_roles.json']);
+});
+
 test('relationship reads load both relationships and their dictionary identities', () => {
   const files = requestStores({ method: 'GET', url: '/api/dictionary/relationships' });
   assert.ok(files.includes('table_relationships.json'));

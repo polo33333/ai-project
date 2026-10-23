@@ -69,10 +69,13 @@ test('harness returns the short-series limitation immediately and does not overw
  assert.equal(responses.length,1,'No speculative model conclusion is needed for this insufficient-history response');
 });
 
-test('harness retains the analytical answer instead of replacing it with raw rows',async()=>{
+test('harness answers analysis from the computed result instead of raw rows or model wording',async()=>{
  const answer='Tiêu chí: chưa có ngưỡng được duyệt. Kết luận: chỉ đối chiếu các mốc quan sát, không xác nhận bất thường. Giới hạn: chưa đủ lịch sử.';
  const {result}=await harnessCase([...source.result.rows,{Nam:2024,Thang:3,TongSanLuong:4500}],answer);
- assert.equal(result.replyText,answer);
+ // Three months is below the method's minimum history: no verdict is invented.
+ assert.match(result.replyText,/Chưa đủ căn cứ xác nhận tháng bất thường/);
+ assert.match(result.replyText,/\*\*Tiêu chí:\*\*/);
+ assert.equal(result.trace.analysisResult.verdict,'INSUFFICIENT_DATA');
  assert.ok(!result.trace.steps.some(s=>s.type==='GROUNDED_RESULT_RENDER'));
 });
 

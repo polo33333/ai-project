@@ -77,3 +77,36 @@ test('matching workflow is preferred before SQL and unconfirmed boolean is left 
     assert.equal(result.toolCalls.at(-1).result.execution.missingInputs[0].key, 'exportFile');
   });
 });
+test('a failed workflow falls back to the data loop and is never retried in the same request', async t => {
+  const governance = require('../src/backend/governance/context'), automation = require('../src/backend/automation');
+  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent_core').defaultToolManager, d = report();
+  t.mock.method(automation, 'settings', async () => ({ enabled: true }));
+  t.mock.method(automation.registry, 'list', async () => [d]);
+  t.mock.method(automation.registry, 'getTemplate', async () => d);
+  t.mock.method(automation.runtime, 'pending', async () => null);
+  let runs = 0;
+  t.mock.method(automation.runtime, 'create', async () => { runs++; return { id: 'failed-run', status: 'FAILED', name: d.name, error: { message: 'source timeout' } }; });
+  const call = (name, args) => ({ tool_calls: [{ id: `${name}-${Math.random()}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
+  let agentRounds = 0;
+  const harness = new Harness({ toolManager: manager, dispatch: async (provider, messages, definitions) => {
+    const name = definitions[0]?.function.name;
+    if (name === 'choose_workflow') return call(name, { templateId: d.id, inputs: { months: 7, drawChart: true }, evidence: { months: '7', drawChart: 'vẽ biểu đồ' } });
+    if (name === 'assess_workflow') return call(name, { suitable: true, reason: 'Exact report', confirmedSlots: ['months', 'drawChart'] });
+    agentRounds++;
+    return agentRounds === 1 ? call('list_workflows', {}) : agentRounds === 2 ? call('run_workflow', { templateId: d.id, inputs: { months: 7, drawChart: true } })
+      : { content: 'Chưa lấy được dữ liệu.' };
+  } });
+  await governance.run(async () => {
+    governance.setPrincipal({ subject: 'account:fallback-owner', role: 'admin' });
+    const result = await harness.run({ userMessage: 'vẽ biểu đồ trong 7 tháng', provider: { id: 'test', supportsToolCalling: true },
+      enabledToolNames: ['list_workflows', 'run_workflow', 'search_schema', 'execute_sql_query'],
+      context: { governedController: true, lockProvider: true, permissions: ['admin'], session: { id: 'fallback-test', accountId: 'fallback-owner' },
+        requestPlan: { outputs: { data: true, chart: true } }, mode: 'data' } });
+    assert.equal(runs, 1);
+    assert.ok(result.trace.steps.some(step => step.type === 'WORKFLOW_FAILED_FALLBACK'));
+    assert.ok(!result.trace.steps.some(step => step.type === 'WORKFLOW_TOOL_HANDOFF'));
+    assert.ok(result.toolCalls.some(item => item.toolName === 'run_workflow' && item.code === 'WORKFLOW_ALREADY_REJECTED'));
+    assert.notEqual(result.replyText, 'Quy trình chưa thể hoàn tất.');
+  });
+});

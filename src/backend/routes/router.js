@@ -224,7 +224,7 @@ function clearSessionCookie(req, res) {
 }
 
 function isPublicPath(pathname) {
-  return pathname === '/login.html'
+  return pathname === '/login' || pathname === '/login.html' || pathname === '/login/'
     || pathname === '/manifest.webmanifest'
     || pathname === '/service-worker.js'
     || pathname === '/favicon.svg'
@@ -276,6 +276,11 @@ async function handleGovernedRequest(req, res) {
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const pathname = parsedUrl.pathname;
+  if (['GET', 'HEAD'].includes(req.method) && ['/login.html', '/login/'].includes(pathname)) {
+    res.writeHead(308, { Location: '/login' + parsedUrl.search });
+    res.end();
+    return;
+  }
   const sessionToken = getSessionToken(req);
   const currentAccount = authService.getAccountBySession(sessionToken);
   if (currentAccount) require('../governance/context').setPrincipal({ subject: `account:${currentAccount.id}`, role: currentAccount.role, permissions:currentAccount.permissions, dataAccess:currentAccount.dataAccess, tenantId: currentAccount.tenantId, channel: 'chat' }, () => {
@@ -352,7 +357,7 @@ async function handleGovernedRequest(req, res) {
       res.end(JSON.stringify({ status: 'error', message: 'UNAUTHENTICATED' }));
       return;
     }
-    res.writeHead(302, { Location: '/login.html' });
+    res.writeHead(302, { Location: '/login' });
     res.end();
     return;
   }
@@ -485,7 +490,7 @@ async function handleGovernedRequest(req, res) {
     }
     return;
   }
-  if (currentAccount && pathname === '/login.html') {
+  if (currentAccount && pathname === '/login') {
     res.writeHead(302, { Location: '/' });
     res.end();
     return;
@@ -2357,7 +2362,8 @@ async function handleGovernedRequest(req, res) {
   }
 
   const isFrontendRoute = req.method === 'GET' && FRONTEND_ROUTES.has(pathname);
-  let filePath = path.join(FRONTEND_DIR, isFrontendRoute ? 'index.html' : pathname);
+  const isLoginRoute = ['GET', 'HEAD'].includes(req.method) && pathname === '/login';
+  let filePath = path.join(FRONTEND_DIR, isLoginRoute ? 'login.html' : isFrontendRoute ? 'index.html' : pathname);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 

@@ -24,6 +24,8 @@ const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])]
   .filter(key => key !== 'QDRANT_EXE' && !obsoleteKeys.has(key) && (safeServerKeys.includes(key) || key in envValuesAtStartup || key in exampleValues));
 const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? exampleValues[key] ?? '']));
 Object.assign(defaults, {
+  // An unset flag uses the existing agent loop; the example opts into v2 explicitly.
+  HARNESS_PIPELINE: 'v1',
   AI_MAX_TOOL_ITERATIONS: envValuesAtStartup.AI_MAX_TOOL_ITERATIONS ?? exampleValues.AI_MAX_TOOL_ITERATIONS ?? '10',
   LOCAL_AI_MODEL: envValuesAtStartup.LOCAL_AI_MODEL ?? exampleValues.LOCAL_AI_MODEL ?? 'qwen3.5:9b',
   LOCAL_MODEL_SKILL_CORE_ENABLED: envValuesAtStartup.LOCAL_MODEL_SKILL_CORE_ENABLED ?? exampleValues.LOCAL_MODEL_SKILL_CORE_ENABLED ?? 'false',
@@ -31,6 +33,7 @@ Object.assign(defaults, {
 });
 const choices = {
   GOVERNED_CONTROLLER_MODE: ['agent', 'legacy'],
+  HARNESS_PIPELINE: ['v1', 'v2'],
   CHAT_ROUTING_MODE: ['local_tev1', 'chat_model', 'auto'],
   CHAT_ROUTING_RETRIEVAL_MODE: ['off', 'shadow', 'on'],
   CHAT_ROUTING_RETRIEVAL_METHOD: ['lexical', 'hybrid'],
@@ -53,7 +56,7 @@ const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL'
 const schema = Object.entries(defaults).map(([key, value]) => ({
   key, defaultValue: value, label: help[key]?.[0] || key.replace(/_/g, ' '),
   group: legacyOnly(key) ? 'Tương thích legacy'
-    : /^(GOVERNED_)/.test(key) ? 'Điều phối agent và giới hạn'
+    : key === 'HARNESS_PIPELINE' || /^(GOVERNED_)/.test(key) ? 'Điều phối agent và giới hạn'
     : key === 'WORKFLOW_PLUGINS_ENABLED' ? 'Mẫu nghiệp vụ'
     : /^(LOCAL_MODEL|LOCAL_AI|MODEL_DATA_INTENT|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
     : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'

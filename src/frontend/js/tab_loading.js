@@ -67,16 +67,58 @@
 
   // Multiple loaders may share a panel (API keys + embeds). Keep it busy until all finish.
   window.beginTabPanelLoading = beginLoading;
+  function tableLoadingMarkup(table, panel) {
+    const head = table.querySelector('thead');
+    const headers = [...(head?.querySelectorAll('tr:last-child > th, tr:last-child > td') || [])];
+    const width = table.getBoundingClientRect().width;
+    if (!headers.length || !width) return '';
+    const skeleton = table.cloneNode(false);
+    skeleton.removeAttribute('id');
+    skeleton.classList.add('tab-skeleton-table');
+    skeleton.setAttribute('aria-hidden', 'true');
+    skeleton.inert = true;
+    skeleton.style.width = width + 'px';
+    skeleton.style.tableLayout = 'fixed';
+    const columns = document.createElement('colgroup');
+    for (const header of headers) {
+      for (let index = 0; index < header.colSpan; index++) {
+        const column = document.createElement('col');
+        column.style.width = header.getBoundingClientRect().width / header.colSpan + 'px';
+        columns.appendChild(column);
+      }
+    }
+    skeleton.append(columns, head.cloneNode(true));
+    skeleton.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    const body = document.createElement('tbody');
+    const count = Math.min(10, Math.max(3, Math.ceil((panel.clientHeight - head.getBoundingClientRect().height) / 52)));
+    for (let rowIndex = 0; rowIndex < count; rowIndex++) {
+      const row = document.createElement('tr');
+      for (let index = 0; index < columns.children.length; index++) {
+        const cell = document.createElement('td');
+        const line = document.createElement('span');
+        line.className = 'tab-skeleton-line';
+        line.style.width = [68, 86, 58][(rowIndex + index) % 3] + '%';
+        cell.appendChild(line);
+        row.appendChild(cell);
+      }
+      body.appendChild(row);
+    }
+    skeleton.appendChild(body);
+    return skeleton.outerHTML;
+  }
+
   function beginLoading(panel) {
     let state = busyPanels.get(panel);
     if (!state) {
       const overlay = document.createElement('div');
       overlay.className = 'tab-data-loading';
       overlay.setAttribute('role', 'status');
-      const kind = panel.querySelector?.('table') ? 'table' : panel.classList.contains?.('system-tools-page') || panel.id === 'library-docs-grid' ? 'cards' : 'list';
+      const table = panel.querySelector?.('table');
+      const kind = table ? 'table' : panel.classList.contains?.('system-tools-page') || panel.id === 'library-docs-grid' ? 'cards' : 'list';
+      const tableMarkup = table ? tableLoadingMarkup(table, panel) : '';
       const bounds = panel.getBoundingClientRect?.();
       const nodes = panel.querySelectorAll?.('h2,h3,h4,p,legend,small,label,input,select,textarea,button,th,td,.card-title,.metric-val,.metric-title,.metric-sub,.metric-main-icon,.system-tool-icon') || [];
-      const shapes = bounds ? [...nodes].slice(0, 100).flatMap(node => {
+      const shapes = !tableMarkup && bounds ? [...nodes].slice(0, 100).flatMap(node => {
         const rect = node.getBoundingClientRect();
         if (!rect.width || !rect.height || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return [];
         const control = ['INPUT','SELECT','TEXTAREA','BUTTON'].includes(node.tagName);
@@ -88,7 +130,15 @@
         const height = Math.min(control || icon ? rect.height : textHeight, bounds.height - top);
         return width > 0 && height > 0 ? ['<span class="tab-skeleton-line tab-skeleton-block" style="left:' + left + 'px;top:' + top + 'px;width:' + width + 'px;height:' + height + 'px"></span>'] : [];
       }) : [];
-      overlay.innerHTML = shapes.length ? '<span class="tab-loading-label">Đang tải dữ liệu…</span><div class="tab-skeleton tab-skeleton-measured" aria-hidden="true">' + shapes.join('') + '</div>' : window.tabSkeletonMarkup(kind);
+      if (tableMarkup) {
+        overlay.classList.add('tab-data-loading-table');
+        overlay.style.width = Math.max(panel.clientWidth, table.scrollWidth) + 'px';
+        overlay.style.height = panel.clientHeight + 'px';
+        overlay.style.top = panel.scrollTop + 'px';
+        overlay.innerHTML = '<span class="tab-loading-label">Đang tải dữ liệu…</span>' + tableMarkup;
+      } else {
+        overlay.innerHTML = shapes.length ? '<span class="tab-loading-label">Đang tải dữ liệu…</span><div class="tab-skeleton tab-skeleton-measured" aria-hidden="true">' + shapes.join('') + '</div>' : window.tabSkeletonMarkup(kind);
+      }
       panel.classList.add('tab-data-loading-host');
       panel.setAttribute('aria-busy', 'true');
       panel.appendChild(overlay);

@@ -1,0 +1,564 @@
+{
+  "version": 1,
+  "source": "IPMS (db-src-1785684548077), oracle values computed 2026-10-23 with hand-written read-only SQL, not from model answers",
+  "scoring": "must: every item present; mustNot: no item present. Strings match case-insensitively; num matches digits with separators removed; re is a case-insensitive regex. mustTools: tool names that must have succeeded in the final turn.",
+  "cases": [
+    {
+      "id": "list-employees",
+      "group": "list",
+      "turns": [
+        "ds nv"
+      ],
+      "must": [
+        "NV001",
+        "NV007",
+        "Kỹ thuật 2"
+      ]
+    },
+    {
+      "id": "list-customers",
+      "group": "list",
+      "turns": [
+        "danh sách khách hàng"
+      ],
+      "must": [
+        "KA0021",
+        "DC6011",
+        "x001"
+      ]
+    },
+    {
+      "id": "list-vendors",
+      "group": "list",
+      "turns": [
+        "danh sách nhà cung cấp"
+      ],
+      "must": [
+        "Tràng An",
+        "Điện kế 131"
+      ]
+    },
+    {
+      "id": "count-female",
+      "group": "aggregate",
+      "turns": [
+        "Có bao nhiêu nhân viên nữ?"
+      ],
+      "must": [
+        {
+          "re": "\\b2\\b"
+        }
+      ]
+    },
+    {
+      "id": "dept-cskh",
+      "group": "join-filter",
+      "turns": [
+        "Nhân viên nào thuộc phòng CSKH?"
+      ],
+      "must": [
+        "Demo4",
+        "Demo2",
+        "Demo3"
+      ],
+      "mustNot": [
+        "Yên Duy",
+        "Nguyễn Văn B"
+      ]
+    },
+    {
+      "id": "list-gender-dept",
+      "group": "join-display",
+      "turns": [
+        "Danh sách nhân viên kèm giới tính và phòng ban"
+      ],
+      "must": [
+        "Nữ",
+        "CSKH",
+        "Kỹ thuật",
+        "NV005"
+      ]
+    },
+    {
+      "id": "count-tech",
+      "group": "join-filter",
+      "turns": [
+        "Phòng Kỹ thuật có bao nhiêu nhân viên?"
+      ],
+      "must": [
+        {
+          "re": "\\b5\\b"
+        }
+      ]
+    },
+    {
+      "id": "youngest",
+      "group": "ranking",
+      "turns": [
+        "Nhân viên nào trẻ nhất?"
+      ],
+      "must": [
+        "Nguyễn Văn B"
+      ]
+    },
+    {
+      "id": "customer-detail",
+      "group": "lookup",
+      "turns": [
+        "Thông tin khách hàng KA0021"
+      ],
+      "must": [
+        "HONOROAD"
+      ],
+      "mustNot": [
+        "DC6011",
+        "Long Giang"
+      ]
+    },
+    {
+      "id": "customer-group",
+      "group": "join-display",
+      "turns": [
+        "Khách hàng KA0021 thuộc nhóm khách hàng nào?"
+      ],
+      "must": [
+        "Sản xuất"
+      ]
+    },
+    {
+      "id": "existing-customers",
+      "group": "join-filter",
+      "turns": [
+        "Những khách hàng nào là khách hàng hiện hữu?"
+      ],
+      "must": [
+        "KA0021",
+        "DC6011",
+        "x001"
+      ]
+    },
+    {
+      "id": "bill-ka-feb",
+      "group": "filtered-aggregate",
+      "turns": [
+        "Tiền điện trên hóa đơn của KA0021 trong 2024-02 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 6652704
+        }
+      ],
+      "mustNot": [
+        {
+          "num": 3396176564
+        }
+      ]
+    },
+    {
+      "id": "bill-ka-feb-pretax",
+      "group": "filtered-aggregate",
+      "turns": [
+        "Tiền điện trước thuế của KA0021 tháng 2024-02 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 6159911
+        }
+      ]
+    },
+    {
+      "id": "qty-ka-jan",
+      "group": "filtered-aggregate",
+      "turns": [
+        "Sản lượng điện của KA0021 tháng 2024-01 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 60192
+        }
+      ]
+    },
+    {
+      "id": "bill-all-jan",
+      "group": "aggregate",
+      "turns": [
+        "Tổng tiền điện tháng 2024-01 của tất cả khách hàng là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 6086924936
+        }
+      ]
+    },
+    {
+      "id": "qty-all-feb",
+      "group": "aggregate",
+      "turns": [
+        "Tổng sản lượng điện bán ra tháng 2024-02?"
+      ],
+      "must": [
+        {
+          "num": 1868033
+        }
+      ]
+    },
+    {
+      "id": "count-invoices-jan",
+      "group": "aggregate",
+      "turns": [
+        "Có bao nhiêu hóa đơn điện bán ra trong tháng 2024-01?"
+      ],
+      "must": [
+        {
+          "re": "\\b6\\b"
+        }
+      ]
+    },
+    {
+      "id": "bill-dc-2024",
+      "group": "filtered-aggregate",
+      "turns": [
+        "Tổng tiền điện của DC6011 trong năm 2024?"
+      ],
+      "must": [
+        {
+          "num": 2107728
+        }
+      ]
+    },
+    {
+      "id": "compare-ka",
+      "group": "compare",
+      "turns": [
+        "So sánh tiền điện của KA0021 giữa 2024-01 và 2024-02"
+      ],
+      "must": [
+        {
+          "num": 123854696
+        },
+        {
+          "num": 6652704
+        }
+      ]
+    },
+    {
+      "id": "top-feb",
+      "group": "ranking",
+      "turns": [
+        "Khách hàng nào có tiền điện cao nhất tháng 2024-02?"
+      ],
+      "must": [
+        {
+          "re": "x001|ABC"
+        }
+      ]
+    },
+    {
+      "id": "period-3",
+      "group": "period",
+      "turns": [
+        "Hóa đơn điện Kỳ 3 gồm những khách hàng nào?"
+      ],
+      "must": [
+        {
+          "re": "KA0021|HONOROAD"
+        },
+        {
+          "re": "DC6011|Long Giang"
+        },
+        {
+          "re": "x001|ABC"
+        }
+      ]
+    },
+    {
+      "id": "period-2-ka",
+      "group": "period",
+      "turns": [
+        "Tiền điện của KA0021 trong Kỳ 2 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 117893230
+        }
+      ]
+    },
+    {
+      "id": "invoices-x001",
+      "group": "filtered-list",
+      "turns": [
+        "Liệt kê các hóa đơn điện của khách hàng x001"
+      ],
+      "must": [
+        {
+          "num": 2879848011
+        },
+        {
+          "num": 3388779956
+        }
+      ],
+      "mustNot": [
+        "DC6011",
+        "KA0021"
+      ]
+    },
+    {
+      "id": "no-data-2025",
+      "group": "empty",
+      "turns": [
+        "Tiền điện của KA0021 tháng 2025-05 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "re": "không (có|tìm thấy)|chưa có"
+        }
+      ],
+      "mustNot": [
+        {
+          "num": 6652704
+        },
+        {
+          "num": 123854696
+        }
+      ]
+    },
+    {
+      "id": "feedback-in-progress",
+      "group": "join-filter",
+      "turns": [
+        "Có bao nhiêu phản ánh đang xử lý?"
+      ],
+      "must": [
+        {
+          "re": "\\b5\\b"
+        }
+      ]
+    },
+    {
+      "id": "feedback-by-status",
+      "group": "join-aggregate",
+      "turns": [
+        "Thống kê số phản ánh theo trạng thái"
+      ],
+      "must": [
+        "Tiếp nhận",
+        {
+          "re": "\\b13\\b"
+        },
+        {
+          "re": "\\b4\\b"
+        }
+      ]
+    },
+    {
+      "id": "debt-count-ka",
+      "group": "filtered-aggregate",
+      "turns": [
+        "Khách hàng KA0021 có bao nhiêu bản ghi công nợ?"
+      ],
+      "must": [
+        {
+          "re": "\\b17\\b"
+        }
+      ]
+    },
+    {
+      "id": "anomaly-ka-2024",
+      "group": "analysis",
+      "turns": [
+        "Tháng nào trong năm 2024 khách hàng KA0021 tiêu thụ điện bất thường?"
+      ],
+      "must": [
+        {
+          "re": "chưa đủ|không đủ"
+        }
+      ],
+      "mustNot": [
+        "x001",
+        "DC6011"
+      ]
+    },
+    {
+      "id": "chat-hello",
+      "group": "chat",
+      "turns": [
+        "Xin chào"
+      ],
+      "must": [
+        {
+          "re": "chào"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "SELECT "
+        }
+      ]
+    },
+    {
+      "id": "followup-month",
+      "group": "followup",
+      "turns": [
+        "Tiền điện trên hóa đơn của KA0021 trong 2024-02 là bao nhiêu?",
+        "Còn tháng 2024-01 thì sao?"
+      ],
+      "must": [
+        {
+          "num": 123854696
+        }
+      ],
+      "mustNot": [
+        {
+          "num": 6086924936
+        }
+      ]
+    },
+    {
+      "id": "followup-customer",
+      "group": "followup",
+      "turns": [
+        "Tổng tiền điện của KA0021 trong tháng 2024-01?",
+        "Còn khách hàng DC6011 thì sao?"
+      ],
+      "must": [
+        {
+          "num": 1363824
+        }
+      ],
+      "mustNot": [
+        {
+          "num": 123854696
+        }
+      ]
+    },
+    {
+      "id": "followup-add-column",
+      "group": "followup",
+      "turns": [
+        "ds nv",
+        "Thêm cột giới tính"
+      ],
+      "must": [
+        "NV005",
+        "Nữ"
+      ]
+    },
+    {
+      "id": "followup-revise-keep-scope",
+      "group": "followup",
+      "turns": [
+        "Phát hiện tháng tiêu thụ điện bất thường của KA0021 trong 24 tháng",
+        "Vậy tìm trong năm 2024 đi"
+      ],
+      "must": [
+        {
+          "re": "KA0021"
+        }
+      ],
+      "mustNot": [
+        "x001",
+        "DC6011",
+        {
+          "num": 5961706416
+        }
+      ]
+    },
+    {
+      "id": "followup-verify",
+      "group": "followup",
+      "turns": [
+        "Liệt kê các hóa đơn điện của khách hàng x001",
+        "Bảng trên là của khách hàng x001 đúng không?"
+      ],
+      "must": [
+        {
+          "re": "đúng|chính xác|phải"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "^Chưa thể hoàn tất"
+        }
+      ]
+    },
+    {
+      "id": "wf-employee",
+      "group": "workflow",
+      "turns": [
+        "Tra cứu thông tin nhân viên NV007"
+      ],
+      "must": [
+        {
+          "re": "Tra cứu chi tiết nhân viên|Nguyễn Văn B"
+        }
+      ],
+      "mustTools": [
+        "run_workflow"
+      ]
+    },
+    {
+      "id": "wf-electricity-report",
+      "group": "workflow",
+      "turns": [
+        "Báo cáo sản lượng điện bán ra 3 tháng gần nhất, vẽ biểu đồ, không xuất file"
+      ],
+      "must": [
+        {
+          "re": "sản lượng điện bán ra"
+        }
+      ],
+      "mustTools": [
+        "run_workflow"
+      ]
+    },
+    {
+      "id": "chart-monthly",
+      "group": "chart",
+      "turns": [
+        "Vẽ biểu đồ tổng tiền điện theo tháng của khách hàng KA0021"
+      ],
+      "must": [
+        {
+          "num": 123854696
+        },
+        {
+          "num": 6652704
+        }
+      ],
+      "mustTools": [
+        "render_chart"
+      ]
+    },
+    {
+      "id": "export-customers",
+      "group": "export",
+      "turns": [
+        "Xuất file excel danh sách khách hàng"
+      ],
+      "must": [
+        {
+          "re": "/api/exports/"
+        }
+      ],
+      "mustTools": [
+        "export_data"
+      ]
+    },
+    {
+      "id": "export-followup",
+      "group": "export",
+      "turns": [
+        "Danh sách nhân viên phòng CSKH",
+        "Xuất file excel danh sách trên"
+      ],
+      "must": [
+        {
+          "re": "/api/exports/"
+        }
+      ],
+      "mustTools": [
+        "export_data"
+      ]
+    }
+  ]
+}

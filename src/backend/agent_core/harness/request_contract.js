@@ -149,6 +149,17 @@ function assessRequestContract(contract, call) {
         && key(column.expr.column) === key(attribute.mappedSource.column)
         && sources.some(source => key(column.expr.table) === key(source.as || source.table)))
         .map(column => column.as || column.expr.column);
+    } else if (statement?.columns && contract.completeness.mode !== 'approved_metric_fields'
+      && !statement.columns.some(column => column.expr?.type === 'star' || column.expr?.column === '*')) {
+      // Root fields need lineage too: the projected expression must read the
+      // physical column. `SELECT 0 AS Amount` has the key but not the value.
+      // Qualifiers resolving to another physical table do not count.
+      const { columnRefs, sourceForColumn } = require('../../services/sql_expression');
+      aliases = statement.columns.filter(column => columnRefs(column.expr).some(ref => {
+        if (key(ref.column) !== key(attribute.name)) return false;
+        const source = sourceForColumn(ref, statement.from || []);
+        return !source?.table || !contract.scope.table || key(source.table) === key(contract.scope.table);
+      })).map(column => column.as || column.expr?.column).filter(Boolean);
     }
     const statuses = hasRows ? rows.map(row => {
       const matching = Object.keys(row).filter(name => aliases.some(alias => key(alias) === key(name)));

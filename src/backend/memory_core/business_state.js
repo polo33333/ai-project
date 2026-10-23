@@ -7,6 +7,12 @@ function fromPlan(plan = {}, updatedAt = new Date().toISOString()) {
     operation: plan.conversationState?.operation || null,
     requestedAttributes: plan.conversationState?.requestedAttributes || [],
     categoryFilters: plan.schemaScope?.invalid ? [] : plan.schemaScope?.filters || [],
+    // Bound, question-grounded qualifiers (codes, periods) for revise follow-ups.
+    requestFilters: Array.isArray(plan.requestFilters) ? structuredClone(plan.requestFilters) : [],
+    analysisTask: plan.analysisTask || null,
+    // Contract of the v2 pipeline and the question it was grounded in, so a
+    // follow-up can change only what the user changed.
+    v2: plan.v2 ? structuredClone(plan.v2) : null,
     groups: plan.semanticGroups ? structuredClone(plan.semanticGroups) : null,
     query: plan.semanticQuery ? Object.fromEntries(['table', 'operation', 'filters', 'segment', 'dimensions', 'measures', 'time']
       .filter(key => plan.semanticQuery[key] !== undefined).map(key => [key, plan.semanticQuery[key]])) : null,

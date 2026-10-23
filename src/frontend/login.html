@@ -1,66 +1,602 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Đăng nhập - KnowledgeHub AI</title>
   <link rel="icon" href="/favicon.svg?v=20260908-brand-sync" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest?v=20260906-desktop-icon">
-  <meta name="theme-color" content="#5b50e6">
+  <meta name="theme-color" content="#7044ff">
   <meta name="mobile-web-app-capable" content="yes">
-  <script src="js/theme.js?v=1"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="css/login.css?v=20260908-brand-sync">
-  <link rel="stylesheet" href="css/theme.css?v=2">
-  <link rel="stylesheet" href="css/ui-foundation.css?v=20261015-select-inset">
+  <script src="js/theme.js?v=1">
+</script>
+  <link rel="stylesheet" href="css/login.css?v=20261024-feature-align">
 </head>
 <body class="login-page">
-  <button class="theme-toggle login-theme-toggle" type="button" data-theme-toggle aria-label="Chuyển sang giao diện tối" aria-pressed="false"><span class="theme-moon" aria-hidden="true">☾</span><span class="theme-sun" aria-hidden="true">☀</span></button>
-  <main class="login-shell">
-    <section class="login-brand-panel" aria-labelledby="brand-title">
-      <div class="login-logo"><img src="/favicon.svg?v=20260908-brand-sync" alt="" aria-hidden="true"></div>
-      <h1 id="brand-title">KnowledgeHub AI</h1>
-      <p>Không gian làm việc cho dữ liệu và AI. Kết nối tri thức, khám phá dữ liệu và quản lý mọi hoạt động tại một nơi.</p>
-      <div class="login-feature-list">
-        <span><i class="fa-solid fa-database"></i> Kết nối nguồn dữ liệu tập trung</span>
-        <span><i class="fa-solid fa-comments"></i> Khám phá tri thức cùng trợ lý AI</span>
-        <span><i class="fa-solid fa-chart-line"></i> Theo dõi chất lượng và hiệu suất</span>
-      </div>
-    </section>
-
-    <section class="login-card">
-      <div class="login-card-head">
-        <h2>Đăng nhập</h2>
-        <p>Sử dụng tài khoản hệ thống để tiếp tục.</p>
-      </div>
-      <form id="login-form">
-        <div class="login-field">
-          <label class="form-label" for="login-username">Tài khoản</label>
-          <div class="login-input-wrap">
-            <i class="fa-regular fa-user"></i>
-            <input class="form-control" id="login-username" name="username" autocomplete="username" placeholder="Nhập tài khoản" required autofocus>
-          </div>
-        </div>
-        <div class="login-field">
-          <label class="form-label" for="login-password">Mật khẩu</label>
-          <div class="login-password-wrap">
-            <i class="fa-solid fa-lock"></i>
-            <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" required>
-            <button type="button" onclick="toggleLoginPassword()" title="Ẩn/hiện mật khẩu" aria-label="Ẩn hoặc hiện mật khẩu">
-              <i class="fa-solid fa-eye"></i>
-            </button>
-          </div>
-        </div>
-        <div class="login-error" id="login-error"></div>
-        <button class="btn-primary login-submit" type="submit">
-          <i class="fa-solid fa-right-to-bracket"></i> Đăng nhập
-        </button>
-      </form>
-    </section>
-  </main>
-  <script src="js/login.js"></script>
+<main class="page">
+<section class="story">
+<div class="brand">
+<img src="/favicon.svg?v=20260908-brand-sync" alt="">
+<div>
+<b>KnowledgeHub <span class="accent">AI</span>
+</b>
+<small>Tri thức · Kết nối · Kiến tạo giá trị</small>
+</div>
+</div>
+<div class="intro">
+<h1>Mọi kết nối,<br>trong <span class="accent">một không gian.</span>
+</h1>
+<p>KnowledgeHub AI giúp bạn dễ dàng truy cập tri thức nội bộ,<br class="wide-break"> khai thác dữ liệu và tận dụng sức mạnh AI để làm việc<br class="wide-break"> hiệu quả hơn mỗi ngày.</p>
+</div>
+<div class="features">
+<div class="feature">
+<span class="purple">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3"/>
+<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
+</svg>
+</span>
+<div>
+<b>Cơ sở dữ liệu</b>
+<p>Kết nối & truy vấn<br>dữ liệu nghiệp vụ</p>
+</div>
+</div>
+<div class="feature">
+<span class="blue">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
+</svg>
+</span>
+<div>
+<b>Tri thức nội bộ</b>
+<p>Tài liệu, quy trình,<br>hướng dẫn</p>
+</div>
+</div>
+<div class="feature">
+<span class="green">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>
+</span>
+<div>
+<b>AI thông minh</b>
+<p>Trả lời, phân tích,<br>hỗ trợ ra quyết định</p>
+</div>
+</div>
+<div class="feature">
+<span class="orange">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
+</svg>
+</span>
+<div>
+<b>Bảo mật cao</b>
+<p>Đảm bảo an toàn<br>dữ liệu doanh nghiệp</p>
+</div>
+</div>
+</div>
+<div class="illustration" id="illustration" role="region" aria-roledescription="carousel" aria-label="Khám phá KnowledgeHub AI">
+<div class="carousel-track">
+<section class="art-slide" role="group" aria-roledescription="slide" aria-label="1 / 3" aria-hidden="false">
+<svg class="landscape" viewBox="0 0 1000 500" preserveAspectRatio="none" fill="none" aria-hidden="true">
+<defs>
+<linearGradient id="wave" x1="200" y1="100" x2="800" y2="500" gradientUnits="userSpaceOnUse">
+<stop stop-color="#c2b8ff" stop-opacity=".07"/>
+<stop offset=".6" stop-color="#b4c5ff" stop-opacity=".42"/>
+<stop offset="1" stop-color="#d8c8ff" stop-opacity=".12"/>
+</linearGradient>
+</defs>
+<path d="M0 50C120-35 180 210 390 180S570 190 700 100 870-70 1000 10V500H0Z" fill="url(#wave)"/>
+<path d="M0 290c200 150 260-95 480-70s340-10 520 80v200H0Z" fill="#afbfff" opacity=".18"/>
+<path d="M0 430c180-90 200-170 450-170s360 160 550 65v175H0Z" fill="#d1c4ff" opacity=".3"/>
+<path d="M-100 420C150 300 230 290 460 350S760 450 1100 250" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 424C150 303 230 295 460 353S760 452 1100 258" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 428C150 306 230 300 460 356S760 454 1100 266" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 432C150 309 230 305 460 359S760 456 1100 274" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 436C150 312 230 310 460 362S760 458 1100 282" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 440C150 315 230 315 460 365S760 460 1100 290" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 444C150 318 230 320 460 368S760 462 1100 298" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 448C150 321 230 325 460 371S760 464 1100 306" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 452C150 324 230 330 460 374S760 466 1100 314" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 456C150 327 230 335 460 377S760 468 1100 322" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 460C150 330 230 340 460 380S760 470 1100 330" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 464C150 333 230 345 460 383S760 472 1100 338" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 468C150 336 230 350 460 386S760 474 1100 346" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 472C150 339 230 355 460 389S760 476 1100 354" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 476C150 342 230 360 460 392S760 478 1100 362" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 480C150 345 230 365 460 395S760 480 1100 370" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+</svg>
+<div class="art-glow">
+</div>
+<div class="ground">
+</div>
+<div class="ring r2">
+</div>
+<div class="ring">
+</div>
+<div class="decor doc">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</div>
+<div class="decor chart">
+<i style="height:35%">
+</i>
+<i style="height:65%">
+</i>
+<i style="height:45%">
+</i>
+<i style="height:85%">
+</i>
+</div>
+<div class="decor shield">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
+</svg>
+</div>
+<div class="decor tiny">
+<i style="height:35%">
+</i>
+<i style="height:55%">
+</i>
+<i style="height:65%">
+</i>
+<i style="height:90%">
+</i>
+</div>
+<div class="dashboard">
+<div class="dash-brand">
+<img src="/favicon.svg?v=20260908-brand-sync" alt="">
+<span>KnowledgeHub <span class="accent">AI</span>
+</span>
+</div>
+<div class="dash-body">
+<div class="dash-sidebar">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="4" y="4" width="6" height="6" rx="1"/>
+<rect x="14" y="4" width="6" height="6" rx="1"/>
+<rect x="4" y="14" width="6" height="6" rx="1"/>
+<rect x="14" y="14" width="6" height="6" rx="1"/>
+</svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3"/>
+<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
+</svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
+</svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>
+</svg>
+</div>
+<div class="dash-main">
+<div class="ask">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>
+<span id="demo-question">Hỏi bất cứ điều gì...</span>
+<span>×</span>
+</div>
+<div class="tiles">
+<div class="tile">
+<span class="purple">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3"/>
+<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
+</svg>
+</span>
+<b>Cơ sở dữ liệu</b>
+</div>
+<div class="tile">
+<span class="blue">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
+</svg>
+</span>
+<b>Tri thức nội bộ</b>
+</div>
+<div class="tile">
+<span class="green">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>
+</span>
+<b>Hội thoại AI</b>
+</div>
+<div class="tile">
+<span class="purple">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>
+</svg>
+</span>
+<b>Phân tích</b>
+</div>
+</div>
+<div class="dash-skeleton">
+<div>
+</div>
+<div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="float-card one">
+<span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>
+</span>
+<div>
+<b id="demo-title">Trả lời câu hỏi</b>
+<small id="demo-description">Dựa trên dữ liệu của bạn</small>
+</div>
+</div>
+<div class="float-card two">
+<span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3"/>
+<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
+</svg>
+</span>
+<div>
+<b>Phân tích dữ liệu</b>
+<small>Tìm kiếm thông tin chính xác</small>
+</div>
+</div>
+<div class="float-card three">
+<span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
+</svg>
+</span>
+<div>
+<b>Tạo báo cáo</b>
+<small>Tự động, nhanh chóng</small>
+</div>
+</div>
+</section>
+<section class="art-slide" role="group" aria-roledescription="slide" aria-label="2 / 3" aria-hidden="true">
+<svg class="landscape" viewBox="0 0 1000 500" preserveAspectRatio="none" fill="none" aria-hidden="true">
+<defs>
+<linearGradient id="wave" x1="200" y1="100" x2="800" y2="500" gradientUnits="userSpaceOnUse">
+<stop stop-color="#c2b8ff" stop-opacity=".07"/>
+<stop offset=".6" stop-color="#b4c5ff" stop-opacity=".42"/>
+<stop offset="1" stop-color="#d8c8ff" stop-opacity=".12"/>
+</linearGradient>
+</defs>
+<path d="M0 50C120-35 180 210 390 180S570 190 700 100 870-70 1000 10V500H0Z" fill="url(#wave)"/>
+<path d="M0 290c200 150 260-95 480-70s340-10 520 80v200H0Z" fill="#afbfff" opacity=".18"/>
+<path d="M0 430c180-90 200-170 450-170s360 160 550 65v175H0Z" fill="#d1c4ff" opacity=".3"/>
+<path d="M-100 420C150 300 230 290 460 350S760 450 1100 250" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 424C150 303 230 295 460 353S760 452 1100 258" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 428C150 306 230 300 460 356S760 454 1100 266" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 432C150 309 230 305 460 359S760 456 1100 274" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 436C150 312 230 310 460 362S760 458 1100 282" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 440C150 315 230 315 460 365S760 460 1100 290" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 444C150 318 230 320 460 368S760 462 1100 298" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 448C150 321 230 325 460 371S760 464 1100 306" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 452C150 324 230 330 460 374S760 466 1100 314" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 456C150 327 230 335 460 377S760 468 1100 322" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 460C150 330 230 340 460 380S760 470 1100 330" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 464C150 333 230 345 460 383S760 472 1100 338" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 468C150 336 230 350 460 386S760 474 1100 346" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 472C150 339 230 355 460 389S760 476 1100 354" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 476C150 342 230 360 460 392S760 478 1100 362" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 480C150 345 230 365 460 395S760 480 1100 370" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+</svg>
+<div class="art-glow">
+</div>
+<div class="ground">
+</div>
+<div class="ring r2">
+</div>
+<div class="ring">
+</div>
+<div class="document-board">
+<div class="scene-heading">
+<img src="/favicon.svg?v=20260908-brand-sync" alt="">
+<b>Tri thức của tổ chức</b>
+<span class="scene-badge">Tài liệu nội bộ</span>
+</div>
+<div class="doc-search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>Tìm quy trình và hướng dẫn...</div>
+<div class="doc-tags">
+<span>Hướng dẫn</span>
+<span>Quy trình</span>
+<span>Chính sách</span>
+</div>
+<div class="doc-list">
+<div>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
+</svg>
+<span>
+<b>Hướng dẫn sử dụng hệ thống</b>
+<small>Bắt đầu từ những điều cơ bản</small>
+</span>
+<em>↗</em>
+</div>
+<div>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="4" y="4" width="6" height="6" rx="1"/>
+<rect x="14" y="4" width="6" height="6" rx="1"/>
+<rect x="4" y="14" width="6" height="6" rx="1"/>
+<rect x="14" y="14" width="6" height="6" rx="1"/>
+</svg>
+<span>
+<b>Quy trình làm việc</b>
+<small>Thông tin theo từng bước</small>
+</span>
+<em>↗</em>
+</div>
+<div>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="10" width="14" height="11" rx="3"/>
+<path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>
+</svg>
+<span>
+<b>Chính sách nội bộ</b>
+<small>Tra cứu tại một nơi</small>
+</span>
+<em>↗</em>
+</div>
+</div>
+</div>
+<div class="scene-note docs-note">
+<span class="green">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 11a9 9 0 0 1-9 9H4l-3 2 2-7a9 9 0 1 1 18-4Z"/>
+<path d="M8 10h8m-8 4h5"/>
+</svg>
+</span>
+<div>
+<b>Trả lời từ tài liệu</b>
+<small>Kèm nguồn để bạn đối chiếu</small>
+<div class="source-tags">
+<span>[1] Hướng dẫn</span>
+<span>[2] Quy trình</span>
+</div>
+</div>
+</div>
+<div class="scene-chip">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m5 12 4 4L19 6"/>
+</svg>Kết nối tri thức của tổ chức</div>
+</section>
+<section class="art-slide" role="group" aria-roledescription="slide" aria-label="3 / 3" aria-hidden="true">
+<svg class="landscape" viewBox="0 0 1000 500" preserveAspectRatio="none" fill="none" aria-hidden="true">
+<defs>
+<linearGradient id="wave" x1="200" y1="100" x2="800" y2="500" gradientUnits="userSpaceOnUse">
+<stop stop-color="#c2b8ff" stop-opacity=".07"/>
+<stop offset=".6" stop-color="#b4c5ff" stop-opacity=".42"/>
+<stop offset="1" stop-color="#d8c8ff" stop-opacity=".12"/>
+</linearGradient>
+</defs>
+<path d="M0 50C120-35 180 210 390 180S570 190 700 100 870-70 1000 10V500H0Z" fill="url(#wave)"/>
+<path d="M0 290c200 150 260-95 480-70s340-10 520 80v200H0Z" fill="#afbfff" opacity=".18"/>
+<path d="M0 430c180-90 200-170 450-170s360 160 550 65v175H0Z" fill="#d1c4ff" opacity=".3"/>
+<path d="M-100 420C150 300 230 290 460 350S760 450 1100 250" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 424C150 303 230 295 460 353S760 452 1100 258" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 428C150 306 230 300 460 356S760 454 1100 266" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 432C150 309 230 305 460 359S760 456 1100 274" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 436C150 312 230 310 460 362S760 458 1100 282" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 440C150 315 230 315 460 365S760 460 1100 290" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 444C150 318 230 320 460 368S760 462 1100 298" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 448C150 321 230 325 460 371S760 464 1100 306" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 452C150 324 230 330 460 374S760 466 1100 314" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 456C150 327 230 335 460 377S760 468 1100 322" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 460C150 330 230 340 460 380S760 470 1100 330" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 464C150 333 230 345 460 383S760 472 1100 338" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 468C150 336 230 350 460 386S760 474 1100 346" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 472C150 339 230 355 460 389S760 476 1100 354" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 476C150 342 230 360 460 392S760 478 1100 362" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+<path d="M-100 480C150 345 230 365 460 395S760 480 1100 370" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+</svg>
+<div class="art-glow">
+</div>
+<div class="ground">
+</div>
+<div class="ring r2">
+</div>
+<div class="ring">
+</div>
+<div class="analysis-board">
+<div class="scene-heading">
+<img src="/favicon.svg?v=20260908-brand-sync" alt="">
+<b>Góc nhìn từ dữ liệu</b>
+<span class="scene-badge">Minh họa</span>
+</div>
+<div class="chart-kpis">
+<div>
+<small>Truy vấn</small>
+<b>Đúng phạm vi</b>
+</div>
+<div>
+<small>Thông tin</small>
+<b>Dễ đối chiếu</b>
+</div>
+<div>
+<small>Kết quả</small>
+<b>Trực quan</b>
+</div>
+</div>
+<div class="scene-chart">
+<div class="chart-title">Tổng quan theo thời gian <span>Dữ liệu minh họa</span>
+</div>
+<div class="chart-bars">
+<div>
+<i style="height:32%">
+</i>
+<small>T1</small>
+</div>
+<div>
+<i style="height:52%">
+</i>
+<small>T2</small>
+</div>
+<div>
+<i style="height:43%">
+</i>
+<small>T3</small>
+</div>
+<div>
+<i style="height:65%">
+</i>
+<small>T4</small>
+</div>
+<div>
+<i style="height:58%">
+</i>
+<small>T5</small>
+</div>
+<div>
+<i style="height:80%">
+</i>
+<small>T6</small>
+</div>
+<div>
+<i style="height:71%">
+</i>
+<small>T7</small>
+</div>
+<div>
+<i style="height:93%">
+</i>
+<small>T8</small>
+</div>
+</div>
+</div>
+</div>
+<div class="scene-note chart-note">
+<span class="blue">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
+</svg>
+</span>
+<div>
+<b>Từ phân tích đến báo cáo</b>
+<small>Trình bày thông tin rõ ràng</small>
+<div class="source-tags">
+<span>Biểu đồ</span>
+<span>Bảng dữ liệu</span>
+</div>
+</div>
+</div>
+<div class="scene-chip">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>
+</svg>Khám phá dữ liệu theo cách của bạn</div>
+</section>
+</div>
+<button type="button" id="carousel-motion" class="carousel-motion" aria-label="Tạm dừng trình chiếu" aria-pressed="false">Ⅱ</button>
+</div>
+<footer class="storyfoot">
+<span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
+</svg>Đồng hành cùng bạn trên hành trình chuyển đổi số</span>
+<div class="dots" aria-label="Khám phá tính năng">
+<button type="button" aria-label="Hỏi đáp AI" aria-pressed="true" data-slide="0">
+</button>
+<button type="button" aria-label="Tra cứu tri thức" aria-pressed="false" data-slide="1">
+</button>
+<button type="button" aria-label="Phân tích dữ liệu" aria-pressed="false" data-slide="2">
+</button>
+</div>
+</footer>
+</section>
+<section class="login" aria-labelledby="login-title">
+<div class="theme-switch" aria-label="Giao diện">
+<button type="button" data-theme-choice="light" aria-label="Giao diện sáng" aria-pressed="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+<circle cx="12" cy="12" r="4"/>
+<path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+</svg>
+</button>
+<button type="button" data-theme-choice="dark" aria-label="Giao diện tối" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>
+</svg>
+</button>
+</div>
+<div class="formwrap">
+<header class="form-head">
+<img src="/favicon.svg?v=20260908-brand-sync" alt="">
+<h2 id="login-title">KnowledgeHub <span class="accent">AI</span>
+</h2>
+<p>Đăng nhập để tiếp tục.</p>
+</header>
+<form id="login-form" method="post" action="/api/auth/login">
+<div class="field">
+<label for="login-username">Tài khoản</label>
+<div class="input">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="8" r="4"/>
+<path d="M5 21v-2a7 7 0 0 1 14 0v2"/>
+</svg>
+<input id="login-username" name="username" autocomplete="username" placeholder="Nhập tên tài khoản" required spellcheck="false">
+</div>
+</div>
+<div class="field">
+<label for="login-password">Mật khẩu</label>
+<div class="input">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="10" width="14" height="11" rx="3"/>
+<path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>
+</svg>
+<input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" required>
+<button class="eye" type="button" id="login-toggle-password" aria-label="Hiện mật khẩu" aria-pressed="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/>
+<circle cx="12" cy="12" r="3"/>
+<path data-eye-slash d="M3 3l18 18"/>
+</svg>
+</button>
+</div>
+<p class="caps" id="login-caps">Caps Lock đang bật.</p>
+</div>
+<button class="submit login-submit" type="submit">Đăng nhập <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 12h14m-5-5 5 5-5 5"/>
+</svg>
+</button>
+<div class="notice login-error" id="login-error" role="alert" aria-live="polite"></div>
+</form>
+<p class="support">Cần hỗ trợ truy cập? <button type="button" id="login-help">Liên hệ quản trị viên</button>
+</p>
+</div>
+<footer class="formfoot">
+<div>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
+</svg>
+<span>Bảo mật</span>
+<span>·</span>
+<span>Ứng dụng nội bộ</span>
+</div>
+<p>© 2026 KnowledgeHub AI. All rights reserved.</p>
+</footer>
+</section>
+</main>
+  <script src="js/login.js?v=20261023-login-theme-v3">
+</script>
+  <script src="js/login_carousel.js?v=20261023-login-sync-v7">
+</script>
 </body>
 </html>

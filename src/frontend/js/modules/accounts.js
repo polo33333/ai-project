@@ -110,7 +110,7 @@
         ...(editing ? { revision:editing.revision } : { username:el('accounts-username').value, password:el('accounts-password').value }) };
       await request('/api/accounts' + (editing ? '/' + encodeURIComponent(editing.id) + (mode === 'password' ? '/password' : '') : ''), mode === 'edit' ? 'PUT' : 'POST', body);
       el('accounts-password').value = '';
-      if (mode === 'password') { const me = await request('/api/auth/me'); if (!me.authenticated || me.account?.id === selectedId) { window.location.href='/login.html'; return; } }
+      if (mode === 'password') { const me = await request('/api/auth/me'); if (!me.authenticated || me.account?.id === selectedId) { window.location.href='/login'; return; } }
       saving = false; window.closeAccountEditor(); window.invalidateMainTabData?.('accounts'); if(loading)await loading; await window.loadAccounts(); window.showToast?.('Đã lưu tài khoản.', 'success');
     } catch (error) { el('accounts-editor-message').textContent = error.message; }
     finally { saving = false; el('accounts-save').disabled = false; }

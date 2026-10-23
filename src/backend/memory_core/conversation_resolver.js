@@ -17,7 +17,7 @@ const schema = { type: 'object', additionalProperties: false,
   } };
 const validate = new Ajv().compile(schema);
 const definition = { type: 'function', function: { name: 'resolve_conversation', description: 'Return the validated conversation reference selection, not a tool routing decision.', parameters: schema } };
-function decode(response, candidates) {
+function decode(response, candidates, { previousRequest = null } = {}) {
   const calls = normalizeAssistantResponse(response).calls;
   let value = calls?.find(call => call.name === 'resolve_conversation')?.arguments;
   if (!value) { try { value = JSON.parse(response.content); } catch (_) {} }
@@ -35,7 +35,10 @@ function decode(response, candidates) {
     && selected.some(item => item.kind === 'dataset' && Number(item.data?.rowCount) > 1)) throw new Error('MEMORY_RESOLUTION_AMBIGUOUS');
   const temporalTask = value.cardinality === 'collection' && ['list', 'aggregate', 'compare', 'analyze'].includes(value.operation)
     && value.dataUse === 'current' && selected.some(item => item.kind === 'task' && item.data.clarification === 'temporal_horizon');
-  if (value.relation === 'followup' && !selected.some(item => ['entity', 'dataset', 'workflow'].includes(item.kind)) && !temporalTask) throw new Error('MEMORY_RESOLUTION_MISSING_REFERENCE');
+  // Changing time/filters of the previous request (even one that returned no
+  // rows) references that request itself, not a stored dataset.
+  const revisesPrevious = value.scopeAction === 'revise' && Boolean(previousRequest?.businessState?.table);
+  if (value.relation === 'followup' && !selected.some(item => ['entity', 'dataset', 'workflow'].includes(item.kind)) && !temporalTask && !revisesPrevious) throw new Error('MEMORY_RESOLUTION_MISSING_REFERENCE');
   if (value.relation === 'ambiguous' && !value.clarification.trim()) throw new Error('MEMORY_RESOLUTION_MISSING_CLARIFICATION');
   // Entity memory identifies records; it never establishes their current values.
   // Historical comparison is valid only for a selected dataset/workflow result.
@@ -62,7 +65,7 @@ async function resolve(dispatch, question, context, onRejected = () => {}) {
   const input = messages(question, candidates, recent, glossary, previousRequest);
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await dispatch([definition], input, attempt ? 'memory_resolution_repair' : 'memory_resolution');
-    try { return decode(response, candidates); }
+    try { return decode(response, candidates, { previousRequest }); }
     catch (error) {
       onRejected(error, attempt);
       if (attempt) throw error;
