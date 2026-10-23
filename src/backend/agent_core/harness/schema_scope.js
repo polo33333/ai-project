@@ -29,7 +29,7 @@ function matchesScope(sql, filters = []) {
     return filters.every(filter => conjuncts(statement.where).some(predicate => {
       if (predicate?.operator !== '=') return false;
       return [[predicate.left, predicate.right], [predicate.right, predicate.left]].some(([column, literal]) => {
-        if (column?.type !== 'column_ref' || key(column.column) !== key(filter.column) || !['number', 'single_quote_string', 'bool'].includes(literal?.type) || literal.value !== filter.value) return false;
+        if (column?.type !== 'column_ref' || key(column.column) !== key(filter.column) || !['number', 'single_quote_string', 'var_string', 'string', 'bool'].includes(literal?.type) || literal.value !== filter.value) return false;
         const sources = (statement.from || []).filter(source => !column.table || key(column.table) === key(source.as || source.table));
         return sources.length === 1 && key(sources[0].table) === key(filter.table);
       });

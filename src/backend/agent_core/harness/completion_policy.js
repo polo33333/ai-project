@@ -48,6 +48,7 @@ function assessSqlEvidence(call, plan = {}) {
       failures.push(...require('../../services/request_time').validateSql(sql, plan.requestTime, plan.temporalTables || []).violations);
       if (plan.schemaScope?.invalid) failures.push('SQL_SCOPE_UNRESOLVED');
       else if (!require('./schema_scope').matchesScope(sql, plan.schemaScope?.filters)) failures.push('SQL_SCOPE_MISMATCH');
+      if (!require('./schema_scope').matchesScope(sql, plan.requestFilters)) failures.push('REQUEST_FILTER_REQUIRED');
       failures.push(...evaluateSql(sql, plan).violations.map(code => `SQL_PLAN_${code}`));
       if (plan.conversationState?.operation === 'aggregate' && !isAggregateSql(sql)) failures.push('SQL_AGGREGATION_REQUIRED');
     }
