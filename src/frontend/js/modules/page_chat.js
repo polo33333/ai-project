@@ -1376,6 +1376,7 @@ function renderCurrentChatMessages(preserveScroll = false) {
   }
   renderQuickPrompts();
   container.scrollTop = preserveScroll ? oldTop + container.scrollHeight - oldHeight : container.scrollHeight;
+  window.ChatReasoningUI?.resumeAtEnd(container);
   window.syncPageChatScrollActivity?.();
 }
 

@@ -413,7 +413,7 @@ main.main-content.chat-workspace-page {
 .chat-reasoning-stream .chat-thinking-toggle { margin-left:auto; background:transparent; border:0; box-shadow:none; }
 .chat-reasoning-stream .chat-thinking-toggle[hidden] { display:none !important; }
 .chat-reasoning-stream .chat-thinking-toggle[aria-expanded="false"] i { transform:rotate(180deg); }
-:is(#page-chat-messages-container,#copilot-modal) .chat-reasoning-stream .chat-thinking-steps { display:block; max-height:256px; margin:12px 0 0 22px; padding:0 12px 0 14px; border:0; border-left:2px solid var(--border-color,#e2e8f0); background:transparent; overflow:auto; scrollbar-width:thin; }
+:is(#page-chat-messages-container,#copilot-modal) .chat-reasoning-stream .chat-thinking-steps { display:block; max-height:205px; margin:12px 0 0 22px; padding:0 12px 0 14px; border:0; border-left:2px solid var(--border-color,#e2e8f0); background:transparent; overflow:auto; scrollbar-width:thin; }
 .chat-reasoning-stream .chat-thinking-steps[hidden] { display:none !important; }
 .chat-reasoning-text { display:block; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--text-secondary,#64748b); white-space:pre-wrap; overflow-wrap:anywhere; font:12.5px/1.85 Inter,system-ui,sans-serif; }
 .chat-reasoning-text+.chat-reasoning-text { margin-top:14px; }
@@ -423,7 +423,7 @@ main.main-content.chat-workspace-page {
 .chat-reasoning-summary>summary>i { font-size:9px; }
 .chat-reasoning-summary[open]>summary>i { transform:rotate(90deg); }
 .chat-reasoning-summary time { color:var(--text-muted,#8993a5); font-size:11px; }
-.chat-reasoning-content { max-height:256px; margin-top:12px; padding-left:14px; border-left:2px solid var(--border-color,#e2e8f0); overflow:auto; scrollbar-width:thin; }
+.chat-reasoning-content { max-height:205px; margin-top:12px; padding-left:14px; border-left:2px solid var(--border-color,#e2e8f0); overflow:auto; scrollbar-width:thin; }
 /* Retained history uses the same presentation, without resurrecting timelines. */
 :is(#page-chat-messages-container,#copilot-modal) :is(.chat-thinking-step,.chat-embedded-thinking-step,.chat-embedded-thinking-title) { display:none !important; }
 :is(#page-chat-messages-container,#copilot-modal) :is(.chat-reasoning-summary,.chat-embedded-thinking,.chat-reasoning-panel) { display:none !important; }

@@ -9,6 +9,7 @@ function extract(name, next) {
   return source.slice(source.indexOf(`function ${name}(`), source.indexOf(`\n${next}`, source.indexOf(`function ${name}(`)));
 }
 function loadReasoningUI(context) {
+  context.requestAnimationFrame ||= () => {};
   context.clearInterval ||= () => {};
   context.window.matchMedia ||= () => ({ matches: true });
   context.document ||= {};

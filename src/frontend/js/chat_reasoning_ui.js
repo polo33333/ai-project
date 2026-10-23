@@ -3,6 +3,28 @@
   const escape = value => String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
   const keyOf = event => JSON.stringify([event.reasoningId || '', event.iteration || 0]);
   const nearBottom = node => node && node.scrollHeight - node.clientHeight - node.scrollTop <= 48;
+  function resumeAtEnd(container) {
+    if (!container || document.hidden || container.clientHeight <= 0) return;
+    // Wait for the restored conversation and its nested scroll box to lay out.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (document.hidden || container.clientHeight <= 0) return;
+      const follower = window.ChatStream?.followResponse(container);
+      if (follower && !follower.following && nearBottom(container)) follower.resume();
+      follower?.sync();
+      container.querySelectorAll('.chat-reasoning-stream .chat-thinking-steps').forEach(content => {
+        const box = content.getBoundingClientRect?.(), viewport = container.getBoundingClientRect?.();
+        const visible = box && viewport ? box.height > 0 && box.bottom > Math.max(0, viewport.top)
+          && box.top < Math.min(window.innerHeight || Infinity, viewport.bottom) : nearBottom(container);
+        // The active reasoning may be visible even when the outer conversation
+        // is not at its bottom. Only move this inner scroller in that case.
+        if (visible && !content.hidden && !content.closest('.chat-reasoning-stream')?._reasoningStopped)
+          content.scrollTop = content.scrollHeight;
+      });
+    }));
+  }
+  const resumeVisible = () => document.querySelectorAll('#page-chat-messages-container,#chat-messages-container').forEach(resumeAtEnd);
+  document.addEventListener?.('visibilitychange', resumeVisible);
+  window.addEventListener?.('focus', resumeVisible);
   function stopStatusTyping(root) {
     clearInterval(root._statusTypingTimer);
     root._statusTypingTimer = null;
@@ -171,6 +193,9 @@
     button.innerHTML=(options.arrow?'<i class="fa-solid fa-arrow-down chat-scroll-arrow" aria-hidden="true"></i>':'')+'<span aria-hidden="true"><i></i><i></i><i></i></span>';
     anchor.before(button);
     watcher={button,isActive,update(){
+      const visible = !document.hidden && container.clientHeight > 0;
+      if (visible && !watcher.visible) resumeAtEnd(container);
+      watcher.visible = visible;
       const active=Boolean(watcher.isActive());
       button.hidden=(!options.showWhenIdle&&!active)||nearBottom(container);
       button.setAttribute('data-active',String(active));
@@ -193,5 +218,5 @@
     observeContent();
     watcher.observers=[mutations,resize];activityWatchers.set(container,watcher);watcher.update();
   }
-  window.ChatReasoningUI = { create, update, render, stripCompleted, watchActivity, stopStatusTyping };
+  window.ChatReasoningUI = { create, update, render, stripCompleted, watchActivity, stopStatusTyping, resumeAtEnd };
 })();
