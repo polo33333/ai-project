@@ -68,14 +68,45 @@ test('biểu đồ is not mistaken for the pronoun đó', () => {
   assert.equal(hasReferencePronoun('vẽ lại dữ liệu đó'), true);
 });
 
-test('PARTIAL and invalid responses remain outside conversation memory', () => {
+test('PARTIAL responses stay out of conversation memory but are logged as such', () => {
   const memory = service();
   const result = memory.persistSuccessfulExchange({
     sessionId: 'partial', question: 'data', reply: 'incomplete', currentPlan: plan('M_Employee'),
     completionStatus: 'PARTIAL', responseEvaluation: { valid: false, failures: ['MISSING_SQL'] }
   });
   assert.equal(result.persisted, false);
-  assert.equal(memory.getSession('partial'), null);
+  const session = memory.getSession('partial');
+  // Messages, plan and references (legacy memory) only take verified turns...
+  assert.deepEqual(session.messages, []);
+  assert.equal(session.lastPlan, null);
+  assert.equal(session.references.lastDataset, null);
+  // ...while the turn log keeps the question and its status for follow-ups.
+  assert.deepEqual(session.turns.map(turn => [turn.question, turn.status]), [['data', 'PARTIAL']]);
+});
+
+test('the turn log keeps the v2 contract and a preview of the rows the user saw', () => {
+  const memory = service();
+  const rows = [{ Code: 'NV002', Name: 'Demo4' }, { Code: 'NV003', Name: 'Demo2' }];
+  memory.persistSuccessfulExchange({ sessionId: 'log', question: 'ds nv CSKH', reply: 'ok', completionStatus: 'SUCCESS',
+    responseEvaluation: { valid: true, failures: [] }, currentPlan: { ...plan('M_Employee'), v2: { contract: { root: 'M_Employee' }, dbSourceId: 's' } },
+    toolCalls: [{ toolName: 'execute_sql_query', success: true, result: { rows } }] });
+  const [turn] = memory.getSession('log').turns;
+  assert.deepEqual(turn.contract, { root: 'M_Employee' });
+  assert.equal(turn.dbSourceId, 's');
+  assert.deepEqual(turn.result, { rowCount: 2, hasMore: false, columns: ['Code', 'Name'], preview: [['NV002', 'Demo4'], ['NV003', 'Demo2']] });
+  assert.deepEqual(memory.getResolutionContext({ sessionId: 'log' }, { dbSourceId: 's' }).turns.map(item => item.question), ['ds nv CSKH']);
+  assert.deepEqual(memory.getResolutionContext({ sessionId: 'log' }, { dbSourceId: 'other' }).turns, []);
+});
+
+test('session caps apply per account before the global backstop', () => {
+  const memory = service();
+  memory.maxSessionsPerAccount = 2;
+  for (const id of ['a1', 'a2', 'a3']) memory.persistSuccessfulExchange({ sessionId: id, accountId: 'alice', question: 'q', reply: 'r',
+    currentPlan: plan('M_Employee'), completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] } });
+  memory.persistSuccessfulExchange({ sessionId: 'b1', accountId: 'bob', question: 'q', reply: 'r', currentPlan: plan('M_Employee'),
+    completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] } });
+  const owners = Object.values(memory.store.sessions).map(item => item.accountId).sort();
+  assert.deepEqual(owners, ['alice', 'alice', 'bob']);
 });
 
 test('SUCCESS responses pass the quality gate and update plan', () => {
@@ -400,4 +431,18 @@ test('recent context falls back to the session active scope when current scope i
   } } });
   const context = memory.getContext({ mode: 'recent', sessionId: 'scoped', currentScope: null, maxMessages: 4 });
   assert.deepEqual(context.map(item => item.content), ['sản lượng điện', '10']);
+});
+
+test('retrying a turn sees only the turn log written before that turn', () => {
+  const memory = service();
+  const ok = { completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] }, currentPlan: plan('M_Employee') };
+  const ask = (question, history) => memory.requestView({ sessionId: 'retry', question, history });
+  ask('Q1', []).persistSuccessfulExchange({ sessionId: 'retry', question: 'Q1', reply: 'A1', ...ok });
+  const history = [{ role: 'user', content: 'Q1' }, { role: 'assistant', content: 'A1' }];
+  ask('Q2', history).persistSuccessfulExchange({ sessionId: 'retry', question: 'Q2', reply: 'A2 wrong', ...ok });
+  const view = memory.requestView({ sessionId: 'retry', question: 'Q2', history, retry: true, latest: true });
+  assert.deepEqual(view.getResolutionContext({ sessionId: 'retry' }).turns.map(turn => turn.question), ['Q1']);
+  view.persistSuccessfulExchange({ sessionId: 'retry', question: 'Q2', reply: 'A2 fixed', ...ok });
+  view.commitRetry();
+  assert.deepEqual(memory.getSession('retry').turns.map(turn => turn.reply), ['A1', 'A2 fixed']);
 });

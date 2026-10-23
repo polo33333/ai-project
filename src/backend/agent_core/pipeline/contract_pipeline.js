@@ -12,13 +12,16 @@ const { normalizeAssistantResponse } = require('../harness/tool_call_normalizer'
 
 const ref = { type: 'string', minLength: 1, maxLength: 200 };
 const contractSchema = { type: 'object', additionalProperties: false, required: ['kind'], properties: {
-  kind: { enum: ['data', 'workflow', 'chat', 'clarify'] },
-  workflow: { type: 'object', additionalProperties: false, required: ['templateId'], properties: {
+  kind: { enum: ['data', 'workflow', 'resume', 'previous', 'document', 'chat', 'clarify'] },
+  previous: { type: 'object', additionalProperties: false, required: ['turn', 'rows'], properties: {
+    turn: { type: 'integer', minimum: 1, maximum: 10 }, rows: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'integer', minimum: 1, maximum: 20 } },
+    columns: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 120 } } } },
+  workflow: { type: 'object', additionalProperties: false, properties: {
     templateId: { type: 'string', maxLength: 200 },
     inputs: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean'] } },
     evidence: { type: 'object', additionalProperties: { type: 'string', maxLength: 200 } } } },
   output: { type: 'object', additionalProperties: false, properties: {
-    chart: { enum: ['none', 'bar', 'line', 'pie'] }, export: { enum: ['none', 'xlsx', 'csv', 'pdf'] } } },
+    chart: { enum: ['none', 'bar', 'line', 'pie'] }, export: { enum: ['none', 'xlsx', 'csv', 'pdf'] }, splitBy: ref } },
   clarification: { type: 'string', maxLength: 300 },
   followup: { type: 'boolean' },
   root: { type: 'string', maxLength: 128 },
@@ -29,11 +32,12 @@ const contractSchema = { type: 'object', additionalProperties: false, required: 
   groupBy: { type: 'array', maxItems: 4, items: { type: 'object', additionalProperties: false, required: ['ref'], properties: {
     ref, grain: { enum: ['day', 'month', 'year'] } } } },
   filters: { type: 'array', maxItems: 12, items: { type: 'object', additionalProperties: false, required: ['ref', 'operator', 'evidence'], properties: {
-    ref, operator: { enum: ['eq', 'in', 'contains', 'period', 'gte', 'gt', 'lt', 'lte', 'isNull', 'notNull'] },
-    value: { type: ['string', 'number'] }, values: { type: 'array', maxItems: 50, items: { type: ['string', 'number'] } },
-    evidence: { type: 'string', maxLength: 200 }, inherited: { type: 'boolean' } } } },
+    ref, operator: { enum: ['eq', 'in', 'ne', 'notIn', 'contains', 'period', 'gte', 'gt', 'lt', 'lte', 'isNull', 'notNull'] },
+    value: { type: ['string', 'number', 'boolean'] }, values: { type: 'array', maxItems: 50, items: { type: ['string', 'number'] } },
+    evidence: { type: 'string', maxLength: 200 }, inherited: { type: 'boolean' }, fromResult: { type: 'boolean' } } } },
   sort: { type: 'object', additionalProperties: false, required: ['by'], properties: { by: { type: 'string', maxLength: 200 }, direction: { enum: ['ASC', 'DESC'] } } },
   limit: { type: 'integer', minimum: 1, maximum: 1000 },
+  ignoredTerms: { type: 'array', maxItems: 10, items: { type: 'string', maxLength: 100 } },
   analysis: { enum: ['none', 'anomaly'] }
 } };
 const validate = new Ajv({ strict: false }).compile(contractSchema);
@@ -41,18 +45,26 @@ const definition = { type: 'function', function: { name: 'plan_query',
   description: 'Return the query contract for the current question over the supplied catalog.', parameters: contractSchema } };
 
 const RULES = `You translate the user's business question into a query contract over CATALOG. Call plan_query only; never write SQL or answer.
+- kind=document for questions answered by company documents (user guides, policies, plans, procedures) rather than database records.
 - kind=data for questions answered by catalog records; kind=chat for greetings, explanations, documents or anything not in the catalog; kind=clarify only when a required value is truly ambiguous (Vietnamese question in clarification).
 - root: the table whose rows are listed, counted or summed (the table holding the measure).
-- Reference columns as "Table.Column". To use a lookup (code, name, status, period name, group) go through the foreign key: "Root.FKColumn->LookupColumn", e.g. "T_Feedback.StatusID->ConstantName", "T_ElectricityOutput.CustomerID->CustomerCode". Never compare a code or name with a numeric ID column.
+- Reference columns as "Table.Column". To use a lookup (code, name, status, period name, group) go through the foreign key: "Root.FKColumn->LookupColumn", e.g. "Orders.StatusID->StatusName", "Orders.CustomerID->CustomerCode". Never compare a code or name with a numeric ID column.
 - operation=list returns records: choose the fields the question implies (for transactions include the business date and the main amount; for people include code and name); empty fields = the table's default list. "theo X" / "by X" means groupBy X. operation=aggregate returns measures, optionally grouped (groupBy). Foreign keys in fields/groupBy are shown by their display column automatically.
 - Measures use root columns only; COUNT of records uses ref "*". Rankings ("cao nhất", "top 5") use sort {by:"measure:0"} and limit.
-- Every code, date, period or year written in the question must appear in a filter; never drop one.
+- Exclusions ("trừ", "ngoại trừ", "không phải", "không bao gồm") use operator ne (one value) or notIn (values).
+- If a word of the question looks like a code or a stored value but is not a criterion (e.g. part of a name), list it in ignoredTerms.
+- Every code, date, period or year written in the question must appear in a filter; never drop one. Named values (a department, status, group, type or period name such as "phòng Kỹ thuật", "đang xử lý") are filters too.
 - If the right table is only in OTHER TABLES, use it anyway (as root or in refs); its columns are supplied on the next turn.
-- Prefer columns with a business label (in quotes) over unlabeled columns of similar meaning, and the table whose entity matches the question (electricity vs water).
-- Every filter needs evidence: an exact quote from the question that contains the value. Dates: operator=period with value "YYYY", "YYYY-MM" or "YYYY-MM-DD" on the business date column; ranges use gte/lt with ISO dates. Relative periods are computed from TODAY. "Kỳ N" is a period name in a lookup (e.g. PeriodID->Name), not a date.
+- Prefer columns with a business label (in quotes) over unlabeled columns of similar meaning, and the table whose entity matches the subject of the question.
+- Every filter needs evidence: an exact quote from the question that contains the value. Dates: operator=period with value "YYYY", "YYYY-MM" or "YYYY-MM-DD" on the business date column; ranges use gte/lt with ISO dates. Relative periods are computed from TODAY. A named period such as "Kỳ 3" or "Q1" is a value in a lookup table reached through its foreign key, not a date.
 - Unusual/abnormal months: operation=aggregate grouped by the business date with grain=month, analysis=anomaly.
-- kind=workflow only when one of WORKFLOWS delivers exactly the requested result (same entity, measure, time semantics and outputs); set workflow.templateId, and in workflow.inputs only values stated in the question, each with its exact quote in workflow.evidence (missing inputs are asked later). A broader report, a different entity or a filter the workflow cannot apply means kind=data.
+- kind=workflow when one of WORKFLOWS is built for the requested lookup or report (same entity, measure, time semantics and outputs): prefer it over kind=data even if the catalog could also answer, because the business configured it. Set workflow.templateId, and in workflow.inputs only values stated in the question, each with its exact quote in workflow.evidence (missing inputs are asked later). A broader report, a different entity or a filter the workflow cannot apply means kind=data.
+- PENDING lists a workflow waiting for inputs. Use kind=resume only when the current message answers one or more of those inputs: put them in workflow.inputs with exact quotes in workflow.evidence. A new or different request is not a resume.
+- One file per group ("mỗi phòng ban một file", "tách file theo X"): operation=list, output.export and output.splitBy = the grouping ref (e.g. "Root.FKColumn").
 - output.chart (bar/line/pie) when a chart is asked ("biểu đồ", "vẽ"); it needs operation=aggregate with groupBy. output.export (xlsx/csv/pdf) when a file is asked ("xuất file", "excel"). Otherwise omit output.
+- When the answer is already in rows shown in PREVIOUS (e.g. "người thứ 2 trong danh sách trên tên gì"), use kind=previous with previous.turn (1 = oldest in PREVIOUS), previous.rows (row numbers shown) and previous.columns (column names to show, empty = all). Do not use it for new measures, totals or rows that were not shown.
+- Otherwise rows of a previous result ("người thứ 2", "khách hàng đó", "hóa đơn lớn nhất ở trên"): read them in PREVIOUS turns' result rows (numbered from 1), filter by that row's identity value (code/name/ID) with fromResult=true and evidence = the referring words of the question.
+- A question may return to an older turn in PREVIOUS (not only the last one): start from that turn's contract.
 - Follow-up (PREVIOUS is given and the question continues it, e.g. "còn tháng 1 thì sao", "vậy tìm trong năm 2024", "thêm cột giới tính"): set followup=true, start from PREVIOUS.contract and change only what the user changed. Carried filters keep their evidence from the previous question and set inherited=true. "tất cả/toàn bộ" removes the carried filter.`;
 
 function decode(response) {
@@ -73,7 +85,7 @@ function otherTables(selection, catalog) {
 
 // Independent coverage check: every explicit code, date or year in the
 // question must reach a filter (or the row limit). A contract that silently
-// widens "KA0021 tháng 2024-02" to all customers or all months is rejected.
+// widens "<code> tháng 2024-02" to all records or all months is rejected.
 function uncovered(contract, question) {
   const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi');
   const tokens = [...new Set([
@@ -81,8 +93,85 @@ function uncovered(contract, question) {
     ...(question.replace(/\b\d{4}-\d{1,2}(?:-\d{1,2})?\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b\d{1,2}\/\d{4}\b/g, ' ').match(/\b(?:19|20)\d{2}\b/g) || []),
     ...(question.match(/\b[A-Za-z][A-Za-z_-]*\d[A-Za-z0-9_-]*\b/g) || [])
   ])];
-  const covered = (contract.filters || []).map(filter => fold([filter.evidence, filter.value, ...(filter.values || [])].join(' ')));
+  const covered = [...(contract.filters || []).map(filter => fold([filter.evidence, filter.value, ...(filter.values || [])].join(' '))),
+    ...(contract.ignoredTerms || []).map(fold)];
   return tokens.filter(token => !covered.some(text => text.includes(fold(token))) && String(contract.limit) !== token);
+}
+
+// Relationship roles named in the question shape the output: a list that asks
+// "những khách hàng nào" shows the customer; "theo trạng thái" groups by status.
+function applyRoles(contract, question, catalog) {
+  const root = catalogApi.table(catalog, contract.root);
+  if (!root) return [];
+  const { mentions } = require('./coverage');
+  const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi').replace(/\s+/g, ' ').trim();
+  const text = fold(question);
+  const usesKey = (refs, fk) => refs.some(ref => {
+    const head = String(ref).split('->')[0];
+    return catalogApi.key(head.includes('.') ? head.split('.').pop() : head) === catalogApi.key(fk);
+  });
+  const added = [];
+  for (const relation of catalog.relations.filter(item => catalogApi.key(item.fromTable) === catalogApi.key(root.tableName) && item.role && item.display)) {
+    const fk = relation.pairs[0].source, role = fold(relation.role), ref = `${root.tableName}.${fk}`;
+    if (contract.operation === 'aggregate' && mentions(text, `theo ${role}`) && !usesKey((contract.groupBy || []).map(item => item.ref), fk)) {
+      contract.groupBy = [...(contract.groupBy || []), { ref }]; added.push(`groupBy:${ref}`);
+    }
+    if (contract.operation === 'list' && contract.fields?.length && mentions(text, role) && !usesKey(contract.fields, fk)) {
+      contract.fields = [...contract.fields, ref]; added.push(`field:${ref}`);
+    }
+    if (contract.operation === 'list' && !contract.fields?.length && mentions(text, role)) {
+      contract.fields = [...root.defaults.map(name => `${root.tableName}.${name}`), ref]; added.push(`field:${ref}`);
+    }
+  }
+  return added;
+}
+
+// A follow-up contract only states what changed. What it leaves out (root,
+// operation, measures/fields, grouping, analysis) comes from the previous
+// contract, and a filter repeating a previous one with a value the current
+// question does not contain is the carried filter, so it is marked inherited.
+function completeFollowup(contract, previous, question) {
+  const before = previous?.contract;
+  if (!before?.root || (!contract.followup && contract.root)) return [];
+  const filled = [];
+  for (const key of ['root', 'operation', 'analysis']) if (!contract[key] && before[key]) { contract[key] = before[key]; filled.push(key); }
+  if (catalogApi.key(contract.root) === catalogApi.key(before.root)) {
+    if (contract.operation === 'aggregate' && !contract.measures?.length && before.measures?.length) { contract.measures = structuredClone(before.measures); filled.push('measures'); }
+    if (contract.operation === 'aggregate' && !contract.groupBy && before.groupBy?.length) { contract.groupBy = structuredClone(before.groupBy); filled.push('groupBy'); }
+    if (contract.operation === 'list' && !contract.fields?.length && before.fields?.length) { contract.fields = [...before.fields]; filled.push('fields'); }
+  }
+  const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi');
+  for (const filter of contract.filters || []) {
+    const same = (before.filters || []).find(item => item.ref === filter.ref && String(item.value) === String(filter.value));
+    if (same && !filter.inherited && !fold(question).includes(fold(filter.value))) { filter.inherited = true; filled.push(`inherited:${filter.ref}`); }
+  }
+  if (filled.length) contract.followup = true;
+  return filled;
+}
+
+// A follow-up keeps the previous measure unless the question names the
+// difference: "còn tháng 1 thì sao" must not silently switch from the
+// after-tax to the pre-tax amount. Words that distinguish the new measure's
+// label from the old one ("trước" vs "sau") must appear in the question.
+function keepMeasures(contract, previous, question, catalog) {
+  const before = previous?.contract;
+  if (!contract.followup || contract.operation !== 'aggregate' || before?.operation !== 'aggregate'
+    || catalogApi.key(before.root) !== catalogApi.key(contract.root) || !before.measures?.length || !contract.measures?.length) return null;
+  const signature = measures => measures.map(item => `${item.aggregation}:${catalogApi.key(String(item.ref).split('.').pop())}`).join('|');
+  if (signature(before.measures) === signature(contract.measures)) return null;
+  const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi');
+  const words = measures => new Set(measures.flatMap(item => {
+    const name = String(item.ref).split('->').pop().split('.').pop();
+    const column = catalogApi.column(catalog, contract.root, name);
+    return fold(`${column?.label || ''} ${name} ${item.label || ''}`).split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1);
+  }));
+  const previousWords = words(before.measures);
+  const distinguishing = [...words(contract.measures)].filter(word => !previousWords.has(word));
+  const asked = fold(question);
+  if (distinguishing.some(word => asked.includes(word))) return null;
+  const replaced = contract.measures;
+  contract.measures = structuredClone(before.measures);
+  return { from: replaced.map(item => item.ref), to: contract.measures.map(item => item.ref) };
 }
 
 // Safety net for follow-ups: an equality filter of the previous contract that
@@ -100,17 +189,28 @@ function carryFilters(contract, previous, question) {
   return added;
 }
 
-async function run({ question, plan, context, toolContext, dispatch, toolManager, trace, toolCalls, requestTime }) {
+async function run({ question, plan, context, toolContext, dispatch, toolManager, trace, toolCalls, requestTime, conversation = [], pendingInput = null }) {
   const step = (type, data = {}) => trace.steps.push({ type, ...data });
   // 1. Schema retrieval is deterministic tool code, not a model round.
   const searchArgs = { query: question, request: { operation: 'list', attributes: [], presentation: 'unspecified' } };
   const search = await toolManager.executeTool('search_schema', searchArgs, { ...toolContext, governedController: true });
   toolCalls.push({ toolName: 'search_schema', args: searchArgs, success: search.success, result: search.result || null, error: search.error || null });
-  if (!search.success || search.result?.mode !== 'data') return { fallback: 'V2_SCHEMA_UNAVAILABLE' };
-  // A follow-up ("còn khách hàng DC6011 thì sao?") names no table: keep the
+  if (!search.success || search.result?.mode !== 'data') return conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns: [] });
+  // A follow-up ("còn khách hàng X thì sao?") names no table: keep the
   // tables of the previous contract available alongside the new retrieval.
-  const previous = context.resolutionContext?.previousRequest?.businessState?.v2 || null;
-  const previousTables = previous?.contract ? [previous.contract.root, ...JSON.stringify(previous.contract).match(/[A-Za-z_][A-Za-z0-9_]*(?=\.[A-Za-z_])/g) || []] : [];
+  const sameSource = item => !item?.dbSourceId || item.dbSourceId === search.result.dbSourceId;
+  const turns = (context.resolutionContext?.turns || []).filter(sameSource).slice(-3);
+  const stored = context.resolutionContext?.previousRequest?.businessState?.v2 || null;
+  const lastContractTurn = [...turns].reverse().find(turn => turn.contract?.root);
+  const previous = lastContractTurn ? { contract: lastContractTurn.contract, question: lastContractTurn.question }
+    : stored && sameSource(stored) ? stored : null;
+  // Carried evidence may come from any recent question (returning to an older topic).
+  const previousQuestions = [...turns.map(turn => turn.question), previous?.question].filter(Boolean).join('\n');
+  // Values a row reference may resolve to: cells of the results the user saw.
+  const resultValues = new Set(turns.flatMap(turn => turn.result?.preview || []).flat()
+    .filter(value => value !== null && value !== '').map(value => String(value).normalize('NFC').toLocaleLowerCase('vi').trim()));
+  const previousTables = [...new Set([...turns.map(turn => turn.contract), previous?.contract].filter(Boolean)
+    .flatMap(contract => [contract.root, ...(JSON.stringify(contract).match(/[A-Za-z_][A-Za-z0-9_]*(?=\.[A-Za-z_])/g) || [])]))];
   let catalog = catalogApi.build(search.result, { include: previousTables });
   if (!catalog.tables.size) return { fallback: 'V2_SCHEMA_EMPTY' };
 
@@ -122,21 +222,56 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   }
 
   // 2. One structured model call (plus at most one targeted repair).
-  const recent = (context.resolutionContext?.recent || []).slice(-4).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 600) }));
+  const recent = turns.length ? [] : (context.resolutionContext?.recent || []).slice(-4).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 600) }));
+  const previousTurns = turns.map(turn => ({ question: turn.question, status: turn.status, contract: turn.contract || undefined,
+    answer: turn.contract ? undefined : String(turn.reply || '').slice(0, 400),
+    result: turn.result ? { columns: turn.result.columns, rowCount: turn.result.rowCount,
+      rows: turn.result.preview.slice(0, 10).map((row, index) => [index + 1, ...row]) } : undefined }));
   const messages = [{ role: 'system', content: RULES },
     { role: 'user', content: `TODAY: ${requestTime.today}\nCATALOG:\n${catalogApi.describe(catalog)}\n`
       + `OTHER TABLES (columns supplied on request): ${otherTables(search.result, catalog)}\n`
       + (workflows.length ? `WORKFLOWS: ${describeWorkflows(workflows)}\n` : '')
-      + (previous ? `PREVIOUS: ${JSON.stringify(previous)}\n` : '') + (recent.length ? `RECENT: ${JSON.stringify(recent)}\n` : '')
+      + (pendingInput ? `PENDING: ${JSON.stringify({ workflow: pendingInput.name, missingInputs: Object.entries(pendingInput.inputs || {})
+        .map(([key, slot]) => ({ key, label: slot.label || key, ask: slot.ask, type: slot.schema?.type || 'string' })) })}\n` : '')
+      + (previousTurns.length ? `PREVIOUS (oldest first): ${JSON.stringify(previousTurns)}\n` : previous ? `PREVIOUS: ${JSON.stringify([previous])}\n` : '')
+      + (recent.length ? `RECENT: ${JSON.stringify(recent)}\n` : '')
       + `QUESTION: ${question}` }];
+  // Lookup values for the coverage check run through the governed SQL tool.
+  const lookupRows = async query => {
+    const result = await toolManager.executeTool('execute_sql_query', { sql: query.sql }, { ...toolContext, joinPlan: query.joinPlan, compiledSemanticQuery: false });
+    return result.success ? result.result?.rows || [] : null;
+  };
   let contract, compiled, lastError, attempts = 2;
   for (let attempt = 0; attempt < attempts && !compiled; attempt++) {
     const response = await dispatch([definition], messages, attempt ? 'v2_contract_repair' : 'v2_contract');
     try {
       contract = decode(response);
       step('V2_CONTRACT', { attempt, contract: structuredClone(contract) });
-      if (contract.kind === 'chat') return { fallback: 'V2_NOT_DATA', contract };
+      if (contract.kind === 'chat') return { ...(await conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step })), contract };
+      if (contract.kind === 'document') {
+        if (!toolContext.allowedToolNames?.includes('search_knowledge_base')) return { ...(await conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step })), contract };
+        return { ...(await require('./conversation_answer').searchDocuments({ question, conversation, dispatch, plan, context, toolManager, toolContext, toolCalls, step })), contract };
+      }
+      if (contract.kind === 'resume') {
+        if (!pendingInput) throw Object.assign(new Error('V2_RESUME_UNAVAILABLE: no workflow is waiting for input; answer with another kind'), { code: 'V2_RESUME_UNAVAILABLE' });
+        const inputs = slotInputs(contract.workflow, pendingInput.inputs, question);
+        if (!Object.keys(inputs).length) return { contract, status: 'CLARIFY', reply: `Để tiếp tục quy trình **${pendingInput.name}**, mình cần thêm:\n`
+          + Object.entries(pendingInput.inputs || {}).map(([key, slot]) => `- ${slot.ask || slot.label || key}`).join('\n') };
+        const args = { runId: pendingInput.runId, revision: pendingInput.revision, inputs };
+        const execution = await toolManager.executeTool('resume_workflow', args, toolContext);
+        step('V2_WORKFLOW_RESUMED', { runId: pendingInput.runId, inputs: Object.keys(inputs), success: execution.success, code: execution.code || null });
+        if (execution.success && execution.result?.execution) {
+          toolCalls.push({ toolName: 'resume_workflow', args, success: true, result: execution.result, error: null });
+          return { contract, handoff: execution.result.execution };
+        }
+        throw Object.assign(new Error(`V2_RESUME_FAILED: ${String(execution.error || execution.code).slice(0, 200)}`), { code: 'V2_RESUME_FAILED' });
+      }
       if (contract.kind === 'clarify') return { contract, reply: contract.clarification || 'Bạn có thể nói rõ hơn phạm vi dữ liệu cần tra cứu không?', status: 'CLARIFY' };
+      if (contract.kind === 'previous') {
+        const answer = previousRows(contract.previous, turns);
+        if (answer) { step('V2_PREVIOUS_ROWS', { turn: contract.previous.turn, rows: contract.previous.rows }); return { contract, reply: answer, status: 'SUCCESS' }; }
+        throw Object.assign(new Error('V2_PREVIOUS_UNAVAILABLE: those rows were not shown in PREVIOUS. Query them with kind=data and fromResult filters'), { code: 'V2_PREVIOUS_UNAVAILABLE' });
+      }
       if (contract.kind === 'workflow') {
         if (contract.operation) plan.conversationState = { ...plan.conversationState, operation: contract.operation };
         const started = await runWorkflow(contract, workflows, question, toolManager, toolContext, step);
@@ -150,12 +285,28 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       if (exportFormat(contract, plan) && contract.operation !== 'aggregate' && !contract.limit) contract.exportLimit = true;
       const dropped = uncovered(contract, question);
       if (dropped.length) throw Object.assign(new Error(`V2_CRITERION_DROPPED: the question states ${dropped.map(item => `"${item}"`).join(', ')} but no filter uses it`), { code: 'V2_CRITERION_DROPPED' });
+      const filled = completeFollowup(contract, previous, question);
+      if (filled.length) step('V2_FOLLOWUP_COMPLETED', { fields: filled });
+      const splitBy = contract.output?.splitBy;
+      if (splitBy && contract.operation !== 'aggregate' && !(contract.fields || []).includes(splitBy)) {
+        const rootEntry = catalogApi.table(catalog, contract.root);
+        contract.fields = [...(contract.fields?.length ? contract.fields : (rootEntry?.defaults || []).map(name => `${rootEntry.tableName}.${name}`)), splitBy];
+      }
+      const roles = applyRoles(contract, question, catalog);
+      if (roles.length) step('V2_ROLES_APPLIED', { refs: roles });
+      if (contract.root && catalogApi.table(catalog, contract.root)) {
+        const terms = await require('./coverage').lookupTerms(catalogApi.table(catalog, contract.root).tableName, catalog, lookupRows);
+        const problems = require('./coverage').check(contract, question, terms);
+        if (problems.length) throw Object.assign(new Error(`V2_CRITERION_DROPPED: ${problems.join('; ')}`), { code: 'V2_CRITERION_DROPPED' });
+      }
+      const kept = keepMeasures(contract, previous, question, catalog);
+      if (kept) step('V2_MEASURES_KEPT', kept);
       const carried = carryFilters(contract, previous, question);
       if (carried.length) step('V2_FILTERS_CARRIED', { refs: carried.map(item => item.ref) });
-      compiled = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previous?.question || '' });
+      compiled = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previousQuestions, resultValues });
     } catch (error) {
       lastError = error;
-      // Retrieval may miss the right table ("tiền điện" -> water table). A
+      // Retrieval may miss the right table (a similar entity is selected). A
       // contract naming an authorized table outside the catalog loads its
       // metadata for the repair round instead of failing.
       const named = [...new Set([contract?.root, ...(JSON.stringify(contract || {}).match(/[A-Za-z_][A-Za-z0-9_]*(?=\.[A-Za-z_])/g) || [])]
@@ -166,6 +317,8 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
         const added = [...catalog.tables.values()].filter(item => !before.has(catalogApi.key(item.tableName)));
         if (added.length) {
           step('V2_CATALOG_EXTENDED', { tables: added.map(item => item.tableName) });
+          // The model has not seen these columns yet: give it one more round.
+          if (attempts < 3) attempts++;
           error.message += `\nAdditional catalog:\n${catalogApi.describe({ ...catalog, tables: new Map(added.map(item => [catalogApi.key(item.tableName), item])) })}`;
         }
       }
@@ -200,7 +353,7 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     if (resolved.clarify) return { contract, reply: resolved.clarify, status: 'CLARIFY' };
     if (resolved.changes.length) {
       step('V2_VALUE_RESOLVED', { changes: resolved.changes });
-      compiled = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previous?.question || '' });
+      compiled = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previousQuestions, resultValues });
       call = await execute(compiled);
       if (!call.success) return { fallback: call.code || 'V2_EXECUTION_FAILED', contract };
     }
@@ -221,14 +374,82 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     }
   }
   const format = exportFormat(contract, plan);
-  if (format && rows.length) {
+  const split = contract.output?.splitBy && compiled.outputs.find(item => item.ref === contract.output.splitBy);
+  if (plan.exportRequest?.separate && !split) { reply += '\n\nChưa xác định được cột để tách file theo nhóm; hãy nói rõ tách theo cột nào.'; status = 'PARTIAL'; }
+  else if (format && rows.length && split) {
+    const exported = await exportGroups(rows, split.alias, format, toolManager, toolContext, toolCalls);
+    reply = `${reply}\n\n${exported.lines.join('\n')}`;
+    const expected = plan.exportRequest?.expectedFiles;
+    if (exported.failed || exported.tooMany || (expected && expected !== exported.count)) {
+      reply += exported.tooMany ? '\n\nCó quá nhiều nhóm (tối đa 30 file); hãy thu hẹp phạm vi.'
+        : expected && expected !== exported.count ? `\n\nYêu cầu ${expected} file nhưng dữ liệu có ${exported.count} nhóm.` : '\n\nMột số file chưa tạo được.';
+      status = 'PARTIAL';
+    }
+  } else if (format && rows.length) {
     const args = { data: rows, format, filename: `Bao_cao_${new Date().toISOString().slice(0, 10)}` };
     const file = await toolManager.executeTool('export_data', args, { ...toolContext, verifiedExport: { resultGroupBy: [], displayNames: {} } });
     toolCalls.push({ toolName: 'export_data', args, success: file.success, result: file.result || null, error: file.error || null });
     if (file.success && file.result?.downloadUrl) reply = require('../harness/grounded_reply').ensureDownloadLink(reply, file.result.downloadUrl);
     else { reply += '\n\nChưa tạo được file xuất.'; status = 'PARTIAL'; }
   }
-  return { contract, compiled, call, reply, status };
+  return { contract, compiled, call, reply, status, dbSourceId: catalog.dbSourceId };
+}
+
+// Answer from rows the user already saw, copied from the turn log (no model-written values).
+function previousRows(reference, turns) {
+  const turn = turns[reference?.turn - 1];
+  const result = turn?.result;
+  if (!result?.preview?.length) return null;
+  const rows = [...new Set(reference.rows)].map(number => result.preview[number - 1]);
+  if (rows.some(row => !row)) return null;
+  const wanted = (reference.columns || []).filter(name => result.columns.includes(name));
+  const indexes = (wanted.length ? wanted : result.columns).map(name => result.columns.indexOf(name));
+  const cell = value => value === null || value === undefined || value === '' ? '—' : typeof value === 'number' ? new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value) : String(value);
+  const lines = rows.map((row, i) => `- **Dòng ${[...new Set(reference.rows)][i]}:** ${indexes.map(index => `${result.columns[index]}: ${cell(row[index])}`).join('; ')}`);
+  return `Theo kết quả của câu “${String(turn.question).slice(0, 160)}”:\n\n${lines.join('\n')}`;
+}
+
+// One file per value of the split column, each written from its own rows.
+async function exportGroups(rows, alias, format, toolManager, toolContext, toolCalls) {
+  const groups = new Map();
+  for (const row of rows) {
+    const name = row[alias] === null || row[alias] === undefined || row[alias] === '' ? 'Không xác định' : String(row[alias]);
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(row);
+  }
+  if (groups.size > 30) return { lines: [], count: groups.size, tooMany: true };
+  const lines = [];
+  let failed = false;
+  for (const [name, data] of groups) {
+    const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40) || 'Nhom';
+    const args = { data, format, filename: `Bao_cao_${slug}` };
+    const file = await toolManager.executeTool('export_data', args, { ...toolContext, verifiedExport: { resultGroupBy: [], displayNames: {} } });
+    toolCalls.push({ toolName: 'export_data', args, success: file.success, result: file.result || null, error: file.error || null, exportGroup: name });
+    if (file.success && file.result?.downloadUrl) lines.push(`- [${name.replace(/[[\]]/g, '')}](${file.result.downloadUrl}) — ${data.length} bản ghi`);
+    else failed = true;
+  }
+  return { lines, count: groups.size, failed };
+}
+
+// Workflow inputs kept only when quoted from the question and valid for the slot.
+function slotInputs(choice = {}, slots = {}, question = '') {
+  const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi');
+  const { validateValue } = require('../../automation/contract');
+  const inputs = {};
+  for (const [name, raw] of Object.entries(choice.inputs || {})) {
+    const slot = slots?.[name], quote = choice.evidence?.[name];
+    if (!slot || typeof quote !== 'string' || !quote.trim() || !fold(question).includes(fold(quote))) continue;
+    const type = slot.schema?.type;
+    const value = ['integer', 'number'].includes(type) ? Number(raw) : type === 'boolean' ? raw === true || /^(true|1|có|co|yes)$/i.test(String(raw).trim()) : String(raw);
+    if (!validateValue(value, slot.schema, name).length) inputs[name] = value;
+  }
+  return inputs;
+}
+
+// Conversation stays on v2 unless an external (MCP) tool may be needed.
+async function conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step }) {
+  if ((toolContext.allowedToolNames || []).some(name => name.startsWith('mcp_'))) return { fallback: 'V2_EXTERNAL_TOOLS' };
+  return require('./conversation_answer').chat({ question, conversation, dispatch, plan, context, previousTurns, step });
 }
 
 function exportFormat(contract, plan) {
@@ -260,17 +481,13 @@ async function runWorkflow(contract, workflows, question, toolManager, toolConte
   const choice = contract.workflow || {};
   const item = workflows.find(workflow => workflow.templateId === choice.templateId);
   if (!item) return { reason: `workflow ${choice.templateId} is not in WORKFLOWS` };
-  const { validateValue } = require('../../automation/contract');
-  const inputs = {};
-  for (const [name, raw] of Object.entries(choice.inputs || {})) {
-    const slot = item.inputs?.[name], quote = choice.evidence?.[name];
-    if (!slot || typeof quote !== 'string' || !quote.trim() || !fold(question).includes(fold(quote))) continue;
-    const type = slot.schema?.type;
-    const value = ['integer', 'number'].includes(type) ? Number(raw) : type === 'boolean' ? raw === true || /^(true|1|có|co|yes)$/i.test(String(raw).trim()) : String(raw);
-    if (!validateValue(value, slot.schema, name).length) inputs[name] = value;
+  const args = { templateId: item.templateId, inputs: slotInputs(choice, item.inputs, question) };
+  let execution = await toolManager.executeTool('run_workflow', args, toolContext);
+  // A malformed suitability answer is a formatting error, not a rejection: assess once more.
+  if (!execution.success && execution.code === 'WORKFLOW_ASSESSMENT_INVALID') {
+    step('V2_WORKFLOW_ASSESSMENT_RETRY', { templateId: item.templateId });
+    execution = await toolManager.executeTool('run_workflow', args, toolContext);
   }
-  const args = { templateId: item.templateId, inputs };
-  const execution = await toolManager.executeTool('run_workflow', args, toolContext);
   const state = execution.result?.execution;
   step('V2_WORKFLOW', { templateId: item.templateId, success: execution.success, code: execution.code || null, status: state?.status || null });
   if (!execution.success) return { reason: execution.error || execution.code || 'workflow rejected' };
@@ -330,7 +547,14 @@ function render(compiled, call, question) {
     } else body = require('../harness/grounded_reply').buildSqlRowsFallbackReply(call, {}, { forceTable: rows.length > 1 });
   }
   const more = call.result.hasMore ? `\n\nĐang hiển thị ${rows.length} dòng đầu; dữ liệu có thể còn thêm.` : '';
-  return `${scope ? `${scope}\n\n` : ''}${body}${more}`;
+  // Matching records exist (SUM is 0, not NULL) yet every value is 0: the
+  // column is probably not filled in, which "= 0" alone would hide.
+  const blank = measures.filter(item => ['SUM', 'AVG'].includes(item.aggregation)
+    && rows.every(row => row[item.alias] === 0 || row[item.alias] === '0'));
+  const note = blank.length ? `\n\nLưu ý: ${blank.map(item => `**${item.alias}**`).join(', ')} bằng 0 ở mọi bản ghi khớp điều kiện; cột này có thể chưa được nhập dữ liệu.` : '';
+  const basis = measures.filter(item => item.column).map(item => `${item.alias} = ${item.aggregation}(${item.column})`);
+  const method = basis.length ? `Cách tính: ${basis.join('; ')}.\n\n` : '';
+  return `${scope ? `${scope}\n` : ''}${scope && !method ? '\n' : ''}${method}${body}${more}${note}`;
 }
 
-module.exports = { run, render, decode, carryFilters, uncovered, chartArgs, describeWorkflows, contractSchema };
+module.exports = { run, render, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, contractSchema };

@@ -79,3 +79,67 @@ test('an export request writes every verified row and links the file', async t =
   assert.equal(seen.exports[0].format, 'xlsx');
   assert.match(result.replyText, /\/api\/exports\/file\.xlsx/);
 });
+
+async function runForm(t, { contracts = [], answers = [], context = {}, enabledToolNames, question, rows = [], pendingInput = null }) {
+  process.env.HARNESS_PIPELINE = 'v2';
+  t.after(() => { delete process.env.HARNESS_PIPELINE; });
+  t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [{ ...table,
+    columns: [...table.columns, { columnName: 'Dept', dataType: 'NVARCHAR', displayName: 'Phòng' }] }]);
+  t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => []);
+  t.mock.method(require('../src/backend/governance/workflow_tools'), 'pendingInput', async () => pendingInput);
+  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent_core/tools/base_tool');
+  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const manager = new Manager(), seen = { resumes: [], exports: [] };
+  const register = (name, run) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = run; manager.registerTool(tool); };
+  register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['TestRows'], tableDirectory: [{ tableName: 'TestRows' }], intentCatalog: [], tables: [] }));
+  register('execute_sql_query', async args => ({ sql: args.sql, rows }));
+  register('resume_workflow', async args => { seen.resumes.push(args); return { runId: args.runId, execution: { id: args.runId, status: 'SUCCEEDED', name: 'Báo cáo' } }; });
+  register('export_data', async args => { seen.exports.push(args); return { downloadUrl: `/api/exports/${args.filename}.xlsx` }; });
+  const pendingContracts = [...contracts], pendingAnswers = [...answers];
+  const harness = new Harness({ toolManager: manager, dispatch: async (_provider, _messages, definitions) => {
+    if (definitions[0]?.function?.name === 'plan_query') return call('plan_query', pendingContracts.shift());
+    return { content: pendingAnswers.shift() || '' };
+  } });
+  const result = await harness.run({ userMessage: question, provider: { id: 'fixture', supportsToolCalling: true },
+    enabledToolNames: enabledToolNames || ['search_schema', 'execute_sql_query', 'resume_workflow', 'export_data'],
+    context: { governedController: true, lockProvider: true, dbSourceId: 's', requestPlan: { outputs: { data: true } }, ...context } });
+  return { result, seen };
+}
+
+test('grounded document answers are repaired once when a citation is missing', async t => {
+  const evidence = [{ citationIndex: 1, payload: { title: 'Quy chế', fullText: 'Nghỉ phép 12 ngày.' } }];
+  const { result } = await runForm(t, { question: 'Nghỉ phép bao nhiêu ngày?', enabledToolNames: [],
+    answers: ['Nhân viên được nghỉ 12 ngày.', 'Nhân viên được nghỉ 12 ngày [1].'],
+    context: { mode: 'knowledge', knowledgeGrounding: { required: true, documentContext: 'Tài liệu 1: Nghỉ phép 12 ngày.' }, citationEvidence: evidence, requestPlan: { outputs: { data: false } } } });
+  assert.equal(result.replyText, 'Nhân viên được nghỉ 12 ngày [1].');
+  assert.equal(result.trace.pipeline, 'v2');
+  assert.equal(result.citationEvidence.length, 1);
+});
+
+test('conversation is answered in v2 instead of falling back to the agent loop', async t => {
+  const { result } = await runForm(t, { question: 'Cảm ơn bạn nhé', contracts: [{ kind: 'chat' }], answers: ['Rất vui được hỗ trợ bạn!'] });
+  assert.equal(result.replyText, 'Rất vui được hỗ trợ bạn!');
+  assert.equal(result.trace.pipeline, 'v2');
+  assert.ok(!result.trace.steps.some(step => step.type === 'V2_FALLBACK'));
+});
+
+test('a waiting workflow resumes with question-grounded inputs only', async t => {
+  const pendingInput = { runId: 'run-9', revision: 3, name: 'Báo cáo', inputs: {
+    months: { label: 'Số tháng', ask: 'Bao nhiêu tháng?', schema: { type: 'integer', minimum: 1, maximum: 24 } },
+    exportFile: { label: 'Xuất file', ask: 'Có xuất file không?', schema: { type: 'boolean' } } } };
+  const { result, seen } = await runForm(t, { question: '3 tháng, không cần', pendingInput,
+    contracts: [{ kind: 'resume', workflow: { inputs: { months: 3, exportFile: false }, evidence: { months: '3 tháng', exportFile: 'không xuất' } } }] });
+  // exportFile quoted "không xuất" is not in the message, so only months is sent.
+  assert.deepEqual(seen.resumes, [{ runId: 'run-9', revision: 3, inputs: { months: 3 } }]);
+  assert.ok(result.trace.steps.some(step => step.type === 'WORKFLOW_TOOL_HANDOFF'));
+});
+
+test('one file per group is exported from the verified rows of each group', async t => {
+  const rows = [{ ID: 1, Phòng: 'CSKH' }, { ID: 2, Phòng: 'Kỹ thuật' }, { ID: 3, Phòng: 'CSKH' }];
+  const { result, seen } = await runForm(t, { question: 'Xuất danh sách mỗi phòng một file excel', rows,
+    context: { requestPlan: { outputs: { data: true, export: true } } },
+    contracts: [{ kind: 'data', root: 'TestRows', operation: 'list', output: { export: 'xlsx', splitBy: 'TestRows.Dept' } }] });
+  assert.deepEqual(seen.exports.map(item => [item.filename, item.data.length]), [['Bao_cao_CSKH', 2], ['Bao_cao_Ky_thuat', 1]]);
+  assert.match(result.replyText, /\[CSKH\]\(\/api\/exports\/Bao_cao_CSKH\.xlsx\) — 2 bản ghi/);
+});

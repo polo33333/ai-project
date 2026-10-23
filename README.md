@@ -212,6 +212,8 @@ LOCAL_MODEL_MAX_MODEL_CALLS=12
 LOCAL_MODEL_MAX_SQL_CALLS=3
 AI_PROVIDER_GUARDS_ENABLED=true
 AI_PROVIDER_MAX_REPAIRS=2
+# v2 = luồng dữ liệu hợp đồng trước (xem "Harness dữ liệu v2"); bỏ trống = vòng agent cũ
+HARNESS_PIPELINE=v2
 
 # SQL relationship và join enrichment
 SQL_RELATIONSHIP_DISCOVERY_ENABLED=false
@@ -225,6 +227,11 @@ MEMORY_PENDING_TURN_ENABLED=true
 MEMORY_CONTEXT_BUDGET_ENABLED=true
 MEMORY_SUMMARY_ENABLED=true
 MEMORY_SEMANTIC_ROUTING_ENABLED=false
+# Hạn mức phiên áp theo từng tài khoản trước, tổng hệ thống chỉ là chặn dự phòng
+AI_MEMORY_MAX_SESSIONS_PER_ACCOUNT=200
+AI_MEMORY_MAX_SESSIONS=5000
+# Nhật ký lượt (mọi lượt kể cả PARTIAL, hợp đồng v2, 20 dòng kết quả đầu) dùng cho hỏi nối tiếp/tham chiếu dòng
+AI_MEMORY_MAX_TURNS=20
 
 # Chat/workflow routing
 CHAT_ROUTING_MODE=auto
@@ -389,6 +396,39 @@ Node.js HTTP Server
   |-- MCP Client ---------------> MCP servers (stdio/HTTP/SSE)
   `-- Async Storage -------------> PostgreSQL app schema + document outbox
 ```
+
+### Harness dữ liệu v2 và khi đổi nguồn SQL
+
+Bật bằng `HARNESS_PIPELINE=v2` (cần restart). Mã nguồn ở `src/backend/agent_core/pipeline/`. Với câu hỏi dữ liệu, luồng chạy:
+
+1. Lấy schema bằng code (`search_schema`), bổ sung bảng tra cứu nối trực tiếp và bảng của câu hỏi trước.
+2. Một lần gọi model để lập **hợp đồng truy vấn**: bảng gốc, cột, phép đo, bộ lọc kèm trích dẫn từ câu hỏi, đầu ra (biểu đồ/xuất file) hoặc workflow phù hợp. Model không viết SQL.
+3. Code kiểm tra hợp đồng: mọi mã/ngày/năm trong câu hỏi phải có trong bộ lọc, giá trị lọc phải trích từ câu hỏi, không so chữ với cột ID số. Sai thì model được sửa một lần với lý do cụ thể.
+4. Bộ biên dịch sinh T-SQL: JOIN chỉ theo quan hệ nhiều-một đã xác minh (không thể nhân bản dòng), kỳ thời gian là khoảng nửa mở, khóa ngoại hiển thị bằng cột hiển thị theo vai trò. SQL phải qua JOIN validator và bộ kiểm tra bộ lọc dùng chung trước khi chạy.
+5. Câu trả lời, biểu đồ và file xuất dựng bằng code từ chính các dòng kết quả. Kết quả rỗng do sai chữ (ví dụ "Phòng Kỹ thuật" so với "Kỹ thuật") được dò lại trong cột; nhiều ứng viên thì hỏi lại người dùng.
+
+Câu hội thoại/tài liệu, workflow đang chờ input, xuất mỗi nhóm một file, hoặc hợp đồng vẫn sai sau một lần sửa sẽ chuyển sang vòng agent cũ (`guarded_agent_harness`).
+
+**Không có tên bảng/cột của một database cụ thể trong code.** Mọi thứ lấy từ Từ điển dữ liệu của nguồn đang chọn; đổi nguồn giữa cuộc chat thì hợp đồng của câu trước không được dùng lại. Chất lượng câu trả lời phụ thuộc metadata. Khi thêm hoặc đổi nguồn SQL:
+
+| Việc cần làm (trong ứng dụng, không sửa code) | Nếu thiếu |
+|---|---|
+| Thêm nguồn, đồng bộ Từ điển dữ liệu, bật các bảng cần dùng | Không có bảng để trả lời |
+| Khai báo và **xác minh quan hệ** khóa ngoại → bảng tra cứu, kèm vai trò và cột hiển thị (kiểm tra dữ liệu trước khi xác minh) | Chỉ trả lời được câu trên một bảng; lọc theo mã khách hàng, tên phòng ban, trạng thái… sẽ không ghép bảng được |
+| Đặt **nhãn hiển thị** cho cột quan trọng, nhất là cột tiền/số lượng; ẩn khỏi AI các cột không dùng | Model chọn nhầm cột cùng nghĩa (ví dụ cột tiền toàn giá trị 0) |
+| Khai báo mô hình ngữ nghĩa của bảng: thực thể, cột ngày nghiệp vụ, chỉ số mặc định, cột tiền, cột hiển thị trong danh sách | Danh sách thiếu cột ngày/số tiền, chọn sai cột ngày |
+| Mã danh mục dùng chung (bảng hằng số/master) phải nối qua đúng khóa ngoại của vai trò đó | Một bảng tra cứu nhiều vai trò sẽ bị báo nhập nhằng |
+
+Giới hạn: chỉ hỗ trợ **SQL Server** (driver `tedious`, bộ biên dịch sinh T-SQL). MySQL/PostgreSQL làm nguồn dữ liệu cần thêm driver và cú pháp.
+
+Đo chất lượng trên model và dữ liệu thật (SQL chỉ đọc, mỗi ca một phiên chat `eval-…`):
+
+```powershell
+$env:HARNESS_PIPELINE='v2'; node scripts/eval/live_harness_eval.js --label v2
+$env:HARNESS_PIPELINE='v1'; node scripts/eval/live_harness_eval.js --label v1
+```
+
+Bộ câu hỏi và đáp án ở `tests/fixtures/live_eval_cases.json` viết cho dữ liệu IPMS; nguồn khác cần bộ ca và đáp án riêng (đáp án lấy bằng SQL viết tay, không lấy từ câu trả lời của model). Kết quả lưu ở `artifacts/live-eval/`. Script đọc `.env`, nên phải đặt `HARNESS_PIPELINE` rõ ràng khi so sánh hai luồng.
 
 Backend dùng `node:http` hoặc `node:https` khi cấu hình TLS, chưa dùng Fastify. Dữ liệu ứng dụng lưu PostgreSQL qua `storage.run/flush` bất đồng bộ; service thao tác view riêng từng operation. Commit hợp nhất thay đổi theo record trong transaction ngắn. HTTP success/cookie và SSE final chỉ gửi sau commit; progress SSE vẫn truyền khi xử lý. File tài liệu/export ở filesystem, dữ liệu nghiệp vụ ở SQL Server, vector ở Qdrant. Redis/BullMQ và parser/embedding Python service vẫn là định hướng.
 

@@ -273,12 +273,17 @@ class GuardedAgentHarness {
     // loop below, which starts clean.
     // Pending workflow inputs, workflow-result follow-ups and one-file-per-group
     // exports stay on the agent loop.
-    if (process.env.HARNESS_PIPELINE === 'v2' && context.governedController && !plan.codeOnly && !pendingInput && !context.webSearch
-      && !plan.exportRequest?.separate && !toolContext.workflowReference
-      && !context.knowledgeGrounding?.required && ['search_schema', 'execute_sql_query'].every(name => toolContext.allowedToolNames.includes(name))) {
+    if (process.env.HARNESS_PIPELINE === 'v2' && context.governedController && !plan.codeOnly && !context.webSearch && !toolContext.workflowReference) {
       try {
-        const v2 = await require('../pipeline/contract_pipeline').run({ question, plan, context, toolContext, dispatch,
-          toolManager: this.toolManager, trace, toolCalls, requestTime });
+        // Documents already retrieved: grounded answer. No data tools: conversation.
+        // Otherwise the contract pipeline (data, workflows, pending inputs, chat).
+        const dataTools = ['search_schema', 'execute_sql_query'].every(name => toolContext.allowedToolNames.includes(name));
+        const v2 = context.knowledgeGrounding?.required
+          ? await require('../pipeline/conversation_answer').documents({ conversation, dispatch, plan, context })
+          : !dataTools ? (toolContext.allowedToolNames.some(name => name.startsWith('mcp_')) ? { fallback: 'V2_EXTERNAL_TOOLS' }
+            : await require('../pipeline/conversation_answer').chat({ question, conversation, dispatch, plan, context }))
+          : await require('../pipeline/contract_pipeline').run({ question, plan, context, toolContext, dispatch,
+            toolManager: this.toolManager, trace, toolCalls, requestTime, conversation, pendingInput });
         if (v2.handoff) {
           const state = v2.handoff;
           trace.pipeline = 'v2';
@@ -291,7 +296,7 @@ class GuardedAgentHarness {
           return { replyText: text, toolCalls, usedProvider: activeProvider, providerFallbacks, tokenUsage: trace.tokenUsage, trace, conversation };
         }
         if (v2.reply) {
-          plan.v2 = { contract: v2.contract, question };
+          plan.v2 = { contract: v2.contract, question, dbSourceId: v2.dbSourceId || toolContext.dbSourceId || null };
           if (v2.compiled) {
             plan.requestFilters = v2.compiled.requestFilters;
             plan.table = v2.compiled.root;
@@ -303,15 +308,22 @@ class GuardedAgentHarness {
           trace.training.responseEvaluation = { valid: succeeded, score: succeeded ? 1 : 0, failures: succeeded ? [] : [`V2_${v2.status}`] };
           trace.executionBudget = budget.snapshot(); trace.durationMs = Date.now() - trace.startTime;
           emitProgress(onProgress, { type: 'request_completed', label: 'Đã hoàn thành câu trả lời', status: 'done', icon: 'check', durationMs: trace.durationMs });
-          return { replyText: security.maskSensitiveData(v2.reply), toolCalls, citationEvidence: [], usedProvider: activeProvider,
+          return { replyText: security.maskSensitiveData(v2.reply), toolCalls, citationEvidence: v2.citationEvidence || [], usedProvider: activeProvider,
             providerFallbacks, tokenUsage: trace.tokenUsage, trace, conversation };
         }
-        trace.steps.push({ type: 'V2_FALLBACK', code: v2.fallback });
+        trace.steps.push({ type: 'V2_FALLBACK', code: v2.fallback || 'V2_NO_ANSWER' });
       } catch (error) {
         if (context.signal?.aborted) throw aborted();
         trace.steps.push({ type: 'V2_FALLBACK', code: error.code || 'V2_ERROR', detail: String(error.message).slice(0, 200) });
       }
-      toolCalls.length = 0;
+      // The agent loop starts clean, but the v2 attempt stays as evidence: its
+      // contract, decisions and tool calls are kept in the trace and audit.
+      const fallback = [...trace.steps].reverse().find(step => step.type === 'V2_FALLBACK');
+      trace.v2Attempt = { fallbackCode: fallback?.code || null,
+        contract: [...trace.steps].reverse().find(step => step.type === 'V2_CONTRACT')?.contract || null,
+        steps: trace.steps.filter(step => /^V2_/.test(step.type)).map(({ contract, ...step }) => step),
+        toolCalls: toolCalls.splice(0).map(call => ({ toolName: call.toolName, success: call.success, code: call.code || null,
+          error: call.error ? String(call.error).slice(0, 300) : null, sql: call.args?.sql || null, rowCount: call.result?.rows?.length ?? null })) };
     }
 
     // Plain lists are fully defined by the reviewed schema and relationship

@@ -23,7 +23,11 @@ class MemoryService {
     if (!this.store.sessions || typeof this.store.sessions !== 'object') this.store.sessions = {};
     this.maxStored = Math.max(4, Number.parseInt(process.env.AI_MEMORY_MAX_MESSAGES || '40', 10));
     this.maxStored -= this.maxStored % 2;
-    this.maxSessions = Math.max(20, Number.parseInt(process.env.AI_MEMORY_MAX_SESSIONS || '500', 10));
+    // Caps apply per account first: one account (or an evaluation script) must
+    // never push other accounts' conversations out. The global cap is a backstop.
+    this.maxSessions = Math.max(20, Number.parseInt(process.env.AI_MEMORY_MAX_SESSIONS || '5000', 10));
+    this.maxSessionsPerAccount = Math.max(10, Number.parseInt(process.env.AI_MEMORY_MAX_SESSIONS_PER_ACCOUNT || '200', 10));
+    this.maxTurns = Math.max(4, Number.parseInt(process.env.AI_MEMORY_MAX_TURNS || '20', 10));
     this.migrateStore();
   }
 
@@ -93,7 +97,7 @@ class MemoryService {
     if (!state && !session.documentState) return;
     session.documentState = state;
     session.updatedAt = new Date().toISOString();
-    this.pruneSessions();
+    this.pruneSessions(session.accountId);
     this.persist();
   }
 
@@ -216,7 +220,8 @@ class MemoryService {
       rowCount: dataset.rowCount, columns: dataset.columns || dataset.requiredColumns || [], updatedAt: dataset.updatedAt } });
     const recent = sanitizeMessages(session.messages.slice(-4), 1000);
     if (pending) recent.push({ role: 'user', content: pending.question }, { role: 'assistant', content: 'Yêu cầu này chưa hoàn tất; chưa có tham chiếu đối tượng được xác minh cho lượt này.' });
-    return { candidates, recent, referenceCutoff,
+    const turns = (session.turns || []).filter(turn => !currentPlan.dbSourceId || !turn.dbSourceId || turn.dbSourceId === currentPlan.dbSourceId).slice(-4);
+    return { candidates, recent, referenceCutoff, turns,
       previousRequest: session.conversationState ? { operation: session.conversationState.operation,
         cardinality: session.conversationState.cardinality, requestedAttributes: session.conversationState.requestedAttributes,
         businessState: fresh(session.businessState) ? session.businessState : undefined } : null };
@@ -287,7 +292,7 @@ class MemoryService {
       updatedAt: now
     });
     session.updatedAt = now;
-    this.pruneSessions();
+    this.pruneSessions(session.accountId);
     this.persist();
     return { recorded: true, pendingTurn: session.pendingTurn };
   }
@@ -338,6 +343,10 @@ class MemoryService {
 
   persistSuccessfulExchange({ sessionId, accountId = null, embedId = null, question, reply, currentPlan, toolCalls = [], completionStatus, responseEvaluation } = {}) {
     if (currentPlan?.independentWeb) return { persisted: false, reason: 'independent_web_search' };
+    // Every turn reaches the log before the quality gate; recordPendingTurn
+    // runs only after this returns unpersisted, so a turn is logged once.
+    const logged = this.recordTurn({ sessionId, accountId, question, reply, completionStatus, currentPlan, toolCalls });
+    if (logged.recorded) this.persist();
     if (policy.isEnabled() && !policy.canPersist({ completionStatus, responseEvaluation })) return { persisted: false, reason: 'quality_gate_rejected' };
     const userMessage = sanitizeMessage({ role: 'user', content: question }, 20000);
     const assistantMessage = sanitizeMessage({ role: 'assistant', content: reply }, 30000);
@@ -384,7 +393,7 @@ class MemoryService {
       });
     }
     session.updatedAt = now;
-    this.pruneSessions();
+    this.pruneSessions(session.accountId);
     this.persist();
     if (currentPlan?.workflowRunId || toolCalls.some(call => ['execute_sql_query', 'query_sql_metric'].includes(call.toolName) && call.success)) {
       require('./durable_memory').memory.recordEvent({ accountId, sessionId, question, currentPlan,
@@ -400,11 +409,40 @@ class MemoryService {
     }).session || null;
   }
 
-  pruneSessions() {
+  pruneSessions(accountId) {
+    const oldestFirst = ids => ids.sort((a, b) => Date.parse(this.store.sessions[a].updatedAt || 0) - Date.parse(this.store.sessions[b].updatedAt || 0));
+    if (accountId !== undefined) {
+      const own = oldestFirst(Object.keys(this.store.sessions).filter(id => (this.store.sessions[id].accountId || null) === (accountId || null)));
+      own.slice(0, Math.max(0, own.length - this.maxSessionsPerAccount)).forEach(id => delete this.store.sessions[id]);
+    }
     const ids = Object.keys(this.store.sessions);
-    if (ids.length <= this.maxSessions) return;
-    ids.sort((a, b) => Date.parse(this.store.sessions[a].updatedAt || 0) - Date.parse(this.store.sessions[b].updatedAt || 0));
-    ids.slice(0, ids.length - this.maxSessions).forEach(id => delete this.store.sessions[id]);
+    if (ids.length > this.maxSessions) oldestFirst(ids).slice(0, ids.length - this.maxSessions).forEach(id => delete this.store.sessions[id]);
+  }
+
+  // Append-only turn log: every answered turn, PARTIAL ones included, with the
+  // v2 query contract and a compact preview of the rows the user saw. Follow-ups
+  // and row references ("người thứ 2 ở trên") read this log; the success-only
+  // fields above stay for the legacy agent loop.
+  recordTurn({ sessionId, accountId = null, question, reply, completionStatus, currentPlan, toolCalls = [] } = {}) {
+    if (!policy.isEnabled() || currentPlan?.independentWeb) return { recorded: false };
+    const session = this.getSession(sessionId, true, accountId);
+    if (!session) return { recorded: false, reason: 'invalid_session' };
+    const now = new Date().toISOString();
+    const source = [...toolCalls].reverse().find(call => ['execute_sql_query', 'query_sql_metric'].includes(call.toolName)
+      && call.success && Array.isArray(call.result?.rows));
+    const rows = source?.result.rows || [];
+    const columns = rows.length ? Object.keys(rows[0]).slice(0, 8) : [];
+    const cell = value => value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === 'string' ? value.slice(0, 80) : value ?? null;
+    const turn = sanitizeObject({ id: crypto.randomUUID(), at: now, question: String(question || '').slice(0, 2000),
+      reply: sanitizeMessage({ role: 'assistant', content: reply || '' }, 3000)?.content || '',
+      status: String(completionStatus || 'UNKNOWN').slice(0, 40),
+      dbSourceId: currentPlan?.v2?.dbSourceId || currentPlan?.dbSourceId || null,
+      contract: currentPlan?.v2?.contract || null,
+      result: source ? { rowCount: rows.length, hasMore: Boolean(source.result.hasMore), columns,
+        preview: rows.slice(0, 20).map(row => columns.map(column => cell(row[column]))) } : null });
+    session.turns = [...(session.turns || []), turn].slice(-this.maxTurns);
+    session.updatedAt = now;
+    return { recorded: true, turn };
   }
 
   clearSession(sessionId, accountId = null) {

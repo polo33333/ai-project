@@ -19,7 +19,7 @@ const text = value => `N'${String(value).replaceAll("'", "''")}'`;
 const isoDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value)) && !Number.isNaN(Date.parse(value)) ? String(value) : null;
 const dmy = value => value.split('-').reverse().join('/');
 
-function compile(contract, catalog, { question = '', previousQuestion = '' } = {}) {
+function compile(contract, catalog, { question = '', previousQuestion = '', resultValues = new Set() } = {}) {
   const root = catalogApi.table(catalog, contract.root);
   if (!root) throw fail('V2_ROOT_UNKNOWN', contract.root);
   const joins = [], joinAliases = new Map();
@@ -94,8 +94,16 @@ function compile(contract, catalog, { question = '', previousQuestion = '' } = {
     const type = ref.column.type, name = ref.label;
     const identity = { table: ref.entry.tableName, column: ref.column.name, schemaName: ref.entry.schemaName };
     const value = filter.value;
+    // Several periods ("2024-01 và 2024-02") are a union of half-open ranges.
+    if (DATE_TYPES.has(type) && ['eq', 'period', 'in'].includes(operator) && (filter.values?.length > 1 || operator === 'in')) {
+      const ranges = (filter.values?.length ? filter.values : [value]).map(item => ({ item, range: dateRange(item) }));
+      if (ranges.some(entry => !entry.range)) throw fail('V2_PERIOD_INVALID', ranges.find(entry => !entry.range).item);
+      where.push(`(${ranges.map(({ range }) => `(${ref.expr} >= '${range.from}' AND ${ref.expr} < '${range.to}')`).join(' OR ')})`);
+      scope.push(`${name}: ${ranges.map(({ range }) => `${dmy(range.from)} – trước ${dmy(range.to)}`).join('; ')}`);
+      continue;
+    }
     if (DATE_TYPES.has(type) && ['eq', 'period'].includes(operator)) {
-      const range = dateRange(value);
+      const range = dateRange(value ?? filter.values?.[0]);
       if (!range) throw fail('V2_PERIOD_INVALID', String(value));
       where.push(`${ref.expr} >= '${range.from}' AND ${ref.expr} < '${range.to}'`);
       requestFilters.push({ ...identity, value, ...range, dateOnly: type === 'date' });
@@ -117,12 +125,26 @@ function compile(contract, catalog, { question = '', previousQuestion = '' } = {
       where.push(`${ref.expr} IS ${operator === 'isNull' ? '' : 'NOT '}NULL`); scope.push(`${name} ${operator === 'isNull' ? 'trống' : 'có giá trị'}`);
       continue;
     }
-    const values = operator === 'in' ? filter.values || [] : [value];
+    // A flag ("hiện hữu", "đang hoạt động") only has two values; its grounding
+    // is the quoted evidence, already checked above.
+    if (type === 'bit' && ['eq', 'ne'].includes(operator)) {
+      const flag = { true: 1, false: 0, 1: 1, 0: 0 }[String(value).toLowerCase()];
+      if (flag === undefined) throw fail('V2_FILTER_TYPE', `${ref.column.name} = ${value}`);
+      const on = operator === 'eq' ? flag : 1 - flag;
+      where.push(on ? `${ref.expr} = 1` : `(${ref.expr} = 0 OR ${ref.expr} IS NULL)`);
+      scope.push(`${name}: ${on ? 'có' : 'không'} ("${filter.evidence}")`);
+      continue;
+    }
+    const values = ['in', 'notIn'].includes(operator) ? filter.values || [] : [value];
     if (!values.length || values.some(item => item === undefined || item === null || item === '')) throw fail('V2_FILTER_VALUE_REQUIRED', filter.ref);
     // A code or name never matches a numeric ID column: that needs a lookup.
     if (NUMERIC_TYPES.has(type) && values.some(item => !Number.isFinite(Number(item)))) throw fail('V2_FILTER_TYPE', `${ref.column.name} = ${values.join(',')}`);
     const asked = filter.resolvedFrom !== undefined ? [filter.resolvedFrom] : values;
-    if (asked.some(item => !source.includes(fold(item)) && !evidence.includes(fold(item)))) throw fail('V2_FILTER_UNGROUNDED', `${filter.ref} = ${values.join(',')}`);
+    // A row reference ("người thứ 2 ở trên") is grounded by its quote in the
+    // question plus a value the user actually saw in a previous result.
+    const grounded = filter.fromResult ? asked.every(item => resultValues.has(fold(item)))
+      : asked.every(item => source.includes(fold(item)) || evidence.includes(fold(item)));
+    if (!grounded) throw fail('V2_FILTER_UNGROUNDED', `${filter.ref} = ${values.join(',')}${filter.fromResult ? ' (not in the previous result)' : ''}`);
     if (operator === 'eq' && !NUMERIC_TYPES.has(type)) textFilters.push({ index: filterIndex, ...identity });
     const sqlValues = values.map(item => NUMERIC_TYPES.has(type) ? String(Number(item)) : text(item));
     if (operator === 'contains') {
@@ -130,6 +152,10 @@ function compile(contract, catalog, { question = '', previousQuestion = '' } = {
       where.push(`${ref.expr} LIKE ${text(`%${escaped}%`)}`); scope.push(`${name} chứa "${value}"`);
     } else if (operator === 'in') {
       where.push(`${ref.expr} IN (${sqlValues.join(', ')})`); scope.push(`${name}: ${values.join(', ')}`);
+    } else if (operator === 'ne' || operator === 'notIn') {
+      // "Không phải X" keeps records whose lookup is empty: NULL is not X.
+      const test = operator === 'ne' ? `${ref.expr} <> ${sqlValues[0]}` : `${ref.expr} NOT IN (${sqlValues.join(', ')})`;
+      where.push(`(${test} OR ${ref.expr} IS NULL)`); scope.push(`${name} không phải: ${values.join(', ')}`);
     } else if (operator === 'eq') {
       where.push(`${ref.expr} = ${sqlValues[0]}`); scope.push(`${name} = ${value}`);
       requestFilters.push({ ...identity, value: NUMERIC_TYPES.has(type) ? Number(value) : value });
@@ -157,7 +183,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '' } = {
       if (measure.ref === '*') {
         if (aggregation !== 'COUNT') throw fail('V2_AGGREGATION_INVALID', `${aggregation}(*)`);
         const alias = label(measure.label && !/^[A-Za-z0-9_]+$/.test(measure.label) ? measure.label : 'Số bản ghi', root);
-        select.push(`COUNT(*) AS ${quote(alias)}`); outputs.push({ alias, kind: 'measure' });
+        select.push(`COUNT(*) AS ${quote(alias)}`); outputs.push({ alias, kind: 'measure', aggregation: 'COUNT' });
         continue;
       }
       const ref = resolve(measure.ref);
@@ -167,13 +193,18 @@ function compile(contract, catalog, { question = '', previousQuestion = '' } = {
       const named = measure.label && !/^[A-Za-z0-9_]+$/.test(measure.label) ? measure.label : null;
       const alias = label(named || `${AGGREGATE_LABELS[aggregation]} ${ref.label}`, ref.entry);
       select.push(`${aggregation}(${aggregation === 'COUNT' && measure.distinct ? 'DISTINCT ' : ''}${ref.expr}) AS ${quote(alias)}`);
-      outputs.push({ alias, kind: 'measure' });
+      outputs.push({ alias, kind: 'measure', aggregation, column: ref.column.name });
     }
   } else {
     // Default list: configured summary fields plus the business date and the
     // main labeled amount, so "liệt kê hóa đơn" shows when and how much.
     const money = (root.money || []).map(name => root.columns.get(key(name))).filter(item => item?.label);
-    const amount = money.find(item => /final|sau thuế/i.test(`${item.name} ${item.label}`)) || money[0];
+    // Exactly one labeled after-tax amount (or a single labeled amount) is the
+    // main amount; several candidates are ambiguous, so none is guessed.
+    // A money column configured in the table's list fields is the main amount.
+    const finals = money.filter(item => /final|sau thuế/i.test(`${item.name} ${item.label}`));
+    const amount = money.find(item => root.defaults.some(name => key(name) === key(item.name)))
+      || (finals.length === 1 ? finals[0] : !finals.length && money.length === 1 ? money[0] : null);
     const chosen = contract.fields?.length ? [...contract.fields] : [];
     // A transaction list without any amount column gets the main amount.
     if (chosen.length && amount && !chosen.some(field => (root.money || []).some(name => key(String(field).split('->').pop().split('.').pop()) === key(name))))
@@ -187,7 +218,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '' } = {
       if (seen.has(ref.expr)) continue;
       seen.add(ref.expr);
       const alias = label(ref.label, ref.entry);
-      select.push(`${ref.expr} AS ${quote(alias)}`); outputs.push({ alias, kind: 'field' });
+      select.push(`${ref.expr} AS ${quote(alias)}`); outputs.push({ alias, kind: 'field', ref: field });
     }
   }
 

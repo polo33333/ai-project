@@ -7,14 +7,19 @@
 const MAX_TABLES = 10;
 const key = value => String(value ?? '').trim().toLowerCase();
 
-function build(selection, { include = [], dictionary = require('../../services/dictionary_service'),
+function build(selection, { include = [], policy = null, dictionary = require('../../services/dictionary_service'),
   relationships = require('../../services/relationship_service') } = {}) {
   const dbSourceId = selection.dbSourceId;
   const authorized = new Set([...(selection.tableDirectory || []).map(item => key(item.tableName)),
     ...(selection.intentCatalog || []).map(item => key(item.tableName))]);
   const all = dictionary.getGroupedTables().filter(table => table.isActive !== false && table.dbSourceId === dbSourceId
     && authorized.has(key(table.tableName)));
-  // Blocked columns arrive hidden in the selection; keep that visibility.
+  // The source policy's blocked columns never reach the model, matching the
+  // connector rule (blocked by column name in every table). The governed copy
+  // of the source in this request wins over the cached one.
+  const source = require('../../governance/context').current()?.resources.get(`sql:${dbSourceId}`)?.resource
+    || require('../../services/sql_connector').dbSources.find(item => item.id === dbSourceId);
+  const blocked = new Set((policy || source?.governedPolicy?.blockedColumns || []).map(key));
   const hidden = new Set((selection.intentCatalog || []).flatMap(table => (table.columns || [])
     .filter(column => column.isVisible === false).map(column => `${key(table.tableName)}.${key(column.name)}`)));
   const verified = relationships.verifiedRelationships({ dbSourceId })
@@ -29,7 +34,8 @@ function build(selection, { include = [], dictionary = require('../../services/d
   const tables = new Map();
   for (const name of names) {
     const table = byName.get(name);
-    const columns = new Map(table.columns.filter(column => column.isVisible !== false && !hidden.has(`${name}.${key(column.columnName)}`))
+    const columns = new Map(table.columns.filter(column => column.isVisible !== false && !blocked.has(key(column.columnName))
+      && !hidden.has(`${name}.${key(column.columnName)}`))
       .map(column => [key(column.columnName), { name: column.columnName, type: String(column.dataType || '').toLowerCase().split('(')[0],
         label: column.displayName || '', pk: Boolean(column.isPrimaryKey) }]));
     const model = table.semanticModel || {};

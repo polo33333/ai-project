@@ -26,6 +26,9 @@ function buildChatDiagnostics(trace) {
       metadataAvailable: trace.requestContract.completeness?.metadataAvailable
     } : null,
     harness: trace.harness,
+    pipeline: trace.pipeline || null,
+    v2Attempt: trace.v2Attempt || null,
+    v2Contract: plan.v2?.contract || null,
     executionBudget: trace.executionBudget,
     stopReason: trace.stopReason,
     workflowRouting: routing ? {

@@ -11,7 +11,7 @@ const catalog = {
   tables: new Map([
     table('T_ElectricityOutput', [['ElectricityOutputID', 'int', 'ID chứng từ', true], ['ElectricityOutputDate', 'datetime', 'Ngày chứng từ'],
       ['CustomerID', 'int'], ['PeriodID', 'int'], ['ElectricityTypeID', 'smallint'], ['TotalQty', 'float', 'Sản lượng'], ['FinalTotalAmount', 'float', 'Tiền sau thuế']], ['ElectricityOutputID']),
-    table('M_Customer', [['CustomerID', 'int', '', true], ['CustomerCode', 'nvarchar', 'Mã khách hàng'], ['CustomerName', 'nvarchar', 'Tên khách hàng'], ['TypeID', 'int']]),
+    table('M_Customer', [['CustomerID', 'int', '', true], ['CustomerCode', 'nvarchar', 'Mã khách hàng'], ['CustomerName', 'nvarchar', 'Tên khách hàng'], ['TypeID', 'int'], ['IsActive', 'bit', 'Đang hoạt động']]),
     table('M_Master', [['MasterID', 'int', '', true], ['Name', 'nvarchar', 'Tên']]),
     table('M_Constant', [['ConstantID', 'int', '', true], ['ConstantName', 'nvarchar', 'Tên hằng']]),
     table('M_Employee', [['EmployeeID', 'int', '', true], ['EmployeeCode', 'nvarchar', 'Mã NV'], ['EmployeeName', 'nvarchar', 'Tên NV'], ['GenderID', 'int'], ['DepartmentID', 'int']], ['EmployeeCode', 'EmployeeName'])
@@ -99,4 +99,31 @@ test('transaction lists show the business date and main labeled amount', () => {
   assert.match(chosen.sql, /\[FinalTotalAmount\] AS \[Tiền sau thuế\]/);
   // An unlabeled money column is never picked as the main amount.
   assert.ok(!/PowerMoney/.test(defaults.sql));
+});
+
+test('row references are grounded by a value the user saw, not by the question text', () => {
+  const contract = { root: 'M_Employee', operation: 'list', fields: ['M_Employee.EmployeeName'],
+    filters: [{ ref: 'M_Employee.EmployeeCode', operator: 'eq', value: 'NV003', evidence: 'Người thứ 2', fromResult: true }] };
+  const question = 'Người thứ 2 trong danh sách trên tên là gì?';
+  assert.match(compile(contract, catalog, { question, resultValues: new Set(['nv002', 'nv003']) }).sql, /\[EmployeeCode\] = N'NV003'/);
+  // A value the previous result never showed is invented, and is rejected.
+  assert.throws(() => compile(contract, catalog, { question, resultValues: new Set(['nv002']) }), /V2_FILTER_UNGROUNDED/);
+  // The referring words must still come from the current question.
+  assert.throws(() => compile({ ...contract, filters: [{ ...contract.filters[0], evidence: 'NV003' }] }, catalog,
+    { question, resultValues: new Set(['nv003']) }), /V2_FILTER_UNGROUNDED/);
+});
+
+test('a flag filter is grounded by its quoted phrase and only accepts true or false', () => {
+  const question = 'Những khách hàng nào là khách hàng hiện hữu?';
+  const active = compile({ root: 'M_Customer', operation: 'list', fields: ['M_Customer.CustomerCode'],
+    filters: [{ ref: 'M_Customer.IsActive', operator: 'eq', value: true, evidence: 'khách hàng hiện hữu' }] }, catalog, { question });
+  assert.match(active.sql, /t0\.\[IsActive\] = 1/);
+  assert.deepEqual(active.scope, ['Đang hoạt động: có ("khách hàng hiện hữu")']);
+  const inactive = compile({ root: 'M_Customer', operation: 'list', fields: ['M_Customer.CustomerCode'],
+    filters: [{ ref: 'M_Customer.IsActive', operator: 'eq', value: 0, evidence: 'hiện hữu' }] }, catalog, { question });
+  assert.match(inactive.sql, /\(t0\.\[IsActive\] = 0 OR t0\.\[IsActive\] IS NULL\)/);
+  assert.throws(() => compile({ root: 'M_Customer', operation: 'list', fields: ['M_Customer.CustomerCode'],
+    filters: [{ ref: 'M_Customer.IsActive', operator: 'eq', value: 'có', evidence: 'hiện hữu' }] }, catalog, { question }), /V2_FILTER_TYPE/);
+  assert.throws(() => compile({ root: 'M_Customer', operation: 'list', fields: ['M_Customer.CustomerCode'],
+    filters: [{ ref: 'M_Customer.IsActive', operator: 'eq', value: 1, evidence: 'đang dùng' }] }, catalog, { question }), /V2_FILTER_UNGROUNDED/);
 });

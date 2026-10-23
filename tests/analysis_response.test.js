@@ -30,7 +30,7 @@ test('two observed months explain change, criteria and missing baseline without 
  assert.match(reply,/56\.905/);assert.match(reply,/94,54%/);
  assert.match(reply,/Tiêu chí/);assert.match(reply,/Giới hạn dữ liệu/);
  assert.ok(reply.indexOf('2024-01')<reply.indexOf('2024-02'));
- assert.match(reply,/không suy ra mức tiêu thụ thông thường/);
+ assert.match(reply,/không suy ra mức thông thường/);
  assert.equal(source.result.rows[0].Thang,2,'rendering never mutates source rows');
 });
 

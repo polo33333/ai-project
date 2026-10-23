@@ -68,6 +68,28 @@ async function ask(storage, account, sessionId, question, history) {
   }), { independent: true });
 }
 
+// Remove everything this run created (--keep retains it). The server's
+// automation worker finishes workflow runs started by the evaluation and then
+// writes their result into the conversation memory, so wait for those runs
+// first; deleting a session under a running worker causes DATA_CONFLICT.
+async function cleanup(storage, runId) {
+  const prefix = `eval-${runId}-`;
+  const pool = storage.getPool();
+  for (let waited = 0; waited < 120000; waited += 2000) {
+    const active = (await pool.query(`SELECT count(*)::int AS n FROM app.automation_runs WHERE document->>'conversationId' LIKE $1
+      AND document->>'status' IN ('READY', 'RUNNING')`, [`${prefix}%`])).rows[0].n;
+    if (!active) break;
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  await new Promise(resolve => setTimeout(resolve, 1500)); // deferred memory writes after a run commits
+  await pool.query(`DELETE FROM app.automation_runs WHERE document->>'conversationId' LIKE $1`, [`${prefix}%`]);
+  await storage.run(() => {
+    const memory = storage.read('conversation_memory.json', { sessions: {} });
+    storage.write('conversation_memory.json', { ...memory, sessions: Object.fromEntries(Object.entries(memory.sessions || {}).filter(([, session]) => !String(session.id).startsWith(prefix))) });
+    storage.write('episodic_memory.json', storage.read('episodic_memory.json', []).filter(record => !String(record.sessionId || '').startsWith(prefix)));
+  }, { files: ['conversation_memory.json', 'episodic_memory.json'] });
+}
+
 const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); return sorted.length ? sorted[Math.floor((sorted.length - 1) * q)] : null; };
 
 (async () => {
@@ -85,7 +107,7 @@ const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).
     for (const question of testCase.turns) {
       let turn;
       try { turn = await ask(storage, account, sessionId, question, structuredClone(history)); }
-      catch (error) { turn = { reply: '', error: error.code || error.message, latencyMs: null, modelCalls: null, inputTokens: null, status: 'EXCEPTION', failures: [] }; }
+      catch (error) { turn = { reply: '', error: error.code || error.message, stack: String(error.stack || '').split(/\r?\n/).slice(0, 6).join(' | '), latencyMs: null, modelCalls: null, inputTokens: null, status: 'EXCEPTION', failures: [] }; }
       turns.push({ question, ...turn });
       history.push({ role: 'user', content: question }, { role: 'assistant', content: turn.reply });
     }
@@ -110,6 +132,7 @@ const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).
   const outDir = path.join(root, 'artifacts', 'live-eval');
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, `${runId}.json`), JSON.stringify({ summary, results }, null, 2));
+  if (!args.keep) await cleanup(storage, runId);
   console.log(JSON.stringify(summary, null, 2));
   await storage.close();
 })().catch(error => { console.error('EVAL_FAILED', error.code || '', error.message); process.exitCode = 1; });

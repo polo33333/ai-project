@@ -141,7 +141,7 @@
       "id": "bill-ka-feb",
       "group": "filtered-aggregate",
       "turns": [
-        "Tiền điện trên hóa đơn của KA0021 trong 2024-02 là bao nhiêu?"
+        "Tiền hóa đơn điện sau thuế của KA0021 trong 2024-02 là bao nhiêu?"
       ],
       "must": [
         {
@@ -158,7 +158,7 @@
       "id": "bill-ka-feb-pretax",
       "group": "filtered-aggregate",
       "turns": [
-        "Tiền điện trước thuế của KA0021 tháng 2024-02 là bao nhiêu?"
+        "Tiền hóa đơn điện trước thuế của KA0021 tháng 2024-02 là bao nhiêu?"
       ],
       "must": [
         {
@@ -182,7 +182,7 @@
       "id": "bill-all-jan",
       "group": "aggregate",
       "turns": [
-        "Tổng tiền điện tháng 2024-01 của tất cả khách hàng là bao nhiêu?"
+        "Tổng tiền hóa đơn điện sau thuế tháng 2024-01 của tất cả khách hàng là bao nhiêu?"
       ],
       "must": [
         {
@@ -218,7 +218,7 @@
       "id": "bill-dc-2024",
       "group": "filtered-aggregate",
       "turns": [
-        "Tổng tiền điện của DC6011 trong năm 2024?"
+        "Tổng tiền hóa đơn điện sau thuế của DC6011 trong năm 2024?"
       ],
       "must": [
         {
@@ -230,7 +230,7 @@
       "id": "compare-ka",
       "group": "compare",
       "turns": [
-        "So sánh tiền điện của KA0021 giữa 2024-01 và 2024-02"
+        "So sánh tiền hóa đơn điện sau thuế của KA0021 giữa 2024-01 và 2024-02"
       ],
       "must": [
         {
@@ -245,7 +245,7 @@
       "id": "top-feb",
       "group": "ranking",
       "turns": [
-        "Khách hàng nào có tiền điện cao nhất tháng 2024-02?"
+        "Khách hàng nào có tiền hóa đơn điện sau thuế cao nhất tháng 2024-02?"
       ],
       "must": [
         {
@@ -275,7 +275,7 @@
       "id": "period-2-ka",
       "group": "period",
       "turns": [
-        "Tiền điện của KA0021 trong Kỳ 2 là bao nhiêu?"
+        "Tiền hóa đơn điện sau thuế của KA0021 trong Kỳ 2 là bao nhiêu?"
       ],
       "must": [
         {
@@ -306,7 +306,7 @@
       "id": "no-data-2025",
       "group": "empty",
       "turns": [
-        "Tiền điện của KA0021 tháng 2025-05 là bao nhiêu?"
+        "Tiền hóa đơn điện sau thuế của KA0021 tháng 2025-05 là bao nhiêu?"
       ],
       "must": [
         {
@@ -399,7 +399,7 @@
       "id": "followup-month",
       "group": "followup",
       "turns": [
-        "Tiền điện trên hóa đơn của KA0021 trong 2024-02 là bao nhiêu?",
+        "Tiền hóa đơn điện sau thuế của KA0021 trong 2024-02 là bao nhiêu?",
         "Còn tháng 2024-01 thì sao?"
       ],
       "must": [
@@ -417,7 +417,7 @@
       "id": "followup-customer",
       "group": "followup",
       "turns": [
-        "Tổng tiền điện của KA0021 trong tháng 2024-01?",
+        "Tổng tiền hóa đơn điện sau thuế của KA0021 trong tháng 2024-01?",
         "Còn khách hàng DC6011 thì sao?"
       ],
       "must": [
@@ -472,12 +472,18 @@
       ],
       "must": [
         {
-          "re": "đúng|chính xác|phải"
+          "re": "x001"
+        },
+        {
+          "re": "đúng|chính xác|phải|Cty dược ABC"
         }
       ],
       "mustNot": [
         {
           "re": "^Chưa thể hoàn tất"
+        },
+        {
+          "re": "không phải (là )?(của )?(khách hàng )?x001"
         }
       ]
     },
@@ -515,7 +521,7 @@
       "id": "chart-monthly",
       "group": "chart",
       "turns": [
-        "Vẽ biểu đồ tổng tiền điện theo tháng của khách hàng KA0021"
+        "Vẽ biểu đồ tổng tiền hóa đơn điện sau thuế theo tháng của khách hàng KA0021"
       ],
       "must": [
         {
@@ -559,6 +565,238 @@
       "mustTools": [
         "export_data"
       ]
+    },
+    {
+      "id": "mem-row-position",
+      "group": "memory",
+      "turns": [
+        "Danh sách nhân viên phòng CSKH sắp xếp theo mã nhân viên",
+        "Người thứ 2 trong danh sách trên tên là gì?"
+      ],
+      "must": [
+        "Demo2"
+      ],
+      "mustNot": [
+        "Demo4",
+        "Demo3"
+      ]
+    },
+    {
+      "id": "mem-filter-previous",
+      "group": "memory",
+      "turns": [
+        "Danh sách nhân viên phòng CSKH",
+        "Trong danh sách trên, ai là nữ?"
+      ],
+      "must": [
+        "Demo3"
+      ],
+      "mustNot": [
+        "Demo4",
+        "Demo2"
+      ]
+    },
+    {
+      "id": "mem-chain-3",
+      "group": "memory",
+      "turns": [
+        "Tổng tiền hóa đơn điện sau thuế của KA0021 tháng 2024-01?",
+        "Còn tháng 2024-02 thì sao?",
+        "Còn khách hàng DC6011 thì sao?"
+      ],
+      "must": [
+        {
+          "num": 743904
+        }
+      ],
+      "mustNot": [
+        {
+          "num": 6652704
+        },
+        {
+          "num": 1363824
+        }
+      ]
+    },
+    {
+      "id": "mem-topic-return",
+      "group": "memory",
+      "turns": [
+        "Tổng tiền hóa đơn điện sau thuế của KA0021 tháng 2024-02?",
+        "Danh sách nhân viên phòng CSKH",
+        "Quay lại câu tiền hóa đơn điện sau thuế lúc nãy, tháng 2024-01 thì bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 123854696
+        }
+      ]
+    },
+    {
+      "id": "mem-row-value",
+      "group": "memory",
+      "turns": [
+        "Liệt kê các hóa đơn điện của khách hàng x001",
+        "Hóa đơn có số tiền lớn nhất ở trên là ngày nào?"
+      ],
+      "must": [
+        {
+          "re": "01/02/2024|2024-02-01"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "21/01/2024|11/01/2024"
+        }
+      ]
+    },
+    {
+      "id": "power-money-empty",
+      "group": "data-quality",
+      "turns": [
+        "Tiền điện của KA0021 tháng 2024-02 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "re": "chưa được nhập dữ liệu"
+        }
+      ],
+      "mustNot": [
+        {
+          "num": 6652704
+        }
+      ]
+    },
+    {
+      "id": "status-done",
+      "group": "named-value",
+      "turns": [
+        "Có bao nhiêu phản ánh đã xử lý?"
+      ],
+      "must": [
+        {
+          "re": "\\b4\\b"
+        }
+      ]
+    },
+    {
+      "id": "gender-dept",
+      "group": "named-value",
+      "turns": [
+        "Phòng Kỹ thuật có bao nhiêu nhân viên nam?"
+      ],
+      "must": [
+        {
+          "re": "\\b4\\b"
+        }
+      ]
+    },
+    {
+      "id": "exclude-name",
+      "group": "exclusion",
+      "turns": [
+        "Danh sách nhân viên phòng CSKH trừ Demo3"
+      ],
+      "must": [
+        "Demo4",
+        "Demo2"
+      ],
+      "mustNot": [
+        {
+          "re": "\\|\\s*Demo3\\s*\\|"
+        }
+      ]
+    },
+    {
+      "id": "exclude-status",
+      "group": "exclusion",
+      "turns": [
+        "Có bao nhiêu phản ánh không phải trạng thái Tiếp nhận?"
+      ],
+      "must": [
+        {
+          "re": "\\b9\\b"
+        }
+      ]
+    },
+    {
+      "id": "period-name-total",
+      "group": "named-value",
+      "turns": [
+        "Tổng tiền hóa đơn điện sau thuế của Kỳ 3 là bao nhiêu?"
+      ],
+      "must": [
+        {
+          "num": 3396176564
+        }
+      ]
+    },
+    {
+      "id": "chat-thanks",
+      "group": "chat",
+      "turns": [
+        "Cảm ơn bạn, hôm nay là ngày mấy?"
+      ],
+      "must": [
+        {
+          "re": "24/10/2026|24-10-2026|2026-10-24|24 tháng 10"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "^Chưa thể hoàn tất"
+        }
+      ]
+    },
+    {
+      "id": "doc-ipms-purpose",
+      "group": "document",
+      "turns": [
+        "Theo tài liệu hướng dẫn sử dụng IPMS, ứng dụng được xây dựng nhằm mục đích gì?"
+      ],
+      "must": [
+        {
+          "re": "khu công nghiệp|KCN"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "wf-resume",
+      "group": "workflow",
+      "turns": [
+        "Báo cáo sản lượng điện bán ra",
+        "3 tháng gần nhất, không vẽ biểu đồ, không xuất file"
+      ],
+      "must": [
+        {
+          "re": "sản lượng điện bán ra"
+        }
+      ],
+      "mustTools": [
+        "resume_workflow"
+      ]
+    },
+    {
+      "id": "export-split",
+      "group": "export",
+      "turns": [
+        "Xuất file excel danh sách nhân viên, mỗi phòng ban một file"
+      ],
+      "must": [
+        "Kỹ thuật",
+        "CSKH",
+        "Ban giám đốc",
+        {
+          "re": "/api/exports/"
+        }
+      ],
+      "mustTools": [
+        "export_data"
+      ]
     }
-  ]
+  ],
+  "note": "PowerMoney is labelled \"Tiền điện\" (empty in this IPMS copy); amount questions use \"tiền hóa đơn điện sau thuế\" (FinalTotalAmount)."
 }

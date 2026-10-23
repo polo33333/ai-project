@@ -237,7 +237,24 @@ class AutomationRuntime {
           ensure(!failures.length, 'Kết quả không đạt output contract.');
           run.result = result; run.status = 'SUCCEEDED'; run.lease = null; event(run, 'completed');
           const completed = await this.repository.put('runs', run, run.revision);
-          require('./conversation_memory').persist(completed, this.view(completed));
+          // Conversation memory is written after the run commits, in its own
+          // transaction with retries: a chat request writing the same
+          // conversation must not roll back and re-execute a finished workflow.
+          const view = this.view(completed);
+          const remember = async () => {
+            for (let attempt = 1; ; attempt++) {
+              try {
+                return await storage.run(() => governance.run(async () => {
+                  establish(await this.authorizeContext(completed.ownerId));
+                  require('./conversation_memory').persist(completed, view);
+                }), { independent: true });
+              } catch (failure) {
+                if (failure.code !== 'DATA_CONFLICT' || attempt >= 3) throw failure;
+                await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+              }
+            }
+          };
+          if (!storage.afterCommit(`workflow-memory:${completed.id}`, remember)) require('./conversation_memory').persist(completed, view);
           return;
         }
         if (!condition(step.when, state)) {

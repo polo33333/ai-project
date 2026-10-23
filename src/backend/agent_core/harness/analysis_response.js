@@ -19,7 +19,7 @@ function emptyReply(source, plan) {
   if (plan.semanticGroups?.length || !task(plan) || !source?.success || !Array.isArray(source.result?.rows)
     || source.result.rows.length || source.result.hasMore || source.result.truncated) return null;
   return '**Chưa đủ dữ liệu để phân tích:** Truy vấn đã thực hiện thành công nhưng không tìm thấy bản ghi phù hợp trong phạm vi đã lọc.'
-    + '\n\nVì chưa có số liệu trong khoảng này, chưa thể đối chiếu với mức tham chiếu hoặc xác nhận điểm bất thường. Không có bản ghi không có nghĩa là mức tiêu thụ bằng 0 hoặc không có bất thường.'
+    + '\n\nVì chưa có số liệu trong khoảng này, chưa thể đối chiếu với mức tham chiếu hoặc xác nhận điểm bất thường. Không có bản ghi không có nghĩa là giá trị bằng 0 hoặc không có bất thường.'
     + '\n\nCần kiểm tra khoảng thời gian, đối tượng được lọc và độ đầy đủ của dữ liệu. Nếu muốn phân tích một giai đoạn lịch sử khác, hãy chỉ định tháng kết thúc hoặc khoảng từ tháng–đến tháng; hệ thống không tự chuyển sang khoảng khác.';
 }
 
@@ -41,10 +41,10 @@ function shortAnomalyReply(source, plan) {
       + (values[0] > 0 ? ` (${format(Math.abs(delta / values[0] * 100))}%)` : '; không tính phần trăm vì giá trị gốc không dương') + '.';
     if (gap !== 1) comparison += ' Hai mốc này không phải hai tháng liên tiếp; không coi đây là biến động tháng liền kề.';
   }
-  return '**Kết luận:** Chưa đủ căn cứ xác nhận tháng tiêu thụ bất thường.\n\n' + points + comparison
+  return '**Kết luận:** Chưa đủ căn cứ xác nhận tháng có số liệu bất thường.\n\n' + points + comparison
     + '\n\n**Tiêu chí:** Muốn xác nhận bất thường cần ngưỡng nghiệp vụ đã được chấp thuận hoặc mức tham chiếu từ lịch sử đủ và có thể so sánh. Biến động giữa hai mốc chỉ là phép đối chiếu, chưa phải tiêu chí kết luận bất thường.'
-    + `\n\n**Giới hạn dữ liệu:** Truy vấn chỉ trả về ${bound.labels.length} tháng có số liệu; chưa xác minh đủ chuỗi lịch sử được yêu cầu. Không coi tháng thiếu là 0, không suy ra mức tiêu thụ thông thường hay nguyên nhân.`
-    + '\n\nCần đối chiếu thêm độ đầy đủ chứng từ, ngày chứng từ với kỳ sử dụng và phạm vi công tơ; đồng thời bổ sung lịch sử hoặc ngưỡng cảnh báo nghiệp vụ để đánh giá tiếp.';
+    + `\n\n**Giới hạn dữ liệu:** Truy vấn chỉ trả về ${bound.labels.length} tháng có số liệu; chưa xác minh đủ chuỗi lịch sử được yêu cầu. Không coi tháng thiếu là 0, không suy ra mức thông thường hay nguyên nhân.`
+    + '\n\nCần đối chiếu thêm độ đầy đủ chứng từ và ngày ghi nhận so với kỳ phát sinh; đồng thời bổ sung lịch sử hoặc ngưỡng cảnh báo nghiệp vụ để đánh giá tiếp.';
 }
 // Structured anomaly screening computed by code, never by the model. Robust
 // modified z-score (Iglewicz–Hoaglin): distance from the median scaled by MAD,

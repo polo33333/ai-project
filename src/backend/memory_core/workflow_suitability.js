@@ -40,7 +40,9 @@ async function assess(dispatch, question, resolution, workflow) {
     } }) }], 'workflow_suitability');
   let result = normalizeAssistantResponse(response).calls?.find(call => call.name === 'assess_workflow')?.arguments;
   if (!result) { try { result = JSON.parse(response.content); } catch (_) {} }
-  if(!new Ajv().compile(parameters)(result)) throw Object.assign(new Error('Workflow suitability response is invalid.'), { code: 'WORKFLOW_ASSESSMENT_INVALID' });
+  const checkResult = new Ajv().compile(parameters);
+  if(!checkResult(result)) throw Object.assign(new Error(`Workflow suitability response is invalid: ${(checkResult.errors || []).slice(0, 3)
+    .map(error => `${error.instancePath || '/'} ${error.message}`).join('; ')}`), { code: 'WORKFLOW_ASSESSMENT_INVALID' });
   for(const slot of typedSlots){
     const bindings=result.inputBindings.filter(b=>b.slot===slot);
     if(bindings.length!==1||!inputFields[slot].some(f=>f.table.toLowerCase()===bindings[0].table.toLowerCase()&&f.column.toLowerCase()===bindings[0].column.toLowerCase()))
