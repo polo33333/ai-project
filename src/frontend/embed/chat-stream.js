@@ -89,7 +89,9 @@
   }catch(error){onAnswer?.({type:'answer_reset'});throw error;}
   finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
  }
- function createPreview(host,{renderMarkdown}={}){
+ function createPreview(host,{renderMarkdown,charactersPerSecond,finishDurationMs=600}={}){
+  const paced=Number.isFinite(charactersPerSecond)&&charactersPerSecond>0;
+  const step=paced?Math.max(1,Math.round(charactersPerSecond*24/1000)):24;
   let id=null,seq=0,text='',shown=0,node=null,frame=null,disposed=false,live=false,deadline=null,finishResolve=null;
   function settle(){finishResolve?.();finishResolve=null;deadline=null;}
   function clear(){if(frame!==null)clearTimeout(frame);frame=null;settle();node?.remove();node=null;text='';shown=0;id=null;seq=0;host.classList.remove('has-answer-preview');}
@@ -99,8 +101,8 @@
    const scroller=host.closest('#page-chat-messages-container,#chat-messages-container,.kh-embed-messages');
    const follow=scroller&&scroller.scrollHeight-scroller.clientHeight-scroller.scrollTop<64;
    const instant=!live||document.hidden||global.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-   const ticks=deadline===null?12:Math.max(1,Math.ceil((deadline-Date.now())/24));
-   shown=instant?text.length:Math.min(text.length,shown+Math.max(24,Math.ceil((text.length-shown)/ticks)));
+   const ticks=deadline===null?(paced?Infinity:12):Math.max(1,Math.ceil((deadline-Date.now())/24));
+   shown=instant?text.length:Math.min(text.length,shown+Math.max(step,Math.ceil((text.length-shown)/ticks)));
    // Do not split a UTF-16 surrogate pair between paints.
    if(shown<text.length&&text.charCodeAt(shown-1)>=0xD800&&text.charCodeAt(shown-1)<=0xDBFF)shown++;
    const visible=text.slice(0,shown);
@@ -120,7 +122,7 @@
    if(disposed)return;
    if(event.type==='answer_complete'){
     if(!node||shown>=text.length)return;
-    deadline=Date.now()+600;schedule();return new Promise(resolve=>{finishResolve=resolve;});
+    deadline=Date.now()+finishDurationMs;schedule();return new Promise(resolve=>{finishResolve=resolve;});
    }
    if(event.type==='answer_reset'){if(!event.id||id===event.id)clear();return;}
    if(event.type==='answer_start'){

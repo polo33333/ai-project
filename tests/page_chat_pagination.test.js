@@ -119,7 +119,7 @@ test('80-message limit permits final answer, blocks more questions and preserves
 test('UI counts unloaded messages toward 60-message warning and 80-message limit',()=> {
   const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
   const nodes=new Map();
-  const create=()=>({children:[],append(...items){this.children.push(...items);},replaceChildren(){this.children=[];}});
+  const create=()=>({children:[],setAttribute(name,value){this[name]=value;},append(...items){this.children.push(...items);},replaceChildren(){this.children=[];}});
   const container=create(); container.after=node=>nodes.set(node.id,node);
   const composerArea={children:[],prepend(node){this.children.unshift(node);node.parentElement=this;nodes.set(node.id,node);}};
   nodes.set('page-chat-messages-container',container);
@@ -131,8 +131,19 @@ test('UI counts unloaded messages toward 60-message warning and 80-message limit
   assert.equal(nodes.get('chat-session-limit-notice').parentElement,composerArea,'Limit warning must be measured above the floating input, never behind it');
   assert.match(nodes.get('chat-session-limit-notice').children[0].textContent,/60\/80/);
   assert.equal(vm.runInContext('chatSessionIsFull(chat)',sandbox),false);
+  const warning=nodes.get('chat-session-limit-notice');
+  warning.children.find(node=>node.className==='chat-limit-dismiss').onclick();
+  assert.equal(warning.hidden,true);
+  vm.runInContext('renderChatLimitNotice(chat)',sandbox);
+  assert.equal(warning.hidden,true,'Dismissal survives rerenders and returning to the conversation');
+  sandbox.other={...chat,id:'other'};
+  vm.runInContext('renderChatLimitNotice(other)',sandbox);
+  assert.equal(warning.hidden,false,'Dismissal is scoped to one conversation');
   chat._page.start=60;
   assert.equal(vm.runInContext('chatSessionIsFull(chat)',sandbox),true);
+  vm.runInContext('renderChatLimitNotice(chat)',sandbox);
+  assert.equal(warning.hidden,false,'A full conversation must override a dismissed early warning');
+  assert.equal(warning.children.some(node=>node.className==='chat-limit-dismiss'),false);
   chat.messages=[]; chat._page.start=0; chat.continuedFrom='previous';
   vm.runInContext('renderChatLimitNotice(chat)',sandbox);
   assert.equal(nodes.get('chat-session-limit-notice').hidden,true);

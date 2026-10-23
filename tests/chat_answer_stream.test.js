@@ -141,6 +141,32 @@ test('answer preview remains transient, ignores stale/duplicate events and respe
  assert.equal(host.children.length,0);assert.equal(classes.size,0);
 });
 
+test('readable page chat pace slows large bursts and allows four seconds to finish',async()=>{
+ const timers=new Map();let next=0,now=0;
+ const host={children:[],classList:{add(){},remove(){}},append(node){this.children.push(node);},closest:()=>null};
+ const context=vm.createContext({window:{},Date:{now:()=>now},
+  setTimeout:fn=>{timers.set(++next,fn);return next;},clearTimeout:id=>timers.delete(id),
+  document:{createElement(){return {style:{},setAttribute(){},remove(){host.children=host.children.filter(node=>node!==this);}};}}});
+ vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ const preview=context.window.ChatStream.createPreview(host,{charactersPerSecond:200,finishDurationMs:4000});
+ const flush=()=>{now+=24;const jobs=[...timers.values()];timers.clear();jobs.forEach(fn=>fn());};
+ const text='Readable answer. '.repeat(200);
+ preview.update({type:'answer_start',id:'paced',verified:true,animate:true});
+ preview.update({type:'answer_delta',id:'paced',seq:1,delta:text});
+ for(let i=0;i<10;i++)flush();
+ assert.equal(host.children[0].textContent.length,50,'about 200 characters per second without burst acceleration');
+ let finished=false;
+ const completion=preview.update({type:'answer_complete'}).then(()=>{finished=true;});
+ const started=now;
+ while(now-started<600)flush();
+ await Promise.resolve();assert.equal(finished,false,'do not rush the remaining answer within the old 600ms window');
+ for(let i=0;i<180&&timers.size;i++)flush();
+ await completion;
+ assert.equal(host.children[0].textContent,text);
+ assert(now-started<=4050);
+ preview.dispose();assert.equal(timers.size,0);
+});
+
 test('live and verified answers paint progressively and final waits for pending visible text',async()=>{
  for(const start of [{verified:false},{verified:true,animate:true}]){
  const timers=new Map();let next=0;

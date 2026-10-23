@@ -47,6 +47,9 @@ main.main-content.chat-workspace-page {
 #chat-session-limit-notice:has(.chat-limit-fresh) .chat-limit-fresh { grid-column:4; grid-row:1; }
 #chat-session-limit-notice .chat-limit-secondary { grid-column:2 / 4; justify-self:start; padding:0; border:0; background:transparent; color:var(--conversation-accent); font-size:11.5px; }
 #chat-session-limit-notice button:focus-visible { outline:2px solid var(--conversation-accent); outline-offset:3px; }
+#chat-session-limit-notice:has(.chat-limit-dismiss) { position:relative; padding-right:42px; }
+#chat-session-limit-notice .chat-limit-dismiss { position:absolute; top:5px; right:5px; display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:7px; background:transparent; color:var(--conversation-muted); font:22px/1 system-ui,sans-serif; }
+#chat-session-limit-notice .chat-limit-dismiss:hover { background:var(--conversation-hover); color:var(--conversation-text); }
 :root[data-theme="dark"] #chat-session-limit-notice { border-color:#453967; background:#242037; }
 :root[data-theme="dark"] #chat-session-limit-notice.is-full { border-color:#615036; background:#30291f; }
 :root[data-theme="dark"] #chat-session-limit-notice::before { color:#d2c4ff; background:#40305f; }

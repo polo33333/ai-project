@@ -279,6 +279,7 @@ const persistedChatSessions = new Map();
 
 const chatPageLoads = new Set();
 const chatContinuations = new Set();
+const dismissedChatLimitWarnings = new Set();
 function chatPayloadBytes(session) {
   return new TextEncoder().encode(JSON.stringify({messages:session.messages,history:session.history})).length;
 }
@@ -303,9 +304,11 @@ function renderChatLimitNotice(session) {
   notice.replaceChildren(); notice.hidden=true;
   if (!session) return;
   const usage=chatSessionUsage(session);
-  const canContinue=usage.count>=60 || chatSessionIsFull(session);
+  const isFull=chatSessionIsFull(session);
+  const canContinue=usage.count>=60 || isFull;
   const nextSession=session.continuedTo && window.chatSessions?.find(item=>item.id===session.continuedTo);
   if (!canContinue && !nextSession) return;
+  if (!isFull && dismissedChatLimitWarnings.has(session.id)) return;
   notice.hidden=false;
   notice.className=chatSessionIsFull(session) ? 'chat-limit-card is-full' : canContinue || nextSession ? 'chat-limit-card' : 'chat-limit-card is-context';
   notice.role='status'; notice.ariaLive='polite';
@@ -331,6 +334,17 @@ function renderChatLimitNotice(session) {
     fresh.title='Bắt đầu hội thoại trống, không mang theo ngữ cảnh cũ';
     fresh.disabled=chatContinuations.has(session.id);
     fresh.onclick=()=>createNewChatSession(); notice.append(fresh);
+  }
+  if (!isFull && usage.count>=60) {
+    const close=document.createElement('button'); close.type='button';
+    close.className='chat-limit-dismiss'; close.textContent='×';
+    close.title='Ẩn cảnh báo sắp đầy';
+    close.setAttribute('aria-label','Ẩn cảnh báo hội thoại sắp đầy');
+    close.onclick=()=>{
+      dismissedChatLimitWarnings.add(session.id);
+      notice.hidden=true;
+    };
+    notice.append(close);
   }
 }
 async function loadOlderChatMessages(session=getCurrentChatSession()) {
@@ -1567,7 +1581,7 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
   // Thinking Bubble
   const thinkingId = `thinking-${Date.now()}`;
   const thinkingDiv = createThinkingBubble(thinkingId);
-  const answerPreview=window.ChatStream?.createPreview(thinkingDiv,{renderMarkdown:parseMarkdown});
+  const answerPreview=window.ChatStream?.createPreview(thinkingDiv,{renderMarkdown:parseMarkdown,charactersPerSecond:400,finishDurationMs:4000});
   const progressEvents = [];
   window.pageChatPendingThinking = { sessionId: session.id, node: thinkingDiv, retryRecord:retryContext?.record };
   if (isRetry) { retryContext.node.before(thinkingDiv); retryContext.node.style.setProperty('display','none','important'); }
