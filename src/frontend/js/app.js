@@ -275,6 +275,8 @@ async function loadCurrentAccount() {
     if (governanceNav) governanceNav.hidden = data.account?.role !== 'admin';
     const accountsNav = document.getElementById('nav-accounts');
     if (accountsNav) accountsNav.hidden = data.account?.role !== 'admin';
+    const aiUsageNav = document.getElementById('nav-ai-usage');
+    if (aiUsageNav) aiUsageNav.hidden = data.account?.role !== 'admin';
     const administrationSection = document.getElementById('nav-administration-section');
     if (administrationSection) administrationSection.hidden = data.account?.role !== 'admin';
     window.refreshSidebarGroups();
@@ -452,6 +454,7 @@ const featureSearchItems = [
   { key: 'glossary', title: 'Thuật ngữ nghiệp vụ', group: 'Dữ liệu & Tri thức', icon: 'fa-spell-check', keywords: 'business glossary từ điển viết tắt định nghĩa' },
   { key: 'ai-providers', title: 'Nhà cung cấp AI', group: 'Cấu hình Agent', icon: 'fa-network-wired', keywords: 'provider model mô hình gemini openai ollama active cấu hình ai' },
   { key: 'system-tools', title: 'Công cụ hệ thống', group: 'Cấu hình Agent', icon: 'fa-screwdriver-wrench', keywords: 'tool tools function calling schema danh mục công cụ agent' },
+  { key: 'ai-usage', title: 'Hạn mức sử dụng', group: 'Quản trị & phân quyền', icon: 'fa-gauge-high', keywords: 'hạn mức quota token giới hạn khóa sử dụng ai mô hình tài khoản' },
   { key: 'data-governance', title: 'Quản trị dữ liệu', group: 'Quản trị & phân quyền', icon: 'fa-shield-halved', keywords: 'governance acl quyền truy cập xử lý dữ liệu chỉ tiêu SQL phê duyệt chính sách phân quyền', adminOnly: true },
   { key: 'analytics', title: 'Báo cáo & Metrics', group: 'Chất lượng & Giám sát', icon: 'fa-chart-pie', keywords: 'analytics metrics chi phí token độ trễ thống kê báo cáo hiệu suất' },
   { key: 'chat-feedback', title: 'Đánh giá AI', group: 'Chất lượng & Giám sát', icon: 'fa-thumbs-up', keywords: 'feedback chất lượng thích không thích kiểm duyệt ai' },
@@ -1285,7 +1288,7 @@ window.sendChatMessage = async function sendChatMessage() {
     const renderedReply = renderVerifiedCitationMarkers(renderCopilotText(stripInlineDownloadLink(reply, data.downloadUrl)), data.citations);
     const richHtml = [
       window.ChatReasoningUI.render(progressEvents, data.executionTime || ''),
-      renderedReply,
+      `<div class="copilot-answer-text">${renderedReply}</div>`,
       typeof window.renderWorkflowExecution === 'function' ? window.renderWorkflowExecution(data.execution) : '',
       renderCopilotDownloadAction(data.downloadUrl, renderedReply),
       renderCopilotRetrievalContext(data.contextSelection, data.citations, data.citationValidation, data.supportingEvidence),
@@ -1296,7 +1299,7 @@ window.sendChatMessage = async function sendChatMessage() {
 
     document.getElementById(thinkingId)?.remove();
     messages.insertAdjacentHTML('beforeend', `
-      <div class="chat-bubble ai">${richHtml}${typeof renderChatFeedback === 'function' ? renderChatFeedback(data, data.tokenUsage) : ''}</div>
+      <div class="chat-bubble ai">${richHtml}${typeof renderChatFeedback === 'function' ? renderChatFeedback(data, data.tokenUsage, { speak: true }) : ''}</div>
     `);
 
     if (data.completionStatus === 'SUCCESS') {

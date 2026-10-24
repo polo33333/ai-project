@@ -57,8 +57,8 @@ test('browser manages plugin publication and completes a run through the slot fo
   const phaseButtons = page.locator('.wp-node-select');
   assert.ok(await phaseButtons.count() > 1);
   assert.equal(await phaseButtons.nth(0).isVisible(),false);
-  assert.deepEqual(await page.getByRole('tab').allTextContents(),['Nhận diện & đầu vào','Nguồn dữ liệu','Kịch bản các bước','Kết quả','Chạy thử']);
-  await page.getByRole('tab',{name:'Kịch bản các bước',exact:true}).click();
+  assert.deepEqual(await page.getByRole('tab').allTextContents(),['Nhận diện & đầu vào','Nguồn dữ liệu','Các bước xử lý','Kết quả','Chạy thử']);
+  await page.getByRole('tab',{name:'Các bước xử lý',exact:true}).click();
   await phaseButtons.nth(1).click();
   assert.equal(await page.locator('.wp-step-inspector > fieldset:visible').count(), 1);
   assert.equal(await phaseButtons.nth(1).getAttribute('aria-pressed'), 'true');
@@ -106,7 +106,7 @@ test('browser manages plugin publication and completes a run through the slot fo
   await page.getByLabel('Xác thực', {exact:true}).selectOption('bearer');
   await page.getByLabel('Biến môi trường chứa token', {exact:true}).fill('WORKFLOW_TEST_TOKEN');
   assert.equal(await page.getByLabel('Đường dẫn dữ liệu trong JSON (để trống lấy toàn bộ)', { exact: true }).count(), 1);
-  await page.getByRole('tab',{name:'Kịch bản các bước',exact:true}).click();
+  await page.getByRole('tab',{name:'Các bước xử lý',exact:true}).click();
   await page.getByRole('combobox', { name:'Thao tác của bước',exact:true }).selectOption('sql');
   await page.getByLabel('Nguồn dữ liệu sử dụng', {exact:true}).selectOption('query_1');
   assert.equal(await page.getByLabel('Nguồn dữ liệu sử dụng', {exact:true}).inputValue(),'query_1');
@@ -254,12 +254,12 @@ test('browser manages plugin publication and completes a run through the slot fo
   await page.getByLabel('Tên gói', { exact: true }).fill('Nghiệp vụ riêng');
   await page.getByLabel('Mã mẫu nghiệp vụ', { exact: true }).fill('custom_first');
   await page.getByLabel('Tên template', { exact: true }).fill('Mẫu tự định nghĩa');
-  await page.getByLabel('Cách hỏi mẫu — mỗi dòng một câu', { exact: true }).fill('Chạy nghiệp vụ riêng');
+  await page.getByLabel('Người dùng thường hỏi thế nào? (mỗi dòng một câu)', { exact: true }).fill('Chạy nghiệp vụ riêng');
   await page.getByRole('button', { name: 'Định nghĩa mẫu mới', exact: true }).click();
   await page.getByLabel('Mã mẫu nghiệp vụ', { exact: true }).fill('custom_second');
   await page.getByLabel('Tên template', { exact: true }).fill('Mẫu thứ hai');
-  await page.getByLabel('Cách hỏi mẫu — mỗi dòng một câu', { exact: true }).fill('Chạy nghiệp vụ thứ hai');
-  await page.getByRole('tab',{name:'Kịch bản các bước',exact:true}).click();
+  await page.getByLabel('Người dùng thường hỏi thế nào? (mỗi dòng một câu)', { exact: true }).fill('Chạy nghiệp vụ thứ hai');
+  await page.getByRole('tab',{name:'Các bước xử lý',exact:true}).click();
   await page.locator('.wp-step-inspector > fieldset:visible').getByRole('combobox').first().selectOption('delay');
   await page.getByLabel('Thời gian chờ (mili giây)', { exact: true }).fill('25');
   await page.getByRole('button', { name: 'Thêm bước', exact: true }).click();

@@ -67,6 +67,8 @@ async function dispatchWithProviderFallback(currentProvider, candidates, message
     } catch (error) {
       lastError = error;
       if (externalSignal?.aborted || error?.name === 'AbortError') throw error;
+      // An account lock or quota blocks every model; trying the next provider cannot help.
+      if (['AI_ACCOUNT_LOCKED', 'AI_ACCOUNT_QUOTA'].includes(error?.code)) throw error;
       console.warn(`[AI Router] Provider ${candidate.name || candidate.id} lỗi: ${error.message}`);
     } finally {
       clearTimeout(timer);
@@ -153,6 +155,12 @@ class IntelligentCore {
     if (providerId && !explicitlySelectedProvider) {
       return this._buildErrorResponse(userMessage, null, 'Model đã chọn không khả dụng. Hãy chọn lại model.');
     }
+    // Account lock/quota is decided once, before any work, so the user sees the reason instead of a
+    // half-finished answer; a question that starts within the quota is allowed to finish.
+    try {
+      const usage = require('../services/ai_usage_service');
+      await usage.service.check({ accountId: usage.currentAccountId(), admitted: require('../governance/context').current()?.aiUsageAdmitted });
+    } catch (error) { return { ...this._buildErrorResponse(userMessage, explicitlySelectedProvider, error.message), errorCode: error.code }; }
     let routingContext;
     try { routingContext = (governedController ? require('../governance/controller').createContext : chatRouter.createRoutingContext)({ ...options, chatProviderSnapshot: explicitlySelectedProvider || undefined }); }
     catch (error) { return { ...this._buildErrorResponse(userMessage, explicitlySelectedProvider, error.message), errorCode: error.code }; }

@@ -50,7 +50,10 @@ async function dispatchUnchecked(provider, messages, tools, signal, options = {}
 
 async function dispatchToProvider(provider, messages, tools, signal, options = {}) {
   const budget = options.executionBudget || require('../../governance/context').current()?.executionBudget;
-  return require('../../governance/admission').model.run(async () => {
+  // Admin-set locks and token limits apply to every model call, whichever feature makes it.
+  const usage = require('../../services/ai_usage_service'), accountId = usage.currentAccountId();
+  await usage.service.check({ accountId, provider, admitted: require('../../governance/context').current()?.aiUsageAdmitted });
+  const result = await require('../../governance/admission').model.run(async () => {
     const estimated = Math.ceil(JSON.stringify([messages, tools]).length / 3) + (Number(provider.maxTokens) || 4096);
     // Provider settings and analytics store tokenCost in currency per 1K tokens.
     const unitCost = Number.isFinite(Number(provider.costPerToken)) && Number(provider.costPerToken) >= 0
@@ -63,6 +66,13 @@ async function dispatchToProvider(provider, messages, tools, signal, options = {
   }, {
     signal, timeoutMs: Math.min(10000, budget?.remainingMs() ?? 10000)
   });
+  // Providers that report no usage are still counted, by a rough size estimate, so they cannot bypass a limit.
+  const reported = Number(result?.usage?.totalTokens);
+  const tokens = Number.isFinite(reported) && reported > 0 ? reported
+    : Math.ceil((JSON.stringify(messages || []).length + String(result?.content || '').length) / 3);
+  await usage.service.record({ accountId, providerId: provider.id, tokens })
+    .catch(error => console.error('[AI usage] Không ghi được mức sử dụng:', error.message));
+  return result;
 }
 
 module.exports = {

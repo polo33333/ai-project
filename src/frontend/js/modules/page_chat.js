@@ -1397,7 +1397,8 @@ function renderPageChatActionIcon(name) {
     retry: '<path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.34 5.66"/>',
     edit: '<path d="m15 5 4 4M4 16l-1 5 5-1L20 8a2.8 2.8 0 0 0-4-4Z"/>',
     more: '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>',
-    check: '<path d="m5 12 4 4L19 6"/>'
+    check: '<path d="m5 12 4 4L19 6"/>',
+    speak: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5Z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.3a8 8 0 0 1 0 11.4"/>'
   };
   return `<svg class="chat-answer-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || ''}</svg>`;
 }
@@ -1471,7 +1472,7 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true, ta
       const actions = node.querySelector('.chat-answer-actions') || document.createElement('div');
       actions.className = 'chat-answer-actions';
       actions.setAttribute('aria-label', 'Thao tác với câu trả lời');
-      actions.innerHTML = `<button type="button" onclick="copyPageChatAnswer(this)" title="Sao chép" aria-label="Sao chép câu trả lời">${renderPageChatActionIcon('copy')}</button><button type="button" onclick="retryPageChatAnswer(this)" title="Thử lại" aria-label="Yêu cầu AI trả lời lại câu hỏi này">${renderPageChatActionIcon('retry')}</button>`;
+      actions.innerHTML = `<button type="button" onclick="copyPageChatAnswer(this)" title="Sao chép" aria-label="Sao chép câu trả lời">${renderPageChatActionIcon('copy')}</button><button type="button" onclick="retryPageChatAnswer(this)" title="Thử lại" aria-label="Yêu cầu AI trả lời lại câu hỏi này">${renderPageChatActionIcon('retry')}</button><button type="button" class="chat-speak-btn" onclick="toggleAnswerSpeech(this)" title="Đọc to" aria-label="Đọc to câu trả lời" aria-pressed="false">${renderPageChatActionIcon('speak')}</button>`;
       const answeredAt = new Date(record.createdAt);
       const answerTime = answeredAt.toLocaleString('vi-VN', {
         day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'
@@ -1605,12 +1606,13 @@ async function submitChatFeedback(button) {
   }
 }
 
-function renderChatFeedback(data = {}, tokenUsage = null) {
+function renderChatFeedback(data = {}, tokenUsage = null, options = {}) {
   return `<div class="chat-feedback" data-audit-id="${escapeChatMarkdown(data.auditId || '')}" data-provider-id="${escapeChatMarkdown(data.provider?.id || '')}" data-model="${escapeChatMarkdown(data.provider?.model || '')}">
     <div class="chat-feedback-actions">
       <span class="chat-feedback-label">Câu trả lời này có hữu ích không?</span>
       <button type="button" data-rating="like" onclick="submitChatFeedback(this)" title="Hữu ích" aria-label="Thích câu trả lời"><i class="fa-regular fa-thumbs-up"></i></button>
       <button type="button" data-rating="dislike" onclick="submitChatFeedback(this)" title="Chưa hữu ích" aria-label="Không thích câu trả lời"><i class="fa-regular fa-thumbs-down"></i></button>
+      ${options.speak ? '<button type="button" class="chat-speak-btn" onclick="toggleAnswerSpeech(this)" title="Đọc to" aria-label="Đọc to câu trả lời" aria-pressed="false"><i class="fa-solid fa-volume-high"></i></button>' : ''}
     </div>
     ${renderChatTokenUsage(tokenUsage, data.routing)}
   </div>`;

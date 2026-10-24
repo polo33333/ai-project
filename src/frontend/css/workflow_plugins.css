@@ -1153,3 +1153,62 @@
   #workflow-plugin-panel #wp-packages { max-height:max(320px, calc(100dvh - 500px)); overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; align-content:start; padding:4px; margin-inline:-4px; }
 }
 .wp-more-menu.wp-more-up .wp-more-items { top:auto; bottom:calc(100% + 6px); }
+/* Basic mode: generated IDs, colours and raw schema stay hidden until "Thiết lập nâng cao" is on */
+.wp-mode-basic .wp-advanced-only { display:none !important; }
+.wp-business-editor .workflow-dialog header strong { margin-right:auto; }
+.wp-business-editor .wp-advanced-toggle { display:inline-flex; align-items:center; gap:7px; color:#475569; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.wp-business-editor .wp-advanced-toggle input { width:auto; margin:0; accent-color:#6366f1; }
+.wp-business-editor .wp-ai-assist { margin:4px 0 0; padding:12px 14px; border:1px dashed #c7d2fe; border-radius:12px; background:#f8f7ff; }
+.wp-business-editor .wp-ai-assist > summary { color:#4f46e5; font-weight:700; font-size:13px; cursor:pointer; }
+.wp-business-editor .wp-ai-assist > summary i { margin-right:4px; }
+.wp-business-editor .wp-ai-assist label { margin-top:10px; }
+.wp-business-editor .wp-ai-assist-button { margin-top:10px; display:inline-flex; align-items:center; gap:6px; }
+.wp-business-editor .wp-route-test { display:flex; align-items:flex-end; gap:8px; margin-top:12px; }
+.wp-business-editor .wp-route-test > label { flex:1 1 auto; min-width:0; margin:0 !important; }
+.wp-business-editor .wp-route-test > button { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; height:40px; }
+.wp-business-editor .wp-route-result:empty { display:none; }
+.wp-business-editor .wp-route-result { display:grid; gap:2px; margin-top:8px; padding:9px 12px; border-radius:9px; background:#f1f5f9; color:#334155; font-size:12px; line-height:1.5; }
+.wp-business-editor .wp-route-result.is-match { background:#ecfdf5; color:#065f46; }
+.wp-business-editor .wp-route-result.is-miss { background:#fff7ed; color:#9a3412; }
+.wp-business-editor .wp-duplicate-note[hidden] { display:none; }
+.wp-business-editor .wp-duplicate-note { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px !important; padding:8px 10px; border-radius:8px; background:#eff6ff; color:#1e40af !important; }
+.wp-business-editor .wp-duplicate-note button { margin-left:auto; }
+.wp-business-editor .wp-guardrails { display:grid; gap:2px; margin:12px 0 0; padding:10px 12px; border:1px solid #e2e8f0; border-radius:10px; }
+.wp-business-editor .wp-guardrails legend { padding:0 4px; color:#475569; font-size:12px; font-weight:700; }
+.wp-business-editor .wp-guardrails label { display:flex !important; align-items:center; gap:8px; font-weight:500 !important; font-size:12.5px !important; margin:0 !important; min-height:28px; }
+.wp-business-editor .wp-guardrails input { width:auto !important; margin:0; accent-color:#6366f1; }
+@media (max-width:640px) { .wp-business-editor .wp-route-test { flex-direction:column; align-items:stretch; } .wp-business-editor .wp-advanced-toggle { font-size:11px; } }
+:root[data-theme="dark"] .wp-business-editor .wp-ai-assist { background:rgba(99,102,241,.08); border-color:rgba(129,140,248,.4); }
+:root[data-theme="dark"] .wp-business-editor .wp-route-result { background:var(--dark-raised,#1e2537); color:var(--text-primary,#e2e8f0); }
+:root[data-theme="dark"] .wp-business-editor .wp-route-result.is-match { background:rgba(16,185,129,.12); color:#6ee7b7; }
+:root[data-theme="dark"] .wp-business-editor .wp-route-result.is-miss { background:rgba(249,115,22,.12); color:#fdba74; }
+:root[data-theme="dark"] .wp-business-editor .wp-duplicate-note { background:rgba(59,130,246,.12); color:#93c5fd !important; }
+:root[data-theme="dark"] .wp-business-editor .wp-guardrails { border-color:var(--border-color,#334155); }
+.wp-business-editor .wp-ai-assist-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.wp-business-editor .wp-ai-assist-actions .wp-ai-assist-button { margin-top:0; }
+.wp-business-editor .wp-ai-assist-status:empty { display:none; }
+.wp-business-editor .wp-ai-assist-status { margin-top:8px !important; color:#4f46e5 !important; }
+.wp-business-editor .wp-ai-review { display:grid; gap:6px; margin-top:12px; padding:10px 12px; border-radius:10px; background:#fffbeb; color:#92400e; font-size:12.5px; line-height:1.55; }
+.wp-business-editor .wp-ai-review ul { margin:0; padding-left:18px; }
+.wp-business-editor .wp-ai-review button { justify-self:start; }
+:root[data-theme="dark"] .wp-business-editor .wp-ai-review { background:rgba(245,158,11,.12); color:#fcd34d; }
+.wp-business-editor .wp-ai-progress[hidden], .wp-business-editor .wp-ai-progress:empty { display:none; }
+.wp-business-editor .wp-ai-progress { display:grid; gap:8px; margin-top:12px; padding:10px 12px; border:1px solid #e0e7ff; border-radius:10px; background:#fff; }
+.wp-business-editor .wp-ai-progress-steps { display:grid; gap:6px; margin:0; padding:0; list-style:none; font-size:12.5px; line-height:1.5; }
+.wp-business-editor .wp-ai-progress-steps li { display:flex; align-items:flex-start; gap:8px; color:#475569; }
+.wp-business-editor .wp-ai-progress-steps li i { flex:0 0 14px; margin-top:3px; }
+.wp-business-editor .wp-ai-progress-steps .is-done i { color:#059669; }
+.wp-business-editor .wp-ai-progress-steps .is-running { color:#4338ca; font-weight:600; }
+.wp-business-editor .wp-ai-progress-steps .is-warning { color:#b45309; }
+.wp-business-editor .wp-ai-progress-steps .is-failed { color:#b91c1c; font-weight:600; }
+.wp-business-editor .wp-ai-progress-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#64748b; font-size:12px; }
+.wp-business-editor .wp-ai-progress-footer button { display:inline-flex; align-items:center; gap:6px; }
+:root[data-theme="dark"] .wp-business-editor .wp-ai-progress { background:var(--dark-raised,#1e2537); border-color:var(--border-color,#334155); }
+:root[data-theme="dark"] .wp-business-editor .wp-ai-progress-steps li { color:var(--text-secondary,#94a3b8); }
+:root[data-theme="dark"] .wp-business-editor .wp-ai-progress-steps .is-running { color:#a5b4fc; }
+.wp-business-editor .wp-ai-assist-actions button[hidden] { display:none !important; }
+/* At the top of the editor the AI panel is the starting point, so give it a little more presence */
+.wp-business-editor .workflow-editor-body > .wp-ai-assist { margin:0; padding:14px 16px; border-style:solid; }
+.wp-business-editor .workflow-editor-body > .wp-ai-assist > summary { font-size:14px; }
+.wp-business-editor .wp-ai-replaced { display:grid; gap:4px; padding-bottom:8px; margin-bottom:4px; border-bottom:1px dashed rgba(146,64,14,.3); }
+.wp-business-editor .wp-ai-sql { max-height:160px; overflow:auto; margin:4px 0 0; padding:8px 10px; border-radius:8px; background:#172033; color:#dbeafe; font:11px/1.5 Consolas,monospace; white-space:pre-wrap; }

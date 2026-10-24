@@ -4,7 +4,7 @@ async function loadViewComponents(tabKey) {
   const container = document.getElementById('main-view-container');
   if (!container) return;
   const viewFiles = {
-    accounts: 'accounts.html',
+    accounts: 'accounts.html', ai_usage: 'ai_usage.html',
     overview: 'dashboard_logs.html', page_chat: 'page_chat.html', dictionary: 'dictionary.html',
     sql: 'sql_connector.html', sql_connector: 'sql_connector.html', ai_providers: 'ai_providers.html',
     library: 'library.html', watchfolder: 'watchfolder.html', glossary: 'glossary.html', analytics: 'analytics.html',

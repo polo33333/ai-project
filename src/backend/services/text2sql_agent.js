@@ -37,7 +37,17 @@ class Text2SqlAgent {
       .toLowerCase();
   }
 
+  // This path calls the model directly, so it applies the same locks and token limits as dispatchToProvider.
   async callLlmApi(provider, systemPrompt, userQuestion) {
+    const usage = require('./ai_usage_service'), accountId = usage.currentAccountId();
+    try { await usage.service.check({ accountId, provider }); } catch (failure) { return { error: failure.message }; }
+    const result = await this.callLlmApiUnmetered(provider, systemPrompt, userQuestion);
+    if (result?.text) await usage.service.record({ accountId, providerId: provider.id, tokens: Math.ceil((systemPrompt.length + userQuestion.length + result.text.length) / 3) })
+      .catch(error => console.error('[AI usage] Không ghi được mức sử dụng:', error.message));
+    return result;
+  }
+
+  async callLlmApiUnmetered(provider, systemPrompt, userQuestion) {
     if (typeof fetch === 'undefined') return { error: "Fetch API không hỗ trợ trong môi trường này." };
 
     const controller = new AbortController();

@@ -61,7 +61,8 @@ const FRONTEND_ROUTES = new Set([
   '/data-governance',
   '/accounts',
   '/memory',
-  '/api-docs'
+  '/api-docs',
+  '/ai-usage'
 ]);
 
 const MIME_TYPES = {
@@ -203,8 +204,9 @@ function isAdminMutation(pathname, method) {
 }
 
 function isAdminOnlyResource(pathname) {
-  if (pathname === '/accounts' || pathname === '/views/accounts.html') return true;
-  return /^\/api\/(accounts|settings|backups|providers|ai-providers|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
+  if (['/accounts', '/views/accounts.html', '/ai-usage', '/views/ai_usage.html'].includes(pathname)) return true;
+  if (pathname === '/api/ai-usage/me') return false; // every user may read their own limit
+  return /^\/api\/(accounts|settings|backups|providers|ai-providers|ai-usage|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
 }
 
 function getSessionToken(req) {
@@ -2182,6 +2184,65 @@ async function handleGovernedRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/ai-usage/me' && req.method === 'GET') {
+    if (!currentAccount) { res.writeHead(401, { 'Content-Type': 'application/json; charset=UTF-8' }); res.end(JSON.stringify({ error: 'Cần đăng nhập.' })); return; }
+    const status = await require('../services/ai_usage_service').service.accountStatus(currentAccount.id);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ ...status, canManage: currentAccount.role === 'admin' }));
+    return;
+  }
+
+  if (pathname === '/api/ai-usage' && req.method === 'GET') {
+    // Admin-only (isAdminOnlyResource): limits, locks and today/this-month usage per account and per model.
+    const usageService = require('../services/ai_usage_service');
+    const [limits, usage] = await Promise.all([usageService.service.limits(), usageService.service.usage()]);
+    const limitOf = (scope, id) => limits.find(item => item.scope === scope && item.targetId === id) || null;
+    const usageOf = (scope, id) => usage[`${scope}|${id}`] || usageService.emptyUsage();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      timeZone: usageService.TIME_ZONE, periods: usageService.periodKeys(), setupRequired: usageService.service.missing === true,
+      accounts: authService.listAccounts(currentAccount.id).map(account => ({ id: account.id, username: account.username, displayName: account.displayName, role: account.role, roleLabel: account.roleLabel, isActive: account.isActive,
+        limit: limitOf('account', account.id), usage: usageOf('account', account.id) })),
+      providers: aiProviderManager.getProviders().map(provider => ({ id: provider.id, name: provider.name, model: provider.model, type: provider.type, isActive: Boolean(provider.isActive),
+        limit: limitOf('provider', provider.id), usage: usageOf('provider', provider.id) }))
+    }));
+    return;
+  }
+
+  if (pathname === '/api/ai-usage/reset' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const known = body?.scope === 'account' ? authService.listAccounts(currentAccount.id).some(account => account.id === body.targetId)
+        : body?.scope === 'provider' && aiProviderManager.getProviders().some(provider => provider.id === body.targetId);
+      if (!known) throw Object.assign(new Error('Không tìm thấy tài khoản hoặc mô hình cần đặt lại.'), { statusCode: 404 });
+      const result = await require('../services/ai_usage_service').service.resetUsage(body);
+      loggerService.addLog('INFO', 'AI Usage', `Đặt lại mức dùng AI ${result.scope}:${result.targetId} — đã xóa ${result.cleared.day} token hôm nay, ${result.cleared.week} tuần này, ${result.cleared.month} tháng này.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(error.statusCode || 500, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/ai-usage/limits' && req.method === 'PUT') {
+    try {
+      const body = await readJsonBody(req);
+      const known = body?.scope === 'account' ? authService.listAccounts(currentAccount.id).some(account => account.id === body.targetId)
+        : body?.scope === 'provider' && aiProviderManager.getProviders().some(provider => provider.id === body.targetId);
+      if (!known) throw Object.assign(new Error('Không tìm thấy tài khoản hoặc mô hình cần đặt hạn mức.'), { statusCode: 404 });
+      const limit = await require('../services/ai_usage_service').service.setLimit(body, currentAccount.id);
+      loggerService.addLog('INFO', 'AI Usage', `Cập nhật hạn mức AI ${limit.scope}:${limit.targetId} — ${limit.locked ? 'khóa' : 'mở'}, ${limit.tokenLimit === null ? 'không giới hạn' : `${limit.tokenLimit} token/${limit.period === 'day' ? 'ngày' : 'tháng'}`}.`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ limit }));
+    } catch (error) {
+      res.writeHead(error.statusCode || 500, { 'Content-Type': 'application/json; charset=UTF-8' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
   if (pathname === '/api/ai-providers' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({
@@ -2412,7 +2473,7 @@ async function handleGovernedRequest(req, res) {
         }
       }
       if (path.basename(filePath) === 'index.html') {
-        content = require('../services/dashboard_shell').render(content.toString('utf8'));
+        content = require('../services/dashboard_shell').render(content.toString('utf8'), pathname);
       }
       if (/\.(?:html|js|css)$/i.test(filePath)) {
         headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';

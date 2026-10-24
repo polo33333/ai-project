@@ -2,7 +2,8 @@
 const { AsyncLocalStorage } = require('node:async_hooks');
 const scopes = new AsyncLocalStorage();
 const denied = code => Object.assign(new Error('Không có quyền truy cập tài nguyên hoặc đích xử lý.'), { code, statusCode: 403 });
-function run(operation) { return scopes.run({ principal: null, resources: new Map() }, operation); }
+// aiUsageAdmitted: account/model limits already passed in this request; the rest of the request is not cut off.
+function run(operation) { return scopes.run({ principal: null, resources: new Map(), aiUsageAdmitted: new Set() }, operation); }
 function isolateResources(operation) {
   const scope = current();
   return scope ? scopes.run({ ...scope, resources: new Map() }, operation) : operation();

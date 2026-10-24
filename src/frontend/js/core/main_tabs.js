@@ -65,7 +65,8 @@ const MAIN_TAB_KEYS = new Set([
   'settings',
   'data-governance',
   'memory',
-  'api-docs'
+  'api-docs',
+  'ai-usage'
 ]);
 function normalizeMainTabKey(tabKey) {
   const rawKey = String(tabKey || '')
@@ -157,6 +158,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     if (dashboardHeadingIcon) dashboardHeadingIcon.hidden = false;
     const titles = {
       accounts: 'Quản lý tài khoản',
+      ai_usage: 'Hạn mức sử dụng',
       settings: 'Cài đặt hệ thống',
       data_governance: 'Quản trị dữ liệu',
       memory: 'Bộ nhớ Agent',
@@ -184,6 +186,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     };
     const pageMeta = {
       accounts: { icon: 'fa-users-gear', subtitle: 'Tài khoản đăng nhập và phân quyền sử dụng ứng dụng' },
+      ai_usage: { icon: 'fa-gauge-high', subtitle: 'Token đã dùng, hạn mức và khóa sử dụng AI theo tài khoản và mô hình' },
       settings: { icon: 'fa-gear', subtitle: 'Quản lý cấu hình và tùy chọn vận hành hệ thống' },
       data_governance: { icon: 'fa-shield-halved', subtitle: 'Quyền truy cập, xử lý dữ liệu và chỉ tiêu SQL' },
       memory: { icon: 'fa-brain', subtitle: 'Bộ nhớ cá nhân, hướng dẫn tổ chức và lịch sử tác vụ' },
@@ -303,6 +306,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
 
     const tabLoaders = {
       accounts: [window.loadAccounts],
+      ai_usage: [window.loadAiUsage],
       settings: [window.fetchSettings],
       data_governance: [window.loadGovernanceResources],
       memory: [window.loadAiMemory],

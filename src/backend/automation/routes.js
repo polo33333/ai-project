@@ -22,6 +22,20 @@ async function handle(req, res, pathname, account, readBody) {
       else throw error('Phương thức không được hỗ trợ.', 405);
       return true;
     }
+    if (['/api/workflow-plugins/route-test', '/api/workflow-plugins/draft-assist', '/api/workflow-plugins/draft-template'].includes(pathname) && req.method === 'POST') {
+      requireAdmin(context); const assist = require('./authoring_assist'), body = await readBody(req);
+      if (pathname.endsWith('draft-template')) {
+        // Drafting takes several model calls, so report each stage as it happens (one JSON object per line).
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=UTF-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+        const aborted = new AbortController(); res.on('close', () => { if (!res.writableEnded) aborted.abort(); });
+        const line = value => { if (!res.writableEnded) res.write(`${JSON.stringify(value)}\n`); };
+        try { line({ result: await assist.draftTemplate(body, { progress: event => line({ progress: event }), signal: aborted.signal }) }); }
+        catch (failure) { line({ error: failure.message || 'Không soạn được mẫu.' }); }
+        res.end(); return true;
+      }
+      send(pathname.endsWith('route-test') ? await assist.routeTest(body, context) : await assist.draftRecognition(body));
+      return true;
+    }
     if (pathname === '/api/workflow-plugins/starter' && req.method === 'GET') { send({ bundle: await automation.starter(context) }); return true; }
     if (pathname === '/api/workflow-plugins') {
       requireAdmin(context);

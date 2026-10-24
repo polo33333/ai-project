@@ -17,6 +17,15 @@ test('initial shell includes the real dashboard and logs without another templat
   await context.loadViewComponents('overview');
 });
 
+test('reloading another tab does not paint the overview first', () => {
+  const index = fs.readFileSync(path.join(__dirname, '../src/frontend/index.html'), 'utf8');
+  const html = require('../src/backend/services/dashboard_shell').render(index, '/chat-history');
+  assert.ok(!html.includes('id="analyticsChart"') && !html.includes('data-loaded="true"'));
+  assert.match(html, /<h1 id="page-heading"><\/h1>/);
+  assert.match(html, /<li class="nav-item active" id="nav-chat-history">/);
+  assert.ok(!html.includes('<li class="nav-item active" id="nav-dashboard">'));
+});
+
 test('a stalled dashboard template aborts, releases its request, and can be retried', async () => {
   let calls = 0;
   const controllers = [];

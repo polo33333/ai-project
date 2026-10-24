@@ -8,6 +8,9 @@ const mutations=new Map([
   // Attachment answers pick a model from the provider catalog.
   ['POST /api/chat/attachments',['ai_providers.json','chat_history.json']],
   ['DELETE /api/chat/attachments',[]],
+  // Limits and counters live in their own SQL tables; only names come from stores.
+  ['PUT /api/ai-usage/limits',['ai_providers.json','logs.json']],
+  ['POST /api/ai-usage/reset',['ai_providers.json','logs.json']],
   ['POST /api/page-chat/sessions',['ai_providers.json']],
   ['PUT /api/settings',[]],
   ['POST /api/persona',['ai_persona.json','logs.json']],
@@ -34,6 +37,7 @@ const routes=new Map([
   ['/api/automation-runs',['dictionary.json','table_relationships.json','db_sources.json','library.json']],
   ['/api/persona',['ai_persona.json']],
   ['/api/ai-providers',['ai_providers.json']],
+  ['/api/ai-usage',['ai_providers.json']], ['/api/ai-usage/me',[]],
   ['/api/chat/providers',['ai_providers.json']],
   ['/api/sql/sources',['db_sources.json']],
   ['/api/dictionary',['dictionary.json','db_sources.json']],
