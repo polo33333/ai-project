@@ -22,6 +22,7 @@
     "backup": "node scripts/backup_restore.js backup",
     "restore": "node scripts/backup_restore.js restore",
     "eval:retrieval": "node scripts/evaluate_retrieval.js",
+    "eval:schema": "node scripts/evaluate_schema_selection.js",
     "eval:local": "node scripts/evaluate_local_harness.js",
     "eval:memory": "node scripts/evaluate_memory.js",
     "eval:provider": "node scripts/evaluate_provider_harness.js",

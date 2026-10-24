@@ -12,7 +12,9 @@ const MAX_COLUMNS_PER_TABLE = Math.max(5, parseInt(process.env.AI_SCHEMA_MAX_COL
 const MAX_CONTEXT_CHARS = Math.max(2000, parseInt(process.env.AI_SCHEMA_MAX_CONTEXT_CHARS || '18000', 10));
 const JOIN_MAX_EDGES = Math.max(1, Math.min(20, parseInt(process.env.SQL_JOIN_MAX_EDGES || '3', 10) || 3));
 const SEMANTIC_MIN_SCORE = Math.max(0, Math.min(1, Number(process.env.AI_SCHEMA_SEMANTIC_MIN_SCORE || 0.5)));
-const STOP_WORDS = new Set(['ai', 'ban', 'toi', 'la', 'cho', 'cua', 'va', 'voi', 'nay', 'kia', 'gi', 'co', 'khong', 'hay', 'theo', 'trong', 'duoc']);
+// "thông tin", "danh sách", "các"… appear in almost every question and description, so they only add noise to table ranking.
+const STOP_WORDS = new Set(['ai', 'ban', 'toi', 'la', 'cho', 'cua', 'va', 'voi', 'nay', 'kia', 'gi', 'co', 'khong', 'hay', 'theo', 'trong', 'duoc',
+  'thong', 'tin', 'danh', 'sach', 'cac', 'nhung', 'nao', 'nhieu']);
 
 function normalize(value) {
   return String(value || '')
@@ -58,12 +60,28 @@ function domainText(domain) {
   return [domain, ...aliases].join(' ');
 }
 
+// Generated column descriptions ("Cột X trong bảng SQL Server T") carry no meaning and match "bảng/cột" in every table.
+const isGeneratedColumnDescription = (column, table) => column.description === `Cột ${column.columnName} trong bảng SQL Server ${table.tableName}`;
+
 function tableText(table) {
   return [table.tableName, table.dbName, table.domain, domainText(table.domain), table.tableDescription,
     table.semanticModel?.entity, table.semanticModel?.grain, ...(table.semanticModel?.aliases || []), ...(table.semanticModel?.segments || []).map(s=>s.label),
     table.defaultMetric, table.defaultTimeColumn, table.defaultAggregation,
-    ...(table.columns || []).filter(column => column.isVisible !== false).flatMap(column => [column.columnName, column.description, column.dataType])
+    ...(table.columns || []).filter(column => column.isVisible !== false).flatMap(column => [column.columnName, column.displayName,
+      isGeneratedColumnDescription(column, table) ? '' : column.description, column.dataType])
   ].filter(Boolean).join(' ');
+}
+
+// What the table IS: name, business entity, aliases, domain and the opening phrase of its description.
+// Only the first clause counts; long first sentences ("…, liên kết khách hàng bằng CustomerID") would dilute it.
+function tableIdentityText(table) {
+  return [table.tableName, table.domain, domainText(table.domain), table.semanticModel?.entity, ...(table.semanticModel?.aliases || []),
+    String(table.tableDescription || '').split(/[.;,:(]/)[0]].filter(Boolean).join(' ');
+}
+
+// Identity matches count twice, so a table whose columns merely mention a word does not outrank the table that is that thing.
+function tableScore(queryTokens, table) {
+  return lexicalScore(queryTokens, tableText(table)) + lexicalScore(queryTokens, tableIdentityText(table));
 }
 
 function isStandaloneCalculation(query, options = {}) {
@@ -193,7 +211,7 @@ async function buildSchemaContext(query, options = {}) {
   const expandedTokens = tokens(expandedQuery);
   const directListTable = isSimpleEntityListRequest(query)
     ? matchExplicitTable(query, activeTables) || matchExplicitTable(expandedQuery, activeTables) : null;
-  const lexicalScores = new Map(activeTables.map(table => [tableIdentity(table), lexicalScore(expandedTokens, tableText(table))]));
+  const lexicalScores = new Map(activeTables.map(table => [tableIdentity(table), tableScore(expandedTokens, table)]));
   if (directListTable) {
     for (const table of activeTables) lexicalScores.set(tableIdentity(table), table === directListTable ? 1000 : 0);
   }
