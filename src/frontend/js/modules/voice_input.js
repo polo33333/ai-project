@@ -2,7 +2,7 @@
 // Any button with data-voice-target="<textarea id>" becomes a mic toggle.
 (function initVoiceInput() {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let active = null; // { recognition, button, input, baseText, finalText }
+  let active = null; // { recognition, button, input, baseText, heard, finalHeard, skip }
 
   function notify(message, type = 'info') {
     if (typeof showToast === 'function') showToast(message, type);
@@ -13,7 +13,7 @@
     button.setAttribute('aria-pressed', String(recording));
     button.title = recording ? 'Đang nghe… nhấn để dừng' : 'Nhập bằng giọng nói';
     button.setAttribute('aria-label', button.title);
-    button.innerHTML = recording ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-microphone"></i>';
+    button.innerHTML = recording ? '<i class="fa-solid fa-square"></i>' : '<i class="fa-solid fa-microphone"></i>';
   }
 
   function writeInput(input, text) {
@@ -50,18 +50,23 @@
     recognition.interimResults = true;
 
     const existing = input.value.trimEnd();
-    const session = { recognition, button, input, baseText: existing ? `${existing} ` : '', finalText: '' };
+    // heard: everything recognised this session; skip: how much of it the user already edited away.
+    const session = { recognition, button, input, baseText: existing ? `${existing} ` : '', heard: '', finalHeard: '', skip: 0 };
     active = session;
 
     recognition.onresult = event => {
       if (active !== session) return;
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) session.finalText += transcript;
-        else interim += transcript;
+      // Chrome may keep a whole utterance as one growing interim result, so rebuild
+      // the transcript from every result instead of appending new ones.
+      let heard = '';
+      let finalHeard = '';
+      for (let i = 0; i < event.results.length; i += 1) {
+        heard += event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalHeard = heard;
       }
-      writeInput(input, session.baseText + session.finalText + interim);
+      session.heard = heard;
+      session.finalHeard = finalHeard;
+      writeInput(input, session.baseText + heard.slice(session.skip).trimStart());
     };
     recognition.onerror = event => {
       const messages = {
@@ -77,8 +82,8 @@
     };
     recognition.onend = () => {
       if (active !== session) return;
-      // Chrome ends after a pause even in continuous mode; keep only the confirmed text.
-      writeInput(input, session.baseText + session.finalText);
+      // The browser ends recognition on its own after a pause; keep only the confirmed text.
+      writeInput(input, session.baseText + session.finalHeard.slice(session.skip).trimStart());
       stop();
     };
 
@@ -99,6 +104,15 @@
     stop();
     if (!sameButton) start(button);
   });
+
+  // When the user edits the box while dictating (e.g. deletes text), continue from
+  // what they left instead of re-filling the old transcript.
+  document.addEventListener('input', event => {
+    if (!active || !event.isTrusted || event.target !== active.input) return;
+    const current = active.input.value.trimEnd();
+    active.baseText = current ? `${current} ` : '';
+    active.skip = active.heard.length;
+  }, true);
 
   // Sending (Enter) or closing a dialog ends dictation so text isn't re-filled afterwards.
   document.addEventListener('keydown', event => {
