@@ -82,6 +82,20 @@ test('draft import failures do not break another package, publish requires curre
   await assert.rejects(registry.publish(draft.id, admin, draft.revision), /fixture/);
   assert.equal((await registry.getTemplate('phase1_examples/lookup', user)).name, 'Tra cứu đối tượng');
 });
+test('fixture mismatch reports the actual output and placeholder inputs block publishing', async t => {
+  const { registry } = setup(t);
+  const mismatch = structuredClone(pilot); mismatch.manifest.id = 'mismatch'; mismatch.templates = [mismatch.templates[0]]; mismatch.templates[0].fixtures[0].expected = { code: 'A001', source: 'other' };
+  let record = await registry.import(mismatch, admin);
+  const report = await registry.test(record.id, admin);
+  assert.equal(report.passed, false);
+  assert.deepEqual(report.results[0].actual, { code: 'A001', source: 'fixture' });
+  const placeholder = structuredClone(pilot); placeholder.manifest.id = 'placeholder'; placeholder.templates = [placeholder.templates[0]];
+  placeholder.templates[0].fixtures[0] = { input: { code: '__EMPTY_FIXTURE__' }, expected: { code: '__EMPTY_FIXTURE__', source: 'fixture' } };
+  record = await registry.import(placeholder, admin);
+  assert.equal((await registry.test(record.id, admin)).passed, true);
+  record = await registry.repository.get('catalog', record.id);
+  await assert.rejects(registry.publish(record.id, admin, record.revision), /giá trị giả/);
+});
 test('owner checks, field injection, idempotency and one pending run per conversation', async t => {
   const { registry, runtime } = setup(t); await publish(registry);
   const run = await runtime.create('phase1_examples/lookup', {}, user, { conversationId: 'owner', requestId: 'unique' });

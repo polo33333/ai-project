@@ -49,11 +49,11 @@ test('browser manages plugin publication and completes a run through the slot fo
   const lookupActions = page.locator('#wp-packages article[data-template-id="lookup"] .workflow-card-actions');
   assert.equal(await lookupActions.locator(':scope > button').count(), 3);
   await lookupActions.getByRole('button', { name: 'Thêm thao tác', exact: true }).click();
-  await lookupActions.getByRole('button', { name: 'Validate', exact: true }).waitFor();
+  await lookupActions.getByRole('button', { name: 'Kiểm tra cấu hình', exact: true }).waitFor();
   await lookupActions.getByRole('button', { name: 'Thêm thao tác', exact: true }).press('Escape');
-  assert.equal(await lookupActions.getByRole('button', { name: 'Validate', exact: true }).isVisible(), false);
+  assert.equal(await lookupActions.getByRole('button', { name: 'Kiểm tra cấu hình', exact: true }).isVisible(), false);
   assert.equal((await automation.repository.list('catalog')).filter(item => item.id.startsWith('phase1_example_')).every(item => item.draft.templates.length === 1), true);
-  await page.locator('#wp-packages article[data-template-id="range"]').getByRole('button', { name: 'Sửa template', exact: true }).click();
+  await page.locator('#wp-packages article[data-template-id="range"]').getByRole('button', { name: 'Sửa mẫu', exact: true }).click();
   const phaseButtons = page.locator('.wp-node-select');
   assert.ok(await phaseButtons.count() > 1);
   assert.equal(await phaseButtons.nth(0).isVisible(),false);
@@ -65,7 +65,7 @@ test('browser manages plugin publication and completes a run through the slot fo
   await page.screenshot({ path: path.join(os.tmpdir(), 'knowledgehub-node-builder.png'), fullPage: true });
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   const beforeEdit = (await automation.repository.list('catalog')).find(item => item.id === 'phase1_example_lookup').draft;
-  await page.locator('#wp-packages article[data-template-id="lookup"]').getByRole('button', { name: 'Sửa template', exact: true }).click();
+  await page.locator('#wp-packages article[data-template-id="lookup"]').getByRole('button', { name: 'Sửa mẫu', exact: true }).click();
   await page.getByRole('tab', { name: 'Nhận diện & đầu vào', exact: true }).click();
   await page.locator('.wp-slot-card').getByLabel('Tên hiển thị', { exact: true }).fill('Mã cần tra cứu');
   await page.getByLabel('Câu hỏi khi thiếu thông tin', { exact: true }).fill('Bạn muốn tra cứu mã nào?');
@@ -154,9 +154,9 @@ test('browser manages plugin publication and completes a run through the slot fo
   expected.templates[0].fixtures[0].name = 'Tra cứu mã hợp lệ'; expected.templates[0].fixtures[0].input.code = 'A002'; expected.templates[0].fixtures[0].expected.code = 'A002';
   expected.manifest.domain = ''; expected.manifest.tags = []; expected.templates[0].bindings = {};
   assert.deepEqual(afterEdit, expected);
-  await page.locator('#wp-packages article[data-template-id="lookup"]').getByRole('button', { name: 'Chạy fixture', exact: true }).click();
+  await page.locator('#wp-packages article[data-template-id="lookup"]').getByRole('button', { name: 'Chạy thử', exact: true }).click();
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
-  await page.locator('#wp-packages article[data-template-id="lookup"]').getByRole('button', { name: 'Publish', exact: true }).click();
+  await page.locator('#wp-packages article[data-template-id="lookup"]').getByRole('button', { name: 'Phát hành', exact: true }).click();
   await page.getByRole('button', { name: 'Bật workflow/plugin', exact: true }).click();
   const lookup = page.locator('#wp-packages article').filter({ has: page.getByRole('heading', { name: 'Tra cứu đối tượng', exact: true }) });
   await lookup.getByRole('button', { name: 'Thêm thao tác', exact: true }).click();
@@ -302,7 +302,7 @@ test('browser manages plugin publication and completes a run through the slot fo
   await customCard.waitFor({ state: 'detached' });
   assert.equal(await page.locator('#wp-packages article[data-template-id="custom_second"]').count(), 1);
   assert.ok((await automation.repository.get('catalog', 'custom_business')).deletedTemplates.custom_first);
-  await page.locator('#wp-packages article[data-template-id="custom_second"]').getByRole('button', { name: 'Sửa template', exact: true }).click();
+  await page.locator('#wp-packages article[data-template-id="custom_second"]').getByRole('button', { name: 'Sửa mẫu', exact: true }).click();
   assert.equal(await page.locator('.workflow-editor-dialog').evaluate(node => getComputedStyle(node).backgroundColor.match(/\d+/g).slice(0, 3).every(value => Number(value) < 80)), true);
   const closeColors = await page.locator('.workflow-editor-dialog > header > button').evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color }));
   assert.equal(closeColors.background, 'rgb(37, 50, 74)');
@@ -312,7 +312,7 @@ test('browser manages plugin publication and completes a run through the slot fo
   await page.getByRole('button', { name:'Đóng', exact:true }).click();
   const publishedCard=page.locator('#wp-packages article[data-template-id="lookup"]');
   await publishedCard.getByRole('button',{name:'Thêm thao tác',exact:true}).click();
-  await publishedCard.getByRole('button',{name:'Tùy chỉnh scope',exact:true}).click();
+  await publishedCard.getByRole('button',{name:'Tùy chỉnh theo phạm vi',exact:true}).click();
   const scopeSection=page.locator('.workflow-editor-body > .wp-editor-section');
   assert.equal(await scopeSection.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(27, 39, 59)');
   assert.equal(await scopeSection.locator(':scope > summary').evaluate(node=>getComputedStyle(node).color),'rgb(226, 232, 240)');

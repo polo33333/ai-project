@@ -8,6 +8,14 @@ function authorized(definition, context) {
   return (!audience?.accountIds?.length || audience.accountIds.includes(context.accountId)) && (!audience?.tenantIds?.length || audience.tenantIds.includes(scope(context)));
 }
 function requireAdmin(context) { if (!context.permissions?.includes('admin')) throw error('Cần quyền quản trị definition.', 403); }
+// Generated drafts mark unfilled fixture inputs as __NAME__; such cases cannot prove the template works.
+const FIXTURE_PLACEHOLDER = /^__[A-Z0-9_]+__$/;
+function placeholderFixtures(bundle) {
+  const found = [];
+  const visit = value => typeof value === 'string' ? FIXTURE_PLACEHOLDER.test(value) : value && typeof value === 'object' && Object.values(value).some(visit);
+  for (const template of bundle.templates) template.fixtures.forEach((fixture, index) => { if (visit(fixture.input)) found.push(`${template.name || template.id} #${index + 1}`); });
+  return found;
+}
 class PluginRegistry {
   constructor(repository) { this.repository = repository; }
   async import(bundle, context, revision = null) {
@@ -99,7 +107,7 @@ class PluginRegistry {
         }
         const output = resolve(template.output.mapping, state), failures = validateValue(output, template.output.schema);
         ensure(!failures.length, failures.join('; '));
-        ensure(hash(output) === hash(fixture.expected), 'Kết quả không khớp expected.');
+        if (hash(output) !== hash(fixture.expected)) { results.push({ templateId: template.id, fixture: index + 1, passed: false, error: 'Kết quả không khớp kết quả mong đợi.', actual: output }); continue; }
         results.push({ templateId: template.id, fixture: index + 1, passed: true });
       } catch (failure) { results.push({ templateId: template.id, fixture: index + 1, passed: false, error: failure.message }); }
     }
@@ -111,6 +119,8 @@ class PluginRegistry {
     await this.validate(id, context);
     ensure(!(record.versions || []).some(version => version.manifest.version === record.draft.manifest.version), 'Version đã publish là bất biến; hãy tạo draft version mới.');
     ensure(record.testedHash === hash(record.draft) && record.lastTest?.passed, 'Phải chạy fixture thành công trên draft hiện tại trước publish.');
+    const placeholders = placeholderFixtures(record.draft);
+    ensure(!placeholders.length, `Trường hợp chạy thử còn dùng giá trị giả: ${placeholders.join(', ')}. Hãy nhập dữ liệu thật đã đối chiếu trước khi phát hành.`);
     await this.indexRoutingBundle(record.draft);
     return this.repository.put('catalog', { ...record, published: structuredClone(record.draft), publishedAt: new Date().toISOString(), publishedBy: context.accountId, versions: [...(record.versions || []), structuredClone(record.draft)] }, revision);
   }

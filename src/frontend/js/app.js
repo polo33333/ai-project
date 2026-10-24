@@ -254,7 +254,7 @@ function initPwaInstall() {
 
 async function loadCurrentAccount() {
   try {
-    const res = await fetch('/api/auth/me');
+    const res = await fetch('/api/auth/me', { signal: globalThis.AbortSignal?.timeout?.(10000) });
     const data = await res.json();
     if (!data.authenticated) {
       window.location.href = '/login';
@@ -529,13 +529,18 @@ function initGlobalFeatureSearch() {
 
 window.architectureSuggestionAction = null;
 
-async function refreshArchitectureSuggestion() {
+async function refreshArchitectureSuggestion(dashboardData) {
   const banner = document.getElementById('ai-suggestion-banner');
   if (!banner || sessionStorage.getItem('knowledgehub.dismissArchitectureSuggestion') === '1') return;
   try {
-    const [sourcesRes, qdrantRes] = await Promise.all([fetch('/api/sql/sources'), fetch('/api/qdrant/status')]);
-    const sourcesData = sourcesRes.ok ? await sourcesRes.json() : [];
-    const qdrant = qdrantRes.ok ? await qdrantRes.json() : { connected: false };
+    let sourcesData = dashboardData?.sources;
+    let qdrant = dashboardData?.qdrant;
+    if (!dashboardData) {
+      const options = { signal: globalThis.AbortSignal?.timeout?.(8000) };
+      const [sourcesRes, qdrantRes] = await Promise.all([fetch('/api/sql/sources', options), fetch('/api/qdrant/status', options)]);
+      sourcesData = sourcesRes.ok ? await sourcesRes.json() : [];
+      qdrant = qdrantRes.ok ? await qdrantRes.json() : { connected: false };
+    }
     const sources = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || []);
     const title = document.getElementById('banner-title');
     const text = document.getElementById('banner-text');
@@ -1384,7 +1389,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   startAuthHeartbeat();
   initGlobalFeatureSearch();
-  await switchMainTab(getRememberedMainTab());
+  try { await switchMainTab(getRememberedMainTab()); }
+  finally { window.releaseDashboardStartupLoading?.(); }
   if(window.canAccessMainTab('page-chat')) populateCopilotModelSelector();
 
 });

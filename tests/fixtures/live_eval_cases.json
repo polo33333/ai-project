@@ -796,6 +796,51 @@
       "mustTools": [
         "export_data"
       ]
+    },
+    {
+      "id": "wf-followup-export",
+      "group": "workflow-followup",
+      "turns": [
+        "Báo cáo sản lượng điện bán ra 3 tháng gần nhất, không vẽ biểu đồ, không xuất file",
+        "Xuất kết quả trên ra file excel"
+      ],
+      "must": [
+        {
+          "re": "/api/|\\.xlsx"
+        }
+      ],
+      "mustTools": [
+        "export_data"
+      ]
+    },
+    {
+      "id": "wf-followup-chart",
+      "group": "workflow-followup",
+      "turns": [
+        "Báo cáo sản lượng điện bán ra 3 tháng gần nhất, không vẽ biểu đồ, không xuất file",
+        "Vẽ biểu đồ cột cho kết quả trên"
+      ],
+      "must": [
+        {
+          "re": "biểu đồ"
+        }
+      ],
+      "mustTools": [
+        "render_chart"
+      ]
+    },
+    {
+      "id": "wf-followup-max",
+      "group": "workflow-followup",
+      "turns": [
+        "Báo cáo sản lượng điện bán ra 3 tháng gần nhất, không vẽ biểu đồ, không xuất file",
+        "Trong kết quả trên, tháng nào có sản lượng cao nhất?"
+      ],
+      "must": [
+        {
+          "re": "tháng"
+        }
+      ]
     }
   ],
   "note": "PowerMoney is labelled \"Tiền điện\" (empty in this IPMS copy); amount questions use \"tiền hóa đơn điện sau thuế\" (FinalTotalAmount)."

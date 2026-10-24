@@ -293,7 +293,6 @@
 :root[data-theme="dark"] .wp-confirm-dialog h3 { color: #e2e8f0; }
 :root[data-theme="dark"] .wp-confirm-dialog p { color: #94a3b8; }
 :root[data-theme="dark"] .wp-confirm-icon { background: #442333; color: #fda4af; }
-.wp-selector-bar { display: flex; align-items: end; gap: 12px; }
 .workflow-execution-panel { box-sizing: border-box; width: 100%; min-width: 0; }
 .workflow-execution-panel > ol { padding-left: 24px; margin: 12px 0 16px; }
 .workflow-execution-panel > strong { display: block; line-height: 1.6; }
@@ -305,8 +304,6 @@
 .workflow-execution-panel .workflow-result-table th { white-space: nowrap; }
 .workflow-execution-panel .workflow-result-table td { max-width: 320px; overflow-wrap: anywhere; }
 .workflow-execution-panel dl, .workflow-execution-panel dd { min-width: 0; max-width: 100%; }
-.wp-selector-bar > label { flex: 1; min-width: 0; margin: 0; }
-.wp-selector-bar > button { flex-shrink: 0; min-height: 40px; }
 .wp-script-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 8px; }
 .wp-script-header h4 { margin: 0; }
 .wp-shared-config { grid-column: 1 / -1; padding-top: 20px; border-top: 1px solid #e2e8f0; }
@@ -320,7 +317,7 @@
 :root[data-theme="dark"] .wp-shared-config, :root[data-theme="dark"] .wp-inspector-heading { border-color: #334155; }
 :root[data-theme="dark"] .wp-scope-heading > i { background: #312e55; color: #a5b4fc; }
 :root[data-theme="dark"] .wp-scope-heading > span { background: #25324a; color: #cbd5e1; }
-@media (max-width: 700px) { .wp-selector-bar { align-items: stretch; flex-direction: column; } .wp-scope-heading { flex-wrap: wrap; } }
+@media (max-width: 700px) { .wp-scope-heading { flex-wrap: wrap; } }
 .wp-business-editor .wp-builder-main { grid-column: 1; grid-row: 1; }
 .wp-business-editor .wp-step-inspector { grid-column: 2; grid-row: 1; position: static; box-sizing: border-box; width: 100%; }
 .wp-business-editor .wp-shared-config { grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; box-sizing: border-box; }
@@ -390,8 +387,6 @@
 .wp-business-editor .workflow-editor-body > .wp-config-section { box-sizing:border-box; width:100%; padding:16px; margin:0 0 16px; border:1px solid #e0dcf5; border-radius:14px; background:#f5f3ff; }
 .wp-business-editor .workflow-editor-body > .wp-config-section > summary { padding:0; border-radius:8px; }
 .wp-business-editor .workflow-editor-body > .wp-config-section > summary:hover { background:#eeebfc; }
-.wp-business-editor .workflow-editor-body > .wp-config-section .wp-selector-bar { margin:16px 0 0; padding:16px 20px; border-radius:12px; background:#f8fafc; }
-:root[data-theme="dark"] .wp-business-editor .workflow-editor-body > .wp-config-section .wp-selector-bar { background:#1b273b; }
 .wp-business-editor .wp-package-fields { margin:16px 0 4px; padding:20px; background:#f8fafc; border-radius:12px; gap:18px 24px; }
 .wp-business-editor .wp-package-fields > label { margin:0; gap:8px; }
 .wp-business-editor .wp-bindings-section > div { margin:16px 0; padding:16px; border-radius:12px; background:#f8fafc; }
@@ -876,17 +871,12 @@
 #wp-drafts-section #wp-toolbar .wp-layout-switch button:not([aria-pressed="true"]):is(:hover,:focus-visible) { background:var(--primary-light,#eef2ff); color:var(--primary,#4f46e5); }
 #wp-drafts-section #wp-toolbar .wp-layout-switch button:focus-visible { outline:2px solid var(--primary,#4f46e5); outline-offset:2px; }
 .wp-toolbar-actions { gap:6px; padding-left:0; border-left:0; }
-.wp-editor-guide { padding:14px 16px; margin-bottom:16px; border:1px solid #e1e7ff; border-radius:12px; background:#f5f7ff; color:#41517a; }
-.wp-editor-guide strong { font-size:14px; }
-.wp-editor-guide p { margin:5px 0 0; font-size:12px; line-height:1.65; }
-.wp-business-editor .workflow-editor-body > .wp-selector-bar { padding:0; margin-bottom:16px; }
 .wp-editor-navigation { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
 .wp-editor-navigation span { color:#94a3b8; font-size:12px; }
 .wp-editor-navigation button { min-height:36px; padding:8px 14px; }
 .wp-editor-navigation button[hidden] { display:none; }
 .wp-editor-navigation button:last-child { margin-left:auto; background:#6555e8; color:#fff; border-color:#6555e8; }
 .wp-editor-save-note { margin-right:auto; color:#7c899c; font-size:11px; line-height:1.5; }
-:root[data-theme="dark"] .wp-editor-guide { background:#242a43; border-color:#3d456a; color:#c4cce6; }
 @media(max-width:700px) { .wp-editor-save-note { flex-basis:100%; } .wp-business-editor .workflow-dialog > footer { flex-wrap:wrap; } }
 #wp-drafts-section #wp-toolbar .wp-toolbar-actions .wp-toolbar-icon { display:inline-grid; place-items:center; width:36px; height:36px; min-height:36px; padding:0; border:0; background:var(--bg-secondary,#f0f4fa); color:#64748b; border-radius:10px; box-shadow:none; }
 #wp-drafts-section #wp-toolbar .wp-toolbar-icon i { margin:0; font-size:13px; }
@@ -1134,3 +1124,32 @@
 
 :root[data-theme="dark"] .wp-business-editor .workflow-editor-body > .wp-config-section { background:#24243c; border-color:#484064; }
 @media(max-width:700px) { .wp-business-editor .workflow-editor-body > .wp-config-section { padding:12px; } }
+/* Editor status marks, package note, inline test report and fixture warnings. */
+.wp-business-editor .wp-config-tabs > button .wp-tab-mark { display:inline-flex; font-size:12px; }
+.wp-tab-mark[hidden] { display:none !important; }
+.wp-tab-mark.is-complete { color:#18794e; }
+.wp-tab-mark.is-warning { color:#b45309; }
+.wp-tab-mark .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+.wp-package-note { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 16px; padding:10px 14px; border:1px solid #e4e9f2; border-radius:12px; background:#f8fafc; color:#475569; font-size:13px; }
+.wp-package-note i { color:#6366f1; }
+.wp-inline-report { gap:12px; margin:0 0 16px; }
+.wp-inline-report-row { display:grid; gap:8px; padding:12px 14px; border:1px solid var(--report-red-bg); border-radius:12px; background:var(--report-surface); }
+.wp-inline-report-row p { margin:0; color:var(--report-red); font-size:13px; font-weight:600; }
+.wp-inline-report-row pre { max-height:220px; overflow:auto; margin:8px 0 0; padding:10px; border-radius:8px; background:var(--bg-primary,#fff); font-size:12px; }
+.wp-inline-report-row > button { justify-self:start; }
+.wp-fixture-warning { display:flex; gap:8px; align-items:flex-start; margin:0 0 12px; padding:10px 12px; border-radius:10px; background:#fff7e6; color:#8a4b00; font-size:12.5px; line-height:1.55; }
+.wp-test-optional { margin-left:6px; color:#64748b; font-size:11px; font-weight:500; }
+.wp-template-stats .wp-test-placeholder { color:#b45309; font-weight:600; }
+.wp-business-editor .workflow-dialog > footer .wp-publish-action:disabled { opacity:.45; cursor:not-allowed; }
+:root[data-theme="dark"] .wp-package-note { background:#1b273b; border-color:#334155; color:#cbd5e1; }
+:root[data-theme="dark"] .wp-fixture-warning { background:#3d2f17; color:#fcd34d; }
+:root[data-theme="dark"] .wp-tab-mark.is-complete { color:#8bd8b0; }
+:root[data-theme="dark"] .wp-tab-mark.is-warning, :root[data-theme="dark"] .wp-template-stats .wp-test-placeholder { color:#fbbf24; }
+:root[data-theme="dark"] .wp-inline-report-row pre { background:#111b2b; }
+.wp-test-field-heading > input[type="checkbox"][hidden] { display:none !important; }
+.wp-business-editor .wp-shared-config { padding-top:0; border-top:0; }
+/* The card grid scrolls on its own so the heading, filters and run history stay in view. Phones keep one page scroll. */
+@media (min-width: 701px) {
+  #workflow-plugin-panel #wp-packages { max-height:max(320px, calc(100dvh - 500px)); overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; align-content:start; padding:4px; margin-inline:-4px; }
+}
+.wp-more-menu.wp-more-up .wp-more-items { top:auto; bottom:calc(100% + 6px); }

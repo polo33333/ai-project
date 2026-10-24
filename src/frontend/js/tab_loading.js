@@ -67,6 +67,14 @@
 
   // Multiple loaders may share a panel (API keys + embeds). Keep it busy until all finish.
   window.beginTabPanelLoading = beginLoading;
+  // The server sends the real dashboard layout. Use its existing panel loaders
+  // immediately, including while authentication is still pending.
+  if (typeof document !== 'undefined' && document.getElementById?.('dashboard-view-container')?.dataset?.loaded &&
+      !window.location?.pathname?.match(/^\/(?!$|overview\/?$)/)) {
+    window.releaseDashboardStartupLoading = () => document.querySelector('main.main-content')?.classList.remove('dashboard-booting');
+  } else if (typeof document !== 'undefined') {
+    document.querySelector?.('main.main-content')?.classList.remove('dashboard-booting');
+  }
   function tableLoadingMarkup(table, panel) {
     const head = table.querySelector('thead');
     const headers = [...(head?.querySelectorAll('tr:last-child > th, tr:last-child > td') || [])];
@@ -117,7 +125,7 @@
       const kind = table ? 'table' : panel.classList.contains?.('system-tools-page') || panel.id === 'library-docs-grid' ? 'cards' : 'list';
       const tableMarkup = table ? tableLoadingMarkup(table, panel) : '';
       const bounds = panel.getBoundingClientRect?.();
-      const nodes = panel.querySelectorAll?.('h2,h3,h4,p,legend,small,label,input,select,textarea,button,th,td,.card-title,.metric-val,.metric-title,.metric-sub,.metric-main-icon,.system-tool-icon') || [];
+      const nodes = panel.querySelectorAll?.('h2,h3,h4,p,legend,small,label,input,select,textarea,button,th,td,.card-title,.metric-val,.metric-title,.metric-sub,.metric-main-icon,.system-tool-icon,.router-status-card strong,.dashboard-activity-stat strong,.dashboard-activity-stat span,.log-stat-val,.log-stat-label') || [];
       const shapes = !tableMarkup && bounds ? [...nodes].slice(0, 100).flatMap(node => {
         const rect = node.getBoundingClientRect();
         if (!rect.width || !rect.height || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return [];

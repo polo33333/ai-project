@@ -23,11 +23,11 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="/vendor/chart.umd.min.js?v=4.5.1"></script>
 
   <!-- Toastify JS Notification CDN -->
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <link rel="stylesheet" type="text/css" href="/vendor/toastify.min.css?v=1.12.0">
+  <script defer src="/vendor/toastify.js?v=1.12.0"></script>
 
   <link rel="stylesheet" href="css/styles.css?v=20261024-logout">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="css/api-docs.css?v=20260904-left-align-api-keys">
   <link rel="stylesheet" href="css/system-tools.css?v=20261015-catalog-hero">
   <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
-  <link rel="stylesheet" href="css/workspace.css?v=20261020-chat-thread">
+  <link rel="stylesheet" href="css/workspace.css?v=20261024-page-scroll-header">
   <link rel="stylesheet" href="css/module-workspaces.css?v=20261024-account-operations-theme">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
   <link rel="stylesheet" href="css/theme.css?v=20261024-surface-aliases">
@@ -49,6 +49,7 @@
   <link rel="stylesheet" href="css/ui-foundation.css?v=20261015-composer-focus">
   <link rel="stylesheet" href="css/chat-conversation.css?v=20261024-dismiss-warning">
   <link rel="stylesheet" href="css/dictionary-workspace.css?v=20261023-column-alignment">
+  <link rel="stylesheet" href="/css/tab_loading.css?v=20261024-first-paint-skeleton">
 </head>
 
 <body>
@@ -240,7 +241,7 @@
     <button class="sidebar-backdrop" id="sidebar-backdrop" tabindex="-1" aria-label="Đóng thanh điều hướng" hidden></button>
 
     <!-- MAIN CONTENT AREA -->
-    <main class="main-content" id="main-content" tabindex="-1">
+    <main class="main-content dashboard-booting" id="main-content" tabindex="-1">
 
       <!-- Top Header Bar -->
       <header class="top-bar">
@@ -274,12 +275,12 @@
         </div>
       </header>
 
-      <div id="dashboard-view-container" style="display:contents"></div>
+      <div id="dashboard-view-container" style="display:contents"><!-- dashboard-shell --></div>
 
-      <div class="dashboard-overview-lower">
+      <div class="dashboard-overview-lower is-dashboard">
       <!-- Bottom Section: Dynamic View Component Containers Container -->
       <section class="bottom-grid" id="main-view-container">
-        <!-- Modular HTML Component Templates will be loaded dynamically here -->
+        <!-- dashboard-logs-shell -->
       </section>
       </div>
 
@@ -568,44 +569,43 @@
   </div>
 
   <!-- Modular JavaScript Engine Files -->
-  <script src="js/ui_dialogs.js?v=20260913"></script>
-  <script src="js/modules/ai_providers.js?v=20261017-user-chat-models"></script>
-  <script src="js/modules/dictionary.js?v=20261023-column-alignment"></script>
-  <script src="js/modules/dictionary-graph.js?v=20261022-graph-cards"></script>
-  <script src="js/modules/glossary.js?v=20261015-training-loading"></script>
+  <script defer src="js/ui_dialogs.js?v=20260913"></script>
+  <script defer src="js/modules/ai_providers.js?v=20261017-user-chat-models"></script>
+  <script defer src="js/modules/dictionary.js?v=20261023-column-alignment"></script>
+  <script defer src="js/modules/dictionary-graph.js?v=20261022-graph-cards"></script>
+  <script defer src="js/modules/glossary.js?v=20261015-training-loading"></script>
   <link rel="stylesheet" href="css/answer_status.css?v=20261012-hide-partial">
-  <script src="js/answer_ui.js?v=20261012-hide-partial"></script>
-  <script src="js/chat_tool_ui.js?v=20261013-tool-typography"></script>
-  <script src="js/chat_reasoning_ui.js?v=20261023-reasoning-resume-v2"></script>
-  <script src="embed/chat-attachments.js?v=20261020-preview"></script>
-  <script src="embed/chat-stream.js?v=20261024-readable-pace"></script>
-  <script src="js/modules/page_chat.js?v=20261024-pace-400"></script>
-  <script src="js/modules/sql_connector.js?v=20261022-tab-performance"></script>
-  <script src="js/modules/system_logs.js?v=20260906-summary-only"></script>
-  <script src="js/modules/chat_history.js?v=20261022-on-demand-audit"></script>
-  <script src="js/modules/chat_feedback.js?v=20261022-compact-list"></script>
-  <script src="js/modules/training_core.js?v=20261015-training-loading"></script>
-  <script src="js/modules/mcp_api.js?v=20261012-embed-status"></script>
-  <script src="js/modules/analytics.js?v=20261022-compact-summary"></script>
-  <script src="js/modules/library.js?v=20261017-pagination-10"></script>
-  <script src="js/modules/watchfolder.js?v=20261015-training-loading"></script>
-  <script src="js/modules/system_tools.js?v=20261015-catalog-hero"></script>
-  <script src="js/modules/governance.js?v=20261022-parallel-load"></script>
-  <script src="js/modules/accounts.js?v=20261023-login-route"></script>
-  <script src="js/modules/memory.js?v=20261015-tab-data"></script>
-  <script src="js/modules/settings.js?v=20261024-harness-pipeline"></script>
-  <script src="js/modules/workflows.js?v=20260926-phase1"></script>
-  <script src="js/modules/workflow_plugins.js?v=20261022-mcp-loading"></script>
-  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261024-control-surfaces">
+  <script defer src="js/answer_ui.js?v=20261012-hide-partial"></script>
+  <script defer src="js/chat_tool_ui.js?v=20261013-tool-typography"></script>
+  <script defer src="js/chat_reasoning_ui.js?v=20261023-reasoning-resume-v2"></script>
+  <script defer src="embed/chat-attachments.js?v=20261020-preview"></script>
+  <script defer src="embed/chat-stream.js?v=20261024-readable-pace"></script>
+  <script defer src="js/modules/page_chat.js?v=20261024-pace-400"></script>
+  <script defer src="js/modules/sql_connector.js?v=20261022-tab-performance"></script>
+  <script defer src="js/modules/system_logs.js?v=20260906-summary-only"></script>
+  <script defer src="js/modules/chat_history.js?v=20261022-on-demand-audit"></script>
+  <script defer src="js/modules/chat_feedback.js?v=20261022-compact-list"></script>
+  <script defer src="js/modules/training_core.js?v=20261015-training-loading"></script>
+  <script defer src="js/modules/mcp_api.js?v=20261012-embed-status"></script>
+  <script defer src="js/modules/analytics.js?v=20261024-real-dashboard-shell"></script>
+  <script defer src="js/modules/library.js?v=20261017-pagination-10"></script>
+  <script defer src="js/modules/watchfolder.js?v=20261015-training-loading"></script>
+  <script defer src="js/modules/system_tools.js?v=20261015-catalog-hero"></script>
+  <script defer src="js/modules/governance.js?v=20261022-parallel-load"></script>
+  <script defer src="js/modules/accounts.js?v=20261023-login-route"></script>
+  <script defer src="js/modules/memory.js?v=20261015-tab-data"></script>
+  <script defer src="js/modules/settings.js?v=20261024-harness-pipeline"></script>
+  <script defer src="js/modules/workflows.js?v=20260926-phase1"></script>
+  <script defer src="js/modules/workflow_plugins.js?v=20261024-packages-scroll"></script>
+  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261024-packages-scroll">
   <!-- Main App Router Script -->
-  <script src="js/sidebar.js?v=20260906-null-safe-footer"></script>
-  <script src="js/notifications.js?v=1.0.1"></script>
-  <link rel="stylesheet" href="css/tab_loading.css?v=20261024-loading-layout-v2">
-  <script src="js/core/tab_data.js?v=20261015-training-loading"></script>
-  <script src="js/core/view_loader.js?v=20261017-account-roles"></script>
-  <script src="js/core/main_tabs.js?v=20261017-account-roles"></script>
-  <script src="js/app.js?v=20261024-logout"></script>
-  <script src="js/tab_loading.js?v=20261024-loading-layout-v2"></script>
+  <script defer src="js/sidebar.js?v=20260906-null-safe-footer"></script>
+  <script defer src="js/notifications.js?v=1.0.1"></script>
+  <script defer src="js/core/tab_data.js?v=20261015-training-loading"></script>
+  <script defer src="js/core/view_loader.js?v=20261024-real-dashboard-shell"></script>
+  <script defer src="js/core/main_tabs.js?v=20261024-real-dashboard-shell"></script>
+  <script defer src="js/app.js?v=20261024-real-dashboard-shell"></script>
+  <script defer src="js/tab_loading.js?v=20261024-first-paint-skeleton"></script>
 </body>
 </html>
 

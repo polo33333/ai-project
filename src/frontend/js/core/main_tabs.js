@@ -277,7 +277,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
       if (navigationVersion !== mainTabNavigationVersion) return;
       const dashLogs = document.getElementById('view-dashboard-logs');
       if (dashLogs) dashLogs.style.display = 'block';
-      await loadTabData(tabKey, [window.refreshDashboardMetrics, window.fetchDashboardLogs, window.refreshArchitectureSuggestion]);
+      await loadTabData(tabKey, [window.refreshDashboardMetrics, window.fetchDashboardLogs]);
       return;
     }
 

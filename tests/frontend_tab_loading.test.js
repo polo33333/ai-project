@@ -5,6 +5,59 @@ const vm = require('node:vm');
 const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '../src/frontend/js', file), 'utf8');
 
+test('initial shell includes the real dashboard and logs without another template request', async () => {
+  const html = require('../src/backend/services/dashboard_shell').render(fs.readFileSync(path.join(__dirname, '../src/frontend/index.html'), 'utf8'));
+  for (const id of ['analyticsChart', 'dashboardFeedbackChart', 'dashboard-activity-card', 'dash-router-primary', 'view-dashboard-logs']) {
+    assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
+  }
+  assert.ok(!html.includes('dashboard-startup-loading'));
+  const container = { dataset: { loaded: 'true' }, querySelector: () => ({}) };
+  const context = { Map, document: { getElementById: () => container }, fetch: () => { throw new Error('Unexpected template request'); } };
+  vm.createContext(context); vm.runInContext(read('core/view_loader.js'), context);
+  await context.loadViewComponents('overview');
+});
+
+test('a stalled dashboard template aborts, releases its request, and can be retried', async () => {
+  let calls = 0;
+  const controllers = [];
+  const container = { dataset: {} };
+  const context = { Map, document: { getElementById: () => container },
+    AbortSignal: { timeout(ms) {
+      assert.equal(ms, 10000);
+      const controller = new AbortController(); controllers.push(controller); return controller.signal;
+    } },
+    fetch: async (url, { signal }) => {
+      assert.equal(url, '/views/dashboard.html');
+      if (++calls === 1) return new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+      return { ok: true, text: async () => '<section>Dashboard</section>' };
+    }
+  };
+  vm.createContext(context); vm.runInContext(read('core/view_loader.js'), context);
+  const first = context.loadDashboardView();
+  const second = context.loadDashboardView();
+  assert.equal(calls, 1);
+  const rejected = Promise.all([assert.rejects(first, /timeout/), assert.rejects(second, /timeout/)]);
+  controllers[0].abort(new Error('template timeout'));
+  await rejected;
+  await context.loadDashboardView();
+  assert.equal(calls, 2);
+  assert.equal(container.dataset.loaded, 'true');
+  assert.match(container.innerHTML, /Dashboard/);
+});
+
+test('architecture suggestion reuses dashboard data without fetching sources or Qdrant again', async () => {
+  const nodes = Object.fromEntries(['ai-suggestion-banner', 'banner-title', 'banner-text', 'banner-action-btn'].map(id => [id, {}]));
+  const source = read('app.js');
+  const start = source.indexOf('async function refreshArchitectureSuggestion(');
+  const end = source.indexOf('\nfunction ', start);
+  const context = { window: {}, document: { getElementById: id => nodes[id] },
+    sessionStorage: { getItem: () => null }, fetch: () => { throw new Error('Unexpected duplicate request'); } };
+  vm.createContext(context); vm.runInContext(source.slice(start, end), context);
+  await context.refreshArchitectureSuggestion({ sources: [{ id: 'source-1' }], qdrant: { connected: true, pointsCount: 10 } });
+  assert.equal(nodes['ai-suggestion-banner'].hidden, true);
+  assert.equal(context.window.architectureSuggestionAction, null);
+});
+
 test('main and popup model lists share one request, including an empty result', async () => {
   const source = read('modules/ai_providers.js');
   let resolve, calls = 0;

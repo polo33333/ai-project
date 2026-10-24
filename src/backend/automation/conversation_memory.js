@@ -36,7 +36,8 @@ function persist(run, execution, memory = require('../memory_core').memoryServic
     }
   }
   return memory.persistWorkflowExchange({ sessionId: run.conversationId, accountId: run.ownerId,
-    workflow: sanitizeObject(describe(run, execution)), artifacts: execution.artifacts || [] });
+    workflow: sanitizeObject(describe(run, execution)), artifacts: execution.artifacts || [],
+    rows: sanitizeObject(Object.values(execution.result || {}).find(Array.isArray) || null) });
 }
 
 async function readRun(runId, context, automation = require('./index')) {

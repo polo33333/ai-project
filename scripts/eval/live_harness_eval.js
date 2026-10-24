@@ -90,6 +90,24 @@ async function cleanup(storage, runId) {
   }, { files: ['conversation_memory.json', 'episodic_memory.json'] });
 }
 
+// A started workflow finishes before the next question, as it would for a
+// user watching the chat. This process runs it (right after the turn, ahead of
+// the server's one-second poll) so the code under evaluation also writes the
+// workflow result into memory.
+async function settleWorkflows(storage, sessionId) {
+  const automation = require(path.join(root, 'src/backend/automation'));
+  const pool = storage.getPool();
+  for (let waited = 0; waited < 180000; waited += 1000) {
+    await automation.runtime.tick();
+    await Promise.all([...automation.runtime.jobs]);
+    const active = (await pool.query(`SELECT count(*)::int AS n FROM app.automation_runs WHERE document->>'conversationId' = $1
+      AND document->>'status' IN ('READY', 'RUNNING')`, [sessionId])).rows[0].n;
+    if (!active) break;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  await new Promise(resolve => setTimeout(resolve, 1500)); // deferred memory write after the run commits
+}
+
 const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).sort((a, b) => a - b); return sorted.length ? sorted[Math.floor((sorted.length - 1) * q)] : null; };
 
 (async () => {
@@ -109,6 +127,7 @@ const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).
       try { turn = await ask(storage, account, sessionId, question, structuredClone(history)); }
       catch (error) { turn = { reply: '', error: error.code || error.message, stack: String(error.stack || '').split(/\r?\n/).slice(0, 6).join(' | '), latencyMs: null, modelCalls: null, inputTokens: null, status: 'EXCEPTION', failures: [] }; }
       turns.push({ question, ...turn });
+      if ((turn.tools || []).some(name => ['run_workflow', 'resume_workflow'].includes(name))) await settleWorkflows(storage, sessionId);
       history.push({ role: 'user', content: question }, { role: 'assistant', content: turn.reply });
     }
     const final = turns.at(-1);

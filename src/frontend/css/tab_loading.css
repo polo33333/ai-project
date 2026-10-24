@@ -12,6 +12,38 @@
 
 #dashboard-view-container[hidden] { display:none !important; }
 
+/* First-paint loading uses the real DOM, before any JavaScript or API request. */
+.dashboard-booting :is(.metric-title,.metric-val,.metric-sub,.metric-main-icon,.middle-grid .card-title,.dashboard-chart-range,.dashboard-feedback-summary,.dashboard-activity-card .card-title,.dashboard-activity-peak,.dashboard-activity-period,.dashboard-activity-stat span,.dashboard-activity-stat strong,.dashboard-activity-best-month,.router-status-card .card-title,.router-status-card strong,.dashboard-logs-card .card-title,.dashboard-logs-card .card-subtitle,.dashboard-log-stat strong,.dashboard-log-stat > span) {
+  color:transparent !important;
+  -webkit-text-fill-color:transparent !important;
+  background:linear-gradient(90deg,var(--skeleton-base,#e8edf5) 25%,var(--skeleton-highlight,#f4f7fb) 50%,var(--skeleton-base,#e8edf5) 75%) !important;
+  background-size:200% 100% !important;
+  border-color:transparent !important;
+  border-radius:6px;
+  animation:dashboard-boot-shimmer 1.6s ease-in-out infinite;
+  pointer-events:none;
+  user-select:none;
+}
+.dashboard-booting :is(.metric-main-icon,.metric-title,.metric-val,.metric-sub,.card-title,.dashboard-activity-stat span,.dashboard-activity-best-month,.router-status-card strong) > * { visibility:hidden; }
+.dashboard-booting :is(.metric-card,.middle-grid > .content-card,.dashboard-activity-card,.router-status-card,.dashboard-logs-card) { pointer-events:none; }
+.dashboard-booting .chart-container::after {
+  content:""; position:absolute; inset:30px 18px 16px;
+  background:repeating-linear-gradient(90deg,var(--skeleton-base,#e8edf5) 0 6%,transparent 6% 10%);
+  clip-path:polygon(0 80%,10% 80%,10% 45%,20% 45%,20% 65%,30% 65%,30% 25%,40% 25%,40% 55%,50% 55%,50% 10%,60% 10%,60% 35%,70% 35%,70% 60%,80% 60%,80% 20%,90% 20%,90% 0,100% 0,100% 100%,0 100%);
+}
+.dashboard-booting .dashboard-feedback-chart { position:relative; }
+.dashboard-booting .dashboard-feedback-chart::after {
+  content:""; position:absolute; width:180px; height:180px;
+  top:50%; left:50%; transform:translate(-50%,-50%);
+  box-sizing:border-box; border:28px solid var(--skeleton-base,#e8edf5); border-radius:50%;
+}
+.dashboard-booting .dashboard-activity-scroll {
+  background:repeating-linear-gradient(0deg,transparent 0 11px,var(--bg-sidebar,#fff) 11px 15px),repeating-linear-gradient(90deg,var(--skeleton-base,#e8edf5) 0 11px,transparent 11px 15px);
+  background-clip:content-box; padding-block:18px; box-sizing:border-box;
+}
+@keyframes dashboard-boot-shimmer { from { background-position:100% 0; } to { background-position:-100% 0; } }
+@media(prefers-reduced-motion:reduce) { .dashboard-booting * { animation:none !important; } }
+
 .dictionary-header-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 .dictionary-sync-status { max-width:360px; height:auto; min-height:0; padding:0; border:0; color:var(--text-secondary); background:transparent; font-size:12px; line-height:1.5; text-align:right; }
 .dictionary-sync-status[hidden] { display:none !important; }

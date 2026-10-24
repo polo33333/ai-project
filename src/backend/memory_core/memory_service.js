@@ -303,7 +303,9 @@ class MemoryService {
     return sanitizeMessages(Array.isArray(source) ? source.slice(-limit) : []);
   }
 
-  persistWorkflowExchange({ sessionId, accountId, workflow, artifacts = [] }) {
+  // rows: the primary dataset's visible rows, logged as the turn result so a
+  // follow-up ("tháng nào cao nhất ở trên") reads the same rows as a SQL turn.
+  persistWorkflowExchange({ sessionId, accountId, workflow, artifacts = [], rows = null }) {
     if (!policy.isEnabled()) return { persisted: false, reason: 'memory_disabled' };
     const previous = this.getSession(sessionId, false, accountId);
     if (previous?.lastWorkflowRun?.runId === workflow.runId) return { persisted: false, reason: 'already_recorded' };
@@ -312,7 +314,9 @@ class MemoryService {
       reply: `Nghiệp vụ đã hoàn tất. ${JSON.stringify(workflow)}`,
       currentPlan: { table: workflow.table || `workflow:${workflow.templateId}`, dbSourceId: workflow.dbSourceId,
         intent: 'workflow', workflowRunId: workflow.runId },
-      completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] } });
+      completionStatus: 'SUCCESS', responseEvaluation: { valid: true, failures: [] },
+      turnResult: Array.isArray(rows) ? { rows, workflow: { runId: workflow.runId, templateId: workflow.templateId, name: workflow.name,
+        field: workflow.datasets[0]?.field || null } } : null });
     if (!result.persisted) return result;
     const session = result.session;
     session.lastWorkflowRun = workflow;
@@ -341,11 +345,11 @@ class MemoryService {
     return result;
   }
 
-  persistSuccessfulExchange({ sessionId, accountId = null, embedId = null, question, reply, currentPlan, toolCalls = [], completionStatus, responseEvaluation } = {}) {
+  persistSuccessfulExchange({ sessionId, accountId = null, embedId = null, question, reply, currentPlan, toolCalls = [], completionStatus, responseEvaluation, turnResult = null } = {}) {
     if (currentPlan?.independentWeb) return { persisted: false, reason: 'independent_web_search' };
     // Every turn reaches the log before the quality gate; recordPendingTurn
     // runs only after this returns unpersisted, so a turn is logged once.
-    const logged = this.recordTurn({ sessionId, accountId, question, reply, completionStatus, currentPlan, toolCalls });
+    const logged = this.recordTurn({ sessionId, accountId, question, reply, completionStatus, currentPlan, toolCalls, turnResult });
     if (logged.recorded) this.persist();
     if (policy.isEnabled() && !policy.canPersist({ completionStatus, responseEvaluation })) return { persisted: false, reason: 'quality_gate_rejected' };
     const userMessage = sanitizeMessage({ role: 'user', content: question }, 20000);
@@ -423,14 +427,14 @@ class MemoryService {
   // v2 query contract and a compact preview of the rows the user saw. Follow-ups
   // and row references ("người thứ 2 ở trên") read this log; the success-only
   // fields above stay for the legacy agent loop.
-  recordTurn({ sessionId, accountId = null, question, reply, completionStatus, currentPlan, toolCalls = [] } = {}) {
+  recordTurn({ sessionId, accountId = null, question, reply, completionStatus, currentPlan, toolCalls = [], turnResult = null } = {}) {
     if (!policy.isEnabled() || currentPlan?.independentWeb) return { recorded: false };
     const session = this.getSession(sessionId, true, accountId);
     if (!session) return { recorded: false, reason: 'invalid_session' };
     const now = new Date().toISOString();
     const source = [...toolCalls].reverse().find(call => ['execute_sql_query', 'query_sql_metric'].includes(call.toolName)
       && call.success && Array.isArray(call.result?.rows));
-    const rows = source?.result.rows || [];
+    const rows = turnResult?.rows || source?.result.rows || [];
     const columns = rows.length ? Object.keys(rows[0]).slice(0, 8) : [];
     const cell = value => value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === 'string' ? value.slice(0, 80) : value ?? null;
     const turn = sanitizeObject({ id: crypto.randomUUID(), at: now, question: String(question || '').slice(0, 2000),
@@ -438,7 +442,8 @@ class MemoryService {
       status: String(completionStatus || 'UNKNOWN').slice(0, 40),
       dbSourceId: currentPlan?.v2?.dbSourceId || currentPlan?.dbSourceId || null,
       contract: currentPlan?.v2?.contract || null,
-      result: source ? { rowCount: rows.length, hasMore: Boolean(source.result.hasMore), columns,
+      ...(turnResult?.workflow ? { workflow: turnResult.workflow } : {}),
+      result: source || turnResult?.rows ? { rowCount: rows.length, hasMore: Boolean(source?.result.hasMore), columns,
         preview: rows.slice(0, 20).map(row => columns.map(column => cell(row[column]))) } : null });
     session.turns = [...(session.turns || []), turn].slice(-this.maxTurns);
     session.updatedAt = now;

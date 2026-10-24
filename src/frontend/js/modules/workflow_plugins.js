@@ -32,6 +32,9 @@
   const h = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const statuses = { CREATED: 'Đã tạo', READY: 'Đang chờ chạy', RUNNING: 'Đang thực hiện', WAITING_INPUT: 'Chờ bổ sung', SUCCEEDED: 'Hoàn thành', FAILED: 'Thất bại', CANCELLED: 'Đã hủy', NEEDS_REVIEW: 'Cần kiểm tra', SELECT_TEMPLATE: 'Chọn quy trình' };
   const done = value => ['SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(value);
+  // Mirrors the publish guard in registry.js: __NAME__ marks a fixture input nobody filled in.
+  const isPlaceholder = value => typeof value === 'string' ? /^__[A-Z0-9_]+__$/.test(value) : Boolean(value && typeof value === 'object' && Object.values(value).some(isPlaceholder));
+  const placeholderFixtureCount = fixtures => (fixtures || []).filter(fixture => isPlaceholder(fixture.input)).length;
   async function api(url, method = 'GET', body) {
     const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
     const data = await response.json(); if (!response.ok) throw new Error(data.message || data.error || 'Không thể xử lý yêu cầu.'); return data;
@@ -616,7 +619,7 @@
     if (state.admin) {
       const connectAI = button('Kết nối Claude / Codex', aiConnectionDialog); connectAI.classList.add('wp-ai-connect'); connectAI.title = 'Cho phép Claude hoặc Codex tạo và cập nhật mẫu nghiệp vụ qua MCP.'; connectAI.prepend(icon('fa-plug')); toolbarActions.appendChild(connectAI);
       if (!state.settings.enabled && !state.settings.disabledByEnvironment) toolbarActions.appendChild(button('Bật workflow/plugin', async () => { await api('/api/workflow-plugins/settings', 'PUT', { enabled: true, revision: state.settings.revision }); await refresh(); }));
-      const importButton = button('Import gói', () => importDialog()); importButton.prepend(icon('fa-arrow-up-from-bracket')); toolbarActions.appendChild(importButton);
+      const importButton = button('Nhập gói', () => importDialog()); importButton.prepend(icon('fa-arrow-up-from-bracket')); toolbarActions.appendChild(importButton);
       const createButton = button('Tạo mẫu', () => editDialog({ draft: blankBundle(), revision: null })); createButton.className = 'btn-primary wp-create-template'; createButton.prepend(icon('fa-plus')); toolbarActions.appendChild(createButton);
     }
     for (const control of toolbarActions.children) {
@@ -638,39 +641,48 @@
       card.dataset.templateId = definition.id;
       const published = record.published && JSON.stringify(record.published.templates.find(item => item.id === definition.id)) === JSON.stringify(definition);
       card.classList.toggle('wp-draft-card', !published);
-      card.innerHTML = `<h3>${h(definition.name)}</h3><p class="wp-template-description">${h(definition.description)}</p><div class="wp-template-stats"><span><i class="fa-regular fa-clock" aria-hidden="true"></i> ${definition.workflow.steps.length} bước</span><span>${Object.keys(definition.inputs).length} ô nhập</span><span class="${record.lastTest?.passed ? 'wp-test-passed' : ''}"><i class="fa-solid ${record.lastTest?.passed ? 'fa-circle-check' : 'fa-circle-minus'}" aria-hidden="true"></i> ${record.lastTest ? (record.lastTest.passed ? 'Kiểm thử đạt' : 'Kiểm thử chưa đạt') : 'Chưa chạy kiểm thử'}</span></div>`;
+      card.innerHTML = `<h3>${h(definition.name)}</h3><p class="wp-template-description">${h(definition.description)}</p><div class="wp-template-stats"><span><i class="fa-regular fa-clock" aria-hidden="true"></i> ${definition.workflow.steps.length} bước</span><span>${Object.keys(definition.inputs).length} ô nhập</span>${placeholderFixtureCount(definition.fixtures) ? '<span class="wp-test-placeholder" title="Trường hợp chạy thử còn giá trị giả, chưa phát hành được"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Dữ liệu thử còn giá trị giả</span>' : `<span class="${record.lastTest?.passed ? 'wp-test-passed' : ''}" title="Chạy bằng dữ liệu giả lập, chưa thực thi truy vấn thật"><i class="fa-solid ${record.lastTest?.passed ? 'fa-circle-check' : 'fa-circle-minus'}" aria-hidden="true"></i> ${record.lastTest ? (record.lastTest.passed ? 'Chạy thử đạt' : 'Chạy thử chưa đạt') : 'Chưa chạy thử'}</span>`}</div>`;
       decorateCard(card, definition);
       const cardHead = card.querySelector('.wp-template-head');
       const cardCopy = document.createElement('div'); cardCopy.className = 'wp-template-heading-copy';
-      const publication = document.createElement('span'); publication.className = 'wp-publication-badge' + (published ? ' published' : ''); publication.textContent = published ? 'Đã publish' : 'Draft'; publication.title = `${record.draft.manifest.name} · Draft v${record.draft.manifest.version}${record.published ? ` · Published v${record.published.manifest.version}` : ''}`;
+      const publication = document.createElement('span'); publication.className = 'wp-publication-badge' + (published ? ' published' : ''); publication.textContent = published ? 'Đã phát hành' : 'Bản nháp'; publication.title = `${record.draft.manifest.name} · Bản nháp v${record.draft.manifest.version}${record.published ? ` · Đã phát hành v${record.published.manifest.version}` : ''}`;
       cardCopy.append(publication, cardHead.querySelector('h3')); cardHead.appendChild(cardCopy);
       const enabled = button('', async () => { await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/enabled`, 'POST', { enabled: !record.enabled, revision: record.revision }); await refresh(); });
       enabled.className = 'wp-card-enabled'; enabled.setAttribute('role', 'switch'); enabled.setAttribute('aria-checked', String(Boolean(record.enabled))); enabled.setAttribute('aria-label', `Kích hoạt gói ${record.draft.manifest.name}`); enabled.title = 'Áp dụng cho toàn bộ mẫu trong gói'; enabled.append(icon(record.enabled ? 'fa-toggle-on' : 'fa-toggle-off')); cardHead.appendChild(enabled);
       const available = state.templates.find(template => template.id === `${record.id}/${definition.id}`);
       cardMetadata(card,domain,[...(record.draft.manifest.tags||[]),...(definition.tags||[])],Boolean(available));
       const actions = document.createElement('div'); actions.className = 'workflow-card-actions';
-      actions.appendChild(button('Sửa template', () => editDialog(record, templateIndex)));
+      actions.appendChild(button('Sửa mẫu', () => editDialog(record, templateIndex)));
       if (available) actions.appendChild(chatButton(available));
       if (available) actions.appendChild(button('Thử kịch bản', async () => { const { execution } = await api('/api/automation-runs', 'POST', { templateId: available.id, inputs: {}, conversationId: `manual-${crypto.randomUUID()}`, requestId: crypto.randomUUID() }); showRun(execution); await refresh(); }));
       const deleteTemplate = button('Xóa mẫu', async () => { if (!await confirmDelete(`Xóa mẫu “${definition.name}”? Mẫu sẽ không còn được chọn cho tác vụ mới.`)) return; await api(`/api/question-templates/${encodeURIComponent(`${record.id}/${definition.id}`)}`, 'DELETE', { revision: record.revision }); await refresh(); }); deleteTemplate.classList.add('wp-danger-action'); actions.appendChild(deleteTemplate);
-      for (const [label, operation] of [['Validate', 'validate'], ['Chạy fixture', 'test'], ['Publish', 'publish']]) actions.appendChild(button(label, async () => { const report = await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/${operation}`, 'POST', { revision: record.revision }); if (report.results) showFixtureReport(report); await refresh(); }));
+      for (const [label, operation] of [['Kiểm tra cấu hình', 'validate'], ['Chạy thử', 'test'], ['Phát hành', 'publish']]) actions.appendChild(button(label, async () => { const report = await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/${operation}`, 'POST', { revision: record.revision }); if (report.results) showFixtureReport(report); await refresh(); }));
       actions.appendChild(button(record.enabled ? 'Vô hiệu hóa' : 'Kích hoạt', async () => { await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/enabled`, 'POST', { enabled: !record.enabled, revision: record.revision }); await refresh(); }));
-      actions.appendChild(button('Export', () => { const blob = new Blob([JSON.stringify(record.published || record.draft, null, 2)], { type: 'application/json' }); const anchor = document.createElement('a'); anchor.href = URL.createObjectURL(blob); anchor.download = `${record.id}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(anchor.href), 1000); }));
+      actions.appendChild(button('Sửa thông tin gói', () => editDialog(record, templateIndex, { showPackage: true })));
+      actions.appendChild(button('Thêm mẫu vào gói', () => editDialog(record, record.draft.templates.length, { addTemplate: true })));
+      actions.appendChild(button('Xuất gói', () => { const blob = new Blob([JSON.stringify(record.published || record.draft, null, 2)], { type: 'application/json' }); const anchor = document.createElement('a'); anchor.href = URL.createObjectURL(blob); anchor.download = `${record.id}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(anchor.href), 1000); }));
       if (record.published) {
-        actions.appendChild(button('Tùy chỉnh scope', () => overlayDialog(record)));
-        actions.appendChild(button('Rollback', () => rollbackDialog(record)));
+        actions.appendChild(button('Tùy chỉnh theo phạm vi', () => overlayDialog(record)));
+        actions.appendChild(button('Khôi phục phiên bản', () => rollbackDialog(record)));
       }
       const more = document.createElement('details'); more.className = 'wp-more-menu';
       const trigger = document.createElement('summary'); trigger.setAttribute('role', 'button'); trigger.setAttribute('aria-label', 'Thêm thao tác'); trigger.setAttribute('aria-expanded', 'false'); trigger.appendChild(icon('fa-ellipsis')); more.appendChild(trigger);
       const menu = document.createElement('div'); menu.className = 'wp-more-items'; more.appendChild(menu);
-      const icons = { 'Sửa template': 'fa-pen', 'Chạy fixture': 'fa-flask', Publish: 'fa-cloud-arrow-up', Validate: 'fa-check-double', Export: 'fa-download', 'Vô hiệu hóa': 'fa-pause', 'Kích hoạt': 'fa-play', 'Xóa mẫu': 'fa-trash-can', 'Tùy chỉnh scope': 'fa-sliders', Rollback: 'fa-clock-rotate-left' };
+      const icons = { 'Sửa mẫu': 'fa-pen', 'Chạy thử': 'fa-flask', 'Phát hành': 'fa-cloud-arrow-up', 'Kiểm tra cấu hình': 'fa-check-double', 'Xuất gói': 'fa-download', 'Sửa thông tin gói': 'fa-folder-open', 'Thêm mẫu vào gói': 'fa-plus', 'Vô hiệu hóa': 'fa-pause', 'Kích hoạt': 'fa-play', 'Xóa mẫu': 'fa-trash-can', 'Tùy chỉnh theo phạm vi': 'fa-sliders', 'Khôi phục phiên bản': 'fa-clock-rotate-left' };
       for (const action of [...actions.children]) {
         const label = action.textContent; action.prepend(icon(icons[label] || 'fa-gear'));
-        if (label === 'Sửa template') action.classList.add('wp-edit-primary');
-        if (!['Sửa template', 'Chạy fixture', 'Publish', 'Dùng trong chat'].includes(label)) menu.appendChild(action);
+        if (label === 'Sửa mẫu') action.classList.add('wp-edit-primary');
+        if (!['Sửa mẫu', 'Chạy thử', 'Phát hành', 'Dùng trong chat'].includes(label)) menu.appendChild(action);
       }
       menu.addEventListener('click', event => { if (event.target.closest('button')) more.open = false; });
-      more.addEventListener('toggle', () => { trigger.setAttribute('aria-expanded', String(more.open)); if (more.open) document.querySelectorAll('.wp-more-menu[open]').forEach(item => { if (item !== more) item.open = false; }); });
+      more.addEventListener('toggle', () => {
+        trigger.setAttribute('aria-expanded', String(more.open)); if (!more.open) return;
+        document.querySelectorAll('.wp-more-menu[open]').forEach(item => { if (item !== more) item.open = false; });
+        // The card grid is its own scroll box, so open upward when the menu would be clipped at its bottom edge.
+        more.classList.remove('wp-more-up');
+        const box = packages.getBoundingClientRect(), items = menu.getBoundingClientRect();
+        if (items.bottom > box.bottom && items.height < trigger.getBoundingClientRect().top - box.top) more.classList.add('wp-more-up');
+      });
       more.addEventListener('keydown', event => { if (event.key === 'Escape') { more.open = false; trigger.focus(); } });
       actions.appendChild(more);
       card.appendChild(actions); packages.appendChild(card);
@@ -684,7 +696,7 @@
       card.appendChild(chatButton(template));
       if (state.admin) card.appendChild(button('Thử kịch bản', async () => { const { execution } = await api('/api/automation-runs', 'POST', { templateId: template.id, inputs: {}, conversationId: `manual-${crypto.randomUUID()}`, requestId: crypto.randomUUID() }); showRun(execution); await refresh(); })); templates.appendChild(card);
     }
-    if (!packages.children.length && state.admin) emptyState(packages, 'fa-pen-ruler', 'Chưa có mẫu đang thiết kế', state.search || state.domain ? 'Thử đổi từ khóa hoặc lĩnh vực để tìm mẫu.' : 'Chọn Tạo template để định nghĩa nghiệp vụ, hoặc Nạp 5 mẫu để bắt đầu từ ví dụ.');
+    if (!packages.children.length && state.admin) emptyState(packages, 'fa-pen-ruler', 'Chưa có mẫu đang thiết kế', state.search || state.domain ? 'Thử đổi từ khóa hoặc lĩnh vực để tìm mẫu.' : 'Chọn Tạo mẫu để định nghĩa nghiệp vụ, hoặc Nạp 5 mẫu để bắt đầu từ ví dụ.');
     if (!templates.children.length && !state.admin) emptyState(templates, 'fa-comment-dots', 'Chưa có mẫu sẵn sàng', state.search || state.domain ? 'Không có mẫu phù hợp với bộ lọc hiện tại.' : 'Mẫu sẽ xuất hiện tại đây sau khi quản trị viên kiểm thử và phát hành.');
     const runs = document.getElementById('wp-runs'); runs.replaceChildren();
     for (const execution of state.runs) { const row = button(`${execution.name} · ${statuses[execution.status]} · ${new Date(execution.updatedAt).toLocaleString('vi-VN')}`, () => showRun(execution)); row.classList.add('workflow-run-row'); runs.appendChild(row); }
@@ -768,15 +780,20 @@
   }
   function fixturesForm(container, initial, getInputs, getOutput) {
     const section = document.createElement('details'); section.className = 'wp-editor-section wp-fixtures-section';
-    section.innerHTML = '<summary><i class="fa-solid fa-flask" aria-hidden="true"></i> Các trường hợp chạy thử</summary><p class="wp-section-help">Nhập dữ liệu thử và kết quả bạn mong đợi. Hệ thống sẽ chạy kịch bản và so sánh hai kết quả trước khi phát hành.</p>'; container.appendChild(section);
+    section.innerHTML = '<summary><i class="fa-solid fa-flask" aria-hidden="true"></i> Các trường hợp chạy thử</summary><p class="wp-section-help">Lưu ý: các bước đọc CSDL dùng dữ liệu giả lập trong phần nâng cao, chưa chạy câu truy vấn thật.</p>'; container.appendChild(section);
     const list = document.createElement('div'); section.appendChild(list); const cases = [];
-    function valuesForm(host, current, definitions, labels) {
+    function valuesForm(host, current, definitions, labels, mode = 'expected') {
       if (!current || typeof current !== 'object' || Array.isArray(current)) return valueEditor(host, current, 'Kết quả mong đợi');
       const readers = [];
       for (const key of new Set([...Object.keys(definitions), ...Object.keys(current)])) {
         const schema = definitions[key]?.schema || definitions[key] || { type: 'string' }, label = labels[key] || key;
         const row = document.createElement('div'); row.className = 'wp-test-value'; host.appendChild(row);
-        const include = field(row, label, '', { type: 'checkbox' }); include.checked = Object.hasOwn(current, key); include.title='Bật để đưa trường này vào trường hợp chạy thử'; include.parentElement.classList.add('wp-test-field-heading'); include.parentElement.prepend(include);
+        const required = mode === 'input' && definitions[key]?.required === true;
+        const include = field(row, label, '', { type: 'checkbox' }); include.checked = required || Object.hasOwn(current, key); include.parentElement.classList.add('wp-test-field-heading'); include.parentElement.prepend(include);
+        // Required inputs are always sent, so a checkbox would only invite mistakes.
+        if (required) include.hidden = true;
+        else if (mode === 'input') { include.title = 'Bật nếu trường hợp này có nhập thông tin này'; const optional = document.createElement('small'); optional.className = 'wp-test-optional'; optional.textContent = 'không bắt buộc'; include.parentElement.appendChild(optional); }
+        else include.title = 'So sánh trường này khi chạy thử';
         const content = document.createElement('div'); row.appendChild(content);
         const initial=Object.hasOwn(current,key)?current[key]:schema.type==='boolean'?false:['integer','number'].includes(schema.type)?0:schema.type==='object'?{}:schema.type==='array'?[]:'';
         const complex=initial!==null && typeof initial==='object'; let editor=content;
@@ -787,6 +804,8 @@
         }
         const read = valueEditor(editor, initial, label);
         if(!complex) { const valueLabel=editor.querySelector(':scope > label'); if(valueLabel?.firstChild?.nodeType===Node.TEXT_NODE) valueLabel.firstChild.remove(); }
+        const dateInput = !complex && schema.format === 'date' ? editor.querySelector('input') : null;
+        if (dateInput && (initial === '' || /^\d{4}-\d{2}-\d{2}$/.test(initial))) dateInput.type = 'date';
         content.hidden = !include.checked; include.onchange = () => { content.hidden = !include.checked; }; readers.push([key, include, read]);
       }
       if (!readers.length) { const hint = document.createElement('p'); hint.textContent = 'Không có trường dữ liệu trong trường hợp này.'; host.appendChild(hint); }
@@ -800,7 +819,8 @@
       const inputHost = document.createElement('section'), expectedHost = document.createElement('section'); inputHost.innerHTML = '<h4><i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i> Dữ liệu đầu vào</h4>'; expectedHost.innerHTML = '<h4><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Kết quả mong đợi</h4>'; grid.append(inputHost, expectedHost);
       const expectedHint=document.createElement('p'); expectedHint.className='wp-section-help'; expectedHint.textContent='Chỉ chọn các trường cần so sánh khi chạy thử.'; expectedHost.appendChild(expectedHint);
       const inputs = getInputs(), output = getOutput();
-      const readInput = valuesForm(inputHost, fixture.input, inputs, Object.fromEntries(Object.entries(inputs).map(([key, slot]) => [key, slot.label || key])));
+      const readInput = valuesForm(inputHost, fixture.input, inputs, Object.fromEntries(Object.entries(inputs).map(([key, slot]) => [key, slot.label || key])), 'input');
+      if (isPlaceholder(fixture.input)) { const warning = document.createElement('p'); warning.className = 'wp-fixture-warning'; warning.setAttribute('role', 'note'); warning.append(icon('fa-triangle-exclamation'), document.createTextNode(' Trường hợp này còn giá trị giả (dạng __TÊN__). Hãy thay bằng dữ liệu thật đã đối chiếu, mẫu không phát hành được khi còn giá trị giả.')); card.insertBefore(warning, grid); }
       const readExpected = output.schema.type === 'object' ? valuesForm(expectedHost, fixture.expected, output.schema.properties || {}, output.presentation?.labels || {}) : valueEditor(expectedHost, fixture.expected, 'Kết quả mong đợi');
       const extras = { ...fixture }; delete extras.input; delete extras.expected; delete extras.name;
       const readExtras = structuredField(card, 'Dữ liệu giả lập từng bước và tùy chọn khác (nâng cao)', extras);
@@ -857,6 +877,7 @@
       summary.remove(); panel.append(heading, ...section.childNodes); section.replaceWith(panel); panels.push(panel);
       const tab = button(labels[index], () => activate(index)); tab.id = `${prefix}-tab-${index}`; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', panel.id);
       const symbol = heading.querySelector('.wp-config-icon i'); if (symbol) tab.prepend(symbol.cloneNode(true));
+      const mark = document.createElement('span'); mark.className = 'wp-tab-mark'; mark.hidden = true; tab.appendChild(mark);
       tabList.appendChild(tab); tabs.push(tab);
       tab.addEventListener('keydown', event => {
         const next = event.key === 'ArrowRight' ? (index + 1) % sections.length : event.key === 'ArrowLeft' ? (index + sections.length - 1) % sections.length : event.key === 'Home' ? 0 : event.key === 'End' ? sections.length - 1 : null;
@@ -876,6 +897,14 @@
     const originalSelect = onSelect;
     onSelect = index => { selectedIndex = index; previous.hidden = index === 0; next.hidden = index === sections.length - 1; progress.textContent = `Phần ${index + 1} / ${sections.length}`; originalSelect(index); };
     activate(activeIndex);
+    // problem === '' marks the section complete; a message marks it as needing attention.
+    return function setStatus(index, problem) {
+      const mark = tabs[index]?.querySelector('.wp-tab-mark'); if (!mark) return;
+      mark.hidden = false; mark.className = 'wp-tab-mark ' + (problem ? 'is-warning' : 'is-complete');
+      mark.replaceChildren(icon(problem ? 'fa-circle-exclamation' : 'fa-circle-check'));
+      const hidden = document.createElement('span'); hidden.className = 'sr-only'; hidden.textContent = problem ? ` — cần bổ sung: ${problem}` : ' — đã đủ'; mark.appendChild(hidden);
+      tabs[index].title = problem || 'Đã đủ thông tin';
+    };
   }
   function pipelineConnectors(pipeline) {
     const ns = 'http://www.w3.org/2000/svg';
@@ -922,32 +951,33 @@
     [steps[from], steps[to]] = [steps[to], steps[from]];
     return true;
   }
-  function editDialog(record, initialIndex = 0) {
-    const dialog = modal('Thiết lập mẫu nghiệp vụ'); dialog.backdrop.classList.add('wp-business-editor'); const bundle = structuredClone(record.draft);
-    const guide = document.createElement('div'); guide.className = 'wp-editor-guide';
-    guide.innerHTML = '<strong>Thiết lập từ yêu cầu đến kết quả</strong><p>Đi lần lượt qua 5 phần bên dưới. Lưu bản nháp khi hoàn tất, sau đó chạy kiểm thử và phát hành tại danh sách nghiệp vụ để dùng trong chat.</p>'; dialog.body.appendChild(guide);
-    const packageSection = document.createElement('details'); packageSection.className = 'wp-editor-section'; packageSection.open = !record.id; packageSection.innerHTML = '<summary>Thông tin lưu trữ và phân loại mẫu</summary>'; dialog.body.appendChild(packageSection);
+  function editDialog(record, initialIndex = 0, { showPackage = false, addTemplate = false } = {}) {
+    // Backdrop clicks must not discard a half-finished template.
+    const dialog = modal('Thiết lập mẫu nghiệp vụ', { closeOnBackdrop: false }); dialog.backdrop.classList.add('wp-business-editor'); const bundle = structuredClone(record.draft);
+    if (addTemplate) bundle.templates.push(blankTemplate());
+    const currentIndex = Math.min(initialIndex, bundle.templates.length - 1);
+    // Package fields apply to every template in the package, so they stay out of the way unless asked for.
+    const packageSection = document.createElement('details'); packageSection.className = 'wp-editor-section'; packageSection.open = !record.id || showPackage; packageSection.hidden = Boolean(record.id) && !showPackage; packageSection.innerHTML = '<summary>Thông tin lưu trữ và phân loại mẫu</summary>'; dialog.body.appendChild(packageSection);
     const packageFields = document.createElement('div'); packageFields.className = 'wp-form-grid wp-package-fields'; packageSection.appendChild(packageFields);
     const packageId = field(packageFields, 'ID gói', bundle.manifest.id); packageId.readOnly = Boolean(record.id);
     const packageName = field(packageFields, 'Tên gói', bundle.manifest.name);
     const domain = field(packageFields, 'Lĩnh vực', bundle.manifest.domain || '');
     const tags = field(packageFields, 'Từ khóa (phân cách bằng dấu phẩy)', (bundle.manifest.tags || []).join(', '));
     packageId.placeholder = 'Mã định danh duy nhất'; packageName.placeholder = 'Tên gói nghiệp vụ'; domain.placeholder = 'Ví dụ: Nhân sự, Kế toán'; tags.placeholder = 'Nhập các từ khóa để tìm mẫu';
-    const selectLabel = document.createElement('label'); selectLabel.textContent = 'Chọn mẫu cần chỉnh sửa';
-    const select = document.createElement('select');
-    function updateOptions(index) { select.replaceChildren(); bundle.templates.forEach((template, position) => select.appendChild(new Option(template.name, String(position)))); select.value = String(index); }
-    updateOptions(initialIndex); selectLabel.appendChild(select);
-    const selectorBar = document.createElement('div'); selectorBar.className = 'wp-selector-bar'; selectorBar.appendChild(selectLabel); dialog.body.insertBefore(selectorBar, packageSection);
-    selectorBar.appendChild(button('Thêm mẫu vào gói', () => { saveCurrent(); bundle.templates.push(blankTemplate()); previous = String(bundle.templates.length - 1); activeConfigTab = 0; updateOptions(previous); renderTemplate(); }));
-    const fields = document.createElement('div'); dialog.body.appendChild(fields); let saveCurrent, activeConfigTab = 0, clearConnectors;
+    if (packageSection.hidden) {
+      const packageNote = document.createElement('div'); packageNote.className = 'wp-package-note';
+      const noteText = document.createElement('span'); noteText.append(icon('fa-folder-open'), document.createTextNode(` Thuộc gói “${bundle.manifest.name}” · ${bundle.templates.length} mẫu${bundle.manifest.domain ? ` · Lĩnh vực: ${bundle.manifest.domain}` : ''}`));
+      const editPackage = button('Sửa thông tin gói', () => { packageSection.hidden = false; packageSection.open = true; packageNote.remove(); packageSection.scrollIntoView({ block: 'nearest' }); });
+      packageNote.append(noteText, editPackage); dialog.body.insertBefore(packageNote, packageSection);
+    }
+    const fields = document.createElement('div'); dialog.body.appendChild(fields); let saveCurrent, activeConfigTab = 0, clearConnectors, setTabStatus, lastReport = null;
     const removalObserver = new MutationObserver(() => { if (!dialog.backdrop.isConnected) { clearConnectors?.(); removalObserver.disconnect(); } });
     removalObserver.observe(document.body, { childList: true });
     function renderTemplate() {
       clearConnectors?.();
-      fields.replaceChildren(); fields.className = 'wp-builder-grid'; const template = bundle.templates[Number(select.value)];
+      fields.replaceChildren(); fields.className = 'wp-builder-grid'; const template = bundle.templates[currentIndex];
       const main = document.createElement('div'); main.className = 'wp-builder-main'; fields.appendChild(main);
       const shared = document.createElement('section'); shared.className = 'wp-shared-config';
-      shared.innerHTML = '<div class="wp-scope-heading"><i class="fa-solid fa-sliders" aria-hidden="true"></i><div><h4>Thiết lập nội dung mẫu</h4><p>Chọn từng phần để cấu hình. Trong Các bước xử lý, chọn một thẻ để chỉnh riêng bước đó.</p></div></div>';
       const recognition = document.createElement('details'); recognition.className = 'wp-editor-section wp-recognition-section'; recognition.open = !template.id;
       const recognitionTitle = document.createElement('summary'); recognitionTitle.append(icon('fa-bullseye'), document.createTextNode(' Nhận diện nghiệp vụ và thông tin cần hỏi')); recognition.appendChild(recognitionTitle); main.appendChild(recognition);
       const about = document.createElement('div'); about.className = 'wp-recognition-about'; about.innerHTML = '<h4>Nghiệp vụ này xử lý việc gì?</h4><p class="wp-section-help">Tên và mô tả giúp trợ lý chọn đúng kịch bản từ câu hỏi của người dùng.</p>'; recognition.appendChild(about);
@@ -955,7 +985,6 @@
       const name = field(about, 'Tên nghiệp vụ', template.name), description = field(about, 'Mục đích và phạm vi xử lý', template.description, { multiline: true });
       name.placeholder = 'Ví dụ: Tra cứu hợp đồng khách hàng'; description.placeholder = 'Mẫu xử lý yêu cầu nào, trả về thông tin gì và không xử lý trường hợp nào?';
       templateId.placeholder = 'Ví dụ: lookup_contract (không dấu, không khoảng trắng)';
-      name.oninput = () => { select.options[Number(select.value)].textContent = name.value || 'Mẫu chưa đặt tên'; };
       const enabledLabel = document.createElement('label'); enabledLabel.textContent = 'Cho phép sử dụng mẫu sau khi phát hành'; const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = template.enabled !== false; enabledLabel.prepend(enabled); recognition.appendChild(enabledLabel);
       const matching = document.createElement('div'); matching.className = 'wp-recognition-about'; matching.innerHTML = '<h4>Khi nào cần chạy kịch bản?</h4><p class="wp-section-help">Thêm các cách hỏi thường gặp và hướng dẫn trợ lý xử lý nghiệp vụ.</p>'; recognition.appendChild(matching);
       const examples = field(matching, 'Cách hỏi mẫu — mỗi dòng một câu', template.examples.join('\n'), { multiline: true }); examples.placeholder = 'Ví dụ: Tra cứu thông tin khách hàng\nTìm khách hàng theo mã';
@@ -1096,7 +1125,7 @@
         ['fa-database', 'Nguồn dữ liệu và truy vấn', 'Thêm nguồn SQL, API hoặc file để sử dụng trong các bước xử lý. Nếu chỉ xử lý thông tin người dùng nhập, có thể bỏ qua phần này.'],
         ['fa-diagram-project', 'Kịch bản các bước', 'Sắp xếp thứ tự thực hiện và cấu hình từng bước sử dụng nguồn dữ liệu.'],
         ['fa-table-list', 'Kết quả trả về trong chat', 'Chọn dữ liệu trả về, kiểu dữ liệu và nhãn hiển thị.'],
-        ['fa-flask', 'Chuẩn bị dữ liệu chạy thử', 'Nhập đầu vào và kết quả mong đợi. Sau khi lưu bản nháp, chọn Chạy fixture tại danh sách nghiệp vụ để thực hiện kiểm thử.']
+        ['fa-flask', 'Chuẩn bị dữ liệu chạy thử', 'Nhập dữ liệu thật đã đối chiếu và kết quả mong đợi, rồi bấm Lưu & chạy thử ở cuối khung.']
       ];
       [packageSection, ...[...shared.children].filter(child => child.tagName === 'DETAILS')].forEach((section, index) => {
         const [symbol, title, hint] = sectionDesign[index]; section.classList.add('wp-config-section');
@@ -1106,14 +1135,89 @@
         summary.append(visual, copy, icon('fa-chevron-down'));
         if (index === 2) section.classList.add('wp-bindings-section');
       });
-      configTabs(shared, activeConfigTab, index => { activeConfigTab = index; });
+      setTabStatus = configTabs(shared, activeConfigTab, index => { activeConfigTab = index; });
+      if (lastReport) shared.querySelector('.wp-fixtures-section > .wp-config-panel-heading')?.after(inlineFixtureReport(lastReport, template));
       clearConnectors = pipelineConnectors(pipeline);
       saveCurrent = () => { Object.assign(template, { id: templateId.value.trim(), name: name.value, description: description.value, enabled: enabled.checked, examples: examples.value.split('\n').map(value => value.trim()).filter(Boolean), instructions: instructions.value, inputs: slots(), bindings: bindings(), output: output(), fixtures: fixtures(), workflow: { steps: stepEditors.map(read => read()) } }); template.allowedCapabilities = [...new Set(template.workflow.steps.map(step => ({ chart: 'data.chart', transform: 'data.transform', condition: 'data.condition', assert: 'data.validate', collect: 'input.collect', delay: 'runtime.delay', sql: 'sql.read', source: 'data.read', export: 'artifact.export' }[step.type])))]; };
     }
-    let previous = String(initialIndex); select.onchange = () => { const next = select.value; select.value = previous; try { saveCurrent(); previous = next; updateOptions(next); renderTemplate(); } catch (failure) { notify(failure.message, true); } }; renderTemplate();
-    const errors = document.createElement('p'); errors.setAttribute('role', 'alert'); dialog.body.appendChild(errors);
-    const saveNote = document.createElement('span'); saveNote.className = 'wp-editor-save-note'; saveNote.textContent = 'Lưu bản nháp → Chạy fixture → Publish để dùng trong chat'; dialog.footer.appendChild(saveNote);
-    dialog.footer.appendChild(button('Lưu bản nháp', async () => { try { saveCurrent(); bundle.manifest.id = packageId.value.trim(); bundle.manifest.name = packageName.value; bundle.manifest.domain = domain.value; bundle.manifest.tags = tags.value.split(',').map(value => value.trim()).filter(Boolean); if (record.published) bundle.manifest.version = Math.max(bundle.manifest.version, ...(record.versions || []).map(version => version.manifest.version + 1)); await api('/api/workflow-plugins', 'POST', { bundle, revision: record.revision }); dialog.backdrop.remove(); await refresh(); } catch (failure) { errors.textContent = failure.message; } }));
+    const errors = document.createElement('p'); errors.setAttribute('role', 'alert');
+    const saveNote = document.createElement('span'); saveNote.className = 'wp-editor-save-note'; saveNote.setAttribute('aria-live', 'polite');
+    let canPublish = false;
+    function updateTabStatus() {
+      if (!setTabStatus) return;
+      try { saveCurrent(); } catch (_) { return; }
+      const template = bundle.templates[currentIndex], mapping = template.output?.mapping;
+      const sourceSteps = template.workflow.steps.filter(step => ['sql', 'source'].includes(step.type) && step.config?.bindingRef);
+      setTabStatus(0, template.id && template.name && template.examples.length ? '' : 'Cần mã mẫu, tên nghiệp vụ và ít nhất một cách hỏi mẫu');
+      setTabStatus(1, sourceSteps.every(step => template.bindings?.[step.config.bindingRef]) ? '' : 'Có bước dùng nguồn dữ liệu chưa khai báo');
+      setTabStatus(2, template.workflow.steps.length ? '' : 'Chưa có bước xử lý');
+      setTabStatus(3, mapping && (typeof mapping !== 'object' || Object.keys(mapping).length) ? '' : 'Chưa chọn dữ liệu trả về');
+      setTabStatus(4, !template.fixtures.length ? 'Chưa có trường hợp chạy thử' : placeholderFixtureCount(template.fixtures) ? 'Dữ liệu thử còn giá trị giả' : '');
+    }
+    function setPublishable(value, note) { canPublish = value; publishButton.disabled = !value; saveNote.textContent = note; }
+    function inlineFixtureReport(report, template) {
+      const results = report.results.filter(result => result.templateId === template.id), passed = results.filter(result => result.passed).length;
+      const success = results.length > 0 && passed === results.length;
+      const box = document.createElement('section'); box.className = 'wp-fixture-report wp-inline-report';
+      const banner = document.createElement('div'); banner.className = `wp-report-banner ${success ? 'is-success' : 'is-failed'}`;
+      const mark = document.createElement('span'); mark.className = 'wp-report-mark'; mark.appendChild(icon(success ? 'fa-circle-check' : 'fa-circle-exclamation'));
+      const copy = document.createElement('div'), title = document.createElement('h3'), detail = document.createElement('p');
+      title.textContent = success ? `Chạy thử đạt ${passed}/${results.length} trường hợp` : results.length ? `Chưa đạt ${results.length - passed}/${results.length} trường hợp` : 'Mẫu chưa có trường hợp chạy thử';
+      const notes = ['Chạy bằng dữ liệu giả lập, chưa thực thi truy vấn thật.'];
+      if (success && !report.passed) notes.push('Một mẫu khác trong gói chưa đạt nên gói chưa phát hành được.');
+      if (placeholderFixtureCount(template.fixtures)) notes.push('Dữ liệu thử còn giá trị giả nên chưa phát hành được.');
+      detail.textContent = notes.join(' '); copy.append(title, detail); banner.append(mark, copy); box.appendChild(banner);
+      for (const result of results.filter(item => !item.passed)) {
+        const row = document.createElement('div'); row.className = 'wp-inline-report-row';
+        const message = document.createElement('p'); message.textContent = `Trường hợp ${result.fixture}: ${result.error}`; row.appendChild(message);
+        if (result.actual !== undefined) {
+          const actual = document.createElement('details'); actual.innerHTML = '<summary>Xem kết quả thực tế</summary>';
+          const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result.actual, null, 2); actual.appendChild(pre);
+          // Simulated step data only proves the mapping; the reviewer still has to confirm the numbers.
+          const adopt = button('Dùng kết quả này làm mong đợi', () => {
+            saveCurrent(); template.fixtures[result.fixture - 1].expected = structuredClone(result.actual);
+            lastReport = null; activeConfigTab = 4; renderTemplate(); updateTabStatus();
+            setPublishable(false, 'Đã cập nhật kết quả mong đợi. Hãy đối chiếu số liệu rồi bấm Lưu & chạy thử.');
+          });
+          row.append(actual, adopt);
+        }
+        box.appendChild(row);
+      }
+      return box;
+    }
+    async function persist() {
+      saveCurrent(); bundle.manifest.id = packageId.value.trim(); bundle.manifest.name = packageName.value; bundle.manifest.domain = domain.value; bundle.manifest.tags = tags.value.split(',').map(value => value.trim()).filter(Boolean);
+      if (record.published) bundle.manifest.version = Math.max(bundle.manifest.version, ...(record.versions || []).map(version => version.manifest.version + 1));
+      record = (await api('/api/workflow-plugins', 'POST', { bundle, revision: record.revision })).package; packageId.readOnly = true;
+    }
+    renderTemplate(); updateTabStatus();
+    dialog.body.appendChild(errors);
+    // Any edit invalidates the last test run; the server would reject publishing it anyway.
+    let statusTimer;
+    dialog.body.addEventListener('change', () => { if (canPublish) setPublishable(false, 'Đã có thay đổi. Bấm Lưu & chạy thử lại trước khi phát hành.'); clearTimeout(statusTimer); statusTimer = setTimeout(updateTabStatus, 250); });
+    const cancelButton = button('Hủy', () => dialog.backdrop.remove());
+    const draftButton = button('Lưu nháp', async () => { try { errors.textContent = ''; await persist(); dialog.backdrop.remove(); await refresh(); } catch (failure) { errors.textContent = failure.message; } });
+    const testButton = button('Lưu & chạy thử', async () => {
+      try {
+        errors.textContent = ''; await persist();
+        lastReport = await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/test`, 'POST', {});
+        record = (await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}`)).package;
+        activeConfigTab = 4; renderTemplate(); updateTabStatus();
+        const placeholders = bundle.templates.reduce((total, template) => total + placeholderFixtureCount(template.fixtures), 0);
+        if (lastReport.passed && !placeholders) setPublishable(true, 'Chạy thử đạt. Có thể phát hành để dùng trong trò chuyện.');
+        else setPublishable(false, lastReport.passed ? 'Chạy thử đạt nhưng dữ liệu thử còn giá trị giả.' : 'Chạy thử chưa đạt. Xem chi tiết ở phần Dữ liệu chạy thử.');
+        refresh().catch(() => {});
+      } catch (failure) { errors.textContent = failure.message; }
+    });
+    testButton.className = 'btn-primary';
+    const publishButton = button('Phát hành', async () => {
+      if (!canPublish) return;
+      try { errors.textContent = ''; await api(`/api/workflow-plugins/${encodeURIComponent(record.id)}/publish`, 'POST', { revision: record.revision }); dialog.backdrop.remove(); await refresh(); notify(`Đã phát hành “${bundle.templates[currentIndex].name}”.`); }
+      catch (failure) { errors.textContent = failure.message; publishButton.disabled = !canPublish; }
+    });
+    publishButton.className = 'btn-primary wp-publish-action';
+    dialog.footer.append(saveNote, cancelButton, draftButton, testButton, publishButton);
+    setPublishable(false, 'Lưu nháp → Chạy thử → Phát hành để dùng trong trò chuyện');
   }
   function overlayDialog(record) {
     const dialog = modal('Tùy chỉnh theo scope'); dialog.backdrop.classList.add('wp-scope-editor'); const scope = field(dialog.body, 'Scope tài khoản (account:<ID>) hoặc tenant đã xác thực', '');

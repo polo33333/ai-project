@@ -14,7 +14,7 @@ const ref = { type: 'string', minLength: 1, maxLength: 200 };
 const contractSchema = { type: 'object', additionalProperties: false, required: ['kind'], properties: {
   kind: { enum: ['data', 'workflow', 'resume', 'previous', 'document', 'chat', 'clarify'] },
   previous: { type: 'object', additionalProperties: false, required: ['turn', 'rows'], properties: {
-    turn: { type: 'integer', minimum: 1, maximum: 10 }, rows: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'integer', minimum: 1, maximum: 20 } },
+    turn: { type: 'integer', minimum: 1, maximum: 10 }, rows: { type: 'array', maxItems: 20, items: { type: 'integer', minimum: 1, maximum: 20 } },
     columns: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 120 } } } },
   workflow: { type: 'object', additionalProperties: false, properties: {
     templateId: { type: 'string', maxLength: 200 },
@@ -64,6 +64,7 @@ const RULES = `You translate the user's business question into a query contract 
 - output.chart (bar/line/pie) when a chart is asked ("biểu đồ", "vẽ"); it needs operation=aggregate with groupBy. output.export (xlsx/csv/pdf) when a file is asked ("xuất file", "excel"). Otherwise omit output.
 - When the answer is already in rows shown in PREVIOUS (e.g. "người thứ 2 trong danh sách trên tên gì"), use kind=previous with previous.turn (1 = oldest in PREVIOUS), previous.rows (row numbers shown) and previous.columns (column names to show, empty = all). Do not use it for new measures, totals or rows that were not shown.
 - Otherwise rows of a previous result ("người thứ 2", "khách hàng đó", "hóa đơn lớn nhất ở trên"): read them in PREVIOUS turns' result rows (numbered from 1), filter by that row's identity value (code/name/ID) with fromResult=true and evidence = the referring words of the question.
+- A PREVIOUS turn with "workflow" holds a completed workflow result. To chart or export that result, use kind=previous with previous.turn, previous.rows=[] and output.chart or output.export. A question about its values (highest month, a row) is kind=chat answered from its rows; a new filter or period is kind=workflow or kind=data.
 - A question may return to an older turn in PREVIOUS (not only the last one): start from that turn's contract.
 - Follow-up (PREVIOUS is given and the question continues it, e.g. "còn tháng 1 thì sao", "vậy tìm trong năm 2024", "thêm cột giới tính"): set followup=true, start from PREVIOUS.contract and change only what the user changed. Carried filters keep their evidence from the previous question and set inherited=true. "tất cả/toàn bộ" removes the carried filter.`;
 
@@ -224,6 +225,7 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   // 2. One structured model call (plus at most one targeted repair).
   const recent = turns.length ? [] : (context.resolutionContext?.recent || []).slice(-4).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 600) }));
   const previousTurns = turns.map(turn => ({ question: turn.question, status: turn.status, contract: turn.contract || undefined,
+    workflow: turn.workflow?.name || undefined,
     answer: turn.contract ? undefined : String(turn.reply || '').slice(0, 400),
     result: turn.result ? { columns: turn.result.columns, rowCount: turn.result.rowCount,
       rows: turn.result.preview.slice(0, 10).map((row, index) => [index + 1, ...row]) } : undefined }));
@@ -252,6 +254,10 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
         if (!toolContext.allowedToolNames?.includes('search_knowledge_base')) return { ...(await conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step })), contract };
         return { ...(await require('./conversation_answer').searchDocuments({ question, conversation, dispatch, plan, context, toolManager, toolContext, toolCalls, step })), contract };
       }
+      // Inputs without their quote would be dropped and asked again: ask the model for the quotes instead.
+      const unquoted = ['workflow', 'resume'].includes(contract.kind) ? Object.keys(contract.workflow?.inputs || {})
+        .filter(name => typeof contract.workflow?.evidence?.[name] !== 'string' || !contract.workflow.evidence[name].trim()) : [];
+      if (unquoted.length) throw Object.assign(new Error(`V2_WORKFLOW_EVIDENCE_MISSING: set workflow.evidence.<input> to the exact words of the question for ${unquoted.join(', ')}`), { code: 'V2_WORKFLOW_EVIDENCE_MISSING' });
       if (contract.kind === 'resume') {
         if (!pendingInput) throw Object.assign(new Error('V2_RESUME_UNAVAILABLE: no workflow is waiting for input; answer with another kind'), { code: 'V2_RESUME_UNAVAILABLE' });
         const inputs = slotInputs(contract.workflow, pendingInput.inputs, question);
@@ -268,6 +274,9 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       }
       if (contract.kind === 'clarify') return { contract, reply: contract.clarification || 'Bạn có thể nói rõ hơn phạm vi dữ liệu cần tra cứu không?', status: 'CLARIFY' };
       if (contract.kind === 'previous') {
+        const turn = turns[contract.previous?.turn - 1];
+        if (turn?.workflow && (exportFormat(contract, plan) || ['bar', 'line', 'pie'].includes(contract.output?.chart)))
+          return { contract, ...(await workflowOutput(turn, contract, plan, toolManager, toolContext, toolCalls, step)) };
         const answer = previousRows(contract.previous, turns);
         if (answer) { step('V2_PREVIOUS_ROWS', { turn: contract.previous.turn, rows: contract.previous.rows }); return { contract, reply: answer, status: 'SUCCESS' }; }
         throw Object.assign(new Error('V2_PREVIOUS_UNAVAILABLE: those rows were not shown in PREVIOUS. Query them with kind=data and fromResult filters'), { code: 'V2_PREVIOUS_UNAVAILABLE' });
@@ -409,6 +418,51 @@ function previousRows(reference, turns) {
   return `Theo kết quả của câu “${String(turn.question).slice(0, 160)}”:\n\n${lines.join('\n')}`;
 }
 
+// Chart or file of a completed workflow result: the tools read the verified
+// dataset by run id, so no rows pass through the model.
+async function workflowOutput(turn, contract, plan, toolManager, toolContext, toolCalls, step) {
+  const { runId, field, name } = turn.workflow;
+  const context = { ...toolContext, workflowRunId: runId, memoryDecision: { reference: { data: { runId, field } } } };
+  const call = async (toolName, args) => {
+    const result = await toolManager.executeTool(toolName, args, context);
+    toolCalls.push({ toolName, args, success: result.success, result: result.result || null, error: result.error || null });
+    return result;
+  };
+  const lines = [], failed = [];
+  const format = exportFormat(contract, plan);
+  if (format) {
+    const slug = String(name || 'Ket_qua').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 60);
+    const file = await call('export_data', { workflowRunId: runId, ...(field ? { workflowField: field } : {}), format, filename: slug });
+    if (file.success && file.result?.downloadUrl) lines.push(`Tải file: [${file.result.filename || slug}](${file.result.downloadUrl})`);
+    else failed.push('xuất file');
+  }
+  const requested = contract.output?.chart;
+  if (['bar', 'line', 'pie'].includes(requested)) {
+    const dataset = await call('get_workflow_dataset', { runId, ...(field ? { field } : {}), limit: 100 });
+    const args = dataset.success ? datasetChart(dataset.result.rows || [], requested, name) : null;
+    const chart = args ? await call('render_chart', args) : null;
+    if (chart?.success) lines.push('Biểu đồ đã được tạo từ toàn bộ kết quả nghiệp vụ.');
+    else failed.push('vẽ biểu đồ');
+  }
+  step('V2_WORKFLOW_OUTPUT', { runId, export: format || null, chart: requested || null, failed });
+  const head = `Từ kết quả nghiệp vụ **${name}**:`;
+  return { reply: [head, ...lines, ...(failed.length ? [`Chưa thể ${failed.join(' và ')} từ kết quả này.`] : [])].join('\n\n'),
+    status: failed.length ? 'PARTIAL' : 'SUCCESS' };
+}
+
+// Labels from the first text column, one series per numeric column (IDs excluded).
+function datasetChart(rows, type, title) {
+  if (!rows.length) return null;
+  const columns = Object.keys(rows[0]);
+  const numeric = column => rows.every(row => row[column] === null || row[column] === '' || Number.isFinite(Number(row[column])));
+  const label = columns.find(column => !numeric(column)) || columns[0];
+  const series = columns.filter(column => column !== label && numeric(column) && !/(^|_)id$|id$/i.test(column)).slice(0, 4);
+  if (!series.length) return null;
+  const text = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? '—');
+  return { type, title: String(title || 'Kết quả nghiệp vụ').slice(0, 120), labels: rows.map(row => text(row[label])),
+    datasets: series.map(column => ({ label: column, data: rows.map(row => Number(row[column]) || 0) })) };
+}
+
 // One file per value of the split column, each written from its own rows.
 async function exportGroups(rows, alias, format, toolManager, toolContext, toolCalls) {
   const groups = new Map();
@@ -489,7 +543,8 @@ async function runWorkflow(contract, workflows, question, toolManager, toolConte
     execution = await toolManager.executeTool('run_workflow', args, toolContext);
   }
   const state = execution.result?.execution;
-  step('V2_WORKFLOW', { templateId: item.templateId, success: execution.success, code: execution.code || null, status: state?.status || null });
+  step('V2_WORKFLOW', { templateId: item.templateId, success: execution.success, code: execution.code || null, status: state?.status || null,
+    kept: Object.keys(args.inputs), dropped: Object.keys(choice.inputs || {}).filter(name => !(name in args.inputs)), slots: Object.keys(item.inputs || {}) });
   if (!execution.success) return { reason: execution.error || execution.code || 'workflow rejected' };
   if (!state || state.status === 'FAILED') return { reason: `workflow failed${state?.error?.message ? `: ${state.error.message}` : ''}` };
   return { handoff: state, call: { toolName: 'run_workflow', args, success: true, result: execution.result, error: null } };
@@ -557,4 +612,4 @@ function render(compiled, call, question) {
   return `${scope ? `${scope}\n` : ''}${scope && !method ? '\n' : ''}${method}${body}${more}${note}`;
 }
 
-module.exports = { run, render, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, contractSchema };
+module.exports = { run, render, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema };

@@ -27,7 +27,7 @@ aside.sidebar { padding: 22px 14px 14px; }
 .brand-name { font-size: 15px; letter-spacing: -.45px; }
 .sidebar-toggle-btn { width: 28px; height: 28px; border: 0; box-shadow: none; background: transparent; color: #8790a5; }
 .sidebar-toggle-btn:hover { box-shadow: none; transform: none; background: var(--primary-light); }
-.btn-copilot { flex-shrink: 0; padding: 12px; margin-bottom: 24px; border-radius: 999px; box-shadow: 0 4px 10px #5955d917; }
+.btn-copilot { flex-shrink: 0; height: 48px; padding: 5px 12px; margin-bottom: 24px; border-radius: 999px; box-shadow: 0 4px 10px #5955d917; }
 .btn-copilot:hover { transform: none; box-shadow: 0 5px 16px #5955d929; }
 .copilot-btn-text { gap: 3px; }
 .copilot-title { font-size: 13px; font-weight: 600; }
@@ -50,6 +50,8 @@ aside.sidebar { padding: 22px 14px 14px; }
   touch-action:pan-y;
 }
 #app-sidebar .sidebar-nav:is(:hover,:focus-within) { --nav-scroll-thumb:var(--nav-scroll-hover); }
+/* Extend the scroll area through the sidebar inset while keeping nav items aligned. */
+#app-sidebar:not(.collapsed) .sidebar-nav { margin-right:-14px; padding-right:22px; }
 #app-sidebar .sidebar-account-area { flex:0 0 auto; }
 #app-sidebar.collapsed .sidebar-account-area { width:100%; margin-inline:0; padding:0; }
 #app-sidebar.collapsed .account-menu-trigger { box-sizing:border-box; width:40px; height:40px; min-height:40px; margin-inline:auto; padding:3px; justify-content:center; }
@@ -168,6 +170,18 @@ aside.sidebar.collapsed .sidebar-footer-card.status-online::after { background: 
 .sidebar-backdrop { display: none; }
 
 header.top-bar { background: #ffffffeb; box-shadow: none; border-bottom-color: var(--border-color); min-height: 76px; }
+/* Keep the page scrollbar below the fixed header. */
+main.main-content { --page-scroll-header-height:76px; }
+@supports selector(::-webkit-scrollbar) {
+  main.main-content { scrollbar-width:auto; scrollbar-color:auto; }
+  main.main-content::-webkit-scrollbar { width:6px; }
+  main.main-content::-webkit-scrollbar-track { margin-top:var(--page-scroll-header-height); background:transparent; }
+  main.main-content::-webkit-scrollbar-thumb { background:#b8c2d3; border-radius:999px; }
+  main.main-content::-webkit-scrollbar-button { display:none; width:0; height:0; }
+}
+@media(max-width:860px) {
+  main.main-content { --page-scroll-header-height:64px; }
+}
 .page-title-group h1 { font-size: 20px; letter-spacing: -.55px; }
 .search-input-wrapper input { background: #f6f7fb; border-color: transparent; border-radius: 10px; }
 .search-input-wrapper input:focus { background: #fff; border-color: #bcb8ef; box-shadow: 0 0 0 3px #5955d90d; }

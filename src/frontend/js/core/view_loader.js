@@ -19,7 +19,7 @@ async function loadViewComponents(tabKey) {
   if (!file || container.querySelector(`[data-view-file="${file}"]`)) return;
   if (viewLoadPromises.has(file)) return viewLoadPromises.get(file);
   const pending = (async () => { try {
-    const response = await fetch(`/views/${file}`);
+    const response = await fetch(`/views/${file}`, { signal: globalThis.AbortSignal?.timeout?.(10000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const template = document.createElement('template');
     template.innerHTML = await response.text();
@@ -42,7 +42,7 @@ async function loadDashboardView() {
   const key = 'dashboard.html';
   if (viewLoadPromises.has(key)) return viewLoadPromises.get(key);
   const pending = (async () => {
-    const response = await fetch('/views/dashboard.html');
+    const response = await fetch('/views/dashboard.html', { signal: globalThis.AbortSignal?.timeout?.(10000) });
     if (!response.ok) throw new Error('HTTP ' + response.status);
     container.innerHTML = await response.text();
     container.dataset.loaded = 'true';

@@ -2378,6 +2378,9 @@ async function handleGovernedRequest(req, res) {
       }
     } else {
       const headers = { 'Content-Type': contentType };
+      if (path.basename(filePath) === 'index.html') {
+        content = require('../services/dashboard_shell').render(content.toString('utf8'));
+      }
       if (/\.(?:html|js|css)$/i.test(filePath)) {
         headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
       }

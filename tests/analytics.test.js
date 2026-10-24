@@ -13,6 +13,23 @@ function analyticsContext(globals = {}) {
   return context;
 }
 
+test('dashboard data finishes while Qdrant is still pending and updates when it responds', async () => {
+  let finishQdrant;
+  const context = analyticsContext({ fetch: async url => {
+    if (url === '/api/qdrant/status') return new Promise(done => { finishQdrant = done; });
+    return { ok: true, json: async () => url.includes('providers') ? { providers: [] } : [] };
+  } });
+  const data = await context.fetchAnalyticsSourceData(true);
+  assert.equal(data.qdrant.pending, true);
+  context.window.dashboardAnalyticsData = data;
+  let updates = 0;
+  context.updateMetricText = () => updates++;
+  finishQdrant({ ok: true, json: async () => ({ connected: true, pointsCount: 671 }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(data.qdrant.pointsCount, 671);
+  assert.equal(updates, 1);
+});
+
 test('compact analytics preserves token estimates and reuses date formatting',()=>{
  const context=analyticsContext();
  const original={timestamp:'12:00:00 22/10/2026',question:'x'.repeat(800),replyText:'y'.repeat(1200),requestPayload:{providerId:'p'},status:'SUCCESS'};

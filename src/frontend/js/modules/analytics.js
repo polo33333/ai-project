@@ -211,26 +211,30 @@ function groupHistoryByMonth(history, months = 6, providers = []) {
   return buckets;
 }
 
-async function fetchAnalyticsSourceData() {
+async function fetchAnalyticsSourceData(deferQdrant = false) {
   const can = permission => window.currentAccountRole==='admin'||!Array.isArray(window.currentAccountPermissions)||window.currentAccountPermissions.includes(permission);
   const safeJson = async (url, fallback) => {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: globalThis.AbortSignal?.timeout?.(8000) });
       if (!res.ok) return fallback;
       return await res.json();
     } catch {
       return fallback;
     }
   };
-  const [history, providersData, dictionary, sources, qdrant, feedback] = await Promise.all([
+  const coreRequests = [
     can('history.read')?safeJson('/api/chat-history?summary=1', []):[],
     safeJson(window.currentAccountRole==='admin'?'/api/ai-providers':'/api/chat/providers', { providers: [] }),
     can('schema.read')?safeJson('/api/dictionary', []):[],
-    can('sources.read')||(can('chat.use')&&can('sql:read'))?safeJson('/api/sql/sources', []):[],
-    safeJson('/api/qdrant/status', {}),
+    can('sources.read')||(can('chat.use')&&can('sql:read'))?safeJson('/api/sql/sources', []):[]
+  ];
+  const qdrantRequest = safeJson('/api/qdrant/status', {});
+  const [history, providersData, dictionary, sources, qdrant, feedback] = await Promise.all([
+    ...coreRequests,
+    deferQdrant ? { pending: true } : qdrantRequest,
     can('feedback.read')?safeJson('/api/chat-feedback?summary=1', []):[]
   ]);
-  return {
+  const data = {
     history: Array.isArray(history) ? history : [],
     providers: Array.isArray(providersData) ? providersData : (providersData.providers || []),
     activeProvider: providersData.activeProvider || null,
@@ -239,6 +243,14 @@ async function fetchAnalyticsSourceData() {
     qdrant: qdrant || {},
     feedback: Array.isArray(feedback) ? feedback : []
   };
+  if (deferQdrant) qdrantRequest.then(status => {
+    data.qdrant = status;
+    if (window.dashboardAnalyticsData === data) {
+      updateMetricText(data);
+      window.refreshArchitectureSuggestion?.(data);
+    }
+  });
+  return data;
 }
 
 function destroyChart(id) {
@@ -741,18 +753,19 @@ function updateMetricText(data) {
 
   renderDashboardSqlMetrics(data.sources || [], dictionary);
   setText('val-queries', String(history.length));
-  setText('val-qdrant', qdrant.connected ? `${Number(qdrant.pointsCount || 0).toLocaleString('vi-VN')} vectors` : 'Ngoại tuyến');
-  setText('val-qdrant-detail', qdrant.connected
+  setText('val-qdrant', qdrant.pending ? 'Đang kiểm tra…' : qdrant.connected ? `${Number(qdrant.pointsCount || 0).toLocaleString('vi-VN')} vectors` : 'Ngoại tuyến');
+  setText('val-qdrant-detail', qdrant.pending ? 'Đang kết nối Qdrant' : qdrant.connected
     ? `${qdrant.collectionName || 'Collection'} · ${qdrant.status || 'Đã kết nối'}`
     : 'Không thể kết nối Qdrant');
   setText('dash-router-primary', activeProvider ? `${activeProvider.name} (${activeProvider.model})` : 'Chưa cấu hình');
   setText('dash-router-fallback', fallbackProvider ? `${fallbackProvider.name} (${fallbackProvider.model})` : 'Chưa kích hoạt');
-  setText('dash-router-vector', `Qdrant (${data.qdrant.pointsCount || totalColumns || 0} vectors)`);
+  setText('dash-router-vector', qdrant.pending ? 'Đang kiểm tra Qdrant…' : `Qdrant (${data.qdrant.pointsCount || totalColumns || 0} vectors)`);
 
   setText('analytics-health-qdrant', `${data.qdrant.pointsCount || totalColumns || 0} vectors indexed`);
 }
 
 function renderDashboardAnalyticsData(data) {
+  if (!data.qdrant?.pending) window.refreshArchitectureSuggestion?.(data);
   window.dashboardAnalyticsHistory = data.history;
   window.dashboardAnalyticsProviders = data.providers;
   window.dashboardFeedbackData = data.feedback;
@@ -783,7 +796,7 @@ async function refreshDashboardMetrics() {
   }
   dashboardAnalyticsRefreshPromise = (async () => {
     try {
-      const data = await fetchAnalyticsSourceData();
+      const data = await fetchAnalyticsSourceData(true);
       window.dashboardAnalyticsData = data;
       window.dashboardAnalyticsLoadedAt = Date.now();
       renderDashboardAnalyticsData(data);
