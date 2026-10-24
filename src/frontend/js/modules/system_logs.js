@@ -178,10 +178,12 @@ function renderLogsTable() {
       <td><div class="log-module">${escapeLogHtml(moduleName)}</div></td>
       <td>
         <div class="json-code-viewer log-json-viewer">
+          <div class="chat-audit-actions"><span class="chat-audit-format">{ } <span>JSON</span></span><span class="chat-audit-copy-status" role="status" aria-live="polite"></span><button type="button" title="Sao chép toàn bộ JSON" aria-label="Copy JSON"><i class="fa-regular fa-copy" aria-hidden="true"></i><span>Sao chép</span></button></div>
           <pre class="json-audit-block"><code>${highlightLogJson(detailsJson)}</code></pre>
         </div>
       </td>
     `;
+    tr.querySelector('.chat-audit-actions button').addEventListener('click', event => copyAuditJson(event.currentTarget, detailsJson));
     tbody.appendChild(tr);
   });
 

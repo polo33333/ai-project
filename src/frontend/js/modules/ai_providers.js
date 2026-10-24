@@ -140,6 +140,9 @@ function renderAiProvidersTable() {
             <span class="metric-tag ${healthClass} provider-health-status">
               <i class="fa-solid ${healthIcon}"></i> ${healthText}
             </span>
+            ${prov.useForAttachments ? `<span class="metric-tag green provider-health-status" title="Dùng đọc tài liệu và ảnh đính kèm">
+              <i class="fa-solid fa-paperclip"></i> Xử lý tệp đính kèm
+            </span>` : ''}
           </div>
         </td>
         <td>
@@ -189,7 +192,8 @@ function editAiProvider(id) {
     'page-new-prov-cost': String(Number((Number(provider.tokenCost || 0) * 1000).toPrecision(12))),
     'page-new-prov-tools': provider.supportsToolCalling ? 'native' : provider.supportsJsonToolCalling ? 'json' : 'none',
     'page-new-prov-context': String(provider.contextWindow || provider.numCtx || 16384),
-    'page-new-prov-reserve': String(provider.outputReserve || 2048)
+    'page-new-prov-reserve': String(provider.outputReserve || 2048),
+    'page-new-prov-attachments': provider.useForAttachments ? 'on' : 'off'
   };
   Object.entries(values).forEach(([fieldId, value]) => {
     const field = document.getElementById(fieldId);
@@ -327,7 +331,8 @@ async function savePageNewAiProvider() {
     if (outputReserve >= contextWindow) throw new Error('Tokens dành cho câu trả lời phải nhỏ hơn dung lượng ngữ cảnh.');
     const payload = { name, type, apiFormat, baseUrl, model,
       supportsToolCalling: capability === 'native' || (capability === 'auto' && apiFormat !== 'ollama'),
-      supportsJsonToolCalling: capability === 'json', contextWindow, outputReserve, priority, tokenCost };
+      supportsJsonToolCalling: capability === 'json', contextWindow, outputReserve, priority, tokenCost,
+      useForAttachments: document.getElementById('page-new-prov-attachments')?.value === 'on' };
     if (apiKey) payload.apiKey = apiKey;
     if (editingId) payload.providerId = editingId;
     const res = await fetch(editingId ? '/api/ai-providers/update' : '/api/ai-providers/add', {

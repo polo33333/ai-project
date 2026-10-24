@@ -127,6 +127,7 @@ window.switchMainTab = async function switchMainTab(tabKey) {
     mainContent?.classList.toggle('chat-workspace-page', cleanKey === 'page_chat');
     mainContent?.classList.toggle('training-workspace', cleanKey === 'training_core');
     mainContent?.classList.toggle('dictionary-workspace', cleanKey === 'dictionary');
+    mainContent?.classList.toggle('system-tools-workspace', cleanKey === 'system_tools');
     mainContent?.classList.toggle('settings-workspace', ['settings', 'data_governance', 'memory'].includes(cleanKey));
 
     const dashboardContainer = document.getElementById('dashboard-view-container');

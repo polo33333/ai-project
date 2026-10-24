@@ -1,13 +1,13 @@
 (function(global){
  'use strict';
- const extensions=['pdf','doc','docx','txt','md','rtf','odt','csv','xls','xlsx','ppt','pptx','png','jpg','jpeg','webp','gif','bmp','tif','tiff','heic','avif'];
+ const extensions=['pdf','docx','txt','md','csv','xlsx','png','jpg','jpeg','webp'];
  const accept=extensions.map(value=>'.'+value).join(',');
  function add(current,incoming,notify){
   const result=[...current];
   for(const file of incoming){
    const extension=file.name.split('.').pop().toLowerCase();
    let error='';
-   if(!extensions.includes(extension))error='Chỉ hỗ trợ tài liệu và ảnh.';
+   if(!extensions.includes(extension))error='Chỉ hỗ trợ PDF, DOCX, XLSX, CSV, TXT, MD và ảnh PNG, JPG, WEBP.';
    else if(!file.size||file.size>10*1024*1024)error='Mỗi tệp phải có nội dung và không vượt quá 10 MB.';
    else if(result.some(item=>item.name===file.name&&item.size===file.size))continue;
    else if(result.length>=5)error='Mỗi lần gửi tối đa 5 tệp.';
@@ -18,7 +18,10 @@
  }
  function encode(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({name:file.name,type:file.type,size:file.size,base64:String(reader.result).split(',')[1]});reader.onerror=()=>reject(new Error('Không đọc được tệp '+file.name));reader.readAsDataURL(file);});}
  async function submit(files,metadata={},signal,endpoint='/api/chat/attachments'){
-  const payload={...metadata,...(files.length?{files:await Promise.all(files.map(encode))}:{})};
+  // Files already stored on the server travel as references instead of bytes.
+  const isStored=file=>typeof file.arrayBuffer!=='function'&&file.batchId&&file.id;
+  const local=files.filter(file=>!isStored(file)),stored=files.filter(isStored);
+  const payload={...metadata,...(local.length?{files:await Promise.all(local.map(encode))}:{}),...(stored.length?{fileRefs:stored.map(file=>({batchId:file.batchId,fileId:file.id}))}:{})};
   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify(payload)});
   const data=await response.json();
   if(!response.ok)throw new Error(data.message||'Không tải được tệp. Hãy thử lại.');
@@ -34,7 +37,7 @@
    let key=localKeys.get(file);if(!key){key=global.crypto.randomUUID();localKeys.set(file,key);localFiles.set(key,file);}
    return {name:file.name,size:file.size,type:file.type,localKey:key};
   }
-  return {...file,...(batchId?{batchId}:{})};
+  return {...(batchId?{batchId}:{}),...file};
  });}
  function release(files){files.forEach(file=>{const key=localKeys.get(file)||file.localKey;if(key)localFiles.delete(key);localKeys.delete(file);});}
  const css=`
@@ -54,7 +57,8 @@
  .chat-file-overlay.is-dark{color:#e6e9f1}.chat-file-overlay.is-dark .chat-file-dialog{background:#20232b;border-color:#414653}.chat-file-overlay.is-dark header{border-color:#414653}.chat-file-overlay.is-dark .chat-file-view{background:#16191f}.chat-file-overlay.is-dark :is(.chat-file-download,header button){border-color:#4b5060}
  @media(max-width:520px){.chat-file-card{flex-basis:136px}.chat-file-overlay{padding:8px}.chat-file-dialog{height:92dvh;border-radius:13px}.chat-file-dialog header{padding:12px;gap:8px}.chat-file-view{padding:12px}.chat-file-download{font-size:12px;padding:7px 9px}}
  `;
- function installStyles(root=document){if(root.querySelector('style[data-chat-attachments]'))return;const style=document.createElement('style');style.dataset.chatAttachments='true';style.textContent=css;(root.head||root).appendChild(style);}
+ // A card rendered before its message is attached has a detached element as root; style the page instead.
+ function installStyles(root=document){if(root.nodeType!==9&&!(global.ShadowRoot&&root instanceof global.ShadowRoot))root=document;if(root.querySelector('style[data-chat-attachments]'))return;const style=document.createElement('style');style.dataset.chatAttachments='true';style.textContent=css;(root.head||root).appendChild(style);}
  async function load(file,loader){
   if(file.localKey){const local=localFiles.get(file.localKey);if(local)return local;throw new Error('Tệp chưa được lưu. Vui lòng chọn lại tệp.');}
   if(loader)return loader(file);

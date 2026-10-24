@@ -17,6 +17,14 @@ const { callAnthropic } = require('./anthropic');
  * @param {Array}  tools    - Tools array (OpenAI format)
  * @param {AbortSignal} signal
  */
+function adapterKind(provider = {}) {
+  const fmt = (provider.apiFormat || '').toLowerCase(), url = (provider.baseUrl || '').toLowerCase(), type = (provider.type || '').toLowerCase();
+  if (fmt === 'anthropic' || type === 'anthropic' || url.includes('anthropic.com')) return 'anthropic';
+  if (fmt === 'gemini' || type === 'google' || type === 'google gemini api' || url.includes('googleapis.com') || url.includes('generativelanguage')) return 'gemini';
+  if (fmt === 'ollama' || type === 'local' || type === 'ollama (local)' || url.includes('11434')) return 'ollama';
+  return 'openai';
+}
+
 async function dispatchUnchecked(provider, messages, tools, signal, options = {}) {
   await require('../../governance/context').refresh(provider.id, /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(provider.baseUrl || ''));
   if (typeof fetch === 'undefined') {
@@ -24,8 +32,6 @@ async function dispatchUnchecked(provider, messages, tools, signal, options = {}
   }
 
   const fmt  = (provider.apiFormat || '').toLowerCase();
-  const url  = (provider.baseUrl   || '').toLowerCase();
-  const type = (provider.type      || '').toLowerCase();
 
   if (fmt === 'openai-responses' || (typeof options.onReasoning === 'function' && provider.supportsStreaming !== false && provider.supportsReasoning !== false && !/chat/i.test(provider.model || '') && (provider.baseUrl || '').replace(/\/$/, '') === 'https://api.openai.com/v1' && /^(?:o[134](?:-|$)|gpt-[56])/.test(provider.model || ''))) {
     return callOpenAIResponses(provider, messages, tools, signal, options);
@@ -33,15 +39,10 @@ async function dispatchUnchecked(provider, messages, tools, signal, options = {}
 
   if (fmt === 'ollama-decision') return callOllamaDecision(provider, provider.decisionTask, signal);
 
-  if (fmt === 'anthropic' || type === 'anthropic' || url.includes('anthropic.com')) {
-    return callAnthropic(provider, messages, tools, signal, options);
-  }
-  if (fmt === 'gemini' || type === 'google' || type === 'google gemini api' || url.includes('googleapis.com') || url.includes('generativelanguage')) {
-    return callGemini(provider, messages, tools, signal, options);
-  }
-  if (fmt === 'ollama' || type === 'local' || type === 'ollama (local)' || url.includes('11434')) {
-    return callOllama(provider, messages, tools, signal, options);
-  }
+  const kind = adapterKind(provider);
+  if (kind === 'anthropic') return callAnthropic(provider, messages, tools, signal, options);
+  if (kind === 'gemini') return callGemini(provider, messages, tools, signal, options);
+  if (kind === 'ollama') return callOllama(provider, messages, tools, signal, options);
 
   // Default: OpenAI-compat (OpenAI, DeepSeek, LM Studio, OpenRouter, ...)
   return callOpenAI(provider, messages, tools, signal, options);
@@ -66,6 +67,7 @@ async function dispatchToProvider(provider, messages, tools, signal, options = {
 
 module.exports = {
   dispatchToProvider,
+  adapterKind,
   callOllama,
   callOllamaDecision,
   callOpenAI,

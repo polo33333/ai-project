@@ -24,12 +24,13 @@ test('audit list reads lightweight columns with owner predicates and without dia
 });
 test('history JSON is requested on first open and retained while toggling',async()=>{
  const source=fs.readFileSync('src/frontend/js/modules/chat_history.js','utf8');
- let requests=0;const host={textContent:'',innerHTML:'',setAttribute(){},removeAttribute(){}};
+ let requests=0;let copyHandler;const host={textContent:'',innerHTML:'',setAttribute(){},removeAttribute(){},querySelector:()=>({addEventListener(type,handler){assert.equal(type,'click');copyHandler=handler;}})};
  const panel={open:false,dataset:{auditId:'a'},querySelector:()=>host};
  const context=vm.createContext({window:{},fetch:async()=>{requests++;return {ok:true,json:async()=>({id:'a',question:'<script>',requestPayload:{toolCalls:[{name:'SQL'}]}})};}});
  vm.runInContext(source,context);
  await context.loadChatAuditDetails(panel);assert.equal(requests,0);
  panel.open=true;await context.loadChatAuditDetails(panel);assert.equal(requests,1);
  assert.ok(host.innerHTML.includes('&lt;script&gt;'));assert.ok(!host.innerHTML.includes('<script>'));
+ assert.ok(host.innerHTML.includes('Copy JSON'));assert.equal(typeof copyHandler,'function');
  panel.open=false;await context.loadChatAuditDetails(panel);panel.open=true;await context.loadChatAuditDetails(panel);assert.equal(requests,1);
 });

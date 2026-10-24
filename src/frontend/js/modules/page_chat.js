@@ -238,7 +238,184 @@ function renderPageChatAttachments() {
   if (!preview) return;
   preview.classList.toggle('has-files', window.pageChatAttachments.length > 0);
   window.ChatAttachments.render(preview,window.pageChatAttachments,{onRemove:removePageChatAttachment});
+  if (window.pageChatAttachments.some(file => file.carried)) {
+    const note = document.createElement('p');
+    note.className = 'page-chat-carry-note';
+    note.innerHTML = '<i class="fa-solid fa-link" aria-hidden="true"></i><span>Dùng tiếp tệp của câu trước. Bấm × trên tệp để bỏ, hoặc</span>';
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.textContent = 'bỏ tất cả';
+    clear.onclick = () => dropCarriedPageChatAttachments();
+    note.append(clear);
+    preview.append(note);
+  }
   renderChatKnowledgeChip();
+  if (typeof renderPageChatSessionFiles === 'function') renderPageChatSessionFiles();
+}
+
+// After a question about files, the same files stay in the composer for the next question in that
+// conversation, as server references. Nothing is carried when the user already staged other files.
+function carryPageChatAttachments(sessionId, attachments) {
+  if (window.currentChatSessionId !== sessionId || window.pageChatAttachments.length) return false;
+  const stored = (attachments || []).filter(file => file.batchId && file.id && ['ready', 'partial', undefined].includes(file.processingStatus)).slice(0, 5);
+  if (!stored.length) return false;
+  window.pageChatAttachments = stored.map(file => ({ id: file.id, batchId: file.batchId, name: file.name, size: file.size, type: file.type, carried: true }));
+  renderPageChatAttachments();
+  return true;
+}
+
+function dropCarriedPageChatAttachments() {
+  const kept = window.pageChatAttachments.filter(file => !file.carried);
+  if (kept.length === window.pageChatAttachments.length) return;
+  window.pageChatAttachments = kept;
+  renderPageChatAttachments();
+}
+
+// Files uploaded earlier in this conversation; picking one adds a server reference to the composer.
+window.pageChatSessionFiles = [];
+let pageChatSessionFilesFor = null;
+async function loadPageChatSessionFiles(force = false) {
+  const sessionId = getCurrentChatSession()?.id || null;
+  if (!force && sessionId === pageChatSessionFilesFor) return;
+  // Files carried from a question belong to that conversation only.
+  if (sessionId !== pageChatSessionFilesFor) dropCarriedPageChatAttachments();
+  pageChatSessionFilesFor = sessionId;
+  window.pageChatSessionFiles = [];
+  if (typeof renderPageChatSessionFiles === 'function') renderPageChatSessionFiles();
+  if (!sessionId) return;
+  try {
+    const response = await fetch('/api/chat/attachments?' + new URLSearchParams({ sessionId }), { cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message);
+    if (pageChatSessionFilesFor !== sessionId) return;
+    window.pageChatSessionFiles = Array.isArray(data.files) ? data.files : [];
+  } catch (_) { window.pageChatSessionFiles = []; }
+  if (typeof renderPageChatSessionFiles === 'function') renderPageChatSessionFiles();
+}
+
+function togglePageChatSessionFiles(event, open) {
+  event?.stopPropagation?.();
+  const panel = document.getElementById('page-chat-session-files-panel');
+  const trigger = document.getElementById('page-chat-session-files-trigger');
+  if (!panel) return;
+  const show = open ?? !panel.classList.contains('is-open');
+  if (show && !window.pageChatSessionFiles.length) {
+    if (open) showToast('Cuộc trò chuyện này chưa có tệp nào được tải lên.', 'info');
+    return;
+  }
+  // The column stays in the DOM so it can slide; inert keeps it out of focus order while closed.
+  panel.classList.toggle('is-open', show);
+  panel.inert = !show;
+  panel.setAttribute('aria-hidden', String(!show));
+  trigger?.setAttribute('aria-expanded', String(show));
+  if (show) renderPageChatSessionFiles();
+}
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.getElementById('page-chat-session-files-panel')?.classList.contains('is-open')) togglePageChatSessionFiles(event, false);
+});
+
+function isPageChatSessionFileSelected(file) {
+  return window.pageChatAttachments.some(item => item.id === file.id && item.batchId === file.batchId);
+}
+
+function togglePageChatSessionFile(index) {
+  const file = window.pageChatSessionFiles[index];
+  if (!file) return;
+  if (isPageChatSessionFileSelected(file)) {
+    window.pageChatAttachments = window.pageChatAttachments.filter(item => !(item.id === file.id && item.batchId === file.batchId));
+  } else if (window.pageChatAttachments.length >= 5) {
+    return showToast('Mỗi lần hỏi tối đa 5 tệp.', 'warning');
+  } else {
+    window.pageChatAttachments = [...window.pageChatAttachments, { id: file.id, batchId: file.batchId, name: file.name, size: file.size, type: file.type }];
+  }
+  renderPageChatAttachments();
+  document.getElementById('page-chat-user-input')?.focus();
+}
+
+function renderPageChatSessionFiles() {
+  const fileSessionId=window.currentChatSessionId;
+  const files = window.pageChatSessionFiles || [];
+  const trigger = document.getElementById('page-chat-session-files-trigger');
+  const count = document.getElementById('page-chat-session-files-count');
+  const panel = document.getElementById('page-chat-session-files-panel');
+  const list = document.getElementById('page-chat-session-files-list');
+  if (trigger) trigger.hidden = files.length === 0;
+  if (count) count.textContent = String(files.length);
+  if (panel && !files.length) togglePageChatSessionFiles(null, false);
+  if (!list || !panel?.classList.contains('is-open')) return;
+  // Same search folding and card layout as the conversation history column.
+  const searchable = value => String(value).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').toLocaleLowerCase('vi');
+  const query = searchable((document.getElementById('page-chat-session-files-search')?.value || '').trim());
+  const icons = { png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image', webp: 'fa-file-image', pdf: 'fa-file-pdf', docx: 'fa-file-word', xlsx: 'fa-file-excel', csv: 'fa-file-excel' };
+  const startToday = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  const groupFor = time => time >= startToday ? 'Hôm nay' : time >= startToday - 86400000 ? 'Hôm qua' : 'Trước đó';
+  const shown = files.map((file, index) => ({ file, index })).filter(({ file }) => !query || searchable(file.name).includes(query));
+  if (!shown.length) {
+    const empty = document.createElement('p');
+    empty.className = 'chat-files-empty';
+    empty.textContent = 'Không tìm thấy tệp phù hợp.';
+    return list.replaceChildren(empty);
+  }
+  const nodes = [];
+  let group = null;
+  for (const { file, index } of shown) {
+    const created = new Date(file.createdAt).getTime();
+    if (groupFor(created) !== group) {
+      group = groupFor(created);
+      const title = document.createElement('div');
+      title.className = 'chat-session-group-title';
+      title.innerHTML = `<span>${group}</span><span class="chat-session-group-count">${shown.filter(item => groupFor(new Date(item.file.createdAt).getTime()) === group).length}</span>`;
+      nodes.push(title);
+    }
+    const selected = isPageChatSessionFileSelected(file);
+    const extension = String(file.name || '').split('.').pop().toLowerCase();
+    const size = file.size >= 1048576 ? (file.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.ceil((file.size || 0) / 1024)) + ' KB';
+    const time = created >= startToday - 86400000 ? new Date(created).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : new Date(created).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    const item = document.createElement('div');
+    item.className = `chat-session-item chat-file-item${selected ? ' is-current' : ''}`;
+    item.innerHTML = `
+      <button type="button" class="chat-session-main" aria-pressed="${selected}" title="${selected ? 'Bỏ chọn tệp' : 'Chọn tệp để hỏi tiếp'}">
+        <i aria-hidden="true" class="${selected ? 'fa-solid fa-check' : `fa-regular ${icons[extension] || 'fa-file-lines'}`}"></i>
+        <span class="chat-session-copy"><span class="chat-session-title-line"><span class="chat-session-title"></span></span></span>
+        <span class="chat-session-meta"><time>${escapeChatMarkdown(time)}</time></span>
+        <span class="chat-session-preview">${escapeChatMarkdown([size, extension.toUpperCase(), file.uploads > 1 ? `đã tải ${file.uploads} lần` : '', selected ? 'đã chọn' : ''].filter(Boolean).join(' · '))}</span>
+      </button>
+      <button type="button" class="chat-session-more" title="Xem tệp" aria-label="Xem tệp"><i class="fa-regular fa-eye" aria-hidden="true"></i></button>`;
+    item.querySelector('.chat-session-title').textContent = file.name;
+    item.querySelector('.chat-session-copy').title = file.name;
+    item.querySelector('.chat-session-main').onclick = () => togglePageChatSessionFile(index);
+    item.querySelector('.chat-session-more').onclick = () => window.ChatAttachments.preview(file);
+    const surface=document.createElement('div');surface.className='chat-file-swipe-content';
+    surface.append(...item.childNodes);item.append(surface);
+    const remove=document.createElement('button');remove.type='button';remove.className='chat-file-list-delete';
+    remove.innerHTML='<i class="fa-regular fa-trash-can" aria-hidden="true"></i><span>Xóa</span>';
+    remove.setAttribute('aria-label','Xóa '+file.name+' khỏi danh sách');item.append(remove);
+    remove.onclick=async()=>{
+      remove.disabled=true;
+      try {
+        const response=await fetch('/api/chat/attachments',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:fileSessionId,batchId:file.batchId,fileId:file.id})});
+        if(!response.ok)throw new Error('Không xóa được tệp khỏi danh sách.');
+        if(window.currentChatSessionId!==fileSessionId)return;
+        window.pageChatSessionFiles=(window.pageChatSessionFiles||[]).filter(entry=>entry!==file);
+        window.pageChatAttachments=(window.pageChatAttachments||[]).filter(entry=>entry.id!==file.id||entry.batchId!==file.batchId);
+        renderPageChatAttachments();renderPageChatSessionFiles();
+      }catch(error){showToast(error.message,'error');remove.disabled=false;}
+    };
+    let startX=0,startY=0,dragging=false,moved=false;
+    surface.addEventListener('pointerdown',event=>{if(event.button!==0)return;startX=event.clientX;startY=event.clientY;dragging=true;moved=false;});
+    surface.addEventListener('pointermove',event=>{
+      if(!dragging)return;
+      const dx=event.clientX-startX,dy=event.clientY-startY;
+      if(!moved&&Math.abs(dy)>Math.abs(dx)){dragging=false;return;}
+      if(Math.abs(dx)>8){moved=true;item.classList.add('is-swiping');surface.setPointerCapture(event.pointerId);item.style.setProperty('--file-delete-width',`${Math.max(0,Math.min(64,(item.classList.contains('is-swiped')?64:0)-dx))}px`);}
+    });
+    const endSwipe=event=>{if(!dragging)return;dragging=false;item.classList.remove('is-swiping');if(moved){const dx=event.clientX-startX;item.classList.toggle('is-swiped',dx < -24 || (item.classList.contains('is-swiped')&&dx<24));item.style.removeProperty('--file-delete-width');}};
+    surface.addEventListener('pointerup',endSwipe);
+    surface.addEventListener('pointercancel',()=>{dragging=false;item.classList.remove('is-swiping');item.style.removeProperty('--file-delete-width');});
+    surface.addEventListener('click',event=>{if(moved){event.preventDefault();event.stopImmediatePropagation();moved=false;}},true);
+    nodes.push(item);
+  }
+  list.replaceChildren(...nodes);
 }
 
 function togglePageChatWebSearch(event) {
@@ -1253,9 +1430,9 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true, ta
   if(record.role==='user'&&record.attachments?.length&&window.ChatAttachments?.render){
     const bubble=node.querySelector('.chat-user-message-bubble');
     if(bubble){
-      let gallery=bubble.querySelector('.chat-file-cards');
+      let gallery=node.querySelector('.chat-file-cards');
       if(!gallery){gallery=document.createElement('div');bubble.append(gallery);}
-      window.ChatAttachments.render(gallery,record.attachments.map(file=>({...file,...(record.attachmentBatchId?{batchId:record.attachmentBatchId}:{})})));
+      window.ChatAttachments.render(gallery,record.attachments.map(file=>({...(record.attachmentBatchId?{batchId:record.attachmentBatchId}:{}),...file})));
     }
   }
   let repairedStoredMarkup = repairStoredSummaryMarkup(node);
@@ -1263,6 +1440,12 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true, ta
   if (repairedStoredMarkup) record.html = node.outerHTML;
   record.createdAt = Number(record.createdAt) || Date.now();
   if (record.role === 'user') enhanceUserMessageNode(node, record.content || '');
+  if (record.role === 'user') {
+    const group = node.querySelector('.chat-user-message-group');
+    const bubble = group?.querySelector('.chat-user-message-bubble');
+    const gallery = node.querySelector('.chat-file-cards');
+    if (bubble && gallery) group.insertBefore(gallery, bubble);
+  }
   if (record.role === 'assistant') enhanceAssistantMessageNode(node);
   addChatMessageTime(node, record.role, record.createdAt);
 
@@ -1392,6 +1575,7 @@ function renderCurrentChatMessages(preserveScroll = false) {
   container.scrollTop = preserveScroll ? oldTop + container.scrollHeight - oldHeight : container.scrollHeight;
   window.ChatReasoningUI?.resumeAtEnd(container);
   window.syncPageChatScrollActivity?.();
+  if (typeof loadPageChatSessionFiles === 'function') loadPageChatSessionFiles();
 }
 
 async function submitChatFeedback(button) {
@@ -1619,9 +1803,12 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
       attachments: attachedFiles.map(file => ({ name: file.name, type: file.type, size: file.size }))
     };
     const hasAttachments=attachedFiles.length>0 || userRecord.attachmentBatchId || userRecord.attachments?.length>0;
-    if(hasAttachments&&!attachedFiles.length&&!userRecord.attachmentBatchId)throw new Error('Tệp chưa được tải lên. Vui lòng đính kèm và gửi lại.');
-    const data = hasAttachments ? await window.ChatAttachments.submit(attachedFiles,{
-      sessionId:session.id,batchId:userRecord.attachmentBatchId,question:requestMessage,
+    // A retry re-asks the stored files by reference, whichever uploads they came from.
+    const storedFiles=isRetry?(userRecord.attachments||[]).filter(file=>file.batchId&&file.id):[];
+    if(hasAttachments&&!attachedFiles.length&&!storedFiles.length&&!userRecord.attachmentBatchId)throw new Error('Tệp chưa được tải lên. Vui lòng đính kèm và gửi lại.');
+    const data = hasAttachments ? await window.ChatAttachments.submit(attachedFiles.length?attachedFiles:storedFiles,{
+      sessionId:session.id,...(storedFiles.length?{}:{batchId:userRecord.attachmentBatchId}),question:requestMessage,
+      providerId:selectedProviderId,history:requestPayload.history,
       ...(isRetry?{retryMessageIndex:requestPayload.retryMessageIndex}:{})
     },requestController.signal) : await fetchStreamingChat(requestPayload, event => {
       if (event.type === 'reasoning_delta') {
@@ -1632,13 +1819,15 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
       addThinkingStep(thinkingId, event.icon || 'circle-notch', event.label || 'Đang xử lý', event.status || 'running', event);
       window.updatePageChatMiniPanel({ status: 'running', label: event.label || 'Đang xử lý yêu cầu…' });
     }, requestController.signal,event=>answerPreview?.update(event));
-    if(data.batchId) {
-      userRecord.attachmentBatchId=data.batchId;userRecord.attachments=data.attachments;
+    if(hasAttachments&&Array.isArray(data.attachments)) {
+      userRecord.attachmentBatchId=data.batchId||null;userRecord.attachments=data.attachments;
       const userNode=[...container.querySelectorAll('.chat-user-message-row')].find(node=>node._chatRecord===userRecord);
       const gallery=userNode?.querySelector('.chat-file-cards');
       if(gallery){window.ChatAttachments.render(gallery,window.ChatAttachments.describe(data.attachments,data.batchId));userRecord.html=userNode.outerHTML;}
       window.ChatAttachments.release(attachedFiles);
       await saveChatSessions();
+      if(data.batchId&&window.currentChatSessionId===session.id)loadPageChatSessionFiles(true);
+      if(!isRetry&&data.completionStatus==='SUCCESS')carryPageChatAttachments(session.id,data.attachments);
     }
     answerPreview?.dispose();
     disposeThinkingBubble(thinkingDiv);

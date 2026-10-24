@@ -195,6 +195,15 @@ main.main-content.chat-workspace-page {
 #view-page_chat .chat-token-usage { max-width:100%; flex-wrap:wrap; row-gap:6px; }
 #page-chat-messages-container .chat-user-message-row { gap:0; margin-top:8px; justify-content:flex-end; }
 #page-chat-messages-container .chat-user-message-group { max-width:min(78%,680px); }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; max-width:100%; margin:0 0 8px; padding:0; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-card { flex:0 0 160px; max-width:100%; border-radius:12px; box-shadow:none; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-open { min-height:0; padding:10px; gap:5px; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-name { -webkit-line-clamp:1; padding-right:0; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-meta { font-size:10px; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-card:has(.chat-file-image:not([hidden])) { flex-basis:80px; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-open:has(.chat-file-image:not([hidden])) { padding:0; gap:0; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-image:not([hidden]) { display:block; width:78px; height:80px; margin:0; border-radius:0; object-fit:cover; }
+#page-chat-messages-container .chat-user-message-group > .chat-file-cards .chat-file-open:has(.chat-file-image:not([hidden])) :is(.chat-file-name,.chat-file-meta,.chat-file-kind) { display:none; }
 #page-chat-messages-container .chat-user-message-bubble { position:relative; display:block; padding:14px 19px; border:1px solid #bfd6f5; border-radius:22px; box-shadow:none; background:#eff6ff; color:#102a43; font-size:14px; line-height:1.8; }
 #page-chat-messages-container :is(.chat-user-message-avatar,.chat-ai-avatar,.chat-ai-message-meta) { display:none !important; }
 #page-chat-messages-container .chat-user-message-stamp { display:none !important; }
@@ -505,3 +514,53 @@ main.main-content.chat-workspace-page {
 :root[data-theme="dark"] #view-page_chat .page-chat-download-button { background:#342e31; color:#f4edf1; }
 :root[data-theme="dark"] #view-page_chat .page-chat-download-button:hover { background:#453b41; }
 @media(max-width:480px) { #view-page_chat .page-chat-download-card { gap:12px; padding-left:12px; padding-right:12px; } #view-page_chat .page-chat-download-icon { flex-basis:42px; height:48px; } #view-page_chat .page-chat-download-button { padding:7px 10px; } }
+
+/* Files uploaded in the current conversation, reusable without uploading again */
+#view-page_chat .page-chat-session-files { position:absolute; top:10px; right:14px; z-index:30; display:flex; flex-direction:column; align-items:flex-end; max-width:calc(100% - 28px); }
+#view-page_chat .page-chat-session-files-trigger { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 8px 0 11px; border:1px solid var(--conversation-border); border-radius:999px; background:var(--conversation-surface); color:var(--conversation-text); font:600 12px/1 inherit; box-shadow:0 2px 8px #16213b12; cursor:pointer; }
+#view-page_chat .page-chat-session-files-trigger:hover,#view-page_chat .page-chat-session-files-trigger[aria-expanded="true"] { background:var(--conversation-hover); }
+#view-page_chat .page-chat-session-files-trigger b { display:grid; place-items:center; min-width:18px; height:18px; padding:0 5px; box-sizing:border-box; border-radius:9px; background:var(--conversation-selected); color:var(--conversation-accent); font-size:11px; }
+#view-page_chat .page-chat-session-files-trigger[hidden] { display:none; }
+/* Right column for conversation files, styled like the conversation history column */
+#view-page_chat .chat-workspace { position:relative; }
+#view-page_chat .chat-files-sidebar { --conversation-selected:#f0edff; flex:0 0 0; width:0; min-width:0; overflow:hidden; border-left:1px solid transparent; background:var(--conversation-surface); visibility:hidden; transition:flex-basis .22s ease,width .22s ease,border-color .22s ease,visibility 0s linear .22s; }
+#view-page_chat .chat-files-sidebar.is-open { flex-basis:320px; width:320px; border-left-color:var(--conversation-border); visibility:visible; transition:flex-basis .22s ease,width .22s ease,border-color .22s ease; }
+:root[data-theme="dark"] #view-page_chat .chat-files-sidebar { --conversation-selected:#30294c; }
+#view-page_chat .chat-files-sidebar-inner { display:flex; flex-direction:column; width:320px; height:100%; box-sizing:border-box; }
+#view-page_chat .chat-files-hint { margin:10px 2px 0; color:var(--conversation-muted); font-size:12px; line-height:1.5; }
+#view-page_chat .chat-files-list { flex:1; min-height:0; overflow:auto; padding:4px 12px 14px; scrollbar-width:thin; scrollbar-color:#b1bfd1 transparent; overscroll-behavior:contain; }
+#view-page_chat .chat-files-list .chat-session-group-title:first-child { margin-top:4px; }
+#view-page_chat .chat-files-empty { margin:24px 8px; color:var(--conversation-muted); font-size:13px; text-align:center; }
+#view-page_chat .chat-file-item .chat-session-main { cursor:pointer; }
+#view-page_chat .chat-file-item.is-current .chat-session-main>i:first-child { color:#fff; background:var(--conversation-accent); }
+:root[data-theme="dark"] #view-page_chat .chat-file-item.is-current .chat-session-main>i:first-child { color:#15161c; }
+#view-page_chat .chat-file-item .chat-session-more { display:grid; place-items:center; border:0; cursor:pointer; }
+#view-page_chat .chat-file-item { display:block; width:100%; min-width:0; overflow:hidden; padding:0; --file-delete-width:0px; }
+#view-page_chat .chat-file-swipe-content { position:relative; z-index:1; width:calc(100% - var(--file-delete-width)); min-width:0; box-sizing:border-box; padding:10px 9px; background:var(--conversation-surface); border-radius:10px; transition:width .18s ease; touch-action:pan-y; }
+#view-page_chat .chat-file-item.is-current .chat-file-swipe-content { background:var(--conversation-selected); }
+#view-page_chat .chat-file-item.is-swiped,
+#view-page_chat .chat-file-item:has(.chat-file-list-delete:focus-visible) { --file-delete-width:64px; }
+#view-page_chat .chat-file-item.is-swiped .chat-file-swipe-content { border-radius:10px 0 0 10px; }
+#view-page_chat .chat-file-list-delete { position:absolute; inset:0 0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:64px; border:0; background:#dc3545; color:#fff; font:inherit; font-size:11px; cursor:pointer; }
+#view-page_chat .chat-file-swipe-content .chat-session-main { min-width:0; padding-right:0; }
+#view-page_chat .chat-file-swipe-content .chat-session-copy { overflow:hidden; }
+#view-page_chat .chat-file-swipe-content .chat-session-title { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#view-page_chat .chat-file-swipe-content .chat-session-preview { padding-right:28px; }
+#view-page_chat .chat-file-list-delete:focus-visible { outline:2px solid #fff; outline-offset:-4px; }
+#view-page_chat .chat-file-list-delete { opacity:0; pointer-events:none; transition:opacity .15s ease; }
+#view-page_chat .chat-file-item.is-swiped .chat-file-list-delete,
+#view-page_chat .chat-file-item:has(.chat-file-list-delete:focus-visible) .chat-file-list-delete { opacity:1; pointer-events:auto; }
+#view-page_chat .chat-file-swipe-content { min-height:70px; }
+#view-page_chat .chat-file-item.is-swiping .chat-file-swipe-content { transition:none; user-select:none; }
+#view-page_chat .chat-file-item.is-swiping .chat-file-list-delete { width:var(--file-delete-width); overflow:hidden; opacity:1; transition:none; pointer-events:none; white-space:nowrap; }
+@media (prefers-reduced-motion:reduce) { #view-page_chat .chat-files-sidebar,#view-page_chat .chat-files-sidebar.is-open { transition:none; } }
+@container main-content (max-width:760px) {
+  #view-page_chat .chat-files-sidebar { position:absolute; inset:0; z-index:40; width:100%; flex:none; border:0; }
+  #view-page_chat .chat-files-sidebar.is-open { width:100%; }
+  #view-page_chat .chat-files-sidebar-inner { width:100%; }
+}
+@media (max-width:640px) { #view-page_chat .page-chat-session-files { top:6px; right:8px; } }
+/* Note shown when files from the previous question stay in the composer */
+#view-page_chat .page-chat-carry-note { display:flex; flex:1 0 100%; flex-wrap:wrap; align-items:center; gap:4px 6px; margin:0; color:var(--conversation-muted); font-size:12px; line-height:1.5; }
+#view-page_chat .page-chat-carry-note i { color:var(--conversation-accent); font-size:11px; }
+#view-page_chat .page-chat-carry-note button { padding:0; border:0; background:transparent; color:var(--conversation-accent); font:inherit; font-weight:600; text-decoration:underline; cursor:pointer; }

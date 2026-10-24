@@ -26,7 +26,9 @@ function convertMessagesToOllama(messages = []) {
         tool_name: message.tool_name || message.name
       };
     }
-    return { role: message.role, content: message.content || '' };
+    // Ollama vision models take raw base64 images next to the text content.
+    return { role: message.role, content: message.content || '',
+      ...(Array.isArray(message.images) && message.images.length ? { images: message.images.map(image => image.data) } : {}) };
   });
 }
 

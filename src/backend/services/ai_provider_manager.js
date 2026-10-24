@@ -74,7 +74,7 @@ class AiProviderManager {
   publicProvider(provider) {
     if (!provider) return null;
     const allowed = ['id', 'name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'model',
-      'supportsToolCalling', 'supportsJsonToolCalling', 'contextWindow', 'outputReserve', 'priority', 'isActive', 'status', 'tokenCost'];
+      'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'isActive', 'status', 'tokenCost'];
     const result = {};
     for (const key of allowed) result[key] = provider[key];
     result.hasApiKey = Boolean(provider.apiKey);
@@ -139,6 +139,7 @@ class AiProviderManager {
       model: data.model || "custom-model",
       supportsToolCalling: data.supportsToolCalling === true || data.supportsToolCalling === 'true',
       supportsJsonToolCalling: data.supportsJsonToolCalling === true || data.supportsJsonToolCalling === 'true',
+      useForAttachments: data.useForAttachments === true || data.useForAttachments === 'true',
       contextWindow: Math.max(1024, Number.parseInt(data.contextWindow, 10) || 16384),
       outputReserve: Math.max(256, Number.parseInt(data.outputReserve, 10) || 2048),
       priority: parseInt(data.priority) || (this.providers.length + 1),
@@ -159,10 +160,10 @@ class AiProviderManager {
 
     const pending = { ...target };
 
-    const allowed = ['name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'apiKey', 'model', 'supportsToolCalling', 'supportsJsonToolCalling', 'contextWindow', 'outputReserve', 'priority', 'tokenCost'];
+    const allowed = ['name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'apiKey', 'model', 'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'tokenCost'];
     for (const key of allowed) {
       if (data[key] !== undefined) {
-        pending[key] = ['supportsToolCalling', 'supportsJsonToolCalling'].includes(key)
+        pending[key] = ['supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments'].includes(key)
           ? (data[key] === true || data[key] === 'true')
           : (['contextWindow', 'outputReserve'].includes(key) ? Math.max(key === 'contextWindow' ? 1024 : 256, parseInt(data[key]) || (key === 'contextWindow' ? 16384 : 2048))
             : (key === 'priority' ? parseInt(data[key]) : (key === 'tokenCost' ? parseFloat(data[key]) : data[key])));

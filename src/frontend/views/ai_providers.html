@@ -90,6 +90,13 @@
         <label class="form-label" for="page-new-prov-reserve">Tokens dành cho câu trả lời</label>
         <input type="number" class="form-control" id="page-new-prov-reserve" value="2048" min="256" step="1">
       </div>
+      <div>
+        <label class="form-label" for="page-new-prov-attachments">Xử lý tệp đính kèm</label>
+        <select class="form-control" id="page-new-prov-attachments" title="Khi có ít nhất một provider được chọn, tệp đính kèm chỉ được xử lý bằng các provider này. Chọn provider đám mây nghĩa là cho phép gửi nội dung tệp lên dịch vụ đó.">
+          <option value="off">Không dùng cho tệp</option>
+          <option value="on">Dùng đọc tài liệu và ảnh đính kèm</option>
+        </select>
+      </div>
       <div class="provider-form-actions">
         <button class="btn-primary" id="page-provider-save-btn" onclick="savePageNewAiProvider()">
           <i class="fa-solid fa-floppy-disk"></i> <span id="page-provider-save-label">Lưu provider</span>

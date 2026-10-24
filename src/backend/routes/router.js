@@ -1082,7 +1082,8 @@ async function handleGovernedRequest(req, res) {
           res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
           res.end(JSON.stringify({name:file.name,type:file.type,base64:file.bytes.toString('base64')}));return;
         }
-        const result=await require('../services/chat_attachment_service').submit(uploadOwner,{...body,channel:'embed'});
+        const aborter=new AbortController();res.on('close',()=>{if(!res.writableEnded)aborter.abort();});
+        const result=await require('../services/chat_attachment_service').submit(uploadOwner,{...body,channel:'embed'},{signal:aborter.signal});
         res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
         res.end(JSON.stringify(result));return;
       }
@@ -1570,11 +1571,32 @@ async function handleGovernedRequest(req, res) {
     }catch(error){res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode?error.message:'Không đọc được tệp.'}));}
     return;
   }
+  if(pathname==='/api/chat/attachments'&&req.method==='GET') {
+    try {
+      const files=await require('../services/chat_attachment_service').list(currentAccount?.id,parsedUrl.searchParams.get('sessionId'));
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});
+      res.end(JSON.stringify({files}));
+    }catch(error){res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode?error.message:'Không tải được danh sách tệp.'}));}
+    return;
+  }
+  if(pathname==='/api/chat/attachments'&&req.method==='DELETE') {
+    try {
+      const body=await readJsonBody(req,4096);
+      const result=await require('../services/chat_attachment_service').hideFromList(currentAccount?.id,body);
+      res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify(result));
+    }catch(error){res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode?error.message:'Không xóa được tệp khỏi danh sách.'}));}
+    return;
+  }
   if(pathname==='/api/chat/attachments'&&req.method==='POST') {
     try {
       const body=await readJsonBody(req,28*1024*1024);
       if(body.sessionId)await require('../services/page_chat_history_service').assertCanChat(currentAccount?.id,body.sessionId,body.retryMessageIndex);
-      const result=await require('../services/chat_attachment_service').submit(currentAccount?.id,{...body,channel:'chat'});
+      const aborter=new AbortController();res.on('close',()=>{if(!res.writableEnded)aborter.abort();});
+      const started=Date.now();
+      const result=await require('../services/chat_attachment_service').submit(currentAccount?.id,{...body,channel:'chat'},{signal:aborter.signal});
+      const audit=loggerService.addChatAudit(body.question||'',result.replyText,null,{name:result.providerName,model:result.modelName},Date.now()-started,result.completionStatus,result.completionStatus==='ERROR'?result.replyText:null,
+        {endpoint:'/api/chat/attachments',accountId:currentAccount?.id,sessionId:body.sessionId,providerId:result.providerId,tokenUsage:result.tokenUsage,attachments:result.attachments});
+      result.auditId=audit.id;
       res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8','Cache-Control':'no-store'});
       res.end(JSON.stringify(result));
     }catch(error){

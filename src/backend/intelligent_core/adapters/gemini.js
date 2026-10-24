@@ -62,7 +62,9 @@ function convertMessagesToGeminiContents(messages) {
     } else if (m.role === 'user') {
       contents.push({
         role: 'user',
-        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
+        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) },
+          // Verified attachment bytes (image or PDF) travel as inline parts.
+          ...(Array.isArray(m.images) ? m.images.map(image => ({ inlineData: { mimeType: image.mimeType, data: image.data } })) : [])]
       });
     }
   }
@@ -202,4 +204,4 @@ async function callGemini(provider, messages, tools, signal, options = {}) {
   };
 }
 
-module.exports = { callGemini };
+module.exports = { callGemini, convertMessagesToGeminiContents };

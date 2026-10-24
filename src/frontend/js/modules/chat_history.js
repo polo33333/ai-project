@@ -72,7 +72,7 @@ function getChatSource(item) {
   if (endpoint === '/api/embed/chat' || payload.embedId) {
     return { label: 'Embed Chat', icon: 'fa-window-restore', tone: 'embed', detail: (payload.visitorIdentity?.verified ? `${payload.visitorIdentity.name} · ${payload.visitorIdentity.subject}` : `Khách · ${payload.sessionId || ''}`) + ` · ${payload.origin || payload.embedId || ''}` };
   }
-  if (endpoint.startsWith('/api/intelligent-core/chat')) {
+  if (endpoint.startsWith('/api/intelligent-core/chat') || endpoint === '/api/chat/attachments') {
     return { label: 'Page Chat', icon: 'fa-comments', tone: 'page', detail: '' };
   }
   if (endpoint === '/api/v1/chat/completions') {
@@ -216,10 +216,49 @@ async function loadChatAuditDetails(panel) {
     const response=await fetch('/api/chat-history?id='+encodeURIComponent(id),{cache:'no-store'});
     const item=await response.json();
     if(!response.ok)throw new Error(item.message||'Không tải được chi tiết.');
-    host.innerHTML='<pre><code>'+highlightAuditJson(getAuditPayload(item).text)+'</code></pre>';
+    const json = getAuditPayload(item).text;
+    host.innerHTML='<div class="chat-audit-actions"><span class="chat-audit-format">{ } <span>JSON</span></span><span class="chat-audit-copy-status" role="status" aria-live="polite"></span><button type="button" title="Sao chép toàn bộ JSON" aria-label="Copy JSON"><i class="fa-regular fa-copy" aria-hidden="true"></i><span>Sao chép</span></button></div><pre><code>'+highlightAuditJson(json)+'</code></pre>';
+    host.querySelector('button').addEventListener('click', event => copyAuditJson(event.currentTarget, json));
     panel.dataset.loaded='true';
   }catch(error){host.textContent=error.message+' Đóng và mở lại để thử lại.';}
   finally{delete panel.dataset.loading;host.removeAttribute('aria-busy');}
+}
+
+async function copyAuditJson(button, json) {
+  const status = button.parentElement.querySelector('[role="status"]');
+  const previousFocus = document.activeElement;
+  button.disabled = true;
+  try {
+    let copied = false;
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(json); copied = true; } catch (_) { /* Try the LAN-compatible fallback. */ }
+    }
+    if (!copied) {
+      const textarea = document.createElement('textarea');
+      textarea.value = json;
+      textarea.readOnly = true;
+      textarea.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+      document.body.appendChild(textarea);
+      try {
+        textarea.focus();
+        textarea.select();
+        if (!document.execCommand('copy')) throw new Error('Copy failed');
+      } finally { textarea.remove(); }
+    }
+    status.textContent = 'Đã sao chép JSON';
+    button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i><span>Đã chép</span>';
+    button.classList.add('is-copied');
+    setTimeout(() => {
+      button.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i><span>Sao chép</span>';
+      button.classList.remove('is-copied');
+      status.textContent = '';
+    }, 2000);
+  } catch (_) {
+    status.textContent = 'Không thể sao chép. Hãy chọn nội dung JSON và nhấn Ctrl+C.';
+  } finally {
+    button.disabled = false;
+    previousFocus?.focus({ preventScroll: true });
+  }
 }
 
 window.loadChatAuditDetails = loadChatAuditDetails;

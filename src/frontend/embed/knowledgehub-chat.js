@@ -10,7 +10,7 @@
   const attachmentsApi=()=>{
     if(window.ChatAttachments)return Promise.resolve(window.ChatAttachments);
     if(!attachmentsApiPromise)attachmentsApiPromise=new Promise((resolve,reject)=>{
-      const helper=document.createElement('script');helper.src=apiBase+'/embed/chat-attachments.js?v=20261020-preview';
+      const helper=document.createElement('script');helper.src=apiBase+'/embed/chat-attachments.js?v=20261024-session-files';
       helper.onload=()=>resolve(window.ChatAttachments);helper.onerror=()=>{attachmentsApiPromise=null;reject(new Error('Không tải được chức năng đính kèm.'));};document.head.appendChild(helper);
     });
     return attachmentsApiPromise;

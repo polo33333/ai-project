@@ -46,6 +46,15 @@
     <div class="chat-main"
       style="flex: 1; min-width: 0; background: transparent; border: 1px solid var(--border-color); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
 
+      <!-- Files uploaded in this conversation, reusable without uploading again -->
+      <div class="page-chat-session-files" onclick="event.stopPropagation()">
+        <button id="page-chat-session-files-trigger" class="page-chat-session-files-trigger" type="button" hidden
+          onclick="togglePageChatSessionFiles(event)" aria-haspopup="dialog" aria-controls="page-chat-session-files-panel" aria-expanded="false"
+          title="Tệp đã tải lên trong cuộc trò chuyện">
+          <i class="fa-solid fa-paperclip" aria-hidden="true"></i><span>Tệp</span><b id="page-chat-session-files-count">0</b>
+        </button>
+      </div>
+
       <!-- Messages Container -->
       <div id="page-chat-messages-container"
         style="flex: 1; overflow-y: auto;">
@@ -98,6 +107,7 @@
               <button id="page-chat-knowledge-toggle" type="button" role="menuitem" onclick="closePageChatMenus(); toggleChatKnowledgePanel(event)" aria-expanded="false"><i class="fa-solid fa-database" aria-hidden="true"></i><span>Chọn nguồn tri thức</span></button>
               <button id="page-chat-web-toggle" type="button" role="menuitemcheckbox" onclick="togglePageChatWebSearch(event); closePageChatMenus()" aria-checked="false" aria-pressed="false"><i class="fa-solid fa-globe" aria-hidden="true"></i><span>Tìm kiếm web</span></button>
               <button type="button" role="menuitem" onclick="openChatFilePicker()" title="Tải tài liệu hoặc ảnh, tối đa 5 tệp"><i class="fa-solid fa-paperclip" aria-hidden="true"></i><span>Đính kèm tệp</span><small>Tài liệu, ảnh</small></button>
+              <button type="button" role="menuitem" onclick="closePageChatMenus(); togglePageChatSessionFiles(event,true)" title="Hỏi tiếp với tệp đã tải lên trong cuộc trò chuyện này"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Tệp đã tải lên</span><small>Trong cuộc trò chuyện</small></button>
             </div>
             <div id="page-chat-knowledge-panel" class="page-chat-knowledge-panel page-chat-inline-panel" hidden onclick="event.stopPropagation()">
               <div class="page-chat-knowledge-search"><i class="fa-solid fa-magnifying-glass"></i><input id="page-chat-knowledge-search" placeholder="Tìm tài liệu..." oninput="renderChatKnowledgeOptions()"></div>
@@ -129,6 +139,23 @@
       </div>
 
     </div>
+
+    <!-- RIGHT PANEL: FILES UPLOADED IN THIS CONVERSATION -->
+    <aside id="page-chat-session-files-panel" class="chat-files-sidebar" aria-label="Tệp trong cuộc trò chuyện" aria-hidden="true" inert onclick="event.stopPropagation()">
+      <div class="chat-files-sidebar-inner">
+        <div class="chat-sidebar-new">
+          <div class="chat-history-heading"><strong>Tệp trong cuộc trò chuyện</strong>
+            <button type="button" class="chat-new-session-btn" onclick="togglePageChatSessionFiles(event,false)" title="Đóng" aria-label="Đóng danh sách tệp"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+          </div>
+          <label class="chat-history-search">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input id="page-chat-session-files-search" type="search" placeholder="Tìm tệp…" aria-label="Tìm tệp trong cuộc trò chuyện" oninput="renderPageChatSessionFiles()" autocomplete="off">
+          </label>
+          <p class="chat-files-hint">Chọn tệp để hỏi tiếp, không cần tải lên lại.</p>
+        </div>
+        <div id="page-chat-session-files-list" class="chat-files-list"></div>
+      </div>
+    </aside>
 
   </div>
 </div>
