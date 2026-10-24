@@ -241,10 +241,13 @@ function renderPageChatAttachments() {
   if (window.pageChatAttachments.some(file => file.carried)) {
     const note = document.createElement('p');
     note.className = 'page-chat-carry-note';
-    note.innerHTML = '<i class="fa-solid fa-link" aria-hidden="true"></i><span>Dùng tiếp tệp của câu trước. Bấm × trên tệp để bỏ, hoặc</span>';
+    // The file row scrolls sideways, so the note sits first in the row as a compact label.
+    note.title = 'Các tệp này được giữ từ câu hỏi trước. Bấm × trên từng tệp hoặc “Bỏ” để không dùng nữa.';
+    note.innerHTML = '<i class="fa-solid fa-link" aria-hidden="true"></i><span>Tệp câu trước</span>';
     const clear = document.createElement('button');
     clear.type = 'button';
-    clear.textContent = 'bỏ tất cả';
+    clear.textContent = 'Bỏ';
+    clear.setAttribute('aria-label', 'Bỏ các tệp giữ từ câu trước');
     clear.onclick = () => dropCarriedPageChatAttachments();
     note.append(clear);
     preview.append(note);
