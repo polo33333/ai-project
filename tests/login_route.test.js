@@ -19,7 +19,11 @@ test('clean login URL serves the login page and legacy URLs redirect without wea
   assert.equal(login.status, 200);
   assert.match(login.headers.get('content-type'), /^text\/html/);
   assert.match(login.headers.get('cache-control'), /no-store/);
-  assert.match(await login.text(), /id="login-form"/);
+  const loginHtml = await login.text();
+  assert.match(loginHtml, /id="login-form"/);
+  const { version } = require('../package.json');
+  assert.ok(loginHtml.includes('Phiên bản v' + version));
+  assert.ok(!loginHtml.includes('{{APP_VERSION}}'));
   const head = await request('/login', { method: 'HEAD' });
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');

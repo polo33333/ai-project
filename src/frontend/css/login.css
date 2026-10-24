@@ -560,3 +560,30 @@ html[data-theme=dark] .login-error.is-help{color:#c0a8df;background:#31263f;bord
 .carousel-motion svg{width:14px;height:14px;color:inherit}
 .carousel-motion .motion-play,.carousel-motion[aria-pressed=true] .motion-pause{display:none}
 .carousel-motion[aria-pressed=true] .motion-play{display:block}
+
+/* Match the application dark palette in theme.css. */
+html[data-theme=dark] .login-page{--autofill-bg:#101a2a;--autofill-text:#e1e8f5;background:#0d1422;color:#e1e8f5}
+html[data-theme=dark] .login::before{background:#0d1422}
+html[data-theme=dark] .story::before{background:radial-gradient(ellipse at 70% 70%,#30294f80,transparent 70%),#111a2a}
+html[data-theme=dark] .story::after{background:#2c3950}
+html[data-theme=dark] input{background:#101a2a;border-color:#2c3950;color:#e1e8f5}
+html[data-theme=dark] input:hover{background:#151f30;border-color:#40506a}
+html[data-theme=dark] input:focus{background:#101a2a;border-color:#a99bff;box-shadow:0 0 0 4px #a99bff18}
+html[data-theme=dark] input::placeholder{color:#8e9db7}
+html[data-theme=dark] :is(label,.form-head h2,.brand b,.intro h1,.feature b){color:#e1e8f5}
+html[data-theme=dark] :is(.brand small,.intro>p,.feature p,.form-head p,.support,.formfoot,.storyfoot,.scene-chip,.input>svg,.eye){color:#a8b6cd}
+html[data-theme=dark] :is(.accent,.support button){color:#a99bff}
+html[data-theme=dark] .feature::before{background:linear-gradient(130deg,#202d4380,#151f3066);border-color:#2c3950}
+html[data-theme=dark] :is(.dashboard,.document-board,.analysis-board){background:#151f30;border-color:#2c3950;box-shadow:inset 0 0 0 5px #ffffff03,0 18px 0 -12px #30294f,0 26px 24px -15px #0004}
+html[data-theme=dark] :is(.dash-main,.scene-chart){background:#111a2a;color:#e1e8f5}
+html[data-theme=dark] :is(.ask,.tile,.doc-search,.doc-list>div,.chart-kpis>div,.scene-note,.float-card){background:#1c283b;border-color:#2c3950;color:#e1e8f5}
+html[data-theme=dark] :is(.scene-heading,.dash-brand,.doc-list b,.chart-kpis b,.scene-note b,.float-card b,.chart-title){color:#e1e8f5}
+html[data-theme=dark] :is(.doc-list small,.chart-kpis small,.scene-note small,.float-card small,.chart-title span,.chart-bars small){color:#a8b6cd}
+html[data-theme=dark] :is(.scene-badge,.doc-tags span,.source-tags span){background:#30294f;border-color:#51458a;color:#c5b9ff}
+html[data-theme=dark] .submit{background:linear-gradient(135deg,#7162df,#6053c6)}
+html[data-theme=dark] .theme-switch{background:#1c283b;box-shadow:inset 0 0 0 1px #2c3950}
+html[data-theme=dark] .theme-switch::before{background:#30294f}
+html[data-theme=dark] .theme-switch button[aria-pressed=true]{background:transparent;color:#a99bff}
+html[data-theme=dark] .carousel-motion{background:#1c283b;border-color:#2c3950;color:#a8b6cd}
+html[data-theme=dark] .dots button{background:#40506a}
+html[data-theme=dark] .dots button[aria-pressed=true]{background:#a99bff}

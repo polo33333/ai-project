@@ -2400,6 +2400,17 @@ async function handleGovernedRequest(req, res) {
       }
     } else {
       const headers = { 'Content-Type': contentType };
+      if (isLoginRoute) {
+        try {
+          const { version } = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8'));
+          const safeVersion = String(version).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+          content = content.toString('utf8').replace('{{APP_VERSION}}', () => safeVersion);
+        } catch {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=UTF-8', 'Cache-Control': 'no-store' });
+          res.end('Unable to load application version');
+          return;
+        }
+      }
       if (path.basename(filePath) === 'index.html') {
         content = require('../services/dashboard_shell').render(content.toString('utf8'));
       }

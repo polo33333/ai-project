@@ -1,6 +1,6 @@
 {
   "name": "ai-project",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "KnowledgeHub AI Server",
   "main": "server.js",
   "directories": {
