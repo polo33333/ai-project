@@ -76,7 +76,8 @@ async function copyTree(source, target, base, components) {
   }
 }
 
-async function verify(directory) {
+// progress({ step, detail, current, total }) lets the admin page show what is happening; optional for the CLI.
+async function verify(directory, { progress = () => {} } = {}) {
   const base = path.resolve(directory);
   if (fs.existsSync(path.join(base, 'INCOMPLETE'))) throw new Error('Incomplete backup package.');
   if ((await fsp.lstat(base)).isSymbolicLink()) throw new Error('Symlink backup directory.');
@@ -84,7 +85,8 @@ async function verify(directory) {
   const manifest = JSON.parse(await fsp.readFile(path.join(base, 'manifest.json'), 'utf8'));
   if (manifest.version !== 1 || manifest.status !== 'complete' || !Array.isArray(manifest.components)) throw new Error('Incomplete or unsupported backup package.');
   const names = new Set();
-  for (const item of manifest.components) {
+  for (const [index, item] of manifest.components.entries()) {
+    progress({ step: 'verify', detail: item.relativePath, current: index + 1, total: manifest.components.length });
     const parts = item.relativePath?.split('/');
     if (!parts?.length || parts.some(p => !safePathPart(p)) || names.has(item.relativePath)) throw new Error('Unsafe or duplicate backup path.');
     names.add(item.relativePath);
@@ -109,7 +111,7 @@ function collectionsFromManifest(manifest) {
   return manifest.collections;
 }
 
-async function backup({ coordinated = false, allowMissingCollections = false } = {}) {
+async function backup({ coordinated = false, allowMissingCollections = false, progress = () => {} } = {}) {
   if (process.env.APP_STORAGE_BACKEND !== 'postgres') throw new Error('APP_STORAGE_BACKEND=postgres is required.');
   if (!coordinated && process.env.BACKUP_APP_STOPPED !== '1') throw new Error('Stop the app and all writers, then set BACKUP_APP_STOPPED=1.');
   const names = collections();
@@ -124,11 +126,13 @@ async function backup({ coordinated = false, allowMissingCollections = false } =
   try {
     await fsp.mkdir(path.join(base, 'postgres'));
     await fsp.mkdir(path.join(base, 'qdrant'));
+    progress({ step: 'postgres' });
     await docker('pg_dump', ['--format=custom', '--no-owner', '--no-acl', '--schema=app'], { output: path.join(base, 'postgres', 'app.dump') });
     components.push(await metadata(base, 'postgres/app.dump', { kind: 'postgres' }));
     const endpoint = qdrantUrl();
     const qdrantVersion = (await request(new URL('/', endpoint))).version;
-    for (const name of names) {
+    for (const [index, name] of names.entries()) {
+      progress({ step: 'qdrant', detail: name, current: index + 1, total: names.length });
       const route = `/collections/${encodeURIComponent(name)}`;
       let info;
       try { info = (await request(new URL(route, endpoint))).result; }
@@ -144,12 +148,14 @@ async function backup({ coordinated = false, allowMissingCollections = false } =
       components.push(await metadata(base, relativePath, { kind: 'qdrant', sourceName: name, pointsCount: info.points_count, config: info.config }));
     }
     const dataDir = path.resolve(process.env.KNOWLEDGEHUB_DATA_DIR || path.join(root, 'data'));
+    progress({ step: 'files' });
     for (const folder of ['library_files', 'library_content']) await copyTree(path.join(dataDir, folder), path.join(base, 'files', folder), base, components);
     await copyTree(path.join(getExportsDirectory(), 'automation'), path.join(base, 'files', 'automation_exports'), base, components);
     const database = process.env.APP_PG_DATABASE || process.env.POSTGRES_DB || 'knowledgehub_app';
     const manifest = { version: 1, backupId, status: 'complete', createdAt: new Date().toISOString(), storageBackend: 'postgres', consistencyMode: coordinated ? 'http-writers-paused' : 'application-stopped', postgresDatabase: database, qdrantVersion, collections: names, absentCollections, embeddingModel: process.env.EMBEDDING_MODEL || 'bge-m3', encryptionKeyRequired: true, components };
     await fsp.writeFile(path.join(base, 'manifest.json'), JSON.stringify(manifest, null, 2), { flag: 'wx', mode: 0o600 });
-    await verify(base);
+    await verify(base, { progress });
+    progress({ step: 'finish' });
     const destination = path.join(backupRoot, backupId);
     await fsp.rename(base, destination);
     return { backup: destination, backupId, components: components.length };

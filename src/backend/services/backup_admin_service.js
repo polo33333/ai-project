@@ -70,22 +70,43 @@ async function upload(req) {
   }
 }
 
+// Steps the admin page lists for each job; a job moves through them in order.
+const STEPS = {
+  backup: [['pause', 'Tạm dừng ghi dữ liệu'], ['postgres', 'Xuất dữ liệu PostgreSQL'], ['qdrant', 'Chụp các collection Qdrant'], ['files', 'Sao chép file thư viện'], ['verify', 'Kiểm tra checksum'], ['finish', 'Hoàn tất gói backup']],
+  verify: [['verify', 'Kiểm tra checksum từng thành phần']],
+  import: [['import', 'Khôi phục vào database mới']]
+};
+function tracker(current) {
+  return ({ step, detail = null, current: done = null, total = null }) => {
+    const index = current.steps.findIndex(item => item.key === step);
+    if (index < 0) return;
+    current.steps.forEach((item, position) => { if (position < index && item.state !== 'done') item.state = 'done'; });
+    Object.assign(current.steps[index], { state: 'running', detail, current: done, total });
+    current.updatedAt = new Date().toISOString();
+  };
+}
+
 function start(action, input = {}) {
   if (job?.state === 'running') throw Object.assign(new Error('Đang có tác vụ backup/import chạy.'), { statusCode: 409 });
   if (!available()) throw Object.assign(new Error('Cần APP_STORAGE_BACKEND=postgres.'), { statusCode: 409 });
   if (!['backup', 'verify', 'import'].includes(action)) throw Object.assign(new Error('Thao tác không hợp lệ.'), { statusCode: 400 });
   if (action !== 'backup' && (typeof input.id !== 'string' || !idPattern.test(input.id))) throw Object.assign(new Error('Chọn gói backup hợp lệ.'), { statusCode: 400 });
   if (action === 'import' && !/^knowledgehub_restore_[a-z0-9_]+$/.test(input.target || '')) throw Object.assign(new Error('Tên database đích phải bắt đầu bằng knowledgehub_restore_.'), { statusCode: 400 });
-  job = { action, state: 'running', startedAt: new Date().toISOString(), id: input.id || null, target: input.target || null };
-  const current = job;
+  job = { action, state: 'running', startedAt: new Date().toISOString(), id: input.id || null, target: input.target || null,
+    steps: STEPS[action].map(([key, label]) => ({ key, label, state: 'pending' })) };
+  const current = job, progress = tracker(current);
   setImmediate(async () => {
     try {
+      progress({ step: action === 'backup' ? 'pause' : action });
       const directory = action === 'backup' ? null : await packageDirectory(input.id);
-      current.result = action === 'backup' ? await backupGate.withPausedWrites(() => backup({ coordinated: true })) : action === 'verify' ? { verified: true, backupId: (await verify(directory)).backupId } : await importPackage(directory, input.target, { dryRun: input.dryRun === true });
+      current.result = action === 'backup' ? await backupGate.withPausedWrites(() => backup({ coordinated: true, progress })) : action === 'verify' ? { verified: true, backupId: (await verify(directory, { progress })).backupId } : await importPackage(directory, input.target, { dryRun: input.dryRun === true });
       current.state = 'complete';
+      current.steps.forEach(item => { item.state = 'done'; });
     } catch (error) {
       current.state = 'failed';
       current.error = error.code || error.message;
+      const running = current.steps.find(item => item.state === 'running');
+      if (running) running.state = 'failed';
     } finally { current.finishedAt = new Date().toISOString(); }
   });
   return { accepted: true, job: current };

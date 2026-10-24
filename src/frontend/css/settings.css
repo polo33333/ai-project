@@ -322,3 +322,31 @@ main.main-content.settings-workspace { display:block; overflow-y:auto; overscrol
 @media(max-width:760px) { .settings-workspace { grid-template-columns:1fr; gap:12px; } .settings-nav { position:static; display:flex; overflow-x:auto; padding:0 0 8px; scrollbar-width:thin; } .settings-nav > small { display:none; } .settings-nav button { flex-shrink:0; white-space:nowrap; border:1px solid var(--border-color,#e8edf4); } .settings-content .settings-list .settings-property { padding:16px; } .settings-content .settings-property.is-dirty { padding-left:13px; } .settings-toolbar { display:flex; flex-wrap:wrap; gap:10px; } .settings-toolbar-title { width:100%; } .settings-search-wrap { flex:1 1 100%; } .settings-toolbar-actions { width:100%; flex-wrap:wrap; gap:8px; } .settings-toolbar-actions #settings-dirty-count { display:inline-block; margin-right:auto; } }
 @media(max-width:680px) { .settings-qdrant-card { grid-template-columns:auto minmax(0,1fr); } .settings-qdrant-action, .settings-qdrant-metrics { grid-column:1 / -1; width:100%; } .settings-qdrant-action { margin-bottom:12px; } .settings-qdrant-action .btn-primary { width:100%; } .settings-qdrant-metrics { grid-row:auto; } .settings-toolbar { grid-template-columns:1fr auto; } .settings-toolbar-title { grid-column:1 / -1; } .settings-search-wrap { max-width:none; } .settings-toolbar-actions > span { display:none; } .settings-property { grid-template-columns:1fr; gap:10px; } .settings-property-result { text-align:left; } .settings-input, .settings-value, .settings-switch { width:100%; margin-left:0; } .settings-switch { justify-content:flex-start; } }
 .operations-summary{display:grid;grid-template-columns:minmax(130px,1fr) minmax(0,1fr);gap:8px 16px;margin:0 0 16px}.operations-summary dt{color:var(--text-secondary)}.operations-summary dd{margin:0;font-weight:600;overflow-wrap:anywhere}@media(max-width:480px){.operations-summary{grid-template-columns:1fr;gap:4px}.operations-summary dd{margin-bottom:8px}}
+/* Backup / restore progress: one checklist row per step, a bar for counted steps, elapsed time */
+.settings-backup-progress { margin-top:10px; padding:12px 14px; border:1px solid #e0e7ff; border-radius:10px; background:#fff; }
+.settings-backup-progress[hidden] { display:none; }
+.settings-backup-progress header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.settings-backup-progress header strong { font-size:13px; color:#0f172a; }
+.settings-backup-progress header > span { color:#64748b; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.settings-backup-progress ol { display:grid; gap:7px; margin:0; padding:0; list-style:none; }
+.settings-backup-progress li { display:flex; gap:9px; align-items:flex-start; color:#94a3b8; font-size:12.5px; line-height:1.5; }
+.settings-backup-progress li > i { flex:0 0 14px; margin-top:3px; }
+.settings-backup-progress li > div { flex:1 1 auto; min-width:0; }
+.settings-backup-progress li em { font-style:normal; color:#64748b; font-variant-numeric:tabular-nums; }
+.settings-backup-progress li small { display:block; color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.settings-backup-progress li.is-done { color:#334155; }
+.settings-backup-progress li.is-done > i { color:#059669; }
+.settings-backup-progress li.is-running { color:#4338ca; font-weight:600; }
+.settings-backup-progress li.is-failed { color:#b91c1c; font-weight:600; }
+.settings-backup-progress-bar { height:5px; margin-top:5px; overflow:hidden; border-radius:999px; background:#eef2f7; }
+.settings-backup-progress-bar span { display:block; height:100%; border-radius:inherit; background:#6366f1; transition:width .3s; }
+.settings-backup-progress-error { margin:8px 0 0; color:#b91c1c; font-size:12px; }
+.settings-backup-progress[data-state="complete"] { border-color:#bbf7d0; background:#f0fdf4; }
+.settings-backup-progress[data-state="failed"] { border-color:#fecaca; background:#fef2f2; }
+#settings-backup-mode.is-busy { color:#4338ca; background:#eef2ff; }
+:root[data-theme="dark"] .settings-backup-progress { border-color:var(--border-color); background:var(--bg-hover); }
+:root[data-theme="dark"] .settings-backup-progress header strong, :root[data-theme="dark"] .settings-backup-progress li.is-done { color:var(--text-primary); }
+:root[data-theme="dark"] .settings-backup-progress li.is-running { color:#a5b4fc; }
+:root[data-theme="dark"] .settings-backup-progress[data-state="complete"] { background:rgba(16,185,129,.08); border-color:rgba(16,185,129,.35); }
+:root[data-theme="dark"] .settings-backup-progress[data-state="failed"] { background:rgba(220,38,38,.08); border-color:rgba(248,113,113,.35); }
+:root[data-theme="dark"] .settings-backup-progress-bar { background:rgba(148,163,184,.2); }

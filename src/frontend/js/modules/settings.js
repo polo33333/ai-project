@@ -256,15 +256,61 @@
     }
   };
 
-  let backupJobTimer;
+  let backupJobTimer, backupClock, backupBusy = false;
   const backupMessage = (message, error = false) => { const node = el('settings-backup-message'); if (node) { node.textContent = message; node.dataset.tone = error ? 'error' : ''; } };
-  const backupResult = value => { const node = el('settings-backup-result'); if (node) node.textContent = value ? JSON.stringify(value, null, 2) : ''; if (value && el('settings-backup-details')) el('settings-backup-details').open = true; };
+  const backupResult = value => { const node = el('settings-backup-result'); if (node) node.textContent = value ? JSON.stringify(value, null, 2) : ''; };
   async function backupApi(route, body) {
     const response = await fetch(`/api/backups${route}`, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
     return data;
   }
+
+  // One action at a time: every backup control is disabled while a job or request is running.
+  const backupControls = () => document.querySelectorAll('.settings-backup-card button:not(.page-panel-toggle), .settings-backup-card select, .settings-backup-card input[type="file"]');
+  function setBackupBusy(busy) {
+    backupBusy = busy;
+    for (const control of backupControls()) {
+      if (busy && !control.disabled) { control.dataset.backupBusy = '1'; control.disabled = true; }
+      else if (!busy && control.dataset.backupBusy) { delete control.dataset.backupBusy; control.disabled = false; }
+    }
+    const mode = el('settings-backup-mode');
+    if (mode) { mode.classList.toggle('is-busy', busy); if (busy) mode.textContent = 'Đang chạy'; }
+  }
+
+  const formatElapsed = ms => { const seconds = Math.max(0, Math.floor(ms / 1000)); return seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút ${seconds % 60} giây`; };
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const jobTitles = { backup: 'Tạo bản sao lưu', verify: 'Kiểm tra gói backup', import: 'Khôi phục vào database mới' };
+  const stepIcons = { pending: 'fa-regular fa-circle', running: 'fa-solid fa-spinner fa-spin', done: 'fa-solid fa-circle-check', failed: 'fa-solid fa-circle-xmark' };
+
+  // Checklist of steps with the running one highlighted, a bar for counted steps and elapsed time.
+  function renderBackupProgress({ title, steps, state = 'running', startedAt = Date.now(), error = '' }) {
+    let host = el('settings-backup-progress');
+    if (!host) {
+      host = document.createElement('section'); host.id = 'settings-backup-progress'; host.className = 'settings-backup-progress';
+      host.setAttribute('aria-live', 'polite'); el('settings-backup-message')?.after(host);
+    }
+    const started = new Date(startedAt).getTime(), done = steps.filter(step => step.state === 'done').length;
+    const summary = state === 'running' ? `Bước ${Math.min(done + 1, steps.length)}/${steps.length} · <span class="settings-backup-progress-clock"></span>` : state === 'complete' ? 'Hoàn tất' : 'Thất bại';
+    host.dataset.state = state; host.hidden = false;
+    host.innerHTML = `<header><strong>${escapeHtml(title)}</strong><span>${summary}</span></header><ol>${steps.map(step => {
+      const counted = step.state === 'running' && step.total, share = counted ? Math.round(step.current / step.total * 100) : null;
+      return `<li class="is-${step.state}"><i class="${stepIcons[step.state] || stepIcons.pending}" aria-hidden="true"></i><div><span>${escapeHtml(step.label)}${counted ? ` <em>${step.current}/${step.total}</em>` : ''}</span>${step.detail && step.state === 'running' ? `<small>${escapeHtml(step.detail)}</small>` : ''}${share !== null ? `<div class="settings-backup-progress-bar"><span style="width:${share}%"></span></div>` : ''}</div></li>`;
+    }).join('')}</ol>${error ? `<p class="settings-backup-progress-error">${escapeHtml(error)}</p>` : ''}`;
+    clearInterval(backupClock);
+    if (state === 'running') {
+      const tick = () => { const clock = host.querySelector('.settings-backup-progress-clock'); if (clock) clock.textContent = formatElapsed(Date.now() - started); };
+      tick(); backupClock = setInterval(tick, 1000);
+    }
+  }
+  // Steps for requests that answer in one go (upload, plan) or end with a server restart.
+  const localSteps = labels => labels.map((label, index) => ({ label, state: index === 0 ? 'running' : 'pending' }));
+  function advance(steps, index, extra = {}) {
+    steps.forEach((step, position) => { step.state = position < index ? 'done' : position === index ? 'running' : 'pending'; });
+    Object.assign(steps[index] || {}, extra);
+  }
+  function failRunning(steps) { const running = steps.find(step => step.state === 'running'); if (running) running.state = 'failed'; }
+
   window.loadStorageBackups = async function (preserveMessage = false) {
     try {
       const data = await backupApi('');
@@ -272,34 +318,44 @@
       select.replaceChildren();
       for (const item of data.packages) { const option = document.createElement('option'); option.value = item.id; option.textContent = `${item.id} · ${item.components} thành phần`; select.append(option); }
       if (data.packages.some(item => item.id === selected)) select.value = selected;
-      el('settings-backup-mode').textContent = data.available ? 'Sẵn sàng' : 'Cần PostgreSQL';
       el('settings-backup-target').value = data.currentDatabase || 'Chưa xác định';
+      const status = await backupApi('/status');
+      // A job started earlier (or from another tab) is still running: show it instead of an idle form.
+      if (status.job?.state === 'running') { watchBackupJob(); return; }
+      el('settings-backup-mode').textContent = data.available ? 'Sẵn sàng' : 'Cần PostgreSQL';
       el('settings-backup-create').disabled = !data.available;
       el('settings-backup-import').disabled = !data.available || data.packages.length === 0;
       if (!preserveMessage) backupMessage(data.available ? 'Có thể tạo backup ngay. Tác vụ sẽ tạm dừng ghi trong lúc chụp dữ liệu.' : 'Chức năng này cần APP_STORAGE_BACKEND=postgres.');
-      const status = await backupApi('/status');
-      if (status.job?.state === 'running') watchBackupJob();
-      else if (status.job) { backupResult(status.job); if (status.job.state === 'failed') backupMessage(status.job.error || 'Tác vụ thất bại.', true); }
+      if (status.job && !preserveMessage) { backupResult(status.job); if (status.job.state === 'failed') backupMessage(status.job.error || 'Tác vụ thất bại.', true); }
     } catch (error) { backupMessage(error.message, true); }
   };
   async function startBackupAction(route, body) {
+    setBackupBusy(true);
     try {
       const data = await backupApi(route, body);
       backupResult(data.job);
-      backupMessage('Tác vụ đang chạy. Kết quả sẽ cập nhật tự động.');
       watchBackupJob();
-    } catch (error) { backupMessage(error.message, true); }
+    } catch (error) { setBackupBusy(false); backupMessage(error.message, true); }
   }
+  // Server jobs (backup, verify) report their steps; poll every second while one runs.
   function watchBackupJob() {
     clearTimeout(backupJobTimer);
+    if (!backupBusy) setBackupBusy(true);
     const poll = async () => {
       try {
         const { job } = await backupApi('/status');
         backupResult(job);
-        if (job?.state === 'running') { backupJobTimer = setTimeout(poll, 1500); return; }
-        backupMessage(job?.state === 'complete' ? 'Tác vụ hoàn tất. Xem kết quả bên dưới.' : job?.error || 'Tác vụ thất bại.', job?.state !== 'complete');
-        if (job?.state === 'complete') await window.loadStorageBackups(true);
-      } catch (error) { backupMessage(error.message, true); }
+        if (job?.steps) renderBackupProgress({ title: jobTitles[job.action] || 'Tác vụ backup', steps: job.steps, state: job.state, startedAt: job.startedAt, error: job.state === 'failed' ? job.error : '' });
+        if (job?.state === 'running') { backupMessage('Đang chạy. Có thể chuyển sang trang khác, tiến độ vẫn được giữ.'); backupJobTimer = setTimeout(poll, 1000); return; }
+        setBackupBusy(false);
+        const finished = job?.state === 'complete';
+        const took = formatElapsed(new Date(job?.finishedAt) - new Date(job?.startedAt));
+        backupMessage(finished
+          ? (job.action === 'backup' ? `Đã tạo gói ${job.result?.backupId || ''} (${job.result?.components || 0} thành phần) trong ${took}.` : `Gói backup toàn vẹn, mọi checksum đều khớp (${took}).`)
+          : job?.error || 'Tác vụ thất bại.', !finished);
+        await window.loadStorageBackups(true);
+        if (finished && job.result?.backupId && el('settings-backup-select')) el('settings-backup-select').value = job.result.backupId;
+      } catch (error) { setBackupBusy(false); backupMessage(error.message, true); }
     };
     poll();
   }
@@ -310,6 +366,7 @@
   window.downloadStorageBackup = async () => {
     const id = el('settings-backup-select').value;
     if (!id || !await window.showUiConfirm(`Tải gói backup "${id}" về máy?`, { title: 'Xác nhận tải backup', confirmText: 'Tải về', icon: 'fa-download' })) return;
+    backupMessage('Máy chủ đang đóng gói file .khbackup; trình duyệt sẽ bắt đầu tải về ngay khi có dữ liệu.');
     window.location.href = `/api/backups/download/${encodeURIComponent(id)}`;
   };
   window.updateStorageBackupFileName = () => { const file = el('settings-backup-file').files[0]; el('settings-backup-file-name').textContent = file ? file.name : 'Chưa chọn file .khbackup'; };
@@ -317,16 +374,36 @@
     const file = el('settings-backup-file').files[0];
     if (!file || !file.name.endsWith('.khbackup')) { backupMessage('Chọn file .khbackup để tải lên.', true); return; }
     if (!await window.showUiConfirm(`Tải file "${file.name}" lên máy chủ và kiểm tra gói backup?`, { title: 'Xác nhận tải lên backup', confirmText: 'Tải lên & kiểm tra', icon: 'fa-upload' })) return;
-    backupMessage('Đang tải file lên và kiểm tra checksum…');
+    const title = `Tải lên ${file.name}`, startedAt = Date.now(), size = file.size / 1048576;
+    const steps = localSteps(['Tải file lên máy chủ', 'Giải nén và kiểm tra checksum', 'Thêm vào danh sách gói']);
+    const show = (state = 'running', error = '') => renderBackupProgress({ title, steps, state, startedAt, error });
+    show(); setBackupBusy(true); backupMessage('Đang tải file lên…');
     try {
-      const response = await fetch('/api/backups/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || `HTTP ${response.status}`);
-      await window.loadStorageBackups();
+      // XMLHttpRequest reports upload progress; fetch does not.
+      const result = await new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/backups/upload');
+        request.setRequestHeader('Content-Type', 'application/octet-stream');
+        request.upload.onprogress = event => {
+          if (!event.lengthComputable) return;
+          advance(steps, 0, { current: Math.round(event.loaded / event.total * 100), total: 100, detail: `${(event.loaded / 1048576).toFixed(1)} / ${size.toFixed(1)} MB` }); show();
+        };
+        request.upload.onload = () => { advance(steps, 1, { detail: 'Máy chủ đang giải nén và so khớp checksum từng thành phần' }); show(); };
+        request.onload = () => { let data = {}; try { data = JSON.parse(request.responseText); } catch (_) {} if (request.status < 300) resolve(data); else reject(new Error(data.message || `HTTP ${request.status}`)); };
+        request.onerror = () => reject(new Error('Mất kết nối khi tải file lên.'));
+        request.send(file);
+      });
+      advance(steps, 2); show();
+      setBackupBusy(false);
+      await window.loadStorageBackups(true);
       el('settings-backup-select').value = result.id;
+      steps.forEach(step => { step.state = 'done'; }); show('complete');
       backupResult(result);
-      backupMessage('Đã tải lên và kiểm tra gói. Có thể xem kế hoạch rồi restore vào đích mới.');
-    } catch (error) { backupMessage(error.message, true); }
+      backupMessage(`Đã tải lên và kiểm tra gói ${result.id} (${result.components} thành phần).`);
+    } catch (error) {
+      failRunning(steps); show('failed', error.message);
+      setBackupBusy(false); backupMessage(error.message, true);
+    }
   };
   window.verifyStorageBackup = async () => {
     const id = el('settings-backup-select').value;
@@ -338,8 +415,16 @@
     if (!id || !database || database === 'Chưa xác định') { backupMessage('Chọn gói backup hợp lệ.', true); return; }
     if (dryRun) {
       if (!await window.showUiConfirm(`Xem kế hoạch khôi phục gói "${id}" vào database ${database}?`, { title: 'Xem kế hoạch khôi phục', confirmText: 'Xem kế hoạch', icon: 'fa-database' })) return;
-      try { const result = await backupApi('/restore-current', { id, dryRun: true }); backupResult(result); backupMessage('Đã kiểm tra kế hoạch ghi đè DB hiện tại.'); }
-      catch (error) { backupMessage(error.message, true); }
+      const steps = localSteps(['Kiểm tra checksum gói backup', 'Lập kế hoạch ghi đè']), startedAt = Date.now();
+      const show = (state = 'running', error = '') => renderBackupProgress({ title: 'Xem kế hoạch khôi phục', steps, state, startedAt, error });
+      show(); setBackupBusy(true); backupMessage('Đang kiểm tra gói và lập kế hoạch…');
+      try {
+        const result = await backupApi('/restore-current', { id, dryRun: true });
+        steps.forEach(step => { step.state = 'done'; }); show('complete');
+        backupResult(result); if (el('settings-backup-details')) el('settings-backup-details').open = true;
+        backupMessage('Đã kiểm tra kế hoạch ghi đè DB hiện tại. Xem chi tiết trong Kết quả tác vụ.');
+      } catch (error) { failRunning(steps); show('failed', error.message); backupMessage(error.message, true); }
+      finally { setBackupBusy(false); }
       return;
     }
     const confirm = await window.showUiPrompt(
@@ -348,18 +433,28 @@
       { title: 'Xác nhận khôi phục Database', confirmText: 'Khôi phục DB hiện tại', icon: 'fa-database', tone: 'danger', requiredValue: database }
     );
     if (confirm !== database) { if (confirm !== null) backupMessage('Tên xác nhận không khớp; chưa khôi phục.', true); return; }
+    const steps = localSteps(['Gửi yêu cầu khôi phục', 'Máy chủ dừng, tạo backup an toàn và khôi phục dữ liệu', 'Khởi động lại ứng dụng']), startedAt = Date.now();
+    const show = (state = 'running', error = '') => renderBackupProgress({ title: `Khôi phục ${database}`, steps, state, startedAt, error });
+    show(); setBackupBusy(true);
     try {
       const result = await backupApi('/restore-current', { id, confirm });
-      backupResult(result); backupMessage('Máy chủ đang dừng để khôi phục. Trang sẽ tải lại khi hoàn tất.');
+      backupResult(result); backupMessage('Máy chủ đang dừng để khôi phục. Trang sẽ tự tải lại khi hoàn tất, đừng đóng trang.');
+      advance(steps, 1, { detail: 'Có thể mất vài phút tùy dung lượng dữ liệu' }); show();
       await new Promise(resolve => setTimeout(resolve, 2000));
       const deadline = Date.now() + 5 * 60 * 1000;
       let sawServerStop = false;
       while (Date.now() < deadline) {
-        try { const response = await fetch('/health/ready', { cache: 'no-store' }); if (!response.ok) sawServerStop = true; else if (sawServerStop) { window.location.reload(); return; } }
-        catch (_) { sawServerStop = true; }
+        try {
+          const response = await fetch('/health/ready', { cache: 'no-store' });
+          if (!response.ok) sawServerStop = true;
+          else if (sawServerStop) { steps.forEach(step => { step.state = 'done'; }); show('complete'); backupMessage('Khôi phục xong, đang tải lại trang…'); window.location.reload(); return; }
+        } catch (_) { sawServerStop = true; }
+        if (sawServerStop && steps[1].state === 'running' && !steps[1].stopped) { steps[1].stopped = true; steps[1].detail = 'Máy chủ đã dừng; chờ khôi phục xong và khởi động lại'; show(); }
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
+      failRunning(steps); show('failed', 'Quá 5 phút chưa thấy máy chủ khởi động lại.');
+      setBackupBusy(false);
       backupMessage('Chưa thấy máy chủ khởi động lại. Kiểm tra log supervisor và báo cáo restore trên máy chủ.', true);
-    } catch (error) { backupMessage(error.message, true); }
+    } catch (error) { failRunning(steps); show('failed', error.message); setBackupBusy(false); backupMessage(error.message, true); }
   };
 })();
