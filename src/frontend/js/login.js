@@ -29,7 +29,7 @@ function loginFeedback(message, help = false) {
 
 document.getElementById('login-toggle-password')?.addEventListener('click', toggleLoginPassword);
 document.getElementById('login-help')?.addEventListener('click', () => {
-  loginFeedback('Vui lòng liên hệ quản trị viên hệ thống để được hỗ trợ tài khoản.', true);
+  window.location.href = 'mailto:tranducthai8@gmail.com?subject=' + encodeURIComponent('Hỗ trợ tài khoản KnowledgeHub AI');
 });
 
 const passwordInput = document.getElementById('login-password');
@@ -95,3 +95,37 @@ document.getElementById('login-form')?.addEventListener('submit', async event =>
 });
 
 checkExistingSession();
+
+// Catch light at UI edges as the animated glass passes over them.
+(() => {
+  const glass = [...document.querySelectorAll('.glass-rain i')];
+  const surfaces = [...document.querySelectorAll('.feature,.input,.submit,.dashboard,.knowledge-board,.analysis-board,.scene-note,.form-head img')];
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  if (!glass.length || !surfaces.length) return;
+  let frame = 0;
+  let lastSample = 0;
+  function reflect(now) {
+    if (now - lastSample >= 100) {
+      lastSample = now;
+      const edges = surfaces.map(surface => surface.getBoundingClientRect()).filter(rect => rect.width && rect.height);
+      const highlights = glass.map(shard => {
+        const rect = shard.getBoundingClientRect();
+        if (!rect.width || !rect.height || rect.bottom < 0 || rect.top > innerHeight) return false;
+        return edges.some(edge => rect.right >= edge.left - 12 && rect.left <= edge.right + 12
+          && rect.bottom >= edge.top - 12 && rect.top <= edge.bottom + 12
+          && (Math.abs(rect.bottom - edge.top) < 24 || Math.abs(rect.top - edge.bottom) < 24
+            || Math.abs(rect.right - edge.left) < 24 || Math.abs(rect.left - edge.right) < 24));
+      });
+      glass.forEach((shard, index) => shard.classList.toggle('is-reflecting', highlights[index]));
+    }
+    frame = requestAnimationFrame(reflect);
+  }
+  function sync() {
+    cancelAnimationFrame(frame);
+    if (!document.hidden && !reducedMotion.matches) frame = requestAnimationFrame(reflect);
+    else glass.forEach(shard => shard.classList.remove('is-reflecting'));
+  }
+  document.addEventListener('visibilitychange', sync);
+  reducedMotion.addEventListener('change', sync);
+  sync();
+})();

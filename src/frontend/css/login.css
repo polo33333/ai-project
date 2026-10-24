@@ -1,6 +1,21 @@
 *{box-sizing:border-box}
 body{margin:0;background:#fff;color:#11183f;font-family:Inter,'Segoe UI',Arial,sans-serif;-webkit-font-smoothing:antialiased}
 button,input{font:inherit}
+.glass-rain{position:fixed;inset:0;overflow:hidden;pointer-events:none;user-select:none;z-index:5;contain:strict}
+.glass-rain i{position:absolute;top:-70px;left:var(--x);width:var(--size);height:calc(var(--size) * 1.65);background:linear-gradient(135deg,#fff9 0%,#d4c4ff22 35%,#a99bff44 65%,#fff8 100%);clip-path:polygon(18% 0,100% 24%,68% 100%,0 62%);opacity:0;animation:glass-fall var(--duration) var(--delay) linear infinite;will-change:transform,opacity}
+.glass-rain i::after{content:'';position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,#fff9 37%,transparent 40%,transparent 70%,#fff6 72%,transparent 75%);clip-path:inherit}
+.glass-rain i:nth-child(3n){clip-path:polygon(40% 0,100% 78%,0 100%)}
+.glass-rain i:nth-child(even){animation-direction:normal;--spin:-210deg}
+.glass-rain{--glass-opacity:.55;--glass-fade:.4}
+.glass-rain i{background:linear-gradient(135deg,#6f56cfa6 0%,#c4dcff66 30%,#9478db80 64%,#6451b5b3 100%);transition:filter .3s ease}
+.glass-rain i::after{background:linear-gradient(115deg,transparent 28%,#5f4daacc 30%,#fff 33%,transparent 38%,transparent 68%,#8770c5aa 70%,#fff 73%,transparent 78%);transition:background .2s ease}
+html[data-theme=dark] .glass-rain{--glass-opacity:.36;--glass-fade:.26}
+html[data-theme=dark] .glass-rain i{background:linear-gradient(135deg,#fff 0%,#c5dfff55 35%,#ad8bff77 65%,#fff 100%)}
+.glass-rain i.is-reflecting{filter:brightness(1.8) drop-shadow(0 0 5px #b69aff);}
+.glass-rain i.is-reflecting::after{background:linear-gradient(115deg,transparent 12%,#fff 26%,#d9c6ff 38%,transparent 52%,#fff 72%,transparent 85%)}
+@keyframes glass-fall{0%{transform:translate3d(0,0,0) rotate(0deg) rotateY(0deg);opacity:0}12%{opacity:var(--glass-opacity)}75%{opacity:var(--glass-fade)}100%{transform:translate3d(var(--drift),calc(100dvh + 140px),0) rotate(var(--spin,240deg)) rotateY(150deg);opacity:0}}
+@media(max-width:760px){.glass-rain i:nth-child(even){display:none}.glass-rain i{width:calc(var(--size) * .75);height:var(--size)}}
+@media(prefers-reduced-motion:reduce){.glass-rain{display:none}}
 button{cursor:pointer}
 svg{width:21px;height:21px;flex-shrink:0}
 button:focus-visible,a:focus-visible{outline:3px solid #b9a5ff;outline-offset:4px}
@@ -89,14 +104,15 @@ html:not([data-theme=dark]) .feature>span::after{opacity:.25}
 .theme-switch{position:absolute;right:clamp(25px,3vw,60px);top:30px;display:flex;gap:4px;background:#f3f3fa;border-radius:30px;padding:3px}
 .theme-switch button{border:0;background:transparent;width:31px;height:31px;border-radius:50%;color:#929ac0;font-size:21px;line-height:1}
 .theme-switch button[aria-pressed="true"]{background:white;color:#7542ff;box-shadow:0 1px 6px #72709616}
-.formwrap{margin:auto;width:100%;max-width:590px;padding:30px 0}
+.formwrap{margin:auto;width:100%;max-width:420px;min-width:0;padding:30px 0}
 .form-head{text-align:center;margin-bottom:clamp(30px,4.5vh,56px)}
 .form-head>img{width:clamp(64px,4.6vw,94px);height:clamp(64px,4.6vw,94px);border-radius:24%;box-shadow:0 5px 10px #7650ef12;margin-bottom:12px}
 .form-head h2{font-size:clamp(25px,1.8vw,39px);letter-spacing:-.8px;font-weight:720;margin:0 0 14px}
 .form-head p{font-size:clamp(12px,.9vw,18px);color:#8990b4;margin:0;line-height:1.6}
 .field{margin-bottom:clamp(22px,3vh,34px)}
 label{display:block;font-size:clamp(13px,.9vw,18px);color:#454969;margin-bottom:10px}
-.input{position:relative;display:flex;align-items:center}
+.input{position:relative;display:flex;align-items:center;min-width:0}
+.input>input{min-width:0;max-width:100%}
 .input>svg{position:absolute;left:16px;width:17px;height:17px;color:#989cc0;pointer-events:none}
 input{width:100%;height:clamp(48px,3.15vw,65px);border:1px solid #dedff0;border-radius:8px;background:#ffffffb3;padding:0 45px;font-size:clamp(12px,.88vw,18px);color:#373752;outline:none;transition:border-color .2s,box-shadow .2s}
 input::placeholder{color:#a0a6c8}
@@ -201,7 +217,7 @@ html[data-theme=dark] .dash-main{color:#292643}
 .story{display:none}
 .login{min-height:100vh;padding:85px 27px 25px}
 .theme-switch{top:20px;right:22px}
-.formwrap{max-width:390px;margin:auto;padding:35px 0}
+.formwrap{max-width:420px;margin:auto;padding:35px 0}
 .form-head>img{width:65px;height:65px}
 .form-head h2{font-size:27px}
 .form-head p{font-size:12px}
@@ -399,6 +415,11 @@ html[data-theme=dark] .support button{color:#c5a5ff}
 html[data-theme=dark] .input>svg,html[data-theme=dark] .eye{color:#c3afd8}
 
 html[data-theme=dark] input::placeholder{color:#b7a8ca}
+/* Keep saved credentials consistent with the selected theme. */
+.login-page{color-scheme:light;--autofill-bg:#f9f8fc;--autofill-text:#40394f}
+html[data-theme=dark] .login-page{color-scheme:dark;--autofill-bg:#24202e;--autofill-text:#e8e1f1}
+.login-page input:is(:-webkit-autofill,:autofill){-webkit-text-fill-color:var(--autofill-text);caret-color:var(--autofill-text);box-shadow:inset 0 0 0 1000px var(--autofill-bg);color:var(--autofill-text)}
+.login-page input:is(:-webkit-autofill,:autofill):focus{box-shadow:inset 0 0 0 1000px var(--autofill-bg),0 0 0 4px #a487df18}
 
 html[data-theme=dark] .landscape{opacity:.3}
 
