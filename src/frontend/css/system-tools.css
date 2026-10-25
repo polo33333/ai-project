@@ -5,7 +5,7 @@ main.main-content.system-tools-workspace { overflow-y:hidden; }
 .system-tools-workspace #main-view-container { display:flex; flex-direction:column; flex:1; min-height:0; }
 .system-tools-workspace #view-system-tools { flex:1; min-height:0; grid-template-rows:auto minmax(0,1fr); overflow:hidden; }
 #view-system-tools .system-tools-catalog { display:grid; grid-template-rows:auto minmax(0,1fr); min-height:0; overflow:hidden; }
-#view-system-tools .system-tools-grid { min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; align-content:start; }
+#view-system-tools .system-tools-grid { min-height:0; grid-auto-rows:max-content; padding:2px 16px 16px 2px; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; align-content:start; }
 #view-system-tools .system-tool-detail-dialog { position:fixed; inset:0; margin:auto; box-sizing:border-box; width:min(680px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); padding:0; border:1px solid var(--tools-border); border-radius:18px; background:var(--tools-surface); color:var(--tools-text); font-family:inherit; box-shadow:0 24px 80px #0003; overflow:hidden; overscroll-behavior:contain; }
 #view-system-tools .system-tool-detail-dialog[open] { display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
 #view-system-tools .system-tool-detail-dialog::backdrop { background:rgba(15,23,42,.48); backdrop-filter:blur(3px); }
