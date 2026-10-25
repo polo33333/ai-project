@@ -2,6 +2,27 @@
   const key = 'knowledgehub.theme';
   const system = matchMedia('(prefers-color-scheme: dark)');
   let preference;
+  let themeTransition;
+  let transitionTimer;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const transitionStyles = document.createElement('style');
+  transitionStyles.textContent = `
+    @keyframes kh-theme-fade-out { to { opacity:0; } }
+    @keyframes kh-theme-fade-in { from { opacity:0; } }
+    html.kh-theme-crossfade::view-transition-old(root) { animation:kh-theme-fade-out .65s ease both; }
+    html.kh-theme-crossfade::view-transition-new(root) { animation:kh-theme-fade-in .65s ease both; }
+    html.kh-theme-crossfade::view-transition-old(root),
+    html.kh-theme-crossfade::view-transition-new(root) { mix-blend-mode:normal; }
+    html.kh-theme-crossfade::view-transition { pointer-events:none; }
+    html.kh-theme-colors, html.kh-theme-colors *, html.kh-theme-colors *::before, html.kh-theme-colors *::after {
+      transition:background-color .65s ease,color .65s ease,border-color .65s ease,box-shadow .65s ease,fill .65s ease,stroke .65s ease !important;
+    }
+    @media(prefers-reduced-motion:reduce) {
+      html.kh-theme-crossfade::view-transition-old(root),html.kh-theme-crossfade::view-transition-new(root) { animation:none; }
+      html.kh-theme-colors,html.kh-theme-colors *,html.kh-theme-colors *::before,html.kh-theme-colors *::after { transition:none !important; }
+    }
+  `;
+  document.head.appendChild(transitionStyles);
   try { preference = localStorage.getItem(key); } catch { /* Follow device appearance. */ }
   function updateCharts(dark) {
     if (!window.Chart) return;
@@ -26,8 +47,29 @@
       chart.update('none');
     });
   }
-  function apply() {
+  function apply(animate = false) {
     const dark = preference === 'dark' || (preference !== 'light' && system.matches);
+    const root = document.documentElement;
+    const nextTheme = dark ? 'dark' : 'light';
+    if (animate && root.dataset.theme !== nextTheme && !reducedMotion.matches) {
+      if (document.startViewTransition) {
+        if (themeTransition) themeTransition.skipTransition();
+        root.classList.add('kh-theme-crossfade');
+        const current = document.startViewTransition(() => apply());
+        themeTransition = current;
+        current.finished.catch(() => {}).finally(() => {
+          if (themeTransition !== current) return;
+          root.classList.remove('kh-theme-crossfade');
+          themeTransition = null;
+        });
+        return;
+      }
+      root.classList.add('kh-theme-colors');
+      // Establish the old computed colors before applying the new palette.
+      void root.offsetWidth;
+      clearTimeout(transitionTimer);
+      transitionTimer = setTimeout(() => root.classList.remove('kh-theme-colors'), 700);
+    }
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     document.querySelectorAll('[data-theme-choice]').forEach(button => {
       button.setAttribute('aria-pressed', String(button.dataset.themeChoice === (['light', 'dark'].includes(preference) ? preference : 'auto')));
@@ -62,16 +104,16 @@
     if (choice && ['light', 'dark', 'auto'].includes(choice.dataset.themeChoice)) {
       preference = choice.dataset.themeChoice;
       try { localStorage.setItem(key, preference); } catch { /* Keep in-memory selection. */ }
-      apply();
+      apply(true);
       return;
     }
     if (!event.target.closest('[data-theme-toggle]')) return;
     preference = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     try { localStorage.setItem(key, preference); } catch { /* Keep selection for this page. */ }
-    apply();
+    apply(true);
   });
-  system.addEventListener('change', () => { if (!['dark', 'light'].includes(preference)) apply(); });
+  system.addEventListener('change', () => { if (!['dark', 'light'].includes(preference)) apply(true); });
   window.addEventListener('storage', event => {
-    if (event.key === key || event.key === null) { preference = event.newValue; apply(); }
+    if (event.key === key || event.key === null) { preference = event.newValue; apply(true); }
   });
 })();

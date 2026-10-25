@@ -149,6 +149,10 @@ html[data-page="chat"], .kh-chat-standalone { height:100%; }
 .kh-login-card label { margin-top:8px; font-size:13px; font-weight:600; }
 .kh-login-card input { width:100%; box-sizing:border-box; height:44px; padding:0 14px; border:1px solid var(--login-border); border-radius:12px; background:var(--login-field); color:var(--login-text); font:400 15px Inter,system-ui,sans-serif; }
 .kh-login-card input:focus { outline:2px solid #5147c766; border-color:#5147c7; }
+/* Keep saved credentials in the active theme, including hover and focus. */
+.kh-chat-login { color-scheme:light; }
+:root[data-theme="dark"] .kh-chat-login { color-scheme:dark; }
+.kh-login-card input:is(:-webkit-autofill,:autofill) { -webkit-text-fill-color:var(--login-text); caret-color:var(--login-text); color:var(--login-text); box-shadow:inset 0 0 0 1000px var(--login-field); }
 .kh-login-password { position:relative; }
 .kh-login-password input { padding-right:46px; }
 .kh-login-password button { position:absolute; top:4px; right:4px; width:36px; height:36px; border:0; border-radius:9px; background:transparent; color:var(--login-muted); cursor:pointer; }
@@ -218,8 +222,19 @@ html[data-page="chat"], .kh-chat-standalone { height:100%; }
 .kh-login-intro-footer { color:#817c94; font-size:11px; }
 .kh-login-card { position:relative; display:flex; flex-direction:column; justify-content:center; width:100%; padding:68px 50px 44px; border:0; border-radius:0; box-shadow:none; text-align:left; }
 .kh-login-card .kh-login-logo { display:none; }
-.kh-login-tools { position:absolute; top:24px; right:24px; }
-.kh-login-tools button { display:grid; place-items:center; width:34px; height:34px; border:1px solid var(--login-border); border-radius:10px; background:transparent; color:var(--login-muted); cursor:pointer; }
+.kh-login-tools { position:absolute; top:24px; right:24px; isolation:isolate; display:flex; gap:4px; width:88px; height:42px; box-sizing:border-box; padding:4px; border-radius:999px; background:#f0edf7; box-shadow:inset 0 0 0 1px #e7e0f1; transition:background-color .8s ease,box-shadow .5s ease; }
+.kh-login-tools::before { content:""; position:absolute; left:4px; top:4px; width:38px; height:34px; border-radius:999px; background:#fff; box-shadow:0 1px 5px #5d49771a; transition:transform .55s cubic-bezier(.22,.8,.28,1),background-color .8s ease; }
+.kh-login-tools button { position:relative; z-index:1; display:grid; place-items:center; flex:0 0 38px; width:38px; height:34px; padding:0; border:0; border-radius:999px; background:transparent; color:#929ac0; cursor:pointer; transition:color .5s ease,transform .55s cubic-bezier(.22,.8,.28,1); }
+.kh-login-tools button svg { width:19px; height:19px; }
+.kh-login-tools button[aria-pressed="true"] { color:#7542ff; }
+.kh-login-tools button:first-child { transform:rotate(0deg) scale(1.06); }
+.kh-login-tools button:last-child { transform:rotate(25deg) scale(.88); }
+.kh-login-tools button:active { scale:.88; }
+.kh-login-tools button:focus-visible { outline:2px solid #a99bff; outline-offset:2px; }
+:root[data-theme="dark"] .kh-login-tools { background:#1c283b; box-shadow:inset 0 0 0 1px #2c3950; }
+:root[data-theme="dark"] .kh-login-tools::before { transform:translateX(42px); background:#30294f; }
+:root[data-theme="dark"] .kh-login-tools button:first-child { transform:rotate(80deg) scale(.88); color:#aa98be; }
+:root[data-theme="dark"] .kh-login-tools button:last-child { transform:rotate(-15deg) scale(1.06); color:#a99bff; }
 .kh-login-card h1 { margin:14px 0 10px; font-size:28px; letter-spacing:-.8px; }
 .kh-login-lead { margin-bottom:28px; font-size:13px; line-height:1.7; }
 .kh-login-card form { gap:8px; }
@@ -243,4 +258,17 @@ html[data-page="chat"], .kh-chat-standalone { height:100%; }
 :root[data-theme="dark"] .kh-login-example { background:#ffffff05; border-color:#3c3552; }
 :root[data-theme="dark"] .kh-login-eyebrow,:root[data-theme="dark"] .kh-login-story h2 em { color:#b4a4ff; }
 @media(max-width:820px) { .kh-chat-login { padding:24px; } .kh-login-intro { padding:30px; } .kh-login-card { padding:64px 30px 36px; } .kh-login-story h2 { font-size:36px; } }
-@media(max-width:640px) { .kh-chat-login { padding:20px 16px; } .kh-login-layout { max-width:440px; min-height:0; grid-template-columns:1fr; border-radius:20px; } .kh-login-intro { padding:24px 28px; border-right:0; border-bottom:1px solid var(--login-border); } .kh-login-story,.kh-login-intro-footer { display:none; } .kh-login-card { padding:38px 28px 30px; } .kh-login-tools { top:18px; right:18px; } .kh-login-card h1 { font-size:25px; } .kh-login-card > .kh-login-eyebrow { max-width:calc(100% - 38px); } }
+@media(max-width:640px) { .kh-chat-login { padding:20px 16px; } .kh-login-layout { max-width:440px; min-height:0; grid-template-columns:1fr; border-radius:20px; } .kh-login-intro { padding:24px 28px; border-right:0; border-bottom:1px solid var(--login-border); } .kh-login-story,.kh-login-intro-footer { display:none; } .kh-login-card { padding:72px 28px 30px; } .kh-login-tools { top:18px; right:18px; } .kh-login-card h1 { font-size:25px; } }
+
+/* Match the admin login's gradual surface and text color changes. */
+.kh-chat-login { transition:background-color 1s ease,color .8s ease; }
+.kh-login-layout,.kh-login-card,.kh-login-intro,.kh-login-example,.kh-login-card input { transition:background-color 1s ease,border-color .8s ease,color .8s ease,box-shadow .8s ease; }
+.kh-login-brand,.kh-login-eyebrow,.kh-login-story h2 em,.kh-login-story > p,.kh-login-lead,.kh-login-note,.kh-login-support,.kh-login-support span,.kh-login-version,.kh-login-intro-footer { transition:color .8s ease,border-color .8s ease; }
+.kh-chat-login,.kh-login-intro { position:relative; isolation:isolate; }
+.kh-chat-login::before,.kh-login-intro::before { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; opacity:0; transition:opacity 1s cubic-bezier(.4,0,.2,1); }
+.kh-chat-login::before { background:radial-gradient(ellipse at 10% 0%,#282144,transparent 55%),#0d1422; }
+.kh-login-intro::before { background:radial-gradient(ellipse at 0 0,#31274c,transparent 80%),#171c30; }
+:root[data-theme="dark"] .kh-chat-login { background:radial-gradient(ellipse at 15% 20%,#eeebff 0,transparent 50%),#f5f6fa; }
+:root[data-theme="dark"] .kh-login-intro { background:radial-gradient(ellipse at 10% 0%,#eee8ff,transparent 70%),#f1f2fc; }
+:root[data-theme="dark"] .kh-chat-login::before,:root[data-theme="dark"] .kh-login-intro::before { opacity:1; }
+@media(prefers-reduced-motion:reduce) { .kh-chat-login,.kh-chat-login *,.kh-chat-login::before,.kh-chat-login *::before { transition:none !important; } }

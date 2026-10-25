@@ -560,8 +560,21 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04
     </tbody>
   </table></div>
   <p style="margin-top:10px"><code>guarded_agent_harness.js</code> còn 44 dòng: thứ tự các bước. <b>Kiểm chứng:</b> toàn bộ kiểm thử mã 1.230/1.244 đạt, 0 lỗi; rà bằng máy rằng mọi biến cấp hàm cũ đều có trong bước dùng đến nó; chạy thật một lần 10 ca trộn (danh sách, tổng hợp, quy trình, hỏi tiếp, đọc dòng cũ, xuất theo nhóm, loại trừ, tài liệu, trò chuyện) trên Gemini Payment: <strong>10/10</strong>, 15 lần gọi mô hình.</p>
-  <p class="ev">Còn có thể tách tiếp bên trong vòng lặp tác tử (chọn lời gọi do backend lập, kiểm tra lời gọi, kết thúc vòng). Các phần này dùng chung nhiều biến của vòng nên nên tách sau khi bộ câu hỏi chuẩn lớn hơn.</p>
-  <p class="ev" style="margin-top:10px">Toàn bộ kiểm thử mã: 1.244 bài, 1.230 đạt, 0 lỗi, 14 bỏ qua. Chưa commit.</p>
+  <h3>Đợt 5: tách bên trong vòng lặp tác tử</h3>
+  <p><code>agent_loop.js</code> từ 550 dòng còn 86 dòng: chỉ giữ thứ tự một vòng. Các phần bên trong chuyển sang <code>steps/loop/</code>; mỗi phần trả quyết định về cho vòng (trả lời, dừng, thử lại, sửa) thay vì tự đổi biến của vòng. Mã kiểm tra được chuyển nguyên văn.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phần</th><th>Mô-đun</th><th class="num">Dòng</th></tr></thead>
+    <tbody>
+      <tr><td>Chọn công cụ theo giai đoạn; lời gọi do backend lập (đầu vào quy trình đang chờ, khôi phục bảng gốc, lấy danh mục, chọn quy trình, truy vấn đã duyệt); giữ phạm vi câu hỏi tiếp</td><td><code>backend_calls.js</code></td><td class="num">124</td></tr>
+      <tr><td>Kiểm tra câu trả lời không gọi công cụ</td><td><code>answer_check.js</code></td><td class="num">31</td></tr>
+      <tr><td>Kiểm tra một lời gọi trước khi chạy (tách riêng phần kiểm tra SQL)</td><td><code>call_checks.js</code></td><td class="num">188</td></tr>
+      <tr><td>Chạy lời gọi, ghi bằng chứng, chuyển giao cho quy trình, phần kết quả đưa lại mô hình</td><td><code>call_results.js</code></td><td class="num">133</td></tr>
+      <tr><td>Kết thúc vòng (mô tả lược đồ, phân tích, biểu đồ/xuất nhóm sẵn sàng, đọc đã xác minh)</td><td><code>round_end.js</code></td><td class="num">70</td></tr>
+      <tr><td>Sửa theo giai đoạn lỗi</td><td><code>repair.js</code></td><td class="num">36</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:10px"><b>Kiểm chứng:</b> kiểm thử mã 1.234/1.248 đạt, 0 lỗi (thêm 4 bài trong <code>tests/agent_loop_steps.test.js</code> cho các nhánh mà kiểm thử đầu-cuối chưa chạm: câu hỏi tiếp không giữ được phạm vi, khôi phục bảng gốc, đầu vào quy trình đang chờ). Độ phủ dòng của các mô-đun mới 82–100%; phần chưa phủ chủ yếu là các câu từ chối được chuyển nguyên văn. Chạy thật một lần 10 ca trộn trên Gemini Payment (v2): <strong>10/10</strong>, 16 lần gọi mô hình, p50 2,53 s, p90 3,79 s. Tuy nhiên cả 13 lượt đều được v2 trả lời trọn, không lượt nào chuyển sang vòng lặp tác tử, nên lần chạy này chỉ xác nhận việc tách không làm hỏng đường chính; mã vòng lặp mới được kiểm chứng bằng kiểm thử mã.</p>
+  <p class="ev" style="margin-top:10px">Toàn bộ kiểm thử mã: 1.248 bài, 1.234 đạt, 0 lỗi, 14 bỏ qua. Chưa commit.</p>
 </section>
 
 <section id="tiep-theo">
@@ -581,7 +594,7 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04
       <div class="item done"><b>Gộp giải tham chiếu vào <code>plan_query</code></b><p>Bỏ một lần gọi mô hình ở đường dự phòng của câu hỏi tiếp.</p></div>
       <div class="item done"><b>Sổ lượt làm nguồn sự thật</b><p>Sổ lượt nay đã giữ cả kết quả quy trình; bước tiếp là suy ra các trạng thái khác từ nó thay vì ghi trùng.</p></div>
       <div class="item done"><b>Hợp đồng quy trình</b><p>Khai báo thao tác, bộ lọc hỗ trợ, mức hạt, đầu ra; so khớp tất định thay vì nhờ mô hình đánh giá.</p></div>
-      <div class="item done"><b>Tách bộ điều phối</b><p>Máy trạng thái thay cho hàm 1.300 dòng.</p></div>
+      <div class="item done"><b>Tách bộ điều phối</b><p>Máy trạng thái thay cho hàm 1.300 dòng; vòng lặp tác tử tách tiếp thành 6 mô-đun (đợt 5).</p></div>
       <div class="item done"><b>Lời bình có khóa số liệu</b><p>Câu trả lời v2 đúng số nhưng khô; thêm diễn giải ngắn, mọi con số đối chiếu với kết quả.</p></div>
     </div>
     <div class="card phase">
