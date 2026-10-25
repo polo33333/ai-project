@@ -115,6 +115,7 @@
       <div class="embed-config-modal-body">
         <label class="form-label">Tên cấu hình<input id="embed-config-name" class="form-control" placeholder="Ví dụ: Website ERP" required></label>
         <label class="form-label">Domain được phép<textarea id="embed-config-origins" class="form-control" rows="4" placeholder="https://erp.example.com&#10;https://portal.example.com" required></textarea><small>Mỗi dòng một domain, bao gồm giao thức https://.</small></label>
+        <label class="form-label">Kiểu hiển thị<select id="embed-config-mode" class="form-control"><option value="widget">Embed chat cũ (khung chat nổi)</option><option value="page">Page chat mới (trang chat đầy đủ)</option></select><small>Embed chat cũ: khách hỏi ngay, không cần đăng nhập. Page chat mới: nhúng trang chat đầy đủ, người dùng đăng nhập bằng tài khoản KnowledgeHub (website cần chạy https). Mã nhúng giữ nguyên khi đổi kiểu.</small></label>
         <div class="embed-modal-grid"><label class="form-label">Request/phút<input id="embed-config-rate" class="form-control" type="number" min="1" max="300" value="30"></label><label class="form-label">Số dòng tối đa<input id="embed-config-rows" class="form-control" type="number" min="1" max="100" value="20"></label></div>
       </div>
       <div class="api-key-modal-actions"><button type="button" class="btn-secondary-sm" onclick="closeEmbedConfigModal()">Hủy</button><button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình</button></div>

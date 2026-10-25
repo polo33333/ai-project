@@ -57,6 +57,8 @@
     } catch(error) {el('embed-identity-message').textContent=error.message;el('embed-identity-message').classList.add('is-error');}
     finally {el('embed-identity-save').disabled=!embedConfigs.length;}
   };
+  // Which client the account may sign in to (see auth_service.clientAccess).
+  const CLIENT_ACCESS_LABELS = { both: 'Trò chuyện + quản lý', chat: 'Chỉ trò chuyện', admin: 'Chỉ quản lý' };
   window.loadAccounts = function () {
     if (loading) return loading;
     if (!el('accounts-rows')) return Promise.resolve();
@@ -75,7 +77,7 @@
     const keyword = el('accounts-search').value.trim().toLocaleLowerCase('vi'), role = el('accounts-role-filter').value, status = el('accounts-status-filter').value;
     const rows = accounts.filter(a => (!role || a.role === role) && (!status || a.isActive === (status === 'active')) && `${a.username} ${a.displayName} ${a.email}`.toLocaleLowerCase('vi').includes(keyword));
     const page = window.paginationState.accounts; page.currentPage = Math.max(1, Math.min(page.currentPage, Math.ceil(rows.length/page.itemsPerPage) || 1));
-    el('accounts-rows').innerHTML = rows.slice((page.currentPage-1)*page.itemsPerPage, page.currentPage*page.itemsPerPage).map((a, index) => `<tr><td class="row-index">${(page.currentPage - 1) * page.itemsPerPage + index + 1}</td><td class="accounts-identity-cell"><strong>${html(a.displayName || a.username)}</strong><span class="accounts-login-name"><span class="accounts-identity-label">Tên đăng nhập:</span> ${html(a.username)}</span>${a.email ? `<span class="accounts-email"><span class="accounts-identity-label">Email:</span> ${html(a.email)}</span>` : ''}</td><td><span class="accounts-badge ${a.role === 'admin' ? 'admin' : ''}">${html(a.roleLabel||a.role)}</span>${a.permissionOverrides!==null?'<small class="accounts-override-label">Quyền riêng</small>':''}</td><td><span class="accounts-badge ${a.isActive ? 'active' : 'locked'}">${a.isActive ? 'Đang hoạt động' : 'Đã khóa'}</span></td><td>${a.lastLoginAt ? html(new Date(a.lastLoginAt).toLocaleString('vi-VN')) : 'Chưa đăng nhập'}</td><td><div class="accounts-row-actions"><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}')"><i class="fa-solid fa-pen"></i> Sửa</button><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}', 'password')"><i class="fa-solid fa-key"></i> Mật khẩu</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="accounts-empty">Không có tài khoản phù hợp.</td></tr>';
+    el('accounts-rows').innerHTML = rows.slice((page.currentPage-1)*page.itemsPerPage, page.currentPage*page.itemsPerPage).map((a, index) => `<tr><td class="row-index">${(page.currentPage - 1) * page.itemsPerPage + index + 1}</td><td class="accounts-identity-cell"><strong>${html(a.displayName || a.username)}</strong><span class="accounts-login-name"><span class="accounts-identity-label">Tên đăng nhập:</span> ${html(a.username)}</span>${a.email ? `<span class="accounts-email"><span class="accounts-identity-label">Email:</span> ${html(a.email)}</span>` : ''}</td><td><span class="accounts-badge ${a.role === 'admin' ? 'admin' : ''}">${html(a.roleLabel||a.role)}</span>${a.permissionOverrides!==null?'<small class="accounts-override-label">Quyền riêng</small>':''}</td><td><span class="accounts-badge">${CLIENT_ACCESS_LABELS[a.clientAccess] || CLIENT_ACCESS_LABELS.both}</span></td><td><span class="accounts-badge ${a.isActive ? 'active' : 'locked'}">${a.isActive ? 'Đang hoạt động' : 'Đã khóa'}</span></td><td>${a.lastLoginAt ? html(new Date(a.lastLoginAt).toLocaleString('vi-VN')) : 'Chưa đăng nhập'}</td><td><div class="accounts-row-actions"><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}')"><i class="fa-solid fa-pen"></i> Sửa</button><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}', 'password')"><i class="fa-solid fa-key"></i> Mật khẩu</button></div></td></tr>`).join('') || '<tr><td colspan="7" class="accounts-empty">Không có tài khoản phù hợp.</td></tr>';
     window.renderPaginationControls('accounts-pagination', 'accounts', rows.length, window.renderAccountsTable);
   };
   window.openAccountEditor = function (id, selectedMode) {
@@ -89,8 +91,8 @@
     el('accounts-access-fields').hidden = mode === 'password'; el('accounts-password-label').hidden = mode === 'edit';
     for (const name of ['username','name','email']) el('accounts-'+name).disabled = mode === 'password' || (name === 'username' && mode === 'edit');
     el('accounts-password').disabled = mode === 'edit'; el('accounts-password').required = mode !== 'edit';
-    if (editing) { el('accounts-username').value = editing.username; el('accounts-name').value = editing.displayName; el('accounts-email').value = editing.email; el('accounts-role').value = editing.role; el('accounts-active').value = editing.isActive ? 'active' : 'inactive'; }
-    else el('accounts-role').value='user';
+    if (editing) { el('accounts-username').value = editing.username; el('accounts-name').value = editing.displayName; el('accounts-email').value = editing.email; el('accounts-role').value = editing.role; el('accounts-active').value = editing.isActive ? 'active' : 'inactive'; el('accounts-client-access').value = editing.clientAccess || 'both'; }
+    else { el('accounts-role').value='user'; el('accounts-client-access').value='both'; }
     el('accounts-permission-mode').value=editing?.permissionOverrides==null?'inherit':'custom';
     renderPermissionChecks('accounts-permissions',editing?.permissionOverrides||roles.find(r=>r.id===el('accounts-role').value)?.permissions||[]);
     renderDataAccess('accounts-data-access',editing?.dataOverrides);
@@ -104,13 +106,13 @@
     const selectedId = editing?.id;
     try {
       const body = mode === 'password' ? { password:el('accounts-password').value, revision:editing.revision } : {
-        displayName:el('accounts-name').value, email:el('accounts-email').value, role:el('accounts-role').value, isActive:el('accounts-active').value === 'active',
+        displayName:el('accounts-name').value, email:el('accounts-email').value, role:el('accounts-role').value, isActive:el('accounts-active').value === 'active', clientAccess:el('accounts-client-access').value,
         permissions:el('accounts-role').value==='admin'||el('accounts-permission-mode').value==='inherit'?null:readPermissions('accounts-permissions'),
         dataAccess:el('accounts-role').value==='admin'?null:readDataAccess('accounts-data-access'),
         ...(editing ? { revision:editing.revision } : { username:el('accounts-username').value, password:el('accounts-password').value }) };
       await request('/api/accounts' + (editing ? '/' + encodeURIComponent(editing.id) + (mode === 'password' ? '/password' : '') : ''), mode === 'edit' ? 'PUT' : 'POST', body);
       el('accounts-password').value = '';
-      if (mode === 'password') { const me = await request('/api/auth/me'); if (!me.authenticated || me.account?.id === selectedId) { window.location.href='/login'; return; } }
+      if (mode === 'password') { const me = await request('/api/auth/me'); if (!me.authenticated || me.account?.id === selectedId) { window.location.href='/admin/login'; return; } }
       saving = false; window.closeAccountEditor(); window.invalidateMainTabData?.('accounts'); if(loading)await loading; await window.loadAccounts(); window.showToast?.('Đã lưu tài khoản.', 'success');
     } catch (error) { el('accounts-editor-message').textContent = error.message; }
     finally { saving = false; el('accounts-save').disabled = false; }

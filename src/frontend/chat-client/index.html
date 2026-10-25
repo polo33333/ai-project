@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi" data-page="chat">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- Chat client: every asset and API call goes through /chat/ so it uses the chat login. -->
+  <base href="/chat/">
+  <title>KnowledgeHub Chat</title>
+  <link rel="icon" href="/favicon.svg?v=20260906" type="image/svg+xml">
+    <meta name="theme-color" content="#5b50e6">
+  <script src="/js/theme.js?v=20260907-chart-theme"></script>
+  <script src="js/chat_client.js?v=20261025-chat-folder"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script defer src="vendor/chart.umd.min.js?v=4.5.1"></script>
+  <link rel="stylesheet" type="text/css" href="vendor/toastify.min.css?v=1.12.0">
+  <script defer src="vendor/toastify.js?v=1.12.0"></script>
+
+  <!-- Same chat styles as the in-app "Trò chuyện" page, so both look the same. -->
+  <link rel="stylesheet" href="css/styles.css?v=20261024-logout">
+  <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
+  <link rel="stylesheet" href="css/workspace.css?v=20261024-page-scroll-header">
+  <link rel="stylesheet" href="css/theme.css?v=20261024-surface-aliases">
+  <link rel="stylesheet" href="css/ui-foundation.css?v=20261015-composer-focus">
+  <link rel="stylesheet" href="css/chat-conversation.css?v=20261025-usage-dismiss">
+  <link rel="stylesheet" href="css/answer_status.css?v=20261012-hide-partial">
+  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261025-workflow-pending">
+  <link rel="stylesheet" href="css/chat.css?v=20261025-help-theme">
+</head>
+
+<body class="kh-chat-standalone">
+  <div class="app-layout">
+    <main class="main-content chat-workspace-page" id="main-content">
+      <div id="main-view-container" aria-busy="true">
+        <div class="kh-chat-loading" role="status"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Đang tải trò chuyện…</div>
+      </div>
+    </main>
+  </div>
+  <div class="kh-chat-nav-backdrop" onclick="KhStandaloneChat.closeNav()" aria-hidden="true"></div>
+
+  <div class="modal-backdrop logout-confirm-backdrop" id="change-password-modal" aria-hidden="true" onclick="if(event.target===this) closeChangePassword()">
+    <section class="account-settings-dialog" role="dialog" aria-modal="true" aria-label="Cài đặt tài khoản">
+      <button type="button" class="account-settings-close" onclick="closeChangePassword()" aria-label="Đóng cài đặt tài khoản"><i class="fa-solid fa-xmark"></i></button>
+      <aside class="account-settings-nav">
+        <div class="account-settings-brand"><span class="account-settings-brand-icon"><i class="fa-solid fa-user-gear"></i></span><div><strong>Cài đặt tài khoản</strong><small>Không gian cá nhân</small></div></div>
+        <nav aria-label="Các mục tài khoản">
+          <button type="button" data-account-tab="profile" onclick="selectAccountTab('profile')"><i class="fa-regular fa-user"></i>Tài khoản</button>
+          <button type="button" data-account-tab="security" onclick="selectAccountTab('security')"><i class="fa-solid fa-shield-halved"></i>Bảo mật và đăng nhập</button>
+          <button type="button" data-account-tab="appearance" onclick="selectAccountTab('appearance')"><i class="fa-solid fa-palette"></i>Giao diện</button>
+          <button type="button" data-account-tab="data" onclick="selectAccountTab('data')"><i class="fa-solid fa-database"></i>Dữ liệu và bộ nhớ</button>
+        </nav>
+      </aside>
+      <div class="account-settings-content">
+        <section data-account-panel="profile">
+          <div class="account-panel-heading"><span class="account-panel-eyebrow">HỒ SƠ CÁ NHÂN</span><h2>Tài khoản</h2><p>Quản lý thông tin hiển thị và liên hệ của bạn.</p></div>
+          <div class="account-profile-summary">
+            <div class="account-detail-row"><span>Tên người dùng</span><strong id="account-profile-username"></strong></div>
+            <div class="account-detail-row"><span>Vai trò</span><strong id="account-profile-role"></strong></div>
+          </div>
+          <form id="account-profile-form" onsubmit="saveAccountProfile(event)" class="account-profile-form">
+            <div class="account-form-field"><label for="account-profile-name">Tên hiển thị</label><input id="account-profile-name" autocomplete="name" required maxlength="100"></div>
+            <div class="account-form-field"><label for="account-profile-email">Email liên hệ</label><input id="account-profile-email" type="email" autocomplete="email" maxlength="254" placeholder="Chưa thêm email"><small>Email chỉ dùng làm thông tin liên hệ, chưa dùng để đăng nhập hoặc khôi phục mật khẩu.</small></div>
+            <p id="account-profile-message" role="status"></p>
+            <button class="logout-submit-btn" type="submit">Lưu thông tin</button>
+          </form>
+        </section>
+        <section data-account-panel="appearance" hidden>
+          <h2>Giao diện</h2>
+          <p class="account-section-intro">Chọn không gian làm việc phù hợp với bạn.</p>
+          <h3 class="account-section-label">Chủ đề</h3>
+          <div class="account-theme-options" role="group" aria-label="Chủ đề giao diện">
+            <button type="button" class="account-theme-option" data-theme-choice="light" aria-pressed="false"><span class="account-theme-preview is-light" aria-hidden="true"><span></span><span></span><span></span></span><span class="account-theme-caption"><i class="fa-regular fa-sun"></i>Sáng<i class="fa-solid fa-circle-check account-theme-check"></i></span></button>
+            <button type="button" class="account-theme-option" data-theme-choice="dark" aria-pressed="false"><span class="account-theme-preview is-dark" aria-hidden="true"><span></span><span></span><span></span></span><span class="account-theme-caption"><i class="fa-regular fa-moon"></i>Tối<i class="fa-solid fa-circle-check account-theme-check"></i></span></button>
+            <button type="button" class="account-theme-option" data-theme-choice="auto" aria-pressed="false"><span class="account-theme-preview is-auto" aria-hidden="true"><span></span><span></span><span></span></span><span class="account-theme-caption"><i class="fa-solid fa-desktop"></i>Hệ thống<i class="fa-solid fa-circle-check account-theme-check"></i></span></button>
+          </div>
+          <div class="account-info-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>Lựa chọn được lưu trên trình duyệt này. Chế độ Hệ thống tự đổi theo thiết bị của bạn.</span></div>
+        </section>
+        <section data-account-panel="data" hidden>
+          <h2>Dữ liệu và bộ nhớ</h2>
+          <p class="account-section-intro">Quản lý cuộc trò chuyện và hiểu cách AI sử dụng ngữ cảnh của bạn.</p>
+          <div class="account-data-card"><span class="account-card-icon"><i class="fa-regular fa-comments"></i></span><div><h3>Lịch sử trò chuyện</h3><p>Các phiên chat được lưu theo tài khoản. Mở trang trò chuyện để xem, đổi tên hoặc xóa từng phiên.</p><button type="button" class="account-card-action" onclick="closeChangePassword();document.getElementById('chat-history-search')?.focus()">Quản lý trò chuyện <i class="fa-solid fa-arrow-right"></i></button></div></div>
+          <div class="account-data-card"><span class="account-card-icon"><i class="fa-solid fa-brain"></i></span><div><h3>Bộ nhớ AI</h3><p>AI dùng ngữ cảnh của phiên để hiểu câu hỏi tiếp nối. Bộ nhớ được tách khỏi lịch sử hiển thị; câu trả lời chưa hoàn tất không được ghi vào bộ nhớ thành công.</p><span class="account-data-badge"><i class="fa-solid fa-check"></i>Ứng dụng kiểm soát việc ghi nhớ</span></div></div>
+          <div class="account-info-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Xóa phiên trên trang trò chuyện sẽ xóa lịch sử hiển thị và bộ nhớ tương ứng. Audit hệ thống được quản lý riêng.</span></div>
+        </section>
+        <section data-account-panel="security" hidden>
+    <form class="logout-confirm-dialog account-password-dialog" role="dialog" aria-modal="true" aria-labelledby="change-password-title" aria-describedby="password-change-description" onsubmit="submitChangePassword(event)">
+      <div class="account-password-icon" aria-hidden="true"><i class="fa-solid fa-lock"></i></div>
+      <h3 id="change-password-title">Đổi mật khẩu</h3>
+      <p id="password-change-description">Bảo vệ tài khoản bằng mật khẩu mới. Sau khi lưu, bạn cần đăng nhập lại trên các thiết bị.</p>
+      <div class="account-password-fields">
+        <label for="password-current">Mật khẩu hiện tại</label>
+        <input id="password-current" type="password" autocomplete="current-password" required maxlength="1024" placeholder="Nhập mật khẩu hiện tại">
+        <label for="password-new">Mật khẩu mới</label>
+        <input id="password-new" type="password" autocomplete="new-password" required minlength="8" maxlength="128" placeholder="Nhập mật khẩu mới" aria-describedby="password-new-help">
+        <small id="password-new-help">Từ 8 đến 128 ký tự, khác mật khẩu hiện tại.</small>
+        <label for="password-confirm">Xác nhận mật khẩu mới</label>
+        <input id="password-confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128" placeholder="Nhập lại mật khẩu mới">
+      </div>
+      <p id="password-change-error" role="alert"></p>
+      <div class="logout-confirm-actions"><button type="button" class="logout-cancel-btn" onclick="closeChangePassword()">Hủy</button><button id="password-change-submit" type="submit" class="logout-submit-btn">Đổi mật khẩu</button></div>
+    </form>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <!-- Usage limit of the signed-in account -->
+  <div class="kh-usage-backdrop" id="kh-usage-dialog" hidden onclick="if(event.target===this)KhStandaloneChat.closeUsage()">
+    <section class="kh-usage-dialog" role="dialog" aria-modal="true" aria-labelledby="kh-usage-title">
+      <header>
+        <h2 id="kh-usage-title"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> Hạn mức sử dụng</h2>
+        <button type="button" class="kh-icon-btn" onclick="KhStandaloneChat.closeUsage()" aria-label="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+      </header>
+      <div id="kh-usage-body" class="kh-usage-body" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <script defer src="js/ui_dialogs.js?v=20260913"></script>
+  <script defer src="js/modules/ai_providers.js?v=20261024-attachment-model"></script>
+  <script defer src="js/answer_ui.js?v=20261012-hide-partial"></script>
+  <script defer src="js/chat_tool_ui.js?v=20261013-tool-typography"></script>
+  <script defer src="js/chat_reasoning_ui.js?v=20261025-workflow-pending-2"></script>
+  <script defer src="embed/chat-attachments.js?v=20261024-session-files"></script>
+  <script defer src="embed/chat-stream.js?v=20261024-readable-pace"></script>
+  <script defer src="js/modules/voice_input.js?v=20261025-full-transcript"></script>
+  <script defer src="js/modules/answer_speech.js?v=20261025-tts-tables-2"></script>
+  <script defer src="js/modules/page_chat.js?v=20261025-history-sync"></script>
+  <script defer src="js/modules/usage_banner.js?v=20261025-usage-countdown"></script>
+  <script defer src="js/modules/workflow_plugins.js?v=20261025-ai-replaced"></script>
+  <script defer src="js/app.js?v=20261025-account-settings"></script>
+  <script defer src="js/chat_app.js?v=20261025-help-theme"></script>
+</body>
+</html>

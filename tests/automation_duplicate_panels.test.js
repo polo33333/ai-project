@@ -16,7 +16,7 @@ for (const staleRestoring of [false, true]) {
     await page.route('http://localhost:12345/**', route => route.fulfill({ contentType: 'text/html', body: '<main></main>' }));
     await page.goto('http://localhost:12345/');
     const install = async html => {
-      await page.addStyleTag({ content: fs.readFileSync(path.resolve('src/frontend/css/workflow_plugins.css'), 'utf8') });
+      await page.addStyleTag({ content: fs.readFileSync(path.resolve('src/frontend/shared/css/workflow_plugins.css'), 'utf8') });
       await page.evaluate(({ html, dark }) => {
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
         document.querySelector('main').innerHTML = html;
@@ -37,7 +37,7 @@ for (const staleRestoring of [false, true]) {
           window.savedReply = event.currentTarget.outerHTML;
         });
       }, { html, dark: staleRestoring });
-      await page.addScriptTag({ content: fs.readFileSync(path.resolve('src/frontend/js/modules/workflow_plugins.js'), 'utf8') });
+      await page.addScriptTag({ content: fs.readFileSync(path.resolve('src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8') });
       await page.evaluate(() => Promise.all([window.restoreWorkflowExecutions(document), window.restoreWorkflowExecutions(document)]));
     };
     await install(`<article><div class="workflow-execution-panel" data-automation-run="saved-report"${staleRestoring ? ' data-restoring="true"' : ''}><strong>Saved report</strong><button type="button">Làm lại</button></div></article>`);
@@ -65,7 +65,7 @@ test('repeated messages keep one actionable panel per run and archived panels su
   const page = await browser.newPage();
   await page.route('http://localhost:12345/**', route => route.fulfill({ contentType: 'text/html', body: '<main id="messages"></main>' }));
   await page.goto('http://localhost:12345/');
-  const source = fs.readFileSync(path.resolve('src/frontend/js/modules/workflow_plugins.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve('src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8');
   const install = async () => {
     await page.evaluate(() => {
       window.testRun = { id: 'same-run', templateId: 'report', conversationId: 'chat', name: 'Report', status: 'WAITING_INPUT', revision: 1, missingInputs: [{ key: 'query', label: 'Identifier', ask: 'Which identifier?', schema: { type: 'string' } }], steps: [] };
@@ -132,7 +132,7 @@ test('embed repeated requests keep one input panel and reload restores one run',
   page.setDefaultTimeout(5000);
   const failures = [];
   page.on('pageerror', error => failures.push(error.message));
-  const source = fs.readFileSync(path.resolve('src/frontend/embed/knowledgehub-chat.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve('src/frontend/embed-client/knowledgehub-chat.js'), 'utf8');
   let inputs = 0;
   let child = null;
   const run = { id: 'same-run', name: 'Report', templateId: 'report', conversationId: 'chat', status: 'WAITING_INPUT', revision: 1, missingInputs: [{ key: 'query', ask: 'Identifier?', schema: { type: 'string' } }] };
@@ -211,7 +211,7 @@ test('refresh restores waiting forms without waiting for historical cards and de
     };
     document.querySelector('main').innerHTML = '<article><div class="workflow-execution-panel" data-automation-run="historical"><strong>History</strong><button>Old action</button></div><div class="workflow-execution-panel" data-automation-run="waiting"><strong>Saved form</strong><form><input><button type="submit">Continue</button></form></div></article><article><div class="workflow-execution-panel" data-automation-run="waiting"><strong>Newer saved form</strong><form><input><button type="submit">Continue</button></form></div></article>';
   });
-  await page.addScriptTag({ content: fs.readFileSync(path.resolve('src/frontend/js/modules/workflow_plugins.js'), 'utf8') });
+  await page.addScriptTag({ content: fs.readFileSync(path.resolve('src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8') });
   await page.evaluate(() => { window.restorePromise = window.restoreWorkflowExecutions(document); });
   await page.waitForFunction(() => document.querySelector('[data-automation-run="waiting"]:not([data-execution-archived]) form')?.onsubmit);
   assert.equal(await page.locator('[data-automation-run="historical"]').getAttribute('data-restoring'), 'true', 'History is still loading when the form becomes usable');

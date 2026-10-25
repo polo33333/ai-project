@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync(require('node:path').join(__dirname, '../src/frontend/js/modules/page_chat.js'), 'utf8');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../src/frontend/shared/js/modules/page_chat.js'), 'utf8');
 function extract(name, next) {
   return source.slice(source.indexOf(`function ${name}(`), source.indexOf(`\n${next}`, source.indexOf(`function ${name}(`)));
 }
@@ -13,7 +13,7 @@ function loadReasoningUI(context) {
   context.clearInterval ||= () => {};
   context.window.matchMedia ||= () => ({ matches: true });
   context.document ||= {};
-  vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../src/frontend/js/chat_reasoning_ui.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../src/frontend/shared/js/chat_reasoning_ui.js'),'utf8'),context);
 }
 
 test('scroll activity appears only while answering above the bottom and lets the reader return explicitly',()=>{

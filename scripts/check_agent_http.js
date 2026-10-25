@@ -6,14 +6,18 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 async function main() {
   const base = new URL(process.argv[2] || 'http://localhost:5500/');
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) throw new Error('HTTP_TARGET_INVALID');
-  const assets = ['/', '/js/answer_ui.js', '/js/modules/page_chat.js', '/embed/knowledgehub-chat.js',
+  const assets = ['/admin', '/js/answer_ui.js', '/js/modules/page_chat.js', '/embed/knowledgehub-chat.js',
     '/js/modules/governance.js', '/views/data_governance.html', '/css/settings.css'];
   const results = [];
   for (const asset of assets) {
     try {
       const response = await fetch(new URL(asset, base), { cache: 'no-store', redirect: 'manual', signal: AbortSignal.timeout(5000) });
       const bytes = Buffer.from(await response.arrayBuffer());
-      const local = path.resolve(__dirname, '../src/frontend', asset === '/' ? 'index.html' : asset.slice(1));
+      // Same lookup as the server: the admin app's own folder, then shared/; /embed/* is embed-client/.
+      const front = path.resolve(__dirname, '../src/frontend');
+      const local = asset === '/admin' ? path.join(front, 'admin-client/index.html')
+        : asset.startsWith('/embed/') ? path.join(front, 'embed-client', asset.slice('/embed/'.length))
+          : ['admin-client', 'shared'].map(dir => path.join(front, dir, asset.slice(1))).find(file => fs.existsSync(file)) || '';
       results.push({ path: asset, status: response.status, bytes: bytes.length,
         matchesWorkspaceAsset: response.status === 200 && fs.existsSync(local) ? hash(bytes) === hash(fs.readFileSync(local)) : null });
     } catch (error) { results.push({ path: asset, error: error.code || error.name }); }

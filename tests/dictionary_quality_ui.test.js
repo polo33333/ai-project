@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'), assert=require('node:assert/strict'), vm=require('node:vm'), fs=require('node:fs');
 function setup() {
- const source=fs.readFileSync('src/frontend/js/modules/dictionary.js','utf8');
+ const source=fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js','utf8');
  const elements=new Map();
  for(const id of ['summary','results','search','kind','table','count','page','prev','next']) elements.set('dictionary-quality-'+id,{value:id==='kind'?'all':'',innerHTML:'',textContent:'',contains:()=>true});
  const tables=[{tableId:'source',tableName:'Orders',semanticModel:{entity:'Đơn hàng'},columns:[{columnName:'CustomerID'}]},
@@ -58,7 +58,7 @@ test('quality UI ignores inactive table, key and display columns in either direc
 });
 
 test('save payload drops hidden display references before sending to the server',()=>{
- const source=fs.readFileSync('src/frontend/js/modules/dictionary.js','utf8'),context={};
+ const source=fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js','utf8'),context={};
  vm.createContext(context);
  vm.runInContext(source.slice(source.indexOf('function reconcileDictionaryPresentation'),source.indexOf('async function saveSelectedTableDescription')),context);
  const model={identityFields:['ContractLandID'],summaryFields:['ContractLandID','CompanyID','CreateUser'],monetaryFields:[],segments:[]};

@@ -48,7 +48,7 @@ function ui(fetch) {
   const context = { window: {}, localStorage: { getItem() {} }, document: { getElementById: id => elements[id] },
     clearTimeout() {}, setTimeout: fn => { timers.push(fn); return timers.length; }, fetch, showToast() {}, showUiConfirm: async () => true };
   vm.createContext(context);
-  const source = fs.readFileSync('src/frontend/js/modules/library.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/admin-client/js/modules/library.js', 'utf8');
   vm.runInContext(source.slice(0, source.indexOf('function escapeLibraryHtml')), context);
   context.renderLibraryDocuments = () => {};
   context.window.libraryDocuments = [{ id: 'a', status: 'Đã lập chỉ mục' }];

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="vi" data-page="chat-login">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <base href="/chat/">
+  <title>Đăng nhập · KnowledgeHub Chat</title>
+  <link rel="icon" href="/favicon.svg?v=20260906" type="image/svg+xml">
+  <meta name="theme-color" content="#5b50e6">
+  <script src="/js/theme.js?v=20260907-chart-theme"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/chat.css?v=20261025-login-loading">
+</head>
+
+<body class="kh-chat-login">
+  <div class="kh-login-shell">
+  <div class="kh-login-layout">
+  <section class="kh-login-intro" aria-label="KnowledgeHub Chat">
+    <a class="kh-login-brand" href="/chat"><img src="/favicon.svg" alt=""><span>KnowledgeHub<span class="kh-login-brand-sub">CHAT</span></span></a>
+    <div class="kh-login-story">
+      <span class="kh-login-eyebrow">TRỢ LÝ AI CHO NGHIỆP VỤ</span>
+      <h2>Hỏi dữ liệu.<br>Tra cứu tri thức.<br><em>Xử lý công việc.</em></h2>
+      <p>Tra cứu dữ liệu, khai thác tài liệu nội bộ và thực hiện quy trình nghiệp vụ bằng ngôn ngữ tự nhiên.</p>
+      <div class="kh-login-example" aria-hidden="true"><span class="kh-example-label"><i class="fa-regular fa-comment-dots"></i> TỪ CÂU HỎI ĐẾN THÔNG TIN NGHIỆP VỤ</span><span id="kh-login-example-text">Liệt kê các hợp đồng sắp hết hạn trong 30 ngày tới.</span><div><i class="fa-solid fa-database"></i> Dữ liệu nghiệp vụ <i class="fa-solid fa-arrow-up"></i></div></div>
+    </div>
+    <span class="kh-login-intro-footer">Kết nối dữ liệu và tri thức trong doanh nghiệp.</span>
+  </section>
+  <main class="kh-login-card" aria-labelledby="kh-login-title">
+    <div class="kh-login-tools"><button type="button" data-theme-toggle aria-label="Đổi giao diện"><i class="fa-regular fa-moon" aria-hidden="true"></i></button></div>
+    <img class="kh-login-logo" src="/favicon.svg?v=20260908-brand-sync" alt="" aria-hidden="true">
+    <span class="kh-login-eyebrow">CHÀO MỪNG TRỞ LẠI</span>
+    <h1 id="kh-login-title">Đăng nhập vào Chat</h1>
+    <p class="kh-login-lead">Truy cập trợ lý AI và các nguồn dữ liệu được cấp quyền.</p>
+    <form id="kh-login-form" novalidate>
+      <label for="kh-login-username">Tên tài khoản</label>
+      <input id="kh-login-username" name="username" autocomplete="username" spellcheck="false" placeholder="Nhập tên tài khoản" required autofocus>
+      <label for="kh-login-password">Mật khẩu</label>
+      <div class="kh-login-password">
+        <input id="kh-login-password" name="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" required>
+        <button type="button" id="kh-login-toggle" aria-label="Hiện mật khẩu" aria-pressed="false"><i class="fa-regular fa-eye" aria-hidden="true"></i></button>
+      </div>
+      <p id="kh-login-error" class="kh-login-error" role="alert" aria-live="polite"></p>
+      <button type="submit" id="kh-login-submit" class="kh-login-submit">Đăng nhập</button>
+    </form>
+    <p class="kh-login-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Đăng nhập bằng tài khoản KnowledgeHub được cấp.</p>
+    <div class="kh-login-support"><strong>Bạn cần hỗ trợ đăng nhập?</strong><span>Liên hệ quản trị viên để được cấp tài khoản hoặc đặt lại mật khẩu.</span></div>
+  </main>
+  </div>
+  <p class="kh-login-version">KnowledgeHub Chat <span>·</span> Phiên bản v{{APP_VERSION}}</p>
+  </div>
+  <script src="js/login.js?v=20261025-login-loading"></script>
+</body>
+</html>

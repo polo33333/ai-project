@@ -138,7 +138,7 @@ class AiUsageService {
     const reset = period => (LABELS[period] || LABELS.month)[1];
     if (reached(accountLimit, `account|${accountId}`))
       throw Object.assign(fail(`Bạn đã dùng hết hạn mức AI ${when(accountLimit.period)} (${formatTokens(accountLimit.tokenLimit)} token). Hạn mức sẽ được đặt lại ${reset(accountLimit.period)}, hoặc liên hệ quản trị viên để nâng hạn mức.`, 429), { code: 'AI_ACCOUNT_QUOTA' });
-    if (reached(providerLimit, `provider|${provider.id}`))
+    if (providerLimit && reached(providerLimit, `provider|${provider.id}`))
       throw Object.assign(fail(`Mô hình AI ${name} đã dùng hết hạn mức ${when(providerLimit.period)} (${formatTokens(providerLimit.tokenLimit)} token). Hạn mức sẽ được đặt lại ${reset(providerLimit.period)}, hoặc liên hệ quản trị viên.`, 429), { code: 'AI_PROVIDER_QUOTA' });
   }
 

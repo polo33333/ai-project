@@ -4,11 +4,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 function parser() {
-  const source = fs.readFileSync('src/frontend/embed/knowledgehub-chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js', 'utf8');
   const start = source.indexOf('  async function readChatResponse(');
   const end = source.indexOf('  function addAnswerActions(', start);
   const context = vm.createContext({ TextDecoder, Uint8Array, window: {} });
-  vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js', 'utf8'), context);
   context.streamApi = async () => context.window.ChatStream;
   vm.runInContext(source.slice(start, end), context);
   return context.readChatResponse;
@@ -49,7 +49,7 @@ test('embed preserves partial coverage identically over JSON and fragmented SSE'
 });
 
 test('embed answer icons sit outside the bubble, copy the answer and retry the paired question', async () => {
-  const source = fs.readFileSync('src/frontend/embed/knowledgehub-chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js', 'utf8');
   const copy = {}, retry = {}, calls = [];
   const actions = { setAttribute() {}, querySelectorAll: () => [copy, retry] };
   const context = vm.createContext({

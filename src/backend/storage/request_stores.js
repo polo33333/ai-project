@@ -68,7 +68,12 @@ const routes=new Map([
   ['/api/workflows/runs',['workflow_runs.json','mcp_servers.json','tool_settings.json']],
 ]);
 function requestStores(req) {
-  const pathname=new URL(req.url,'http://localhost').pathname;
+  let pathname=new URL(req.url,'http://localhost').pathname;
+  // The chat (/chat) and admin (/admin) clients serve the same routes under their prefix (see
+  // routes/router.js). The chat pages read the embed settings to decide which sites may frame them.
+  const client=/^\/(chat|admin)(?=\/|$)/.exec(pathname)?.[1];
+  if (client) pathname=pathname.slice(client.length+1)||'/';
+  if (client==='chat'&&['/','/login'].includes(pathname)) return [...auth,'embed_chat_configs.json'];
   // Hosted MCP executes the same authoring operations as the workflow UI.
   if (pathname.startsWith('/mcp/') || pathname.startsWith('/.well-known/')) return undefined;
   if (!pathname.startsWith('/api/')) return auth;

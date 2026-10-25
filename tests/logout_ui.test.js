@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const vm = require('node:vm'), fs = require('node:fs');
-const source = fs.readFileSync('src/frontend/js/app.js', 'utf8');
+const source = fs.readFileSync('src/frontend/shared/js/app.js', 'utf8');
 
 function fixture(fetch) {
   const confirm = { disabled: false, innerHTML: 'Xác nhận', attributes: {}, setAttribute(k, v) { this.attributes[k] = v; } };
@@ -31,7 +31,7 @@ test('logout responds immediately, blocks duplicate requests and navigates only 
   f.context.closeLogoutConfirmation(); assert.equal(f.modal.closed, undefined);
   assert.deepEqual(f.navigations, []); assert.deepEqual(f.removed, []);
   complete({ ok: true }); await pending;
-  assert.deepEqual(f.navigations, ['/login']); assert.deepEqual(f.removed, ['active-tab']);
+  assert.deepEqual(f.navigations, ['/admin/login']); assert.deepEqual(f.removed, ['active-tab']);
   assert.equal(f.timers.size, 0);
 });
 
@@ -49,7 +49,7 @@ test('logout server/network failures keep the user on the page and allow a succe
     assert.equal(f.confirm.disabled, false); assert.equal(f.cancel.disabled, false);
     assert.equal(f.confirm.innerHTML, 'Xác nhận'); assert.equal(f.timers.size, 0);
     await f.context.performLogout(); assert.equal(calls, 2);
-    assert.deepEqual(f.navigations, ['/login']); assert.equal(f.error.textContent, '');
+    assert.deepEqual(f.navigations, ['/admin/login']); assert.equal(f.error.textContent, '');
   }
 });
 

@@ -84,7 +84,7 @@ test('admin config and public heartbeat enforce authentication without running A
 
 test('widget resets on account change but preserves token refresh, including without browser storage',async()=>{
   const fs=require('node:fs'),vm=require('node:vm');
-  const source=fs.readFileSync('src/frontend/embed/knowledgehub-chat.js','utf8');
+  const source=fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js','utf8');
   const start=source.indexOf('  let lastIdentityKey;'),end=source.indexOf('  const history = [];',start);
   let current=null,resets=0;
   const context=vm.createContext({window:{KnowledgeHubIdentity:{getToken:async()=>current}},embedId:'widget',workflowStorageKey:'key',workflowToken:'',atob,sessionStorage:{getItem(){throw Error('disabled');},setItem(){throw Error('disabled');}},resetConversation(){resets++;}});

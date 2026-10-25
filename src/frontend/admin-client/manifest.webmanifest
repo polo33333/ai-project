@@ -4,7 +4,7 @@
   "short_name": "KnowledgeHub",
   "description": "Trợ lý AI, quản lý tri thức và truy vấn dữ liệu doanh nghiệp.",
   "lang": "vi",
-  "start_url": "/",
+  "start_url": "/admin",
   "scope": "/",
   "display": "standalone",
   "display_override": [

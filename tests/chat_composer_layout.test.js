@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 test('floating composer clearance follows size changes without moving a reader who scrolled up', () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const code = source.slice(source.indexOf('window.syncPageChatComposerLayout ='), source.indexOf('window.syncPageChatScrollActivity='));
   let height = 90, resize, observed = 0, clearance;
   const messages = { scrollHeight: 1000, clientHeight: 500, scrollTop: 500 };

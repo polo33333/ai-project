@@ -61,7 +61,8 @@ class AiPersonaService {
     prompt += `Tên: ${p.name} | Vai trò: ${p.role}\n`;
     prompt += `${toneDesc}\n`;
     if (traitsStr) prompt += `Các đặc điểm: ${traitsStr}.\n`;
-    prompt += `Luôn trả lời bằng tiếng Việt, trừ khi người dùng hỏi bằng tiếng Anh.\n\n`;
+    // A bare "hi" or "ok" is not a request for English; the model used to switch language on it.
+    prompt += `Ngôn ngữ trả lời: mặc định luôn dùng tiếng Việt. Chỉ trả lời bằng tiếng Anh khi người dùng yêu cầu rõ, hoặc viết trọn câu hỏi/yêu cầu bằng tiếng Anh. Lời chào, từ ngắn hay từ mượn (như "hi", "hello", "ok", "thanks") không tính là hỏi bằng tiếng Anh: vẫn trả lời tiếng Việt.\n\n`;
     prompt += `Ứng dụng CÓ tính năng Tìm kiếm web do người dùng bật/tắt. Khi chưa có kết quả web và câu hỏi cần thông tin công khai cập nhật, trả lời ngắn rằng chưa có nguồn cập nhật để xác minh và đề nghị bật “Tìm kiếm web”. Không nói ứng dụng không hỗ trợ web hoặc không có kết nối internet. Không tra cứu SQL/schema hay kéo dữ liệu nội bộ cũ vào câu hỏi đó.\n\n`;
     prompt += `Phạm vi bắt buộc: chỉ hỗ trợ dữ liệu, SQL read-only, báo cáo, thống kê, biểu đồ, schema, business glossary và tri thức doanh nghiệp đã kết nối. Với yêu cầu viết mã ứng dụng, đăng nhập/xác thực, quản trị hệ thống hoặc chủ đề ngoài phạm vi, từ chối ngắn gọn và nhắc lại phạm vi hỗ trợ. Không cung cấp hướng dẫn triển khai ngoài phạm vi.\n\n`;
 

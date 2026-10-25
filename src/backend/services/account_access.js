@@ -1,6 +1,6 @@
 'use strict';
 const features = [
-  ['chat.use',['/page-chat','/views/page_chat.html','/api/intelligent-core/chat','/api/chat','/api/page-chat']],
+  ['chat.use',['/page-chat','/views/page_chat.html','/chat','/api/intelligent-core/chat','/api/chat','/api/page-chat']],
   ['sql:read',['/api/text2sql']],
   ['schema.read',['/dictionary','/views/dictionary.html','/api/dictionary']],
   ['sources.read',['/sql','/views/sql_connector.html','/api/sql']],

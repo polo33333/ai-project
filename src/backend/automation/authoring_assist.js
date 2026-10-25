@@ -149,7 +149,7 @@ function buildTemplate(raw, catalog) {
   const sqlModule = require('./sql');
   const resultMapping = columns.filter(column => catalog.tables.some(table => table.tableId === column.tableId
     && table.columns.some(item => item.columnName === column.columnName))).map(({ key, tableId, columnName }) => ({ key, tableId, columnName }))
-    .filter(mapping => { try { sqlModule.validateResultMapping({ dbSourceId: source.id, resultMapping: [mapping] }); return true; } catch (_) { return false; } });
+    .filter(mapping => { try { sqlModule.validateResultMapping({ dbSourceId: source.id, resultMapping: [mapping] }, undefined, { strict: true }); return true; } catch (_) { return false; } });
   const binding = { dbSourceId: source.id, tables, sql, parameters, ...(resultMapping.length ? { resultMapping } : {}) };
   // Rows stay loosely typed: SUM over no rows is NULL and must reach the user as "no data", not fail the schema.
   const labels = Object.fromEntries(columns.map(column => [column.key, column.label]));
@@ -176,7 +176,7 @@ function buildTemplate(raw, catalog) {
   template.fixtures.push({ input, stepResults: { query: empty }, expected: contract.resolve(template.output.mapping, { input, steps: { query: empty } }) });
   contract.validatePackage({ manifest: { id: 'draft_check', name: 'Kiểm tra bản nháp', version: 1, engineContractVersion: 1 }, templates: [template] });
   for (const table of tables) ensure(sqlModule.tableAvailable(binding, table), `Bảng ${table} đã tắt trong danh mục dữ liệu.`);
-  sqlModule.validateResultMapping(binding);
+  sqlModule.validateResultMapping(binding, undefined, { strict: true });
   return { template, package: recognition.package, tables, exportFile, columns: columns.map(column => column.label), unmappedColumns: columns.filter(column => !resultMapping.some(item => item.key === column.key)).map(column => column.label) };
 }
 

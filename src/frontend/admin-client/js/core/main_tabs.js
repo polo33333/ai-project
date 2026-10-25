@@ -73,6 +73,7 @@ function normalizeMainTabKey(tabKey) {
     .trim()
     .replace(/^#/, '')
     .split(/[?&]/, 1)[0]
+    .replace(/^\/?admin(?=\/|$)/, '') // the admin app is served under /admin
     .replace(/^\/+|\/+$/g, '');
   const aliasKey = MAIN_TAB_ALIASES[rawKey] || MAIN_TAB_ALIASES[rawKey.replace(/-/g, '_')];
   const normalizedKey = aliasKey || rawKey.replace(/_/g, '-');
@@ -100,7 +101,7 @@ function rememberMainTab(tabKey) {
     // The URL hash still preserves the route when browser storage is unavailable.
   }
 
-  const nextPath = tabKey === 'overview' ? '/' : `/${tabKey}`;
+  const nextPath = tabKey === 'overview' ? '/admin' : `/admin/${tabKey}`;
   if (window.location.pathname !== nextPath || window.location.hash) {
     window.history.replaceState(null, '', `${nextPath}${window.location.search}`);
   }

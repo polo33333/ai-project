@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function parseInline(value) {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const start = source.indexOf('function escapeChatMarkdown');
   const end = source.indexOf('\nfunction splitMarkdownTableRow', start);
   const context = vm.createContext({ URL });
@@ -37,7 +37,7 @@ test('hidden system-path download lines are omitted completely', () => {
 });
 
 test('inline export link is removed when a separate download action is available', () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const start = source.indexOf('function stripInlineDownloadLink');
   const end = source.indexOf('\nfunction parseMarkdownInline', start);
   const context = vm.createContext({});
@@ -46,7 +46,7 @@ test('inline export link is removed when a separate download action is available
 });
 
 test('multiple grouped exports retain their labels and counts without a duplicate fallback card', () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const context = vm.createContext({});
   vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('\nfunction splitMarkdownTableRow')), context);
   vm.runInContext(source.slice(source.indexOf('function renderPageChatDownloadAction'), source.indexOf('\nfunction typeThinkingText')), context);
@@ -62,13 +62,13 @@ test('multiple grouped exports retain their labels and counts without a duplicat
 
 test('modal and standalone embed renderers hide paths while retaining export links',()=>{
   const value='[Tải](/api/exports/report.xlsx) (file:///C:/Users/Admin/AppData/Local/Temp/report.xlsx)';
-  const page=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
-  const app=fs.readFileSync('src/frontend/js/app.js','utf8');
+  const page=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
+  const app=fs.readFileSync('src/frontend/shared/js/app.js','utf8');
   const modal=vm.createContext({parseMarkdown:parseInline});
   vm.runInContext(page.slice(page.indexOf('function sanitizeSystemPaths'),page.indexOf('function parseMarkdownInline')),modal);
   vm.runInContext(app.slice(app.indexOf('function renderCopilotText'),app.indexOf('function renderCopilotDownloadAction')),modal);
   const modalHtml=vm.runInContext(`renderCopilotText(${JSON.stringify(value)})`,modal);
-  const embed=fs.readFileSync('src/frontend/embed/knowledgehub-chat.js','utf8');
+  const embed=fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js','utf8');
   const standalone=vm.createContext({URL,apiBase:'https://chat.example.com'});
   vm.runInContext(embed.slice(embed.indexOf('  const escapeHtml'),embed.indexOf('  const markdownCells'))+`\nthis.result=renderText(${JSON.stringify(value)});`,standalone);
   for(const html of [modalHtml,standalone.result]) {
@@ -97,7 +97,7 @@ test('trailing punctuation stays outside the URL', () => {
 });
 
 test('chat result renderers convert ISO database dates to Vietnamese display format', () => {
-  const page = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const page = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const pageContext = vm.createContext({});
   const pageStart = page.indexOf('function isBooleanDisplayColumn');
   const pageEnd = page.indexOf('\nfunction renderMarkdownTable', pageStart);
@@ -109,14 +109,17 @@ test('chat result renderers convert ISO database dates to Vietnamese display for
   assert.equal(pageContext.number, '0');
   assert.equal(vm.runInContext("formatChatDisplayValue(6652704, 'Tiền hóa đơn (VNĐ)')", pageContext), '6.652.704 ₫');
   assert.equal(vm.runInContext("formatChatDisplayValue('001234', 'EmployeeID')", pageContext), '001234');
+  assert.equal(vm.runInContext("formatChatDisplayValue(246, 'ID hợp đồng')", pageContext), '246');
+  assert.equal(vm.runInContext("formatChatDisplayValue(1500000, 'Giá trị hợp đồng')", pageContext), '1.500.000');
+  assert.equal(vm.runInContext("formatChatDisplayValue(1500000, 'Thành tiền (đồng)')", pageContext), '1.500.000 ₫');
 
-  const embed = fs.readFileSync('src/frontend/embed/knowledgehub-chat.js', 'utf8');
+  const embed = fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js', 'utf8');
   assert.match(embed, /formatDisplayValue\(row\[cellIndex\]/);
   assert.match(embed, /escapeHtml\(formatDisplayValue\(cell, data\.toolResult\.columns\[cellIndex\]\)\)/);
 });
 
 test('API examples survive reply cleaning while internal chart payloads are hidden', () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const start = source.indexOf('function cleanReplyText');
   const end = source.indexOf('function escapeChatMarkdown', start);
   const context = vm.createContext({});
@@ -131,7 +134,7 @@ test('API examples survive reply cleaning while internal chart payloads are hidd
 });
 
 test('knowledge API blocks render as escaped copyable code and normalize malformed fences', () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const context = vm.createContext({ URL });
   vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('// Render Chart.js')), context);
   const standard = context.parseMarkdown('Request:\n```json\n{"status":200,"html":"<script>alert(1)</script>"}\n```\nResponse');
@@ -151,7 +154,7 @@ test('knowledge API blocks render as escaped copyable code and normalize malform
 });
 
 test('copy code uses only the displayed code text', async () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   let copied;
   const context = vm.createContext({ navigator: { clipboard: { writeText: async text => { copied = text; } } }, setTimeout: () => {} });
   vm.runInContext(source.slice(source.indexOf('async function copyChatCodeBlock'), source.indexOf('function parseMarkdown(text)')), context);
@@ -162,7 +165,7 @@ test('copy code uses only the displayed code text', async () => {
 });
 
 test('chat token badges show request totals without model breakdowns', () => {
-  const source = fs.readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
   const context = vm.createContext({});
   vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('function sanitizeSystemPaths')) + source.slice(source.indexOf('function renderChatTokenUsage'), source.indexOf('async function copyPageChatQuestion')), context);
   const routing = { stages: [

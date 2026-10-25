@@ -57,11 +57,13 @@ async function executeBinding(binding, input, { signal, permissions = [], state 
   return { rows, rowCount: rows.length, source: binding.dbSourceId, retrievedAt: new Date().toISOString(), empty: rows.length === 0 };
 }
 function ensureParameter(value,schema) { if (value === undefined || require('./contract').validateValue(value,schema).length) throw error('Giá trị tham số từ bước trước không đúng kiểu dữ liệu.'); }
-function validateResultMapping(binding, dictionary = require('../services/dictionary_service')) {
+// A raw column saved before its relation was verified still reads correctly, so it only
+// blocks when `strict` (authoring, where the SQL may already show the related name).
+function validateResultMapping(binding, dictionary = require('../services/dictionary_service'), { strict = false } = {}) {
   for (const mapping of binding.resultMapping || []) {
     const table = dictionary.tablesStore.find(item => item.tableId === mapping.tableId && item.dbSourceId === binding.dbSourceId && item.isActive !== false);
     if (!table || !require('./column_mapping').mappedColumns(table, dictionary).some(item => item.column.columnName === mapping.columnName
-      && (item.relation?.id || null) === (mapping.relationId || null))) throw error(`Mapping kết quả ${mapping.key}: cột nguồn hoặc quan hệ đã thay đổi. Cần cập nhật SQL của mẫu.`, 409);
+      && ((item.relation?.id || null) === (mapping.relationId || null) || (!strict && !mapping.relationId)))) throw error(`Mapping kết quả ${mapping.key}: cột nguồn hoặc quan hệ đã thay đổi. Cần cập nhật SQL của mẫu.`, 409);
   }
 }
 module.exports = { validateBinding, executeBinding, tableAvailable, validateResultMapping };

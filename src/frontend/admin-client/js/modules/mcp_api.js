@@ -290,7 +290,7 @@ function renderEmbedConfigs() {
     <article class="embed-config-item ${config.isActive ? '' : 'inactive'}">
       <div class="embed-config-main"><span class="embed-config-index" aria-label="STT ${page.start + index + 1}">${page.start + index + 1}</span><span class="embed-config-icon"><i class="fa-solid fa-comments"></i></span><div><strong>${escapeMcpApiHtml(config.name)}</strong><code>${escapeMcpApiHtml(config.id)}</code></div></div>
       <div class="embed-config-domains">${(config.allowedOrigins || []).filter(origin => origin && String(origin).toLowerCase() !== 'null').map(origin => `<span><i class="fa-solid fa-globe"></i>${escapeMcpApiHtml(origin)}</span>`).join('') || '<span class="empty"><i class="fa-solid fa-circle-exclamation"></i>Chưa cấu hình domain</span>'}</div>
-      <div class="embed-config-meta"><span>${escapeMcpApiHtml(config.rateLimit)} req/phút</span><span>Tối đa ${escapeMcpApiHtml(config.maxRows)} dòng</span></div>
+      <div class="embed-config-meta"><span>${config.mode === 'page' ? 'Page chat mới' : 'Embed chat cũ'}</span><span>${escapeMcpApiHtml(config.rateLimit)} req/phút</span><span>Tối đa ${escapeMcpApiHtml(config.maxRows)} dòng</span></div>
       <div class="embed-config-actions">
         <label class="embed-status-toggle" title="Bật/tắt Embed"><input type="checkbox" ${config.isActive ? 'checked' : ''} onchange="toggleEmbedConfig('${escapeMcpApiHtml(config.id)}',this.checked)"><span class="embed-toggle-track"><i></i></span><span class="embed-status-text"></span></label>
         <button class="icon-action-btn embed-preview-btn" onclick="openEmbedPreview('${escapeMcpApiHtml(config.id)}')" title="Mở Embed Chat để thử" aria-label="Mở Embed Chat để thử"><i class="fa-solid fa-up-right-from-square"></i></button>
@@ -341,6 +341,7 @@ function openEmbedConfigModal(id = '') {
   document.getElementById('embed-config-origins').value = (config?.allowedOrigins || []).join('\n');
   document.getElementById('embed-config-rate').value = String(config?.rateLimit || 30);
   document.getElementById('embed-config-rows').value = String(config?.maxRows || 20);
+  document.getElementById('embed-config-mode').value = config?.mode === 'page' ? 'page' : 'widget';
   document.getElementById('embed-config-modal-title').textContent = config ? 'Sửa Embed Chat' : 'Tạo Embed Chat';
   if (typeof openModal === 'function') openModal('embed-config-modal');
   setTimeout(() => document.getElementById('embed-config-name')?.focus(), 80);
@@ -358,7 +359,8 @@ async function saveEmbedConfig(event) {
     name: document.getElementById('embed-config-name')?.value.trim(),
     allowedOrigins: document.getElementById('embed-config-origins')?.value,
     rateLimit: Number(document.getElementById('embed-config-rate')?.value || 30),
-    maxRows: Number(document.getElementById('embed-config-rows')?.value || 20)
+    maxRows: Number(document.getElementById('embed-config-rows')?.value || 20),
+    mode: document.getElementById('embed-config-mode')?.value === 'page' ? 'page' : 'widget'
   };
   try {
     const endpoint = id ? '/api/embed/configs/update' : '/api/embed/configs/create';

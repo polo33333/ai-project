@@ -70,9 +70,9 @@ test('browser draws columns, axes, zero markers and empty message', { skip: proc
   const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
   try {
     const page = await browser.newPage();
-    const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/workflow_plugins.js'), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '../src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8');
     await page.evaluate('(() => {' + source.slice(source.indexOf('  function resultText('), source.indexOf('  function mount(')) + '; window.renderResult = renderResult; })()');
-    await page.addStyleTag({ content: fs.readFileSync(path.join(__dirname, '../src/frontend/css/workflow_plugins.css'), 'utf8') });
+    await page.addStyleTag({ content: fs.readFileSync(path.join(__dirname, '../src/frontend/shared/css/workflow_plugins.css'), 'utf8') });
     for (const values of [[1000, 2000], [0, 0], []]) {
       await page.evaluate(values => document.body.replaceChildren(window.renderResult({ kind: 'bar-chart', title: 'Test', unit: 'kWh', points: values.map((value, i) => ({ label: `2024-0${i + 1}`, value })) })), values);
       assert.equal(await page.locator('svg rect').count(), values.length);

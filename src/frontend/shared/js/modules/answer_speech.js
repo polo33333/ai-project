@@ -4,25 +4,89 @@
   const synth = window.speechSynthesis;
   const STOP_ICON = '<svg class="chat-answer-action-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>';
   // Parts of an answer that sound like noise when read out.
-  const SKIP = 'pre, code, table, svg, canvas, img, button, details, script, style, [aria-hidden="true"], [hidden], .chat-feedback, .chat-code-block, .chat-answer-actions, .chat-reasoning, .chat-tool-panel';
+  // Tables and file cards are not noise: they are rewritten as sentences instead (see readable()).
+  const SKIP = 'pre, code, svg, canvas, img, button, details, script, style, form, [aria-hidden="true"], [hidden], .chat-feedback, .chat-code-block, .chat-answer-actions, .chat-reasoning, .chat-tool-panel, .page-chat-download-button';
+  const MAX_TABLE_ROWS = 10;
   let active = null; // { button, idleHtml, chunks, index }
 
   function notify(message, type = 'info') {
     if (typeof showToast === 'function') showToast(message, type);
   }
 
+  // The answer text plus the workflow cards shown beside it in the same message.
   function findAnswer(button) {
-    return button.closest('.chat-assistant-message-row')?.querySelector('.chat-ai-answer')
-      || button.closest('.chat-bubble.ai')?.querySelector('.copilot-answer-text');
+    const row = button.closest('.chat-assistant-message-row');
+    const answer = row?.querySelector('.chat-ai-answer') || button.closest('.chat-bubble.ai')?.querySelector('.copilot-answer-text');
+    if (!answer) return [];
+    const workflows = row ? [...row.querySelectorAll('.workflow-execution-panel')].filter(panel => !answer.contains(panel)) : [];
+    return [answer, ...workflows];
   }
 
-  function answerText(element) {
+  // "Bao_cao_Nam_20261025192247863.xlsx" -> "Bao cao Nam, định dạng XLSX": the export timestamp is noise.
+  function spokenFileName(name) {
+    const file = decodeURIComponent(String(name).split(/[?#]/)[0].split('/').pop() || '');
+    const dot = file.lastIndexOf('.');
+    const extension = dot > 0 ? file.slice(dot + 1).toUpperCase() : '';
+    const base = (dot > 0 ? file.slice(0, dot) : file).replace(/[_-]?\d{12,}$/, '').replace(/[_-]+/g, ' ').trim();
+    return extension ? `${base}, định dạng ${extension}` : base;
+  }
+
+  function sentence(document, text) {
+    const node = document.createElement('p');
+    node.textContent = text;
+    return node;
+  }
+
+  // Read a table row by row as "Header: value"; a long table is cut short with a count.
+  function tableText(table) {
+    const cells = row => [...row.children].filter(cell => /^(TH|TD)$/.test(cell.tagName)).map(cell => cell.textContent.replace(/\s+/g, ' ').trim());
+    const rows = [...table.querySelectorAll('tr')];
+    const headRow = table.querySelector('thead tr') || (rows[0]?.querySelector('th') ? rows[0] : null);
+    const headers = headRow ? cells(headRow) : [];
+    const body = rows.filter(row => row !== headRow && row.querySelector('td'));
+    const title = table.getAttribute('aria-label') || table.querySelector('caption')?.textContent.trim();
+    const lines = [`${title ? `Bảng ${title}` : 'Bảng'} có ${body.length} dòng.`];
+    body.slice(0, MAX_TABLE_ROWS).forEach((row, index) => {
+      const values = cells(row).map((value, column) => !/^[-—–]*$/.test(value) && (headers[column] ? `${headers[column]}: ${value}` : value)).filter(Boolean);
+      if (values.length) lines.push(`Dòng ${index + 1}: ${values.join(', ')}.`);
+    });
+    if (body.length > MAX_TABLE_ROWS) lines.push(`Còn ${body.length - MAX_TABLE_ROWS} dòng nữa trong bảng.`);
+    return lines.join('\n');
+  }
+
+  function readable(element) {
     const clone = element.cloneNode(true);
     clone.querySelectorAll(SKIP).forEach(node => node.remove());
+    const doc = clone.ownerDocument;
+    clone.querySelectorAll('table').forEach(table => {
+      (table.closest('.chat-table-wrap, .workflow-result-table, .chat-markdown-table-wrap') || table).replaceWith(sentence(doc, tableText(table)));
+    });
+    clone.querySelectorAll('.page-chat-download-card').forEach(card => {
+      const name = card.querySelector('.page-chat-download-name');
+      const file = name?.getAttribute('title') || card.querySelector('a[href]')?.getAttribute('href') || name?.textContent || '';
+      const meta = card.querySelector('.page-chat-download-meta')?.textContent.replace(/\s*·\s*/g, ', ').trim();
+      // The meta line already names the format ("Bảng tính, XLSX").
+      card.replaceWith(sentence(doc, meta ? `Tệp ${spokenFileName(file).split(', định dạng ')[0]}, ${meta}.` : `Tệp ${spokenFileName(file)}.`));
+    });
+    clone.querySelectorAll('a[download], a[href*="/api/exports/"], a[href*="/download"]').forEach(link => {
+      link.replaceWith(sentence(doc, `Tệp ${spokenFileName(link.getAttribute('href') || link.textContent)}.`));
+    });
+    clone.querySelectorAll('.wp-execution-status').forEach(status => status.prepend('. Trạng thái: '));
+    // Side-by-side inline pieces (title and badge, label and value) would otherwise run together.
+    clone.querySelectorAll('span, strong, b, em, a').forEach(node => node.append(' '));
+    return clone;
+  }
+
+  function answerText(elements) {
+    return elements.map(element => elementText(readable(element))).filter(Boolean).join(' ');
+  }
+
+  function elementText(clone) {
     clone.querySelectorAll('br').forEach(node => node.replaceWith('\n'));
     clone.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, div, blockquote').forEach(node => node.append('\n'));
     return clone.textContent
       .replace(/https?:\/\/\S+/g, '')
+      .replace(/[ \t]+([,.;:!?])/g, '$1')
       .split('\n')
       .map(line => line.replace(/\s+/g, ' ').trim())
       .filter(Boolean)
@@ -34,7 +98,8 @@
   function splitChunks(text, max = 220) {
     const chunks = [];
     let current = '';
-    for (const sentence of text.match(/[^.!?…]+[.!?…]*\s*/g) || []) {
+    // A sentence ends only at punctuation before a space, so "32.451,95" or "HĐ.LG.2010" stay whole.
+    for (const sentence of text.match(/[\s\S]+?(?:[.!?…]+(?=\s|$)|$)\s*/g) || []) {
       if (current && (current + sentence).length > max) { chunks.push(current.trim()); current = ''; }
       if (sentence.length > max) {
         sentence.split(/(?<=,)\s+/).forEach(part => {
@@ -106,7 +171,7 @@
       return;
     }
     const answer = findAnswer(button);
-    const chunks = answer ? splitChunks(answerText(answer)) : [];
+    const chunks = answer.length ? splitChunks(answerText(answer)) : [];
     if (!chunks.length) {
       notify('Câu trả lời này không có nội dung chữ để đọc.', 'info');
       return;

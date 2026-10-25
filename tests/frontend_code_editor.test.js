@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 test('SQL copy preserves selection and highlighted viewport follows native textarea', async () => {
-  const source = fs.readFileSync(require('node:path').join(__dirname, '../src/frontend/js/modules/workflow_plugins.js'), 'utf8');
+  const source = fs.readFileSync(require('node:path').join(__dirname, '../src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8');
   const nodes = [];
   const node = () => { const value = { children: [], style: {}, dataset: {}, events: {}, classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items); }, appendChild(item) { this.children.push(item); }, insertBefore() {}, addEventListener(name, handler) { this.events[name] = handler; } }; nodes.push(value); return value; };
   let copied;

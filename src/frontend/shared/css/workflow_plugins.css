@@ -1212,3 +1212,9 @@
 .wp-business-editor .workflow-editor-body > .wp-ai-assist > summary { font-size:14px; }
 .wp-business-editor .wp-ai-replaced { display:grid; gap:4px; padding-bottom:8px; margin-bottom:4px; border-bottom:1px dashed rgba(146,64,14,.3); }
 .wp-business-editor .wp-ai-sql { max-height:160px; overflow:auto; margin:4px 0 0; padding:8px 10px; border-radius:8px; background:#172033; color:#dbeafe; font:11px/1.5 Consolas,monospace; white-space:pre-wrap; }
+/* Chat: a pending workflow card appears while the run is checked, and the final card fades in where it was */
+.chat-workflow-pending { animation:wp-card-enter .24s ease-out both; transition:opacity .2s ease, transform .2s ease; }
+.chat-workflow-pending.is-leaving { opacity:0; transform:translateY(-4px); }
+.workflow-execution-panel.wp-handoff { animation:wp-card-enter .24s ease-out both; }
+@keyframes wp-card-enter { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .chat-workflow-pending,.workflow-execution-panel.wp-handoff { animation:none; transition:none; } }

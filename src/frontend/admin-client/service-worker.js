@@ -1,5 +1,6 @@
-const CACHE_NAME = 'knowledgehub-shell-v5';
-const APP_SHELL = ['/', '/index.html', '/login', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest'];
+const CACHE_NAME = 'knowledgehub-shell-v6';
+// The admin app (/admin). The chat client (/chat) has no offline shell.
+const APP_SHELL = ['/admin', '/admin/login', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).catch(() => undefined));
@@ -25,7 +26,7 @@ self.addEventListener('fetch', event => {
       const cached = await cache.match(event.request);
       if (cached) return cached;
       if (event.request.mode === 'navigate') {
-        const shell = await cache.match('/index.html');
+        const shell = url.pathname.startsWith('/admin') ? await cache.match('/admin') : null;
         if (shell) return shell;
         return new Response('<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Không thể kết nối</title><body><h1>Không thể kết nối máy chủ</h1><p>Kiểm tra ứng dụng đang chạy, sau đó tải lại trang.</p><button onclick="location.reload()">Thử lại</button></body></html>', {
           status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }

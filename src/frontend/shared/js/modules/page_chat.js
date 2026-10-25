@@ -753,6 +753,51 @@ async function loadChatSessions() {
   }
 }
 
+// Both clients use account-scoped server history. Refresh only a clean, idle view;
+// version checks retain locally expanded message pages when nothing changed remotely.
+let chatHistorySyncing = false;
+function chatHistoryIsClean() {
+  const sessions = window.chatSessions || [];
+  return sessions.length === persistedChatSessions.size && sessions.every(session =>
+    persistedChatSessions.get(session.id)?.snapshot === sessionSnapshot(session));
+}
+async function syncChatSessions() {
+  if (chatHistorySyncing || !chatHistoryLoaded || chatHistoryFailed || document.hidden || window.pageChatIsResponding || chatPageLoads.size || !chatHistoryIsClean()) return;
+  chatHistorySyncing = true;
+  const before = JSON.stringify([...persistedChatSessions].map(([id, value]) => [id, value.version]));
+  try {
+    const response = await fetch('/api/page-chat/sessions', {cache:'no-store'});
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!Array.isArray(data.sessions) || window.pageChatIsResponding || chatPageLoads.size || !chatHistoryIsClean() || before !== JSON.stringify([...persistedChatSessions].map(([id, value]) => [id, value.version]))) return;
+    const local = new Map(window.chatSessions.map(session => [session.id, session]));
+    const selectedId = window.currentChatSessionId;
+    const selectedVersion = persistedChatSessions.get(selectedId)?.version;
+    const changed = data.sessions.length !== local.size || data.sessions.some(session => persistedChatSessions.get(session.id)?.version !== session.version);
+    if (!changed) return;
+    window.chatSessions = data.sessions.map(remote => {
+      if (persistedChatSessions.get(remote.id)?.version === remote.version) { const kept = local.get(remote.id); kept.version = remote.version; return kept; }
+      const session = normalizeStoredChatSession(remote);
+      if (session._page) session._page.loadedBytes = chatPayloadBytes(session);
+      return session;
+    });
+    persistedChatSessions.clear();
+    window.chatSessions.forEach(session => persistedChatSessions.set(session.id, {version:session.version, snapshot:sessionSnapshot(session)}));
+    // Retained local sessions can have an older version property after a save.
+    data.sessions.forEach(remote => { persistedChatSessions.get(remote.id).version = remote.version; });
+    if (!window.chatSessions.some(session => session.id === selectedId)) window.currentChatSessionId = window.chatSessions[0]?.id || null;
+    renderChatSessionsList();
+    if (selectedId !== window.currentChatSessionId || selectedVersion !== persistedChatSessions.get(window.currentChatSessionId)?.version) {
+      renderCurrentChatMessages();
+      loadPageChatSessionFiles(true);
+    }
+  } catch (_) { /* A temporary connection failure must preserve the current conversation. */ }
+  finally { chatHistorySyncing = false; }
+}
+window.addEventListener('focus', syncChatSessions);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncChatSessions(); });
+setInterval(syncChatSessions, 5000);
+
 // Load persona from server
 async function loadPersona() {
   try {
@@ -897,7 +942,9 @@ function isBooleanDisplayColumn(columnName = '') {
 
 function formatMoneyDisplayValue(value, label = '', unit = '') {
   const text = String(label) + ' ' + String(unit || '');
-  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd');
+  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/\bhop dong\b/gi, '');
+  // "hợp đồng" means contract, not the currency; identifier columns are never money.
+  if (/\bid\b|^\s*ma\b/i.test(normalized) || /[a-z]ID\b/.test(text)) return value;
   const currency = /\b(?:VND|VNd|dong)\b|₫/i.test(normalized) ? 'VND'
     : /\b(USD|EUR|GBP|JPY)\b/i.exec(text)?.[1]?.toUpperCase();
   const monetary = currency || /amount|money|price|balance|\b(?:tien|gia|cong no|doanh thu|chi phi)\b/i.test(normalized);
@@ -1835,6 +1882,7 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
       if(!isRetry&&data.completionStatus==='SUCCESS')carryPageChatAttachments(session.id,data.attachments);
     }
     answerPreview?.dispose();
+    const workflowHandoff = Boolean(thinkingDiv.querySelector('.chat-workflow-pending:not(.is-leaving)'));
     disposeThinkingBubble(thinkingDiv);
     thinkingDiv.remove();
     if (window.pageChatPendingThinking?.node === thinkingDiv) window.pageChatPendingThinking = null;
@@ -1995,6 +2043,10 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
     };
     if (isRetry) await replacePageChatAnswer(session,retryContext,answerRecord);
     else appendChatMessage(answerRecord,true,responseScroll?.following ?? true,session);
+    // The pending workflow card just left; let the real one fade in where it stood.
+    if (workflowHandoff && data.execution?.id) container.querySelectorAll(`[data-automation-run="${CSS.escape(data.execution.id)}"]`).forEach(node => {
+      node.classList.add('wp-handoff'); node.addEventListener('animationend', () => node.classList.remove('wp-handoff'), { once: true });
+    });
     if(!hasAttachments)requestPageChatSuggestions(session,isRetry ? retryContext.record : answerRecord,data.provider?.id);
     window.updatePageChatMiniPanel({ status: data.execution ? 'complete' : data.completionStatus === 'PARTIAL' ? 'error' : 'complete',
       label: data.execution ? 'Theo dõi tác vụ trong hội thoại' : data.completionStatus === 'PARTIAL' ? 'Một phần yêu cầu chưa hoàn tất' : 'Đã hoàn thành câu trả lời' });
@@ -2249,6 +2301,20 @@ function renderChatSessionsList() {
     `;
     container.appendChild(div);
   };
+  if (document.documentElement?.dataset.page === 'chat') {
+    container.insertAdjacentHTML('beforeend', '<div class="kh-history-heading">Gần đây</div>');
+    const visible = window.khChatShowAllHistory || query ? filtered : filtered.slice(0, 20);
+    visible.forEach(renderSession);
+    if (!query && filtered.length > 20) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'kh-history-more';
+      more.dataset.khAction = 'history-all';
+      more.setAttribute('aria-expanded', String(Boolean(window.khChatShowAllHistory)));
+      more.textContent = window.khChatShowAllHistory ? 'Thu gọn' : 'Xem tất cả';
+      container.appendChild(more);
+    }
+  } else {
   const recentSessions = filtered.filter(session => !session.pinned);
   const pinnedSessions = filtered.filter(session => session.pinned)
     .sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0));
@@ -2273,12 +2339,18 @@ function renderChatSessionsList() {
     container.insertAdjacentHTML('beforeend',`<div class="chat-session-group-title"><span>${label}</span></div>`);
     items.forEach(renderSession);
   }
+  }
   if (!filtered.length) container.insertAdjacentHTML('beforeend','<div class="chat-sessions-empty" role="status">'+(query?'Không tìm thấy cuộc trò chuyện.':'Chưa có cuộc trò chuyện.')+'</div>');
 
   // Sync title in header
   const currentSession = sessions.find(s => s.id === window.currentChatSessionId);
   const titleEl = document.getElementById('current-session-title');
   if (titleEl && currentSession) titleEl.textContent = currentSession.title;
+  const standaloneTitle = document.querySelector?.('.kh-chat-topbar-title');
+  if (standaloneTitle) {
+    standaloneTitle.textContent = currentSession?.title || 'Cuộc trò chuyện mới';
+    standaloneTitle.title = standaloneTitle.textContent;
+  }
 }
 
 function closeChatSessionMenus(exceptId = null) {

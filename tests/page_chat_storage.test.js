@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../src/frontend/js/modules/page_chat.js'),'utf8');
+const source=fs.readFileSync(require('node:path').join(__dirname,'../src/frontend/shared/js/modules/page_chat.js'),'utf8');
 function fixture(fetch) {
   const writes=[];
   const context=vm.createContext({window:{chatSessions:[],currentChatSessionId:'s'},fetch,

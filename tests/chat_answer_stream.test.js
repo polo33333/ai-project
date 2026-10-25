@@ -47,7 +47,7 @@ test('the guarded harness previews tool-free general answers but withholds data 
  }
 });
 
-function browserReader(){const context=vm.createContext({window:{},TextDecoder,Uint8Array,JSON,Error});vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);return context.window.ChatStream.read;}
+function browserReader(){const context=vm.createContext({window:{},TextDecoder,Uint8Array,JSON,Error});vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);return context.window.ChatStream.read;}
 
 test('response scrolling follows delayed result growth and preserves an intentional scroll upward',()=>{
  const frames=[],listeners={};let resize,mutate;
@@ -55,7 +55,7 @@ test('response scrolling follows delayed result growth and preserves an intentio
   get scrollTop(){return this._top;},set scrollTop(top){this._top=Math.min(top,this.scrollHeight-this.clientHeight);},
   addEventListener(type,fn){listeners[type]=fn;}};
  const context=vm.createContext({window:{ResizeObserver:class{constructor(fn){resize=fn;}observe(){}unobserve(){}},MutationObserver:class{constructor(fn){mutate=fn;}observe(){}}},setTimeout:fn=>frames.push(fn)});
- vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);
  const follower=context.window.ChatStream.followResponse(scroller),flush=()=>{while(frames.length)frames.shift()();};flush();
  scroller.scrollHeight=1800;resize();flush();assert.equal(scroller.scrollTop,1500,'follow table layout after final rendering');
  scroller.scrollTop=900;listeners.scroll();assert.equal(follower.following,false);
@@ -127,7 +127,7 @@ test('answer preview remains transient, ignores stale/duplicate events and respe
  const context=vm.createContext({window:{},TextDecoder,Uint8Array,JSON,Error,
   setTimeout:fn=>{frames.set(++nextFrame,fn);return nextFrame;},clearTimeout:id=>frames.delete(id),
   document:{createElement(){return {style:{},setAttribute(){},remove(){host.children=host.children.filter(node=>node!==this);}};}}});
- vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);
  const preview=context.window.ChatStream.createPreview(host),flush=()=>{const pending=[...frames.values()];frames.clear();pending.forEach(fn=>fn());};
  preview.update({type:'answer_start',id:'a'});
  preview.update({type:'answer_delta',id:'old',seq:1,delta:'Wrong'});
@@ -147,7 +147,7 @@ test('readable page chat pace slows large bursts and allows four seconds to fini
  const context=vm.createContext({window:{},Date:{now:()=>now},
   setTimeout:fn=>{timers.set(++next,fn);return next;},clearTimeout:id=>timers.delete(id),
   document:{createElement(){return {style:{},setAttribute(){},remove(){host.children=host.children.filter(node=>node!==this);}};}}});
- vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);
  const preview=context.window.ChatStream.createPreview(host,{charactersPerSecond:200,finishDurationMs:4000});
  const flush=()=>{now+=24;const jobs=[...timers.values()];timers.clear();jobs.forEach(fn=>fn());};
  const text='Readable answer. '.repeat(200);
@@ -174,7 +174,7 @@ test('live and verified answers paint progressively and final waits for pending 
  const context=vm.createContext({window:{},TextDecoder,Uint8Array,JSON,Error,Date,
   setTimeout:fn=>{timers.set(++next,fn);return next;},clearTimeout:id=>timers.delete(id),
   document:{createElement(){return {style:{},setAttribute(){},remove(){host.children=host.children.filter(node=>node!==this);}};}}});
- vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);
  const preview=context.window.ChatStream.createPreview(host),flush=()=>{const jobs=[...timers.values()];timers.clear();jobs.forEach(fn=>fn());};
  const text='A long provider chunk. '.repeat(100);
  preview.update({type:'answer_start',id:'a',...start});
@@ -196,9 +196,9 @@ test('rich preview renders table rows progressively using the final Markdown par
  const context=vm.createContext({window:{},URL,Date,
   setTimeout:fn=>{timers.set(++next,fn);return next;},clearTimeout:id=>timers.delete(id),
   document:{createElement(){return {style:{},querySelectorAll(){return [];},setAttribute(){},remove(){host.children=[];}};}}});
- const source=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+ const source=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
  vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'),source.indexOf('// Render Chart.js')),context);
- vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);
  const preview=context.window.ChatStream.createPreview(host,{renderMarkdown:context.parseMarkdown});
  const flush=()=>{const jobs=[...timers.values()];timers.clear();jobs.forEach(fn=>fn());};
  const text='| Name | Value |\n| --- | --- |\n'+Array.from({length:30},(_,i)=>`| Row ${i} | ${i} |`).join('\n')+'\n| Unsafe | <script>alert(1)</script> |';

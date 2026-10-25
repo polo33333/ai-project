@@ -7,8 +7,8 @@ test('workflow forms reach the chat bottom after mounting and resizing without p
   await page.route('http://localhost:12345/**',route=>route.fulfill({contentType:'text/html',body:'<main></main>'}));
   await page.goto('http://localhost:12345/');
   await page.setContent('<main id="page-chat-messages-container"><div style="height:400px">Older messages</div></main>');
-  await page.addStyleTag({content:fs.readFileSync('src/frontend/css/workflow_plugins.css','utf8')+'\n#page-chat-messages-container{height:220px;overflow:auto}'});
-  await page.addScriptTag({content:fs.readFileSync('src/frontend/js/modules/workflow_plugins.js','utf8')});
+  await page.addStyleTag({content:fs.readFileSync('src/frontend/shared/css/workflow_plugins.css','utf8')+'\n#page-chat-messages-container{height:220px;overflow:auto}'});
+  await page.addScriptTag({content:fs.readFileSync('src/frontend/shared/js/modules/workflow_plugins.js','utf8')});
   await page.evaluate(()=>{
     const container=document.querySelector('main');
     const execution={id:'scroll-run',name:'Report',status:'WAITING_INPUT',revision:1,missingInputs:Array.from({length:8},(_,i)=>({key:`field-${i}`,ask:`Field ${i}`,schema:{type:'string'}}))};
@@ -33,7 +33,7 @@ test('embed scroll settles after a tall workflow form is rendered', {skip:proces
   const page=await browser.newPage();
   await page.route('http://localhost:12345/**',route=>{
     const url=route.request().url();
-    if(url.endsWith('/embed.js'))return route.fulfill({contentType:'text/javascript; charset=utf-8',body:fs.readFileSync('src/frontend/embed/knowledgehub-chat.js','utf8')});
+    if(url.endsWith('/embed.js'))return route.fulfill({contentType:'text/javascript; charset=utf-8',body:fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js','utf8')});
     if(url.endsWith('/api/embed/chat'))return route.fulfill({json:{status:'success',execution:{id:'embed-scroll',name:'Report',status:'WAITING_INPUT',revision:1,missingInputs:Array.from({length:8},(_,i)=>({key:`field-${i}`,ask:`Field ${i}`,schema:{type:'string'}}))}}});
     return route.fulfill({contentType:'text/html; charset=utf-8',body:'<html><body><script src="/embed.js" data-embed-id="fixture"></script></body></html>'});
   });

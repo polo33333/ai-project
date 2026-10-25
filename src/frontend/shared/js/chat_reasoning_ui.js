@@ -110,18 +110,52 @@
     if (current) typeStatus(root, current, current.textContent);
     return root;
   }
+  // A chosen workflow gets a card shaped like the final one, so the result can take its place.
+  function workflowCard(root, event) {
+    const card = root.querySelector?.('.chat-thinking-card');
+    if (!card) return;
+    let panel = root.querySelector('.chat-workflow-pending');
+    if (event.type === 'workflow_rejected') {
+      if (panel) { panel.classList.add('is-leaving'); setTimeout(() => panel.remove(), 220); }
+      return;
+    }
+    if (!panel || panel.classList.contains('is-leaving')) {
+      panel?.remove();
+      panel = document.createElement('div');
+      panel.className = 'workflow-execution-panel chat-workflow-pending';
+      panel.setAttribute('role', 'status');
+      panel.innerHTML = `<div class="wp-execution-header"><span class="wp-execution-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+        <strong class="wp-execution-title"></strong><span class="wp-execution-status"></span></div>
+        <div class="wp-execution-loading wp-processing"><div class="wp-processing-graphic" aria-hidden="true"><span class="wp-processing-source"><i class="fas fa-database"></i></span><span class="wp-processing-flow"><b></b><b></b><b></b></span><span class="wp-processing-core"><i class="fas fa-layer-group"></i></span><span class="wp-processing-flow"><b></b><b></b><b></b></span><span class="wp-processing-source"><i class="fas fa-file-alt"></i></span></div>
+        <div class="wp-processing-copy"><strong></strong><span>Kết quả sẽ hiển thị khi hoàn tất.</span></div></div>`;
+      card.after(panel);
+      // The workflow card is now the focus; the model's notes stay one click away.
+      const content = root.querySelector('.chat-thinking-steps'), toggle = root.querySelector('.chat-thinking-toggle');
+      if (content && root._reasoningCollapsed === undefined) {
+        root._reasoningCollapsed = true; content.hidden = true;
+        toggle?.setAttribute('aria-expanded', 'false'); toggle?.setAttribute('aria-label', 'Mở nội dung suy nghĩ');
+      }
+    }
+    const running = event.type === 'workflow_running';
+    panel.querySelector('.wp-execution-title').textContent = event.workflowName || panel.querySelector('.wp-execution-title').textContent || 'Quy trình nghiệp vụ';
+    panel.querySelector('.wp-execution-status').textContent = running ? 'Đang thực hiện' : 'Đang kiểm tra';
+    panel.querySelector('.wp-processing-copy strong').textContent = running ? 'Đang xử lý thông tin' : 'Đang chuẩn bị quy trình';
+  }
   function update(root, event = {}, label = '') {
     if (!root) return;
     if (root._hideReasoning && event.type === 'reasoning_delta') return;
     const current = root.querySelector('.chat-thinking-copy span');
     if (event.type !== 'reasoning_delta') {
-      if (!root._reasoningRecords?.size && current) typeStatus(root, current, label || 'Đang chuẩn bị câu trả lời…');
+      if (/^workflow_(pending|running|rejected)$/.test(event.type)) workflowCard(root, event);
+      // Keep reporting after reasoning: later steps (SQL, workflow checks) can take seconds.
+      if (current) typeStatus(root, current, String(label || 'Đang chuẩn bị câu trả lời…').replace(/\*\*|`/g, ''));
       return;
     }
     if (!event.delta) return;
     const content = root.querySelector('.chat-thinking-steps');
     if (!content) return;
     root._reasoningRecords ||= new Map();
+    const firstReasoning = !root._reasoningRecords.size;
     const key = keyOf(event);
     let text = root._reasoningRecords.get(key);
     if (!text) {
@@ -164,8 +198,11 @@
         root.remove = () => { root._reasoningStopped = true; clearInterval(root._typingTimer); root._typingTimer = null; remove(); };
       }
     }
-    stopStatusTyping(root);
-    if (current) current.textContent = '';
+    if (firstReasoning) {
+      stopStatusTyping(root);
+      root._statusTypingTarget = null;
+      if (current) current.textContent = '';
+    }
     content.hidden = root._reasoningCollapsed === true;
     const toggle = root.querySelector('.chat-thinking-toggle');
     if (toggle) toggle.hidden = false;

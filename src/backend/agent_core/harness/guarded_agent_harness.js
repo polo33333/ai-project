@@ -18,6 +18,19 @@ const { buildEnrichedListSql, contextualLookupQuestion, isSimpleEntityListReques
 
 const positive = (value, fallback) => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
 const aborted = () => Object.assign(new Error('Request aborted'), { name: 'AbortError' });
+// The v2 pipeline calls tools directly; report them like the agent loop does.
+const withToolProgress = (toolManager, onProgress) => Object.assign(Object.create(toolManager), {
+  async executeTool(name, args, toolContext) {
+    emitProgress(onProgress, { type: 'tool_started', label: toolLabel(name), status: 'running', toolName: name, icon: 'gear' });
+    const execution = await toolManager.executeTool(name, args, toolContext);
+    // v2 falls back to SQL when the run is refused or fails: drop the pending workflow card.
+    if (name === 'run_workflow' && execution?.code !== 'WORKFLOW_ASSESSMENT_INVALID'
+      && (execution?.success === false || execution?.result?.execution?.status === 'FAILED'))
+      emitProgress(onProgress, { type: 'workflow_rejected', label: 'Quy trình chưa xử lý được, chuyển sang truy vấn dữ liệu', status: 'warning', icon: 'gear' });
+    emitProgress(onProgress, { type: 'tool_completed', label: toolLabel(name, 'done', execution?.result?.rowCount), status: execution?.success === false ? 'error' : 'done', toolName: name, icon: 'gear' });
+    return execution;
+  }
+});
 
 function createProviderBudget() {
   return new RequestExecutionBudget({
@@ -150,6 +163,8 @@ class GuardedAgentHarness {
 
     const check = () => { if (context.signal?.aborted) throw aborted(); budget.assertTimeRemaining(); };
     const dispatch = async (definitions, inputMessages = conversation, stage = 'agent') => {
+      if (['v2_contract', 'v2_contract_repair'].includes(stage)) emitProgress(onProgress, { type: 'model_started', label: stage === 'v2_contract'
+        ? 'Đang phân tích câu hỏi và lập kế hoạch truy vấn' : 'Đang điều chỉnh kế hoạch truy vấn', status: 'running', icon: 'brain' });
       let lastError;
       for (const candidate of [activeProvider, ...candidates.filter(item => item.id !== activeProvider?.id)]) {
         check();
@@ -235,13 +250,26 @@ class GuardedAgentHarness {
       }
       throw lastError || new Error('Không có AI Provider khả dụng.');
     };
-    if (context.governedController) toolContext.assessWorkflow = (definition, proposedInputs = {}) =>
-      require('../../memory_core/workflow_suitability').assess(dispatch, question,
+    if (context.governedController) toolContext.assessWorkflow = async (definition, proposedInputs = {}) => {
+      // A separate model call; the UI shows a pending workflow card meanwhile.
+      const workflow = { workflowName: definition.name, templateId: definition.id };
+      emitProgress(onProgress, { type: 'workflow_pending', label: 'Đang kiểm tra quy trình có khớp câu hỏi', status: 'running', icon: 'gear', ...workflow });
+      try {
+        const assessment = await require('../../memory_core/workflow_suitability').assess(dispatch, question,
         plan.conversationState ? {...toolContext.conversationResolution,operation:plan.conversationState.operation,
           attributes:plan.conversationState.requestedAttributes,
           outputs: plan.outputs, temporalMonths: plan.temporalMonths,
           proposedInputs,
           cardinality:plan.conversationState.cardinality||(['compare','list','aggregate'].includes(plan.conversationState.operation)?'collection':'single')} : {...toolContext.conversationResolution, outputs: plan.outputs, proposedInputs}, definition);
+        emitProgress(onProgress, { type: 'workflow_running', label: 'Đang chạy quy trình nghiệp vụ', status: 'running', icon: 'gear', ...workflow });
+        return assessment;
+      } catch (error) {
+        // A malformed assessment is retried at once; keep the card instead of flickering.
+        if (error.code !== 'WORKFLOW_ASSESSMENT_INVALID') emitProgress(onProgress, { type: 'workflow_rejected',
+          label: 'Quy trình chưa phù hợp, chuyển sang truy vấn dữ liệu', status: 'warning', icon: 'gear', ...workflow });
+        throw error;
+      }
+    };
     // Repairs are routed by failure phase (repair_router): each phase has its
     // own budget, stage guidance is free, and a repair that resolves nothing
     // and adds no new evidence stops instead of spending the request budget.
@@ -283,7 +311,7 @@ class GuardedAgentHarness {
           : !dataTools ? (toolContext.allowedToolNames.some(name => name.startsWith('mcp_')) ? { fallback: 'V2_EXTERNAL_TOOLS' }
             : await require('../pipeline/conversation_answer').chat({ question, conversation, dispatch, plan, context }))
           : await require('../pipeline/contract_pipeline').run({ question, plan, context, toolContext, dispatch,
-            toolManager: this.toolManager, trace, toolCalls, requestTime, conversation, pendingInput });
+            toolManager: withToolProgress(this.toolManager, onProgress), trace, toolCalls, requestTime, conversation, pendingInput });
         if (v2.handoff) {
           const state = v2.handoff;
           trace.pipeline = 'v2';

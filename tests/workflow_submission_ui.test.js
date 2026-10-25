@@ -5,7 +5,7 @@ function fixture(){
  const form={children:[],querySelectorAll:()=>[input,submit],appendChild(node){this.children.push(node);}};
  const badge={textContent:'Waiting'},node={dataset:{},attributes:{},setAttribute(key,value){this.attributes[key]=value;},querySelector:()=>badge};
  const context=vm.createContext({window:{},document:{createElement(){return {style:{},setAttribute(){},remove(){form.children=form.children.filter(item=>item!==this);}};}}});
- vm.runInContext(fs.readFileSync('src/frontend/embed/chat-stream.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/embed-client/chat-stream.js','utf8'),context);
  return {ui:context.window.ChatStream,input,submit,form,badge,node};
 }
 test('workflow submission retains form and values through stale polls and running steps, then releases at completion',()=>{

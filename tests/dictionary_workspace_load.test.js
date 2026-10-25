@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
 test('dictionary workspace coalesces tab loads and keeps existing data on failure, then retries', async () => {
-  const source = fs.readFileSync('src/frontend/js/modules/dictionary.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js', 'utf8');
   let resolve, requests = 0;
   const context = { window: { groupedTablesData: ['previous'], businessDomainsData: {}, tableRelationshipsData: [] },
     console: { error() {} }, renderDictionaryDomainOptions() {}, renderDataDictionary() {},
@@ -23,7 +23,7 @@ test('workspace snapshot is restricted to auth and dictionary dependencies', () 
 });
 
 test('forced reload on source switch ignores an older in-flight workspace response', async () => {
-  const source = fs.readFileSync('src/frontend/js/modules/dictionary.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js', 'utf8');
   const pending = [];
   const context = { window: { paginationState: { dictionary: { currentPage: 3 } }, selectedDictionaryTableId: 'old', dictionaryGraphSelection: 'Old' },
     console: { error() {} }, renderDictionaryQuality() {}, renderDictionaryDomainOptions() {}, renderDataDictionary() {},

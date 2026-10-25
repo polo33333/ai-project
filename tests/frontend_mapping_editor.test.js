@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 test('mapping cards preserve metadata and null relations while editing labels', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/workflow_plugins.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8');
   const inputs = [];
   const node = () => ({ children: [], append(...children) { this.children.push(...children); }, appendChild(child) { this.children.push(child); }, prepend() {}, setAttribute() {}, addEventListener() {}, remove() {} });
   const context = { document: { createElement: node }, icon: node, button: node,

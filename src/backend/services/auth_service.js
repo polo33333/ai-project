@@ -77,11 +77,23 @@ class AuthService {
       displayName: account.displayName || account.username,
       email: account.email || '',
       role: account.role || 'user',
+      clientAccess: this.clientAccess(account),
       ...require('./account_roles').effective(account),
       ...(account.tenantId ? { tenantId: account.tenantId } : {}),
       createdAt: account.createdAt || null,
       lastLoginAt: account.lastLoginAt || null
     };
+  }
+
+  // Which client an account may sign in to: 'chat' (/chat only), 'admin' (the management app
+  // only) or 'both'. Accounts saved before this setting existed keep 'both'.
+  clientAccess(account) {
+    return ['chat', 'admin'].includes(account?.clientAccess) ? account.clientAccess : 'both';
+  }
+
+  canUseClient(account, client) {
+    const access = this.clientAccess(account);
+    return client === 'chat' ? access !== 'admin' : access !== 'chat';
   }
 
   requireAccountAdmin(actorId) {
@@ -105,7 +117,9 @@ class AuthService {
     if (typeof input.email !== 'string' || input.email.length > 254 || (input.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim()))) fail('Email không hợp lệ.');
     const roles=require('./account_roles');
     if (!roles.get(input.role) || typeof input.isActive !== 'boolean') fail('Vai trò hoặc trạng thái không hợp lệ.');
+    if (input.clientAccess !== undefined && !['chat', 'admin', 'both'].includes(input.clientAccess)) fail('Phạm vi sử dụng không hợp lệ.');
     return { displayName: input.displayName.trim(), email: input.email.trim(), role: input.role, isActive: input.isActive,
+      ...(input.clientAccess !== undefined ? { clientAccess: input.clientAccess } : {}),
       ...(input.permissions!==undefined?{permissions:input.permissions===null?null:roles.validatePermissions(input.permissions)}:{}),
       ...(input.dataAccess!==undefined?{dataAccess:roles.validateDataAccess(input.dataAccess)}:{}) };
   }
@@ -137,11 +151,13 @@ class AuthService {
     if (!Number.isInteger(input.revision) || input.revision !== (account.managementRevision || 0))
       throw Object.assign(new Error('Tài khoản đã thay đổi. Hãy tải lại trước khi lưu.'), { statusCode: 409 });
     const fields = this.validateAccountFields(input);
-    if (actorId === id && (!fields.isActive || fields.role !== 'admin'))
-      throw Object.assign(new Error('Không thể tự khóa hoặc hạ quyền tài khoản đang đăng nhập.'), { statusCode: 400 });
-    if (account.role === 'admin' && account.isActive !== false && (!fields.isActive || fields.role !== 'admin')
-      && !this.accounts.some(item => item.id !== id && item.role === 'admin' && item.isActive !== false))
-      throw Object.assign(new Error('Phải giữ ít nhất một quản trị viên đang hoạt động.'), { statusCode: 409 });
+    if (actorId === id && (!fields.isActive || fields.role !== 'admin' || fields.clientAccess === 'chat'))
+      throw Object.assign(new Error('Không thể tự khóa, hạ quyền hoặc bỏ quyền vào trang quản lý của tài khoản đang đăng nhập.'), { statusCode: 400 });
+    // A manager is an active admin who may open the management app.
+    const manages = item => item.role === 'admin' && item.isActive !== false && this.clientAccess(item) !== 'chat';
+    if (manages(account) && !manages({ ...account, ...fields })
+      && !this.accounts.some(item => item.id !== id && manages(item)))
+      throw Object.assign(new Error('Phải giữ ít nhất một quản trị viên đang hoạt động được vào trang quản lý.'), { statusCode: 409 });
     const revoke = (account.role || 'user') !== fields.role || (account.isActive !== false) !== fields.isActive
       || (fields.permissions!==undefined&&JSON.stringify(fields.permissions)!==JSON.stringify(account.permissions??null))
       || (fields.dataAccess!==undefined&&JSON.stringify(fields.dataAccess)!==JSON.stringify(account.dataAccess??null));

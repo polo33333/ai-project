@@ -7,8 +7,9 @@ function validateTransition(previous, next) {
     if (names.has(key)) fail('Tên đăng nhập đã tồn tại.');
     names.add(key);
   }
-  const activeAdmin = account => account.role === 'admin' && account.isActive !== false;
-  if (previous.some(activeAdmin) && !next.some(activeAdmin)) fail('Phải giữ ít nhất một quản trị viên đang hoạt động.');
+  // An admin limited to the chat client cannot open the management app.
+  const activeAdmin = account => account.role === 'admin' && account.isActive !== false && account.clientAccess !== 'chat';
+  if (previous.some(activeAdmin) && !next.some(activeAdmin)) fail('Phải giữ ít nhất một quản trị viên đang hoạt động được vào trang quản lý.');
 }
 function validateRevisions(baseline, proposed, fresh) {
   for (const account of proposed) {

@@ -9,7 +9,7 @@ test('embed workflow renders chart objects as SVG at widget width', { skip: proc
   const browser = await chromium.launch({ executablePath: process.env.TEST_BROWSER_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 360, height: 760 } });
-    const source = fs.readFileSync(path.join(__dirname, '../src/frontend/embed/knowledgehub-chat.js'), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '../src/frontend/embed-client/knowledgehub-chat.js'), 'utf8');
     const escape = source.slice(source.indexOf('  const escapeHtml ='), source.indexOf('\n', source.indexOf('  const escapeHtml =')));
     const charts = source.slice(source.indexOf('  const chartColors ='), source.indexOf('  const renderEmbedCitations ='));
     const mount = source.slice(source.indexOf('  function mountWorkflow('), source.indexOf('  // Keep host-page keyboard'));

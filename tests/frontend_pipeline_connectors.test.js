@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 test('swapping workflow steps exchanges only the two nodes and preserves their configuration', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/workflow_plugins.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8');
   const context = {}; vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('  function moveWorkflowStep('), source.indexOf('  function editDialog(')), context);
   const moved = { id: 'a', config: { mapping: { value: 1 } }, ui: { backgroundColor: '#112233' } };
@@ -22,7 +22,7 @@ test('swapping workflow steps exchanges only the two nodes and preserves their c
 });
 
 test('pipeline connects adjacent cards across rows and redraws after resizing', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/workflow_plugins.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/shared/js/modules/workflow_plugins.js'), 'utf8');
   const element = () => ({ children: [], attributes: {}, classList: { add() {} }, setAttribute(key, value) { this.attributes[key] = value; }, replaceChildren() { this.children = []; }, append(...items) { this.children.push(...items); } });
   let resize, pending, disconnected = false;
   let rectangles = [

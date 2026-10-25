@@ -15,3 +15,14 @@ test('mapping preflight checks current exposed columns without executing SQL', (
   dictionary.tablesStore[0].columns[0].isVisible = false;
   assert.throws(() => validateResultMapping(binding, dictionary), /Address/);
 });
+test('a relation verified after publishing does not break a raw column, except while authoring', () => {
+  const dictionary = { tablesStore: [
+    { tableId: 'records', dbSourceId: 'test', isActive: true, columns: [{ columnName: 'address', isVisible: true }] },
+    { tableId: 'places', dbSourceId: 'test', isActive: true, columns: [{ columnName: 'id', isVisible: true }, { columnName: 'name', isVisible: true }] }],
+  tableRelationships: [{ id: 'rel', sourceTableId: 'records', targetTableId: 'places', isActive: true, status: 'verified', cardinality: 'many-to-one',
+    displayColumn: 'name', columnPairs: [{ sourceColumn: 'address', targetColumn: 'id' }] }] };
+  assert.doesNotThrow(() => validateResultMapping(binding, dictionary));
+  assert.throws(() => validateResultMapping(binding, dictionary, { strict: true }), /Address/);
+  const related = { ...binding, resultMapping: [{ ...binding.resultMapping[0], relationId: 'gone' }] };
+  assert.throws(() => validateResultMapping(related, dictionary), /Address/);
+});

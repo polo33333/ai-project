@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 test('mutation responses cannot add another database source back into the selected workspace', () => {
   const context = vm.createContext({ window: {}, console, document: { addEventListener() {} } });
-  vm.runInContext(fs.readFileSync('src/frontend/js/modules/dictionary.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js', 'utf8'), context);
   Object.assign(context.window, { dictionaryWorkspaceSource: { id: 'one' }, groupedTablesData: [
     { tableId: 'one:A', tableName: 'A', dbSourceId: 'one' }, { tableId: 'one:B', tableName: 'B', dbSourceId: 'one' }
   ] });
@@ -26,7 +26,7 @@ test('drawer, list toggle and column edits send the selected identity for same-n
       return { ok: true, json: async () => ({ status: 'success' }) };
     } };
   vm.createContext(context);
-  const source = fs.readFileSync('src/frontend/js/modules/dictionary.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js', 'utf8');
   vm.runInContext(source, context);
   const first = { tableId: 'one::db::dbo::same', tableName: 'Same', isActive: true, columns: [{ columnName: 'ID' }] };
   const second = { tableId: 'two::db::dbo::same', tableName: 'Same', isActive: true, columns: [{ columnName: 'ID' }] };

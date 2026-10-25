@@ -5,7 +5,8 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const root = path.resolve(__dirname, '../src/frontend');
+// Serves the admin app the way the server does: admin-client/, then shared/, /embed/* from embed-client/.
+const front = path.resolve(__dirname, '../src/frontend');
 const output = path.resolve(__dirname, '../artifacts/ui-review');
 fs.mkdirSync(output, { recursive: true });
 const server = http.createServer((req, res) => {
@@ -17,8 +18,11 @@ const server = http.createServer((req, res) => {
       : [];
     return res.end(JSON.stringify(data));
   }
-  const file = path.resolve(root, `.${url.pathname.includes('.') ? url.pathname : '/index.html'}`);
-  if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) { res.writeHead(404); return res.end(); }
+  const pathname = url.pathname.replace(/^\/admin(?=\/|$)/, '') || '/';
+  const relative = pathname.includes('.') ? pathname : '/index.html';
+  const dirs = relative.startsWith('/embed/') ? [path.join(front, 'embed-client')] : [path.join(front, 'admin-client'), path.join(front, 'shared')];
+  const file = dirs.map(dir => path.resolve(dir, '.' + relative.replace(/^\/embed/, ''))).find(candidate => dirs.some(dir => candidate.startsWith(dir + path.sep)) && fs.existsSync(candidate));
+  if (!file) { res.writeHead(404); return res.end(); }
   res.setHeader('Content-Type', ({ '.css': 'text/css', '.js': 'text/javascript', '.html': 'text/html' })[path.extname(file)] || 'application/octet-stream');
   res.end(fs.readFileSync(file));
 });

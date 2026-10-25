@@ -2,7 +2,7 @@ async function checkExistingSession() {
   try {
     const res = await fetch('/api/auth/me', { cache: 'no-store' });
     const data = await res.json();
-    if (data.authenticated) window.location.href = '/';
+    if (data.authenticated) window.location.href = '/admin';
   } catch {
     // Keep the login form available when the session check fails.
   }
@@ -82,7 +82,7 @@ document.getElementById('login-form')?.addEventListener('submit', async event =>
     } catch {
       // A fresh login still continues when browser storage is unavailable.
     }
-    window.location.href = '/';
+    window.location.href = '/admin';
   } catch (err) {
     loginFeedback(err.message || 'Không thể kết nối máy chủ. Vui lòng thử lại.');
   } finally {

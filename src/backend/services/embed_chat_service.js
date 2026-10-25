@@ -12,6 +12,12 @@ class EmbedChatService {
     StorageHelper.saveJson('embed_chat_configs.json', this.configs);
   }
 
+  // "widget": the floating chat box. "page": the chat client (/chat) in a frame, where visitors
+  // sign in with their KnowledgeHub account.
+  normalizeMode(value) {
+    return value === 'page' ? 'page' : 'widget';
+  }
+
   normalizeOrigin(value) {
     try {
       return new URL(String(value || '').trim()).origin.toLowerCase();
@@ -34,6 +40,7 @@ class EmbedChatService {
       id: crypto.randomUUID(),
       name,
       allowedOrigins,
+      mode: this.normalizeMode(data.mode),
       rateLimit: Math.min(300, Math.max(1, Number(data.rateLimit) || 30)),
       maxQuestionLength: Math.min(8000, Math.max(100, Number(data.maxQuestionLength) || 2000)),
       maxHistory: Math.min(20, Math.max(0, Number(data.maxHistory) || 10)),
@@ -66,6 +73,7 @@ class EmbedChatService {
     Object.assign(config, {
       name,
       allowedOrigins,
+      mode: this.normalizeMode(data.mode),
       rateLimit: Math.min(300, Math.max(1, Number(data.rateLimit) || 30)),
       maxRows: Math.min(100, Math.max(1, Number(data.maxRows) || 20)),
       updatedAt: new Date().toISOString()

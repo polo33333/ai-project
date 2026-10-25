@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
 test('historical workflow restore uses at most two concurrent requests and skips hidden panels', async () => {
-  const source = fs.readFileSync('src/frontend/js/modules/workflow_plugins.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/workflow_plugins.js', 'utf8');
   let active = 0, peak = 0, calls = 0, mounted = 0;
   const panel = (id, visible = true) => ({ dataset: { automationRun: id }, isConnected: true,
     getClientRects: () => visible ? [{}] : [], querySelector: () => null, querySelectorAll: () => [], setAttribute() {} });

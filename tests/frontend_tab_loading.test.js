@@ -3,10 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const read = file => fs.readFileSync(path.join(__dirname, '../src/frontend/js', file), 'utf8');
+// Admin modules live in admin-client/, modules both clients use in shared/.
+const frontendFile = rel => ['admin-client', 'shared'].map(dir => path.join(__dirname, '../src/frontend', dir, rel)).find(file => fs.existsSync(file));
+const read = file => fs.readFileSync(frontendFile('js/' + file), 'utf8');
 
 test('initial shell includes the real dashboard and logs without another template request', async () => {
-  const html = require('../src/backend/services/dashboard_shell').render(fs.readFileSync(path.join(__dirname, '../src/frontend/index.html'), 'utf8'));
+  const html = require('../src/backend/services/dashboard_shell').render(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/index.html'), 'utf8'));
   for (const id of ['analyticsChart', 'dashboardFeedbackChart', 'dashboard-activity-card', 'dash-router-primary', 'view-dashboard-logs']) {
     assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
   }
@@ -18,7 +20,7 @@ test('initial shell includes the real dashboard and logs without another templat
 });
 
 test('reloading another tab does not paint the overview first', () => {
-  const index = fs.readFileSync(path.join(__dirname, '../src/frontend/index.html'), 'utf8');
+  const index = fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/index.html'), 'utf8');
   const html = require('../src/backend/services/dashboard_shell').render(index, '/chat-history');
   assert.ok(!html.includes('id="analyticsChart"') && !html.includes('data-loaded="true"'));
   assert.match(html, /<h1 id="page-heading"><\/h1>/);

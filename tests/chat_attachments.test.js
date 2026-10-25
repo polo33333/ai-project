@@ -51,7 +51,7 @@ test('upload validation rejects unsupported, corrupt, empty, oversized and exces
 });
 
 test('shared picker enforces limits and sends bytes to upload endpoint without invoking chat',async()=>{
- const source=await fs.readFile(path.join(__dirname,'../src/frontend/embed/chat-attachments.js'),'utf8');
+ const source=await fs.readFile(path.join(__dirname,'../src/frontend/embed-client/chat-attachments.js'),'utf8');
  const requests=[],global={window:{},FileReader:class{readAsDataURL(file){this.result='data:application/pdf;base64,'+Buffer.from(file.text).toString('base64');this.onload();}},fetch:async(url,options)=>{requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({reply:'development'})};}};
  vm.runInNewContext(source,global);
  const helper=global.window.ChatAttachments,notices=[];

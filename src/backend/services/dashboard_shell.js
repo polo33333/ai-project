@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const views = path.join(__dirname, '../../frontend/views');
+const views = path.join(__dirname, '../../frontend/admin-client/views');
 // Reuse the actual views so the initial layout cannot drift from the dashboard.
 const dashboard = fs.readFileSync(path.join(views, 'dashboard.html'), 'utf8');
 const logs = fs.readFileSync(path.join(views, 'dashboard_logs.html'), 'utf8')

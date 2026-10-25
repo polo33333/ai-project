@@ -23,7 +23,7 @@ test('audit list reads lightweight columns with owner predicates and without dia
  assert.match(request.sql,/principalRef/);assert.doesNotMatch(request.sql,/diagnostics|SELECT \*/);
 });
 test('history JSON is requested on first open and retained while toggling',async()=>{
- const source=fs.readFileSync('src/frontend/js/modules/chat_history.js','utf8');
+ const source=fs.readFileSync('src/frontend/admin-client/js/modules/chat_history.js','utf8');
  let requests=0;let copyHandler;const host={textContent:'',innerHTML:'',setAttribute(){},removeAttribute(){},querySelector:()=>({addEventListener(type,handler){assert.equal(type,'click');copyHandler=handler;}})};
  const panel={open:false,dataset:{auditId:'a'},querySelector:()=>host};
  const context=vm.createContext({window:{},fetch:async()=>{requests++;return {ok:true,json:async()=>({id:'a',question:'<script>',requestPayload:{toolCalls:[{name:'SQL'}]}})};}});

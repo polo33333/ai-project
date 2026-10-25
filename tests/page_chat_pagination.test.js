@@ -117,7 +117,7 @@ test('80-message limit permits final answer, blocks more questions and preserves
   assert.ok(handoff.context.includes('message 0')); assert.ok(handoff.context.includes('message 77'));
 });
 test('UI counts unloaded messages toward 60-message warning and 80-message limit',()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const nodes=new Map();
   const create=()=>({children:[],setAttribute(name,value){this[name]=value;},append(...items){this.children.push(...items);},replaceChildren(){this.children=[];}});
   const container=create(); container.after=node=>nodes.set(node.id,node);
@@ -157,7 +157,7 @@ test('UI counts unloaded messages toward 60-message warning and 80-message limit
   assert.equal(selected,'next');
 });
 test('loading an older page preserves local edits and does not mark loaded history as a new edit',async()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const chat={id:'chat',title:'Test',messages:session(20).messages,history:[],_page:{start:40,bytes:1000,loadedBytes:0}};
   const older=session(20).messages.map(item=>({...item,content:'older '+item.content}));
   let renders=0;
@@ -181,7 +181,7 @@ test('loading an older page preserves local edits and does not mark loaded histo
   assert.equal(vm.runInContext('chatSessionUsage(chat).count',sandbox),60);
 });
 test('continuation failure keeps the original chat and success saves the summary before switching',async()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const original={id:'chat',title:'Original',messages:session(60).messages,history:[]};
   let fail=true,saves=0,selected=null;
   const notices=[];
@@ -232,7 +232,7 @@ test('slow summary is cancelled and returns clearly labelled excerpts',async()=>
   assert.equal((await api.list('a'))[0].messages.length,70);
 });
 test('prepending old messages keeps the same visible scroll position',()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const children=[];
   const container={scrollTop:0,get scrollHeight(){return children.length*10;},
     set innerHTML(value){assert.fail('The scroll viewport must retain its content wrapper');}};
@@ -280,7 +280,7 @@ test('retrying a previously failed answer inserts its context before later turns
   assert.equal(full.history[2].content,'message 2');
 });
 test('retry failure preserves the answer, input draft and message count without appending user/error bubbles',async()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const chat=session(80); const answer=chat.messages[79], question=chat.messages[78];
   const input={value:'Unsent draft'}; let restored=0,payload;
   const node={style:{setProperty(){}},before(){}};
@@ -305,7 +305,7 @@ test('retry failure preserves the answer, input draft and message count without 
   assert.equal(payload.retryMessageIndex,79); assert.equal(payload.history.at(-1).content,'message 77');
 });
 test('workflow handoff is a usable retry result while ordinary partial answers and failed runs are rejected',()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const sandbox=vm.createContext({});
   vm.runInContext(frontend.slice(frontend.indexOf('function isPageChatRetryResultUsable('),frontend.indexOf('async function retryPageChatAnswer(')),sandbox);
   const usable=sandbox.isPageChatRetryResultUsable;
@@ -354,7 +354,7 @@ test('ordinary answers and workflow forms do not trigger extra suggestion calls'
   assert.equal(calls,0);
 });
 test('contextual chips survive default refresh and only fill a draft when clicked',()=> {
-  const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+  const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
   const chips=[]; let draft='';
   const chat={id:'a',messages:[{role:'assistant',followUpSuggestions:[{speaker:'user',label:'Theo tháng',prompt:'Thống kê theo tháng',icon:'fa-reply'}]}]};
   const container={replaceChildren(){chips.length=0;},appendChild(node){chips.push(node);}};

@@ -63,7 +63,7 @@ test('failed upsert never prunes the previous vector snapshot', async () => {
 
 test('dictionary UI ignores a duplicate save and does not reopen a different table', async () => {
   const fs = require('node:fs'), vm = require('node:vm');
-  const source = fs.readFileSync('src/frontend/js/modules/dictionary.js','utf8');
+  const source = fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js','utf8');
   const start = source.indexOf('function reconcileDictionaryPresentation(');
   const end = source.indexOf('async function saveDictionaryColumnDescription',start);
   let finish, calls = 0, drawerRenders = 0; const control = { disabled:false, isConnected:true };

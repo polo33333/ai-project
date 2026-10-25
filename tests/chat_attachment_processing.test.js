@@ -213,7 +213,7 @@ test('files from earlier uploads in a conversation can be asked about again by r
 });
 
 test('stored files are sent as references and new files as bytes',async()=>{
- const source=await fs.readFile(path.join(__dirname,'../src/frontend/embed/chat-attachments.js'),'utf8');
+ const source=await fs.readFile(path.join(__dirname,'../src/frontend/embed-client/chat-attachments.js'),'utf8');
  const requests=[],sandbox={window:{},FileReader:class{readAsDataURL(file){this.result='data:text/plain;base64,'+Buffer.from(file.text).toString('base64');this.onload();}},
   fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return {ok:true,json:async()=>({})};}};
  require('node:vm').runInNewContext(source,sandbox);

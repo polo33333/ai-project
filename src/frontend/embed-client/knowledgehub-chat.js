@@ -60,7 +60,9 @@
     if (document.visibilityState === 'hidden') return;
     try {
       const token = await identityToken();
-      await fetch(apiBase + '/api/embed/chat', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,presence:true,identityToken:token})});
+      const response = await fetch(apiBase + '/api/embed/chat', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({embedId,sessionId,preview:isPreview,presence:true,identityToken:token})});
+      const data = response.ok ? await response.json().catch(() => null) : null;
+      if (data?.mode) applyEmbedMode(data.mode);
     } catch (_) { /* Next heartbeat retries without interrupting chat. */ }
   }
   let presenceTimer;
@@ -85,7 +87,9 @@
   };
 function formatMoneyDisplayValue(value, label = '', unit = '') {
   const text = String(label) + ' ' + String(unit || '');
-  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd');
+  const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/\bhop dong\b/gi, '');
+  // "hợp đồng" means contract, not the currency; identifier columns are never money.
+  if (/\bid\b|^\s*ma\b/i.test(normalized) || /[a-z]ID\b/.test(text)) return value;
   const currency = /\b(?:VND|VNd|dong)\b|₫/i.test(normalized) ? 'VND'
     : /\b(USD|EUR|GBP|JPY)\b/i.exec(text)?.[1]?.toUpperCase();
   const monetary = currency || /amount|money|price|balance|\b(?:tien|gia|cong no|doanh thu|chi phi)\b/i.test(normalized);
@@ -252,6 +256,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
   const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>';
   const sendIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/></svg>';
   const resetIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/></svg>';
+  const newTabIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
   const expandIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>';
   const collapseIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h5V3M21 8h-5V3M16 21v-5h5M8 21v-5H3"/></svg>';
   function createSessionId() { return `embed_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`; }
@@ -351,7 +356,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     host.remove();
     window.KnowledgeHubEmbedLoaded = false;
   };
-  root.innerHTML = `<section class="kh-embed-panel" role="dialog" aria-label="${escapeHtml(title)}"><header class="kh-embed-head"><span class="kh-embed-avatar">${botIcon}</span><div class="kh-embed-identity"><strong>${escapeHtml(title)}</strong><span class="kh-embed-status">Đang trực tuyến</span></div><div class="kh-embed-head-actions"><button class="kh-embed-expand" type="button" aria-pressed="false">${expandIcon}</button><button class="kh-embed-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới">${resetIcon}</button><button class="kh-embed-close" aria-label="Đóng">${closeIcon}</button></div></header><div class="kh-embed-messages"></div><footer class="kh-embed-footer"><form class="kh-embed-form"><input class="kh-embed-input" placeholder="Nhập câu hỏi..." autocomplete="off" aria-label="Câu hỏi"><button class="kh-embed-send" aria-label="Gửi">${sendIcon}</button></form><div class="kh-embed-brand">Powered by <b>KnowledgeHub AI</b></div></footer></section><button class="kh-embed-toggle" aria-label="Mở trợ lý AI"><span class="kh-icon-chat">${chatIcon}</span><span class="kh-icon-close">${closeIcon}</span></button>`;
+  root.innerHTML = `<section class="kh-embed-panel" role="dialog" aria-label="${escapeHtml(title)}"><header class="kh-embed-head"><span class="kh-embed-avatar">${botIcon}</span><div class="kh-embed-identity"><strong>${escapeHtml(title)}</strong><span class="kh-embed-status">Đang trực tuyến</span></div><div class="kh-embed-head-actions"><a class="kh-embed-newtab" href="${escapeHtml(apiBase + '/chat')}" target="_blank" rel="noopener" aria-label="Mở trang trò chuyện trong tab mới" title="Mở trong tab mới">${newTabIcon}</a><button class="kh-embed-expand" type="button" aria-pressed="false">${expandIcon}</button><button class="kh-embed-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới">${resetIcon}</button><button class="kh-embed-close" aria-label="Đóng">${closeIcon}</button></div></header><div class="kh-embed-messages"></div><footer class="kh-embed-footer"><form class="kh-embed-form"><input class="kh-embed-input" placeholder="Nhập câu hỏi..." autocomplete="off" aria-label="Câu hỏi"><button class="kh-embed-send" aria-label="Gửi">${sendIcon}</button></form><div class="kh-embed-brand">Powered by <b>KnowledgeHub AI</b></div></footer></section><button class="kh-embed-toggle" aria-label="Mở trợ lý AI"><span class="kh-icon-chat">${chatIcon}</span><span class="kh-icon-close">${closeIcon}</span></button>`;
   shadow.append(style, root);
   document.body.appendChild(host);
 
@@ -663,12 +668,44 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       }
     })();
   }
+  // "Page chat" mode, chosen in the admin's embed settings: the panel shows the chat client
+  // (/chat) in a frame instead of the built-in chat, and visitors sign in with their
+  // KnowledgeHub account there. The server sends the mode with each presence check.
+  const embedModeKey = `knowledgehub-embed-mode:${apiBase}:${embedId}`;
+  let pageMode = false;
+  style.textContent += `
+    .kh-embed-frame{display:none;flex:1;width:100%;min-height:0;border:0;background:#fff}.kh-embed-root.dark .kh-embed-frame{background:#111827}
+    .kh-embed-root.page-mode .kh-embed-frame{display:block}
+    .kh-embed-newtab{display:none;place-items:center;width:32px;height:32px;border-radius:9px;color:#fff;background:rgba(255,255,255,.1)}.kh-embed-newtab:hover{background:rgba(255,255,255,.2)}.kh-embed-newtab svg{width:17px;height:17px}.kh-embed-root.page-mode .kh-embed-newtab{display:grid}
+    .kh-embed-root.page-mode :is(.kh-embed-messages,.kh-embed-footer,.kh-embed-reset,.kh-scroll-activity){display:none!important}
+    .kh-embed-root.page-mode .kh-embed-panel{width:min(980px,calc(100vw - 32px));height:min(720px,calc(100vh - 105px));height:min(720px,calc(100dvh - 105px))}
+    .kh-embed-root.page-mode.expanded .kh-embed-panel{width:min(1240px,calc(100vw - 32px));height:min(880px,calc(100dvh - 32px))}
+    @media(max-width:520px){.kh-embed-root.page-mode .kh-embed-panel{width:calc(100vw - 24px);height:calc(100dvh - 94px)}.kh-embed-root.page-mode.expanded .kh-embed-panel{height:calc(100dvh - 24px)}}
+  `;
+  function mountChatFrame() {
+    if (root.querySelector('.kh-embed-frame')) return;
+    const frame = document.createElement('iframe');
+    frame.className = 'kh-embed-frame';
+    frame.title = title;
+    frame.allow = 'microphone; clipboard-write';
+    frame.src = apiBase + '/chat?embed=' + encodeURIComponent(embedId);
+    messages.before(frame);
+  }
+  function applyEmbedMode(mode) {
+    try { sessionStorage.setItem(embedModeKey, mode); } catch (_) {}
+    if ((mode === 'page') === pageMode) return;
+    pageMode = mode === 'page';
+    root.classList.toggle('page-mode', pageMode);
+    if (pageMode && root.classList.contains('open')) mountChatFrame();
+  }
+  try { if (sessionStorage.getItem(embedModeKey) === 'page') applyEmbedMode('page'); } catch (_) {}
   toggleButton.onclick = () => {
     root.classList.toggle('open');
     const isOpen = root.classList.contains('open');
     toggleButton.setAttribute('aria-label', isOpen ? 'Đóng trợ lý AI' : 'Mở trợ lý AI');
     updateToggleStatus();
-    if (isOpen) setTimeout(() => input.focus(), 50);
+    if (isOpen && pageMode) mountChatFrame();
+    else if (isOpen) setTimeout(() => input.focus(), 50);
   };
   root.querySelector('.kh-embed-close').onclick = () => { root.classList.remove('open'); updateToggleStatus(); toggleButton.focus(); };
   root.querySelector('.kh-embed-reset').onclick = resetConversation;

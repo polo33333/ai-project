@@ -36,6 +36,10 @@ const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } 
 
 
 const FRONTEND_DIR = path.join(__dirname, '../../frontend');
+// One folder per client; files both clients use live in shared/, the website widget in embed-client/.
+const CLIENT_DIRS = { chat: path.join(FRONTEND_DIR, 'chat-client'), admin: path.join(FRONTEND_DIR, 'admin-client') };
+const SHARED_DIR = path.join(FRONTEND_DIR, 'shared');
+const EMBED_DIR = path.join(FRONTEND_DIR, 'embed-client');
 const EXPORTS_DIR = getExportsDirectory();
 const LEGACY_EXPORTS_DIR = path.join(__dirname, '../../data/exports');
 
@@ -64,6 +68,60 @@ const FRONTEND_ROUTES = new Set([
   '/api-docs',
   '/ai-usage'
 ]);
+// Two clients share the server: the chat client at /chat (the default page) and the admin app
+// at /admin. A request under either prefix is handled as the same path without the prefix, so
+// both reach the same API; the prefix only says which client is asking (an account may be
+// limited to one of them, see auth_service.clientAccess). Requests without a prefix (the API
+// called by the admin app, the embed widget, old links) count as the admin client.
+// Both clients share one login session: one browser is signed in to one account.
+const CHAT_CLIENT_PATH = '/chat';
+const ADMIN_CLIENT_PATH = '/admin';
+const CLIENT_PATHS = { chat: CHAT_CLIENT_PATH, admin: ADMIN_CLIENT_PATH };
+const SESSION_COOKIE = 'kh_session';
+// The chat page framed on a customer site (embed "page" mode) keeps its own partitioned cookie.
+const FRAME_SESSION_COOKIE = 'kh_frame_session';
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+function routeClient(req) {
+  const url = req.url || '/';
+  const pathname = url.split('?')[0], query = url.slice(pathname.length);
+  for (const [client, prefix] of Object.entries(CLIENT_PATHS)) {
+    if (pathname !== prefix && !pathname.startsWith(prefix + '/')) continue;
+    req.khClient = client;
+    req.khPrefixed = true;
+    req.url = (pathname.slice(prefix.length) || '/') + query;
+    return;
+  }
+  req.khClient = 'admin';
+}
+
+// A file of the client's own folder, else of shared/; /embed/* is the website widget.
+function resolveStaticFile(client, pathname) {
+  const inside = (dir, relative) => {
+    const file = path.join(dir, relative);
+    return file.startsWith(dir + path.sep) ? file : null;
+  };
+  if (pathname.startsWith('/embed/')) return inside(EMBED_DIR, pathname.slice('/embed/'.length)) || path.join(EMBED_DIR, 'missing');
+  for (const dir of [CLIENT_DIRS[client], SHARED_DIR]) {
+    const file = inside(dir, pathname);
+    if (file && fs.statSync(file, { throwIfNoEntry: false })?.isFile()) return file;
+  }
+  return path.join(CLIENT_DIRS[client], 'missing');
+}
+
+// Keeps the embed id when the chat client moves between its page and its login page.
+function chatEmbedQuery(parsedUrl) {
+  const id = parsedUrl.searchParams.get('embed');
+  return id && /^[a-zA-Z0-9-]{1,64}$/.test(id) ? '?embed=' + id : '';
+}
+
+// The chat page may be framed only by the app itself, or by the domains of an active embed
+// configuration that uses the "page" mode.
+function chatFrameAncestors(parsedUrl) {
+  const id = parsedUrl.searchParams.get('embed');
+  const config = id ? embedChatService.configs.find(item => item.id === id && item.isActive && item.mode === 'page') : null;
+  return ["'self'", ...(config?.allowedOrigins || [])].join(' ');
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=UTF-8',
@@ -209,20 +267,40 @@ function isAdminOnlyResource(pathname) {
   return /^\/api\/(accounts|settings|backups|providers|ai-providers|ai-usage|api-keys|mcp|system-logs|training|workflows)(\/|$)/.test(pathname);
 }
 
+// The cookie this request is signed in with: the shared one, else the framed chat page's one.
+function sessionCookieName(req) {
+  if (req.khSessionCookie) return req.khSessionCookie;
+  const cookies = parseCookies(req);
+  return !cookies[SESSION_COOKIE] && cookies[FRAME_SESSION_COOKIE] ? FRAME_SESSION_COOKIE : SESSION_COOKIE;
+}
+
 function getSessionToken(req) {
-  return parseCookies(req).kh_session || '';
+  return parseCookies(req)[sessionCookieName(req)] || '';
 }
 
 function secureRequest(req) {
   return Boolean(req.socket?.encrypted || (process.env.TRUST_PROXY === 'true' && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https'));
 }
 
+// Browsers keep a cookie set inside a customer site's iframe only when it is partitioned and
+// SameSite=None, which must be Secure: possible on https and on localhost.
+function canSetFrameCookie(req) {
+  const hostname = String(req.headers.host || '').replace(/:\d+$/, '').toLowerCase();
+  return secureRequest(req) || LOCAL_HOSTS.has(hostname);
+}
+
+function sessionCookieAttributes(req) {
+  return sessionCookieName(req) === FRAME_SESSION_COOKIE
+    ? 'HttpOnly; Path=/; SameSite=None; Secure; Partitioned'
+    : `HttpOnly; SameSite=Lax; Path=/${secureRequest(req) ? '; Secure' : ''}`;
+}
+
 function setSessionCookie(req, res, token, maxAge) {
-  res.setHeader('Set-Cookie', `kh_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureRequest(req) ? '; Secure' : ''}`);
+  res.setHeader('Set-Cookie', `${sessionCookieName(req)}=${encodeURIComponent(token)}; ${sessionCookieAttributes(req)}; Max-Age=${maxAge}`);
 }
 
 function clearSessionCookie(req, res) {
-  res.setHeader('Set-Cookie', `kh_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureRequest(req) ? '; Secure' : ''}`);
+  res.setHeader('Set-Cookie', `${sessionCookieName(req)}=; ${sessionCookieAttributes(req)}; Max-Age=0`);
 }
 
 function isPublicPath(pathname) {
@@ -258,6 +336,7 @@ async function handleGovernedRequest(req, res) {
   req.requestId = requestId;
   require('../governance/context').current().requestId = requestId;
   res.setHeader('X-Request-Id', requestId);
+  routeClient(req);
   const allowedOrigin = configuredOrigin(req);
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
@@ -278,15 +357,36 @@ async function handleGovernedRequest(req, res) {
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const pathname = parsedUrl.pathname;
-  if (['GET', 'HEAD'].includes(req.method) && ['/login.html', '/login/'].includes(pathname)) {
-    res.writeHead(308, { Location: '/login' + parsedUrl.search });
+  const pageRequest = ['GET', 'HEAD'].includes(req.method);
+  // Pages live under a client prefix: / opens the chat client, old admin links move to /admin.
+  if (pageRequest && !req.khPrefixed) {
+    const login = ['/login', '/login.html', '/login/'].includes(pathname);
+    const location = pathname === '/' ? CHAT_CLIENT_PATH
+      : login ? ADMIN_CLIENT_PATH + '/login' + parsedUrl.search
+        : FRONTEND_ROUTES.has(pathname) || pathname === '/index.html'
+          ? ADMIN_CLIENT_PATH + (pathname === '/index.html' ? '' : pathname) + parsedUrl.search : '';
+    if (location) { res.writeHead(login ? 308 : 302, { Location: location }); res.end(); return; }
+  }
+  // The chat client has only its chat page and login page; the admin pages stay in the admin app.
+  if (pageRequest && req.khClient === 'chat'
+    && (pathname === '/index.html' || (FRONTEND_ROUTES.has(pathname) && pathname !== '/') || ['/login.html', '/login/'].includes(pathname))) {
+    res.writeHead(302, { Location: CHAT_CLIENT_PATH + chatEmbedQuery(parsedUrl) });
+    res.end();
+    return;
+  }
+  if (pageRequest && req.khClient === 'admin' && ['/login.html', '/login/', '/index.html'].includes(pathname)) {
+    res.writeHead(308, { Location: ADMIN_CLIENT_PATH + (pathname === '/index.html' ? '' : '/login') + parsedUrl.search });
     res.end();
     return;
   }
   const sessionToken = getSessionToken(req);
-  const currentAccount = authService.getAccountBySession(sessionToken);
+  const client = req.khClient === 'chat' ? 'chat' : 'admin';
+  // An account limited to the other client counts as signed out here.
+  const sessionAccount = authService.getAccountBySession(sessionToken);
+  const currentAccount = sessionAccount && authService.canUseClient(sessionAccount, client) ? sessionAccount : null;
   if (currentAccount) require('../governance/context').setPrincipal({ subject: `account:${currentAccount.id}`, role: currentAccount.role, permissions:currentAccount.permissions, dataAccess:currentAccount.dataAccess, tenantId: currentAccount.tenantId, channel: 'chat' }, () => {
-    const account = authService.getAccountBySession(sessionToken, { touch: false });
+    const found = authService.getAccountBySession(sessionToken, { touch: false });
+    const account = found && authService.canUseClient(found, client) ? found : null;
     return account ? { subject: `account:${account.id}`, role: account.role, permissions:account.permissions, dataAccess:account.dataAccess, tenantId: account.tenantId, channel: 'chat' } : null;
   });
   // Keep the browser cookie aligned with the server-side sliding session.
@@ -327,13 +427,26 @@ async function handleGovernedRequest(req, res) {
 
   if (pathname === '/api/auth/login' && req.method === 'POST') {
     try {
-      const { username, password } = await readJsonBody(req);
+      const { username, password, framed } = await readJsonBody(req);
+      const previousToken = getSessionToken(req);
       const result = authService.login(username, password);
       if (!result) {
         res.writeHead(401, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: 'Sai tài khoản hoặc mật khẩu.' }));
         return;
       }
+      if (!authService.canUseClient(result.account, client)) {
+        authService.logout(result.token);
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=UTF-8' });
+        res.end(JSON.stringify({ status: 'error', message: client === 'chat'
+          ? 'Tài khoản này chỉ được dùng trang quản lý.'
+          : 'Tài khoản này chỉ được dùng trang trò chuyện. Hãy đăng nhập tại ' + CHAT_CLIENT_PATH + '/login.' }));
+        return;
+      }
+      // Both clients share this login. Signing in ends the browser's earlier session (for
+      // example an admin session when a chat-only account signs in at /chat).
+      if (previousToken && previousToken !== result.token) authService.logout(previousToken);
+      req.khSessionCookie = framed === true && req.khClient === 'chat' && canSetFrameCookie(req) ? FRAME_SESSION_COOKIE : SESSION_COOKIE;
       setSessionCookie(req, res, result.token, result.maxAge);
       loggerService.addLog('SUCCESS', 'Authentication', `Đăng nhập thành công: ${result.account.username}`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -359,7 +472,7 @@ async function handleGovernedRequest(req, res) {
       res.end(JSON.stringify({ status: 'error', message: 'UNAUTHENTICATED' }));
       return;
     }
-    res.writeHead(302, { Location: '/login' });
+    res.writeHead(302, { Location: req.khClient === 'chat' ? CHAT_CLIENT_PATH + '/login' + chatEmbedQuery(parsedUrl) : ADMIN_CLIENT_PATH + '/login' });
     res.end();
     return;
   }
@@ -369,7 +482,7 @@ async function handleGovernedRequest(req, res) {
     res.end(JSON.stringify({ status: 'error', message: 'FORBIDDEN', requestId }));
     return;
   }
-  if (!require('../services/account_access').allowed(currentAccount,pathname)) {
+  if (!require('../services/account_access').allowed(currentAccount, req.khClient === 'chat' && pathname === '/' ? CHAT_CLIENT_PATH : pathname)) {
     res.writeHead(403, { 'Content-Type':'application/json; charset=UTF-8' }); res.end(JSON.stringify({message:'Bạn chưa được cấp quyền sử dụng chức năng này.'})); return;
   }
 
@@ -493,7 +606,7 @@ async function handleGovernedRequest(req, res) {
     return;
   }
   if (currentAccount && pathname === '/login') {
-    res.writeHead(302, { Location: '/' });
+    res.writeHead(302, { Location: req.khClient === 'chat' ? CHAT_CLIENT_PATH + chatEmbedQuery(parsedUrl) : ADMIN_CLIENT_PATH });
     res.end();
     return;
   }
@@ -1075,7 +1188,7 @@ async function handleGovernedRequest(req, res) {
       if (sessionId) embedChatService.touchSession(authorization.config, sessionId, visitorIdentity, authorization.origin);
       if (body.presence === true) {
         res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8'});
-        res.end(JSON.stringify({status:'success'})); return;
+        res.end(JSON.stringify({status:'success',mode:embedChatService.normalizeMode(authorization.config.mode)})); return;
       }
       if(body.files || body.batchId) {
         const uploadOwner=JSON.stringify([req.storageOwner,visitorIdentity?.id||sessionId]);
@@ -2446,7 +2559,14 @@ async function handleGovernedRequest(req, res) {
 
   const isFrontendRoute = req.method === 'GET' && FRONTEND_ROUTES.has(pathname);
   const isLoginRoute = ['GET', 'HEAD'].includes(req.method) && pathname === '/login';
-  let filePath = path.join(FRONTEND_DIR, isLoginRoute ? 'login.html' : isFrontendRoute ? 'index.html' : pathname);
+  const isChatPage = req.khClient === 'chat' && req.method === 'GET' && pathname === '/';
+  const isChatLogin = req.khClient === 'chat' && isLoginRoute;
+  const isAdminPage = req.khClient === 'admin' && isFrontendRoute;
+  // Read the embed settings here, inside the request: app storage is not available in the file callback.
+  const chatFramePolicy = isChatPage || isChatLogin ? `frame-ancestors ${chatFrameAncestors(parsedUrl)}` : '';
+  const filePath = isLoginRoute ? path.join(CLIENT_DIRS[req.khClient], 'login.html')
+    : isChatPage || isAdminPage ? path.join(CLIENT_DIRS[req.khClient], 'index.html')
+      : resolveStaticFile(req.khClient, pathname);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
@@ -2461,6 +2581,7 @@ async function handleGovernedRequest(req, res) {
       }
     } else {
       const headers = { 'Content-Type': contentType };
+      if (chatFramePolicy) headers['Content-Security-Policy'] = chatFramePolicy;
       if (isLoginRoute) {
         try {
           const { version } = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8'));
@@ -2472,7 +2593,7 @@ async function handleGovernedRequest(req, res) {
           return;
         }
       }
-      if (path.basename(filePath) === 'index.html') {
+      if (isAdminPage) {
         content = require('../services/dashboard_shell').render(content.toString('utf8'), pathname);
       }
       if (/\.(?:html|js|css)$/i.test(filePath)) {

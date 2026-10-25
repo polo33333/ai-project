@@ -240,7 +240,7 @@ main.main-content.chat-workspace-page {
 
 /* One compact composer row, with model selection on the right. */
 #view-page_chat .page-chat-composer-area { position:absolute; inset-inline:0; bottom:0; margin-inline:auto; z-index:4; box-sizing:border-box; width:100%; max-width:calc(var(--chat-content-width) + 2 * var(--chat-gutter)); align-self:center; flex:0 0 auto; padding:10px var(--chat-gutter) 18px !important; background:transparent !important; box-shadow:none; pointer-events:none; }
-#view-page_chat .page-chat-composer-area :is(.page-chat-composer,.chat-scroll-activity,#quick-prompts-bar > button,#chat-session-limit-notice) { pointer-events:auto; }
+#view-page_chat .page-chat-composer-area :is(.page-chat-composer,.chat-scroll-activity,.usage-banner,#quick-prompts-bar > button,#chat-session-limit-notice) { pointer-events:auto; }
 #view-page_chat .page-chat-disclaimer { flex:0 0 auto; box-sizing:border-box; width:100%; max-width:var(--chat-content-width); margin:auto auto 0; padding-top:24px; color:var(--conversation-muted); text-align:center; font-size:11px; font-weight:400; line-height:1.5; text-wrap:balance; }
 #page-chat-messages-container:has(> .chat-thread:empty) > .page-chat-disclaimer { display:none; }
 #view-page_chat #quick-prompts-bar { position:static; inset:auto; z-index:auto; margin:0 0 8px; }

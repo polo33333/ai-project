@@ -93,3 +93,13 @@ test('resetting a user clears only their current usage and lets them ask again',
  assert.equal((await service.limits()).find(item=>item.targetId==='u1').tokenLimit,100);
  await assert.rejects(service.resetUsage({scope:'team',targetId:'x'}),/không hợp lệ/);
 });
+
+test('account quota admission works before a provider is selected and still enforces the account limit', async t => {
+ const service=isolated(t);
+ await service.setLimit({scope:'account',targetId:'u1',period:'day',tokenLimit:100},'admin');
+ await service.check({accountId:'u1'});
+ await service.record({accountId:'u1',tokens:85});
+ await service.check({accountId:'u1'});
+ await service.record({accountId:'u1',tokens:15});
+ await assert.rejects(service.check({accountId:'u1'}),error=>error.code==='AI_ACCOUNT_QUOTA');
+});

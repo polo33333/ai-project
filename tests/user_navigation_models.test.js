@@ -17,7 +17,7 @@ test('User chat selector reads a minimal model catalog while admin provider APIs
   grants=[];assert.equal((await fetch(base+'/api/chat/providers')).status,403);
 });
 test('sidebar hides empty sections and restores them when a permitted item appears',()=>{
-  const source=fs.readFileSync('src/frontend/js/app.js','utf8');
+  const source=fs.readFileSync('src/frontend/shared/js/app.js','utf8');
   const sections=[{children:[{hidden:true,style:{}},{hidden:true,style:{}}]},{children:[{hidden:false,style:{}}]},{children:[{hidden:false,style:{display:'none'}}]}];
   sections.forEach(s=>s.querySelectorAll=()=>s.children);
   const context={window:{},document:{querySelectorAll:()=>sections}};vm.createContext(context);
@@ -26,7 +26,7 @@ test('sidebar hides empty sections and restores them when a permitted item appea
   sections[0].children[0].hidden=false;context.window.refreshSidebarGroups();assert.equal(sections[0].hidden,false);
 });
 test('User dashboard loads the safe model catalog and skips sources for functions not granted',async()=>{
-  const source=fs.readFileSync('src/frontend/js/modules/analytics.js','utf8'),calls=[];
+  const source=fs.readFileSync('src/frontend/admin-client/js/modules/analytics.js','utf8'),calls=[];
   const context={window:{currentAccountRole:'user',currentAccountPermissions:['dashboard.read']},fetch:async path=>{
     calls.push(path);return {ok:true,json:async()=>path==='/api/chat/providers'?{providers:[{id:'model',name:'Configured model',isActive:true}]}:{}};
   }};

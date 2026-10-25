@@ -10,7 +10,10 @@ function loadEnvironment(root = path.resolve(__dirname, '../../../..')) {
     const file = path.join(root, name);
     if (!fs.existsSync(file)) continue;
     for (const [key, value] of Object.entries(parseEnv(fs.readFileSync(file, 'utf8')))) {
-      if (process.env[key] === undefined) process.env[key] = value;
+      if (process.env[key] !== undefined) continue;
+      // Relative paths in env files belong to the project root, not the caller's cwd.
+      const isPath = /_(DIR|FILE)$/.test(key) && value && !path.isAbsolute(value);
+      process.env[key] = isPath ? path.resolve(root, value) : value;
     }
   }
 }

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/chat_tool_ui.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../src/frontend/shared/js/chat_tool_ui.js'), 'utf8');
 function component() { const context = vm.createContext({ Intl }); vm.runInContext(source, context); return context.ChatToolUI; }
 
 test('shared tools UI handles empty data, both API name formats, zero rows and zero duration', () => {

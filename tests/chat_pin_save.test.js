@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const source = require('node:fs').readFileSync('src/frontend/js/modules/page_chat.js', 'utf8');
+const source = require('node:fs').readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
 
 test('unpin waits for persistence, prevents duplicate clicks and restores state on failure', async () => {
   for (const success of [false, true]) {

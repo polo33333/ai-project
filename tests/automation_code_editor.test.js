@@ -6,9 +6,9 @@ test('SQL editor mouse caret, highlighted selection and deletion agree in busine
   const browser=await chromium.launch({executablePath:process.env.TEST_BROWSER_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});t.after(()=>browser.close());
   const page=await browser.newPage({viewport:{width:900,height:600}});
   await page.goto('about:blank');
-  const source=fs.readFileSync('src/frontend/js/modules/workflow_plugins.js','utf8').replace('  function field(', '  window.testCodeField=codeField;\n  function field(');
+  const source=fs.readFileSync('src/frontend/shared/js/modules/workflow_plugins.js','utf8').replace('  function field(', '  window.testCodeField=codeField;\n  function field(');
   await page.addScriptTag({content:source});
-  for(const name of ['styles.css','workspace.css','workflow_plugins.css'])await page.addStyleTag({content:fs.readFileSync('src/frontend/css/'+name,'utf8')});
+  for(const name of ['styles.css','workspace.css','workflow_plugins.css'])await page.addStyleTag({content:fs.readFileSync('src/frontend/shared/css/'+name,'utf8')});
   const sql="SELECT TOP 50 e.[ContractNo], e.[ContractDate], e.[EmployeeID], e.[CustomerID], e.[TotalArea], e.[Qty], e.[StartDate], e.[EndDate], e.[StatusID], e.[IsVAT], e.[Note], e.[CompanyID] FROM [dbo].[T_Contract] WHERE e.[ContractNo] = @query";
   for(const dialog of ['wp-business-editor','wp-scope-editor']){
     await page.evaluate(({sql,dialog})=>{

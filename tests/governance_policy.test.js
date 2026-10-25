@@ -57,7 +57,7 @@ test('bounded admission cancels queued work and always releases running slots', 
   await assert.rejects(gate.run(async () => { throw new Error('failure'); }), /failure/); assert.equal(gate.active, 0);
 });
 test('answer UI escapes untrusted limitations and keeps pending/error semantics', () => {
-  const ui = require('../src/frontend/js/answer_ui');
+  const ui = require('../src/frontend/shared/js/answer_ui');
   assert.equal(ui.render({ schemaVersion: '1', disposition: 'partial' }), '');
   const html = ui.render({ schemaVersion: '1', disposition: 'error', claims: [], limitations: ['<img src=x onerror=alert(1)>'] });
   assert.ok(html.includes('Chưa thể hoàn tất')); assert.ok(!html.includes('<img')); assert.ok(html.includes('&lt;img'));

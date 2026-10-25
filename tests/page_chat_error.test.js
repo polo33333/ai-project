@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 test('chat displays backend failure in an assistant bubble and releases composer', async () => {
-  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/page_chat.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/shared/js/modules/page_chat.js'), 'utf8');
   const body = source.slice(source.indexOf('async function sendPageChatMessage('), source.indexOf('async function populateChatKnowledgeSources()'));
   const messages = [];
   const node = () => ({ style: {}, innerHTML: '', get outerHTML() { return this.innerHTML; }, remove() {} });

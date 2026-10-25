@@ -16,7 +16,7 @@ test('only a verified analytical limitation is usable as a partial retry replace
 
 test('the API payload carries the verified-partial disposition to the retry button',()=>{
  const router=fs.readFileSync('src/backend/routes/router.js','utf8');
- const frontend=fs.readFileSync('src/frontend/js/modules/page_chat.js','utf8');
+ const frontend=fs.readFileSync('src/frontend/shared/js/modules/page_chat.js','utf8');
  const sandbox=vm.createContext({selectUserFacingSqlExecutions:executions=>executions||[],buildChatDiagnostics:()=>null,
   require:name=>name.endsWith('chat_retry_policy')?{disposition}:{createAnswerEnvelope:()=>({})}});
  vm.runInContext(router.slice(router.indexOf('function buildChatClientPayload('),router.indexOf('function parseCookies(')),sandbox);

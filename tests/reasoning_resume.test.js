@@ -5,7 +5,7 @@ function fixture(){
   const follower={following:true,sync(){if(this.following)container.scrollTop=container.scrollHeight-container.clientHeight},resume(){this.following=true;this.sync()}};
   const document={hidden:false,addEventListener:(name,fn)=>events[name]=fn,querySelectorAll:()=>[container]};
   const window={addEventListener:(name,fn)=>events[name]=fn,ChatStream:{followResponse:()=>follower}};
-  vm.runInNewContext(fs.readFileSync('src/frontend/js/chat_reasoning_ui.js','utf8'),{window,document,requestAnimationFrame:fn=>frames.push(fn)});
+  vm.runInNewContext(fs.readFileSync('src/frontend/shared/js/chat_reasoning_ui.js','utf8'),{window,document,requestAnimationFrame:fn=>frames.push(fn)});
   return {window,document,container,inner,follower,root,events,flush(){while(frames.length)frames.shift()()}};
 }
 test('returning to a streaming response resumes both outer chat and reasoning at the latest text',()=>{

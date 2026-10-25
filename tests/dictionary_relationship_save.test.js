@@ -11,7 +11,7 @@ function uiFixture() {
  const target={tableId:'target',tableName:'Employees',columns:[{columnName:'EmployeeID',dataType:'INT',isPrimaryKey:true},{columnName:'EmployeeName',dataType:'NVARCHAR'}]};
  const relation={id:'relation-1',sourceTableId:'source',targetTableId:'target',sourceTable:'Invoices',targetTable:'Employees',revision:1,status:'suggested',cardinality:'many-to-one',columnPairs:[{sourceColumn:'EmployeeID',targetColumn:'EmployeeID'}],displayColumn:''};
  const c={window:{},document:{addEventListener(){},getElementById:()=>null,querySelectorAll:selector=>selector.includes('.dictionary-field-relation-editor')?[editor]:[]},console,showToast(){}};
- vm.createContext(c);vm.runInContext(fs.readFileSync('src/frontend/js/modules/dictionary.js','utf8'),c);
+ vm.createContext(c);vm.runInContext(fs.readFileSync('src/frontend/admin-client/js/modules/dictionary.js','utf8'),c);
  Object.assign(c.window,{groupedTablesData:[source,target],tableRelationshipsData:[relation],selectedDictionaryTableId:'source',selectedDictionaryTableName:'Invoices'});
  c.renderDictionaryQuality=()=>{};c.renderDataDictionary=()=>{};c.renderDictionaryDrawer=()=>{};c.window.refreshDictionarySyncStatus=()=>{};
  editor.dataset.initialState=c.readFieldRelationshipState(editor);

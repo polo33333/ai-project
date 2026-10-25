@@ -12,6 +12,8 @@ function sanitizeProgressEvent(event = {}) {
   };
   if (event.iteration != null) clean.iteration = Number(event.iteration) || 0;
   if (event.toolName) clean.toolName = String(event.toolName).slice(0, 80);
+  if (event.workflowName) clean.workflowName = String(event.workflowName).slice(0, 160);
+  if (event.templateId) clean.templateId = String(event.templateId).slice(0, 120);
   if (event.rowCount != null) clean.rowCount = Math.max(0, Number(event.rowCount) || 0);
   if (event.durationMs != null) clean.durationMs = Math.max(0, Number(event.durationMs) || 0);
   if (event.providerName) clean.providerName = String(event.providerName).slice(0, 100);
@@ -35,7 +37,10 @@ function toolLabel(toolName, phase = 'running', rowCount = null) {
     get_current_datetime: ['Đang kiểm tra thời gian hệ thống', 'Đã lấy thời gian hệ thống'],
     calculate_expression: ['Đang thực hiện phép tính', 'Đã tính toán xong'],
     calculate_stats: ['Đang tính toán thống kê', 'Đã tính toán thống kê'],
-    export_data: ['Đang xuất dữ liệu', 'Đã xuất dữ liệu']
+    export_data: ['Đang xuất dữ liệu', 'Đã xuất dữ liệu'],
+    list_workflows: ['Đang tìm quy trình nghiệp vụ phù hợp', 'Đã tìm quy trình nghiệp vụ'],
+    run_workflow: ['Đang chạy quy trình nghiệp vụ', 'Đã chạy quy trình nghiệp vụ'],
+    resume_workflow: ['Đang tiếp tục quy trình nghiệp vụ', 'Đã tiếp tục quy trình nghiệp vụ']
   };
   const pair = labels[toolName] || [`Đang chạy ${toolName}`, `Đã chạy ${toolName}`];
   const suffix = rowCount != null ? ` · ${rowCount} dòng` : '';

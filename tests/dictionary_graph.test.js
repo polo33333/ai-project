@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 test('crossing masks use pill outlines and exclude both relationship endpoints', () => {
   const context = vm.createContext({ window: { addEventListener() {} }, document: { addEventListener() {} } });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8'), context);
   const markup = vm.runInContext(`dictionaryGraphCrossingRects([{name:'A',x:0,y:0,width:196,height:64},{name:'B',x:220,y:0,width:196,height:64},{name:'C',x:440,y:0,width:196,height:64}], 'A', 'C')`, context);
   assert.equal(markup, '<rect x="220" y="0" width="196" height="64" rx="32"></rect>');
   assert.equal(vm.runInContext(`dictionaryGraphCrossingRects([{name:'A'},{name:'C'}], 'A', 'C')`, context), '');
@@ -16,7 +16,7 @@ test('crossing masks use pill outlines and exclude both relationship endpoints',
 
 test('mapping badges avoid nodes, earlier labels and canvas edges', () => {
   const context = vm.createContext({ window: { addEventListener() {} }, document: { addEventListener() {} } });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8'), context);
   const occupied = [{ x: 150, y: 100, width: 196, height: 64 }];
   context.occupied = occupied;
   const box = vm.runInContext('findDictionaryGraphLabelPosition({x:240,y:140},180,30,{width:800,height:500},occupied)', context);
@@ -33,7 +33,7 @@ test('fullscreen requests browser fullscreen and selecting a table keeps it open
   const panel = { classList: { contains: name => classes.has(name), toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } }, async requestFullscreen(value) { options = value; document.fullscreenElement = panel; } };
   const document = { addEventListener() {}, getElementById(id) { return id === 'dictionary-graph-panel' ? panel : null; } };
   const context = vm.createContext({ window: { addEventListener() {} }, document, requestAnimationFrame() {} });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8'), context);
   vm.runInContext('focusDictionaryGraphTable = () => {}; openDictionaryDrawer = () => { throw new Error("must keep fullscreen"); };', context);
   await vm.runInContext('toggleDictionaryGraphFullscreen()', context);
   assert.equal(options.navigationUI, 'hide');
@@ -52,7 +52,7 @@ test('fullscreen falls back to an expanded panel when browser permission is unav
   const button = { setAttribute(name, value) { attributes[name] = value; } };
   const document = { addEventListener() {}, getElementById(id) { return id === 'dictionary-graph-panel' ? panel : id === 'dictionary-graph-fullscreen' ? button : null; } };
   const context = vm.createContext({ window: { addEventListener() {} }, document, requestAnimationFrame() {} });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8'), context);
   await vm.runInContext('toggleDictionaryGraphFullscreen()', context);
   assert.ok(classes.has('is-fullscreen'));
   assert.equal(attributes['aria-pressed'], 'true');
@@ -63,7 +63,7 @@ test('fullscreen falls back to an expanded panel when browser permission is unav
 
 test('cluster layout is stable and keeps pills apart', () => {
   const context = vm.createContext({ document: { addEventListener() {} }, window: { addEventListener() {} }, console });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8'), context);
   const result = vm.runInContext(`buildDictionaryClusterLayout(Array.from({length:24}, (_,i) => ({tableName:'T'+i,domain:'domain'+Math.floor(i/8)})), [])`, context);
   const points = [...result.positions.values()];
   for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++) {
@@ -77,7 +77,7 @@ test('cluster layout is stable and keeps pills apart', () => {
 test('dictionary overview graph only uses active verified relationships', () => {
   const window = { addEventListener() {} };
   const context = vm.createContext({ document: { addEventListener() {} }, window, console });
-  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8');
   vm.runInContext(source, context);
   window.tableRelationshipsData = [
     { id: 'verified', status: 'verified', isActive: true },
@@ -91,7 +91,7 @@ test('dictionary overview graph only uses active verified relationships', () => 
 
 test('overview packs forty-one tables and many small domains into a landscape canvas', () => {
   const context = vm.createContext({ document: { addEventListener() {} }, window: { addEventListener() {} }, console });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/dictionary-graph.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/dictionary-graph.js'), 'utf8'), context);
   const result = vm.runInContext(`buildDictionaryClusterLayout([6,5,4,4,3,3,3,3,2,2,1,1,1,1,1,1].flatMap((count,domain) => Array.from({length:count}, (_,i) => ({tableName:domain+'_'+i,domain:String(domain)}))), [], 1400, 800)`, context);
   assert.equal(result.positions.size, 41);
   assert.ok(Math.min(1360 / result.width, 760 / result.height) >= .8);

@@ -13,7 +13,7 @@ test('slow operations do not delay resource selection or metric loading',async()
  const events=[],elements=new Map();
  const element=()=>({children:[],value:'',textContent:'',replaceChildren(...nodes){this.children=nodes;},append(...nodes){this.children.push(...nodes);}});
  const context=vm.createContext({window:{},document:{querySelectorAll:()=>[],getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},createElement:element},fetch:async()=>{events.push('resources');return {ok:true,json:async()=>({resources:[],providers:[]})};}});
- vm.runInContext(fs.readFileSync('src/frontend/js/modules/governance.js','utf8'),context);
+ vm.runInContext(fs.readFileSync('src/frontend/admin-client/js/modules/governance.js','utf8'),context);
  let finishOperations;
  context.window.loadAgentOperations=()=>{events.push('operations');return new Promise(resolve=>finishOperations=resolve);};
  context.window.loadGovernedMetrics=async()=>{events.push('metrics');};

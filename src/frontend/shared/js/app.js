@@ -257,7 +257,7 @@ async function loadCurrentAccount() {
     const res = await fetch('/api/auth/me', { signal: globalThis.AbortSignal?.timeout?.(10000) });
     const data = await res.json();
     if (!data.authenticated) {
-      window.location.href = '/login';
+      window.location.href = '/admin/login';
       return;
     }
     const nameEl = document.getElementById('account-display-name');
@@ -285,7 +285,7 @@ async function loadCurrentAccount() {
     if (nameEl) nameEl.textContent = data.account?.displayName || data.account?.username || 'Admin AI';
     if (roleEl) roleEl.textContent = data.account?.roleLabel || (data.account?.role === 'admin' ? 'Quản trị viên' : 'Thành viên');
   } catch {
-    window.location.href = '/login';
+    window.location.href = '/admin/login';
   }
 }
 
@@ -311,7 +311,7 @@ async function refreshActiveSession() {
     if (!response.ok) return;
     const data = await response.json();
     if (!data.authenticated && !window.pageChatRequestController && !window.copilotRequestController) {
-      window.location.href = '/login';
+      window.location.href = '/admin/login';
     }
   } catch {
     // A temporary network interruption must not sign out an active user.
@@ -346,13 +346,17 @@ async function saveAccountProfile(event) {
   try {
     const response=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:document.getElementById('account-profile-name').value,email:document.getElementById('account-profile-email').value.trim()})});
     const data=await response.json();if(!response.ok)throw new Error(data.message||'Không lưu được tài khoản.');
-    message.textContent='Đã lưu thông tin tài khoản.';await loadCurrentAccount();
+    message.textContent='Đã lưu thông tin tài khoản.';
+    if (isStandaloneChatPage) {
+      const refreshed = await fetch('/api/auth/me', {cache:'no-store'}).then(response => response.json());
+      if (refreshed.account) window.dispatchEvent(new CustomEvent('account-profile-updated', {detail:refreshed.account}));
+    } else await loadCurrentAccount();
   }catch(error){message.textContent=error.message;}finally{button.disabled=false;}
 }
 function closeChangePassword() {
   const modal=document.getElementById('change-password-modal');
   modal.classList.remove('show');modal.setAttribute('aria-hidden','true');modal.querySelectorAll('form').forEach(form=>form.reset());
-  document.getElementById('user-profile-btn')?.focus();
+  (document.getElementById('user-profile-btn') || document.querySelector('.kh-account-button'))?.focus();
 }
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&document.getElementById('change-password-modal')?.classList.contains('show')) closeChangePassword();
@@ -367,7 +371,7 @@ async function submitChangePassword(event) {
   try {
     const response=await fetch('/api/auth/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:document.getElementById('password-current').value,newPassword})});
     const data=await response.json();if(!response.ok)throw new Error(data.message||'Không thể đổi mật khẩu.');
-    closeChangePassword();window.location.href='/login';
+    closeChangePassword();window.location.href=isStandaloneChatPage ? '/chat/login' + window.location.search : '/admin/login';
   }catch(err){error.textContent=err.message;}finally{button.disabled=false;}
 }
 
@@ -417,7 +421,7 @@ async function performLogout() {
     } catch {
       // Continue logout even when browser storage is unavailable.
     }
-    window.location.replace('/login');
+    window.location.replace('/admin/login');
   } catch (cause) {
     const message = cause.name === 'AbortError'
       ? 'Máy chủ phản hồi chậm. Vui lòng thử đăng xuất lại.'
@@ -1380,8 +1384,12 @@ function initCopilotSloganRotation() {
   }, 3800);
 }
 
+// The full-screen chat page (/chat) reuses this file for shared helpers and starts itself.
+const isStandaloneChatPage = document.documentElement.dataset.page === 'chat';
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
+  if (isStandaloneChatPage) return;
   initCopilotSloganRotation();
   initAccountMenu();
   initPwaInstall();
@@ -1399,6 +1407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 window.addEventListener('popstate', () => {
+  if (isStandaloneChatPage) return;
   const pathTab = normalizeMainTabKey(window.location.pathname) || 'overview';
   if (pathTab !== window.activeMainTab) switchMainTab(pathTab);
 });

@@ -12,7 +12,7 @@ test('source pagination renders continuous row numbers, resets size and clamps a
     getElementById(id) { return id === 'db-sources-tbody' ? tbody : id === 'sql-pagination' ? pager : null; },
     createElement() { return { style: {}, classList: { add() {} } }; }
   } });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/sql_connector.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/sql_connector.js'), 'utf8'), context);
   context.window.dbSourcesData = Array.from({ length: 23 }, (_, i) => ({ id: `id${i}`, dbName: `DB${i}` }));
   vm.runInContext('changeDbSourcesPage(2)', context);
   assert.equal(tbody.rows.length, 10);

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function modalFactory() {
-  const source = fs.readFileSync('src/frontend/js/modules/workflow_plugins.js', 'utf8');
+  const source = fs.readFileSync('src/frontend/shared/js/modules/workflow_plugins.js', 'utf8');
   const start = source.indexOf('  function modal(');
   const end = source.indexOf('  async function aiConnectionDialog(', start);
   const document = {

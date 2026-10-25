@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
-const source = fs.readFileSync(require('node:path').join(__dirname, '../src/frontend/js/modules/page_chat.js'), 'utf8');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../src/frontend/shared/js/modules/page_chat.js'), 'utf8');
 
 test('time markers group continuous messages and separate long gaps or a new day', () => {
   const sandbox = vm.createContext({});

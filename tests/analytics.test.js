@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 function analyticsContext(globals = {}) {
   const context = vm.createContext({ window: {}, Intl, Date, console, ...globals });
-  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/js/modules/analytics.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/frontend/admin-client/js/modules/analytics.js'), 'utf8');
   vm.runInContext(source, context);
   return context;
 }
