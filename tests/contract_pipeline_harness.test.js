@@ -80,7 +80,7 @@ test('an export request writes every verified row and links the file', async t =
   assert.match(result.replyText, /\/api\/exports\/file\.xlsx/);
 });
 
-async function runForm(t, { contracts = [], answers = [], context = {}, enabledToolNames, question, rows = [], pendingInput = null }) {
+async function runForm(t, { contracts = [], answers = [], context = {}, enabledToolNames, question, rows = [], pendingInput = null, tools = {} }) {
   process.env.HARNESS_PIPELINE = 'v2';
   t.after(() => { delete process.env.HARNESS_PIPELINE; });
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [{ ...table,
@@ -90,14 +90,16 @@ async function runForm(t, { contracts = [], answers = [], context = {}, enabledT
   const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
   const Base = require('../src/backend/agent_core/tools/base_tool');
   const Manager = require('../src/backend/agent_core/tools/tool_manager');
-  const manager = new Manager(), seen = { resumes: [], exports: [] };
+  const manager = new Manager(), seen = { resumes: [], exports: [], prompts: [] };
   const register = (name, run) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = run; manager.registerTool(tool); };
   register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['TestRows'], tableDirectory: [{ tableName: 'TestRows' }], intentCatalog: [], tables: [] }));
   register('execute_sql_query', async args => ({ sql: args.sql, rows }));
   register('resume_workflow', async args => { seen.resumes.push(args); return { runId: args.runId, execution: { id: args.runId, status: 'SUCCEEDED', name: 'Báo cáo' } }; });
   register('export_data', async args => { seen.exports.push(args); return { downloadUrl: `/api/exports/${args.filename}.xlsx` }; });
+  for (const [name, run] of Object.entries(tools)) register(name, run);
   const pendingContracts = [...contracts], pendingAnswers = [...answers];
-  const harness = new Harness({ toolManager: manager, dispatch: async (_provider, _messages, definitions) => {
+  const harness = new Harness({ toolManager: manager, dispatch: async (_provider, messages, definitions) => {
+    seen.prompts.push({ tool: definitions[0]?.function?.name || null, messages });
     if (definitions[0]?.function?.name === 'plan_query') return call('plan_query', pendingContracts.shift());
     return { content: pendingAnswers.shift() || '' };
   } });
@@ -142,4 +144,85 @@ test('one file per group is exported from the verified rows of each group', asyn
     contracts: [{ kind: 'data', root: 'TestRows', operation: 'list', output: { export: 'xlsx', splitBy: 'TestRows.Dept' } }] });
   assert.deepEqual(seen.exports.map(item => [item.filename, item.data.length]), [['Bao_cao_CSKH', 2], ['Bao_cao_Ky_thuat', 1]]);
   assert.match(result.replyText, /\[CSKH\]\(\/api\/exports\/Bao_cao_CSKH\.xlsx\) — 2 bản ghi/);
+});
+
+// Counts how many calls of the wrapped tools are in flight at once.
+function concurrency(names, delayMs, results) {
+  const state = { active: 0, peak: 0 };
+  const tools = Object.fromEntries(names.map(name => [name, async args => {
+    state.active++; state.peak = Math.max(state.peak, state.active);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    state.active--;
+    return results[name](args);
+  }]));
+  return { state, tools };
+}
+
+test('the workflow listing is read while schema retrieval runs', async t => {
+  const { state, tools } = concurrency(['search_schema', 'list_workflows'], 20, {
+    search_schema: () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['TestRows'], tableDirectory: [{ tableName: 'TestRows' }], intentCatalog: [], tables: [] }),
+    list_workflows: () => ({ workflows: [report] }) });
+  const { seen } = await runForm(t, { question: 'Cảm ơn bạn nhé', tools: { ...tools, run_workflow: async () => ({}) }, contracts: [{ kind: 'chat' }], answers: ['Rất vui được hỗ trợ bạn!'],
+    enabledToolNames: ['search_schema', 'execute_sql_query', 'list_workflows', 'run_workflow'] });
+  assert.equal(state.peak, 2);
+  assert.match(seen.prompts.find(item => item.tool === 'plan_query').messages.at(-1).content, /WORKFLOWS: /);
+});
+
+test('saved preferences reach the v2 contract and answer; the clock is kept apart from the stage rules', async t => {
+  const preference = { id: 'preference:1', kind: 'preference', data: { scope: 'personal', title: 'Đơn vị tiền', content: 'Hiển thị số tiền theo triệu đồng.', revision: 1 } };
+  const { result, seen } = await runForm(t, { question: 'Cảm ơn bạn nhé', contracts: [{ kind: 'chat' }], answers: ['Rất vui được hỗ trợ bạn!'],
+    tools: { list_workflows: async () => ({ workflows: [report] }), run_workflow: async () => ({}) },
+    enabledToolNames: ['search_schema', 'execute_sql_query', 'list_workflows', 'run_workflow'],
+    context: { resolutionContext: { candidates: [preference], recent: [], turns: [] } } });
+  assert.equal(result.trace.pipeline, 'v2');
+  const contract = seen.prompts.find(item => item.tool === 'plan_query').messages;
+  assert.match(contract.at(-1).content, /PREFERENCES .*Hiển thị số tiền theo triệu đồng/);
+  // The stage rules stay an unchanged first block that providers can cache.
+  assert.doesNotMatch(contract[0].content, /Authoritative backend request clock/);
+  assert.deepEqual(contract.map(message => message.role), ['system', 'system', 'user']);
+  assert.match(contract[1].content, /^Authoritative backend request clock/);
+  const chat = seen.prompts.find(item => item.tool === null).messages;
+  assert.ok(chat.some(message => message.role === 'system' && /PREFERENCES .*triệu đồng/.test(message.content)));
+});
+
+test('the request clock is a separate block for remote models and joins the single system message for local ones', async t => {
+  const { seen } = await runForm(t, { question: 'Cảm ơn bạn nhé', contracts: [{ kind: 'chat' }], answers: ['Rất vui được hỗ trợ bạn!'],
+    context: { lockProvider: true } });
+  assert.deepEqual(seen.prompts[0].messages.map(message => message.role), ['system', 'system', 'user']);
+  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const prompts = [];
+  const harness = new Harness({ toolManager: { getToolDefinitions: () => [], executeTool: async () => ({ success: false }) },
+    dispatch: async (_provider, messages) => { prompts.push(messages); return { content: 'Chào bạn.' }; } });
+  await harness.run({ userMessage: 'chào', provider: { id: 'local', executionClass: 'local' }, enabledToolNames: [],
+    context: { lockProvider: true, mode: 'general', requestPlan: { outputs: { data: false } } } });
+  for (const messages of prompts) {
+    assert.equal(messages[0].role, 'system');
+    assert.equal(messages.slice(1).some(message => message.role === 'system'), false);
+  }
+});
+
+test('group files are written together and names that fold alike stay distinct', async t => {
+  const rows = [{ ID: 1, Phòng: 'Phòng A' }, { ID: 2, Phòng: 'Phong A' }, { ID: 3, Phòng: 'Phòng A' }];
+  const exported = [];
+  const { state, tools } = concurrency(['export_data'], 20, { export_data: args => {
+    exported.push(args); return { downloadUrl: `/api/exports/${args.filename}.xlsx` }; } });
+  const { result } = await runForm(t, { question: 'Xuất danh sách mỗi phòng một file excel', rows, tools,
+    context: { requestPlan: { outputs: { data: true, export: true } } },
+    contracts: [{ kind: 'data', root: 'TestRows', operation: 'list', output: { export: 'xlsx', splitBy: 'TestRows.Dept' } }] });
+  assert.equal(state.peak, 2);
+  assert.deepEqual(exported.map(item => [item.filename, item.data.length]).sort(), [['Bao_cao_Phong_A', 2], ['Bao_cao_Phong_A_2', 1]]);
+  assert.ok(result.replyText.indexOf('[Phòng A]') < result.replyText.indexOf('[Phong A]'), 'links keep the group order');
+});
+
+test('a resume with nothing waiting points the repair at the finished workflow result', async t => {
+  const finished = { question: 'Báo cáo sản lượng 3 tháng', status: 'SUCCESS', dbSourceId: 's',
+    workflow: { runId: 'run-1', name: 'Báo cáo', field: 'rows', templateId: 'test/report' }, result: { rowCount: 2, columns: ['Tháng', 'Sản lượng'], preview: [['2025-01', 1], ['2025-02', 2]] } };
+  const { seen } = await runForm(t, { question: 'Vẽ biểu đồ cột cho kết quả trên', answers: ['Đây là kết quả.'],
+    contracts: [{ kind: 'resume', workflow: { inputs: { drawChart: true } } }, { kind: 'chat' }],
+    context: { resolutionContext: { candidates: [], recent: [], turns: [finished] } } });
+  const repair = seen.prompts.filter(item => item.tool === 'plan_query').at(-1).messages.at(-1).content;
+  // Rejected for the missing run, not for missing quotes, and told where the result is.
+  assert.match(repair, /V2_RESUME_UNAVAILABLE/);
+  assert.doesNotMatch(repair, /V2_WORKFLOW_EVIDENCE_MISSING/);
+  assert.match(repair, /kind=previous with previous\.turn=1/);
 });

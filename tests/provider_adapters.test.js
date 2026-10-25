@@ -40,3 +40,20 @@ test('adapters preserve HTTP status for recoverable fallback decisions', async t
     await assert.rejects(() => adapter({ baseUrl: 'https://test.invalid' }, [], []), error => error.status === 429);
   }
 });
+
+test('Anthropic caches the leading system block and counts cached prompt tokens as input', async t => {
+  let request;
+  t.mock.method(global, 'fetch', async (_, options) => { request = JSON.parse(options.body); return { ok: true, json: async () => ({
+    stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }],
+    usage: { input_tokens: 20, cache_read_input_tokens: 1500, cache_creation_input_tokens: 0, output_tokens: 5 } }) }; });
+  const messages = [{ role: 'system', content: 'rules' }, { role: 'user', content: 'go' }, { role: 'system', content: 'clock' }];
+  const response = await callAnthropic({ baseUrl: 'https://test.invalid' }, messages, []);
+  assert.deepEqual(request.system, [{ type: 'text', text: 'rules', cache_control: { type: 'ephemeral' } }, { type: 'text', text: 'clock' }]);
+  assert.deepEqual(request.messages, [{ role: 'user', content: 'go' }]);
+  assert.deepEqual(response.usage, { inputTokens: 1520, outputTokens: 5, totalTokens: 1525, cachedInputTokens: 1500, cacheWriteTokens: 0 });
+
+  process.env.ANTHROPIC_PROMPT_CACHE = 'false';
+  t.after(() => { delete process.env.ANTHROPIC_PROMPT_CACHE; });
+  await callAnthropic({ baseUrl: 'https://test.invalid' }, messages, []);
+  assert.equal(request.system[0].cache_control, undefined);
+});

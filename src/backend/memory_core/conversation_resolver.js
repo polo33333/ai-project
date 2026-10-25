@@ -1,6 +1,6 @@
 'use strict';
 const Ajv = require('ajv');
-const { normalizeAssistantResponse } = require('../agent_core/harness/tool_call_normalizer');
+const { normalizeAssistantResponse, parseJsonContent } = require('../agent_core/harness/tool_call_normalizer');
 const schema = { type: 'object', additionalProperties: false,
   required: ['relation', 'operation', 'cardinality', 'attributes', 'selectedIds', 'clarification', 'dataUse'], properties: {
     sourceScope: { enum: ['enterprise', 'external_current', 'general'], description: 'external_current for public current information requiring web sources; enterprise for configured internal data/schema/documents; general for other conversation.' },
@@ -20,7 +20,7 @@ const definition = { type: 'function', function: { name: 'resolve_conversation',
 function decode(response, candidates, { previousRequest = null } = {}) {
   const calls = normalizeAssistantResponse(response).calls;
   let value = calls?.find(call => call.name === 'resolve_conversation')?.arguments;
-  if (!value) { try { value = JSON.parse(response.content); } catch (_) {} }
+  if (!value) value = parseJsonContent(response.content);
   if (!validate(value)) throw Object.assign(new Error('MEMORY_RESOLUTION_SCHEMA_INVALID'), {
     code: 'MEMORY_RESOLUTION_SCHEMA_INVALID', validationErrors: validate.errors.map(item => ({ path: item.instancePath, keyword: item.keyword })) });
   const byId = new Map(candidates.map(item => [item.id, item]));

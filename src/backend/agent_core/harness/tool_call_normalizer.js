@@ -17,6 +17,16 @@ function jsonCandidates(content) {
   return [...new Set(candidates)];
 }
 
+// A structured answer the model wrote as text instead of a tool call, bare or
+// inside a ```json block. Returns the first candidate that is a JSON object.
+function parseJsonContent(content) {
+  for (const candidate of jsonCandidates(content)) {
+    const value = parseJson(candidate);
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  }
+  return undefined;
+}
+
 function normalizeOne(call, index = 0, source = 'native') {
   if (!call || typeof call !== 'object') return null;
   const fn = call.function || call.functionCall || call;
@@ -65,4 +75,4 @@ function normalizeAssistantResponse(response = {}) {
   return { kind: 'final', content: response.content || '', calls: [] };
 }
 
-module.exports = { normalizeAssistantResponse, parseJson };
+module.exports = { normalizeAssistantResponse, parseJson, parseJsonContent };

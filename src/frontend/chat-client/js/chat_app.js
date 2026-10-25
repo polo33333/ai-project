@@ -69,7 +69,6 @@
       </div>
       <nav class="kh-nav-actions" aria-label="Chức năng">
         ${navItem('fa-regular fa-pen-to-square', 'Trò chuyện mới', 'new-chat')}
-        ${navItem('fa-solid fa-magnifying-glass', 'Tìm kiếm đoạn chat', 'search')}
         ${navItem('fa-solid fa-gauge-high', 'Hạn mức sử dụng', 'usage', 'aria-haspopup="dialog"')}
       </nav>`);
     sidebar.insertAdjacentHTML('beforeend', `
@@ -102,6 +101,7 @@
     view.querySelector('.chat-main')?.insertAdjacentHTML('afterbegin', `
       <header class="kh-chat-topbar">
         <button type="button" class="kh-icon-btn kh-nav-open-btn" data-kh-action="toggle-nav" title="Mở thanh bên" aria-label="Mở thanh bên" aria-controls="kh-chat-nav" aria-expanded="false"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+        <button type="button" class="kh-icon-btn kh-topbar-search" data-kh-action="search" title="Tìm cuộc trò chuyện" aria-label="Tìm cuộc trò chuyện" aria-controls="kh-chat-nav"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button>
         <span class="kh-chat-topbar-title"></span>
         <button type="button" class="kh-usage-chip" data-kh-action="usage" hidden aria-haspopup="dialog"></button>
         <button type="button" class="kh-icon-btn kh-topbar-new" data-kh-action="new-chat" title="Trò chuyện mới" aria-label="Trò chuyện mới"><i class="fa-regular fa-pen-to-square" aria-hidden="true"></i></button>

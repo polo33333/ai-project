@@ -9,7 +9,9 @@ function operations(definition) {
 }
 function brief(definition) {
   return { templateId: definition.id, name: definition.name, description: definition.description?.slice(0, 300),
-    inputs: definition.inputs, operations: operations(definition), templateVersion: definition.packageVersion };
+    inputs: definition.inputs, operations: operations(definition), templateVersion: definition.packageVersion,
+    // Fields each input filters on, read from the workflow's executable SQL.
+    inputFields: require('../automation/sql_input_fields').inputFields(definition) };
 }
 function discover(definitions, { query = '', offset = 0, limit = 5, templateId } = {}) {
   // Ranking only changes order. Every authorized candidate remains discoverable.

@@ -71,6 +71,19 @@ function appendedMessages(base, proposed) {
   return null;
 }
 
+// Each request appends or completes its own turns in the turn log; keep both
+// sides' turns instead of letting one request's copy of the log win.
+function mergeTurns(base = [], proposed = [], fresh = []) {
+  const before = new Map(base.map(turn => [turn.id, turn]));
+  const merged = new Map(fresh.map(turn => [turn.id, turn]));
+  for (const turn of proposed) {
+    if (equal(before.get(turn.id), turn)) continue;
+    if (!merged.has(turn.id) || equal(before.get(turn.id), merged.get(turn.id))) merged.set(turn.id, turn);
+  }
+  const max = Math.max(4, Number.parseInt(process.env.AI_MEMORY_MAX_TURNS || '20', 10));
+  return [...merged.values()].sort((a, b) => String(a.at || '').localeCompare(String(b.at || ''))).slice(-max);
+}
+
 function mergeRecord(source, base, proposed, fresh) {
   if (equal(base, fresh)) return proposed;
   // Repeated identical updates/deletions are idempotent (e.g. concurrent log trimming).
@@ -84,11 +97,12 @@ function mergeRecord(source, base, proposed, fresh) {
       const configured = Math.max(4, Number(process.env.AI_MEMORY_MAX_MESSAGES || 40));
       const max = configured - configured % 2;
       const newer = String(proposed.updatedAt || '') >= String(fresh.updatedAt || '');
-      return { ...fresh, ...(newer ? proposed : {}), messages: messages.slice(-max) };
+      return { ...fresh, ...(newer ? proposed : {}), messages: messages.slice(-max), turns: mergeTurns(base?.turns, proposed.turns, fresh.turns) };
     }
     // Pending turns never erase an exchange committed by another request.
     if (base && equal(base.messages, proposed.messages)) {
-      return { ...fresh, pendingTurn: fresh.updatedAt > proposed.updatedAt ? fresh.pendingTurn : proposed.pendingTurn };
+      return { ...fresh, pendingTurn: fresh.updatedAt > proposed.updatedAt ? fresh.pendingTurn : proposed.pendingTurn,
+        turns: mergeTurns(base.turns, proposed.turns, fresh.turns) };
     }
   }
   if (source.table === 'auth_sessions' && base && base.accountId === fresh.accountId && fresh.accountId === proposed.accountId) {

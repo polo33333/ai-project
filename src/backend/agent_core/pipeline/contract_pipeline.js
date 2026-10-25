@@ -194,6 +194,11 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   const step = (type, data = {}) => trace.steps.push({ type, ...data });
   // 1. Schema retrieval is deterministic tool code, not a model round.
   const searchArgs = { query: question, request: { operation: 'list', attributes: [], presentation: 'unspecified' } };
+  // Authorized workflows are offered in the same contract call (tool code, no
+  // model). The listing does not depend on the schema, so both run together.
+  const listing = ['list_workflows', 'run_workflow'].every(name => toolContext.allowedToolNames?.includes(name))
+    ? toolManager.executeTool('list_workflows', { limit: 30 }, toolContext) : null;
+  listing?.catch(() => {}); // awaited below, only for a data question
   const search = await toolManager.executeTool('search_schema', searchArgs, { ...toolContext, governedController: true });
   toolCalls.push({ toolName: 'search_schema', args: searchArgs, success: search.success, result: search.result || null, error: search.error || null });
   if (!search.success || search.result?.mode !== 'data') return conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns: [] });
@@ -201,6 +206,7 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   // tables of the previous contract available alongside the new retrieval.
   const sameSource = item => !item?.dbSourceId || item.dbSourceId === search.result.dbSourceId;
   const turns = (context.resolutionContext?.turns || []).filter(sameSource).slice(-3);
+  await completeWorkflowTurns(turns, toolContext, step);
   const stored = context.resolutionContext?.previousRequest?.businessState?.v2 || null;
   const lastContractTurn = [...turns].reverse().find(turn => turn.contract?.root);
   const previous = lastContractTurn ? { contract: lastContractTurn.contract, question: lastContractTurn.question }
@@ -215,10 +221,9 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   let catalog = catalogApi.build(search.result, { include: previousTables });
   if (!catalog.tables.size) return { fallback: 'V2_SCHEMA_EMPTY' };
 
-  // Authorized workflows are offered in the same contract call (tool code, no model).
   let workflows = [];
-  if (['list_workflows', 'run_workflow'].every(name => toolContext.allowedToolNames?.includes(name))) {
-    const listed = await toolManager.executeTool('list_workflows', { limit: 30 }, toolContext);
+  if (listing) {
+    const listed = await listing;
     if (listed.success) workflows = listed.result?.workflows || [];
   }
 
@@ -229,10 +234,12 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     answer: turn.contract ? undefined : String(turn.reply || '').slice(0, 400),
     result: turn.result ? { columns: turn.result.columns, rowCount: turn.result.rowCount,
       rows: turn.result.preview.slice(0, 10).map((row, index) => [index + 1, ...row]) } : undefined }));
+  const preferences = require('./preferences').preferences(context);
   const messages = [{ role: 'system', content: RULES },
     { role: 'user', content: `TODAY: ${requestTime.today}\nCATALOG:\n${catalogApi.describe(catalog)}\n`
       + `OTHER TABLES (columns supplied on request): ${otherTables(search.result, catalog)}\n`
       + (workflows.length ? `WORKFLOWS: ${describeWorkflows(workflows)}\n` : '')
+      + (preferences ? `${preferences}\n` : '')
       + (pendingInput ? `PENDING: ${JSON.stringify({ workflow: pendingInput.name, missingInputs: Object.entries(pendingInput.inputs || {})
         .map(([key, slot]) => ({ key, label: slot.label || key, ask: slot.ask, type: slot.schema?.type || 'string' })) })}\n` : '')
       + (previousTurns.length ? `PREVIOUS (oldest first): ${JSON.stringify(previousTurns)}\n` : previous ? `PREVIOUS: ${JSON.stringify([previous])}\n` : '')
@@ -254,12 +261,18 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
         if (!toolContext.allowedToolNames?.includes('search_knowledge_base')) return { ...(await conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step })), contract };
         return { ...(await require('./conversation_answer').searchDocuments({ question, conversation, dispatch, plan, context, toolManager, toolContext, toolCalls, step })), contract };
       }
+      // Checked before the quotes: a repair round spent on quotes for a run that
+      // cannot be resumed is wasted.
+      if (contract.kind === 'resume' && !pendingInput) {
+        const finished = turns.findLastIndex(turn => turn.workflow);
+        throw Object.assign(new Error('V2_RESUME_UNAVAILABLE: no workflow is waiting for input; answer with another kind'
+          + (finished >= 0 ? `. PREVIOUS turn ${finished + 1} holds the completed workflow result: to chart or export it use kind=previous with previous.turn=${finished + 1}, previous.rows=[] and output.chart or output.export` : '')), { code: 'V2_RESUME_UNAVAILABLE' });
+      }
       // Inputs without their quote would be dropped and asked again: ask the model for the quotes instead.
       const unquoted = ['workflow', 'resume'].includes(contract.kind) ? Object.keys(contract.workflow?.inputs || {})
         .filter(name => typeof contract.workflow?.evidence?.[name] !== 'string' || !contract.workflow.evidence[name].trim()) : [];
       if (unquoted.length) throw Object.assign(new Error(`V2_WORKFLOW_EVIDENCE_MISSING: set workflow.evidence.<input> to the exact words of the question for ${unquoted.join(', ')}`), { code: 'V2_WORKFLOW_EVIDENCE_MISSING' });
       if (contract.kind === 'resume') {
-        if (!pendingInput) throw Object.assign(new Error('V2_RESUME_UNAVAILABLE: no workflow is waiting for input; answer with another kind'), { code: 'V2_RESUME_UNAVAILABLE' });
         const inputs = slotInputs(contract.workflow, pendingInput.inputs, question);
         if (!Object.keys(inputs).length) return { contract, status: 'CLARIFY', reply: `Để tiếp tục quy trình **${pendingInput.name}**, mình cần thêm:\n`
           + Object.entries(pendingInput.inputs || {}).map(([key, slot]) => `- ${slot.ask || slot.label || key}`).join('\n') };
@@ -340,6 +353,12 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   if (!compiled) return { fallback: lastError?.code || 'V2_CONTRACT_INVALID', contract };
   step('V2_COMPILED', { root: compiled.root, operation: compiled.operation, joins: compiled.joinPlan.edges.length, filters: compiled.requestFilters.length });
 
+  // An exclusion on a column that does not hold the value removes nothing yet
+  // looks applied ("trừ Demo3" on the code column). Move it to the column of
+  // the same table that holds the value, or say that nothing was excluded.
+  const excluded = await checkExclusions(compiled.exclusions || [], contract, catalog, toolManager, toolContext, step);
+  if (excluded.moved) compiled = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previousQuestions, resultValues });
+
   // 3. Execute through the governed SQL tool (permissions, security guard, completeness).
   const execute = async query => {
     const args = { sql: query.sql };
@@ -371,6 +390,10 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   // 5. Deterministic answer from the verified rows, then requested outputs
   // built from the same rows (a chart or file can never drift from the data).
   let reply = render(compiled, call, question), status = 'SUCCESS';
+  if (excluded.missing.length) reply += `\n\nKhông tìm thấy ${excluded.missing.map(value => `“${value}”`).join(', ')} trong dữ liệu nên không có bản ghi nào bị loại trừ.`;
+  // A checked commentary on a summary result; dropped if it cites an unseen number.
+  const commentary = await require('./narration').narrate({ compiled, call, question, dispatch, step });
+  if (commentary) reply += `\n\n**Nhận xét:** ${commentary}`;
   const rows = call.result.rows || [];
   const chartType = contract.output?.chart && contract.output.chart !== 'none' ? contract.output.chart : plan.outputs?.chart ? 'auto' : null;
   if (chartType) {
@@ -402,6 +425,61 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     else { reply += '\n\nChưa tạo được file xuất.'; status = 'PARTIAL'; }
   }
   return { contract, compiled, call, reply, status, dbSourceId: catalog.dbSourceId };
+}
+
+// A workflow a turn started may finish before its result reaches conversation
+// memory (that write runs after the run commits). Read the finished, owned run
+// directly so "kết quả trên" works right away. Turns are copied, never changed
+// in the session.
+async function completeWorkflowTurns(turns, toolContext, step) {
+  const { sanitizeObject } = require('../../memory_core/memory_sanitizer');
+  const cell = value => value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === 'string' ? value.slice(0, 80) : value ?? null;
+  for (const [index, turn] of turns.entries()) {
+    if (!turn.workflowRunId || turn.workflow) continue;
+    let view;
+    try { view = await require('../../automation/conversation_memory').readRun(turn.workflowRunId, toolContext); }
+    catch { continue; } // still running, failed or no longer readable: the turn stays as recorded
+    const [field, found] = Object.entries(view.result || {}).find(([, value]) => Array.isArray(value)) || [];
+    const rows = found ? sanitizeObject(found) : null;
+    const columns = rows?.length ? Object.keys(rows[0]).slice(0, 8) : [];
+    turns[index] = { ...turn, status: 'SUCCESS', workflow: { runId: view.runId, templateId: view.templateId, name: view.name, field: field || null },
+      ...(rows ? { result: { rowCount: rows.length, hasMore: false, columns, preview: rows.slice(0, 20).map(row => columns.map(column => cell(row[column]))) } } : {}) };
+    step('V2_WORKFLOW_TURN_COMPLETED', { runId: view.runId });
+  }
+}
+
+async function checkExclusions(exclusions, contract, catalog, toolManager, toolContext, step) {
+  const quote = name => `[${String(name).replaceAll(']', ']]')}]`;
+  const has = async (exclusion, column, value) => {
+    const sql = `SELECT TOP 1 1 AS [hit] FROM ${quote(exclusion.schemaName || 'dbo')}.${quote(exclusion.table)} WHERE ${quote(column)} = N'${String(value).replaceAll("'", "''")}'`;
+    const probe = await toolManager.executeTool('execute_sql_query', { sql }, { ...toolContext, joinPlan: null, compiledSemanticQuery: false });
+    return probe.success ? (probe.result?.rows?.length || 0) > 0 : null;
+  };
+  let moved = false;
+  const missing = [];
+  for (const exclusion of exclusions) {
+    const found = [];
+    for (const value of exclusion.values) if (await has(exclusion, exclusion.column, value) !== false) found.push(value);
+    if (found.length === exclusion.values.length) continue;
+    const entry = catalogApi.table(catalog, exclusion.table);
+    const others = [...(entry?.columns?.values() || [])].filter(column => column.name !== exclusion.column && /char|text/i.test(column.type || ''));
+    let target = null;
+    for (const column of others) {
+      const hits = await Promise.all(exclusion.values.map(value => has(exclusion, column.name, value)));
+      if (hits.every(Boolean)) { target = column.name; break; }
+    }
+    const filter = contract.filters[exclusion.index];
+    if (target) {
+      const ref = String(filter.ref);
+      filter.ref = ref.includes('->') ? `${ref.split('->')[0]}->${target}` : `${exclusion.table}.${target}`;
+      moved = true;
+      step('V2_EXCLUSION_MOVED', { from: exclusion.column, to: target });
+    } else {
+      missing.push(...exclusion.values.filter(value => !found.includes(value)));
+      step('V2_EXCLUSION_UNMATCHED', { column: exclusion.column });
+    }
+  }
+  return { moved, missing };
 }
 
 // Answer from rows the user already saw, copied from the turn log (no model-written values).
@@ -474,10 +552,21 @@ async function exportGroups(rows, alias, format, toolManager, toolContext, toolC
   if (groups.size > 30) return { lines: [], count: groups.size, tooMany: true };
   const lines = [];
   let failed = false;
-  for (const [name, data] of groups) {
-    const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40) || 'Nhom';
+  // Files are written together. Names that fold to the same slug ("Phòng A",
+  // "Phong A") get a suffix so two files never claim one name at once.
+  const slugs = new Set();
+  const jobs = [...groups].map(([name, data]) => {
+    const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40) || 'Nhom';
+    let slug = base;
+    for (let index = 2; slugs.has(slug); index++) slug = `${base}_${index}`;
+    slugs.add(slug);
     const args = { data, format, filename: `Bao_cao_${slug}` };
-    const file = await toolManager.executeTool('export_data', args, { ...toolContext, verifiedExport: { resultGroupBy: [], displayNames: {} } });
+    return { name, data, args, file: toolManager.executeTool('export_data', args, { ...toolContext, verifiedExport: { resultGroupBy: [], displayNames: {} } }) };
+  });
+  const files = await Promise.allSettled(jobs.map(job => job.file));
+  for (const [index, { name, data, args }] of jobs.entries()) {
+    const file = files[index].status === 'fulfilled' ? files[index].value
+      : { success: false, error: String(files[index].reason?.message || files[index].reason) };
     toolCalls.push({ toolName: 'export_data', args, success: file.success, result: file.result || null, error: file.error || null, exportGroup: name });
     if (file.success && file.result?.downloadUrl) lines.push(`- [${name.replace(/[[\]]/g, '')}](${file.result.downloadUrl}) — ${data.length} bản ghi`);
     else failed = true;
@@ -526,7 +615,8 @@ function chartArgs(compiled, rows, requested, title) {
 function describeWorkflows(workflows) {
   return workflows.map(item => `${item.templateId}: ${item.name}${item.description ? ` — ${String(item.description).slice(0, 160)}` : ''}`
     + ` [operations: ${(item.operations || []).join(', ') || 'none'}; inputs: ${Object.entries(item.inputs || {})
-      .map(([key, slot]) => `${key}${slot.required ? '*' : ''}(${slot.label || key}, ${slot.schema?.type || 'string'})`).join(', ') || 'none'}]`).join(' | ');
+      .map(([key, slot]) => `${key}${slot.required ? '*' : ''}(${slot.label || key}, ${slot.schema?.type || 'string'}`
+        + `${item.inputFields?.[key]?.length ? `, matches ${item.inputFields[key].map(field => `${field.table}.${field.column}`).join(' or ')}` : ''})`).join(', ') || 'none'}]`).join(' | ');
 }
 
 // Inputs are kept only when quoted from the question and valid for the slot schema.
@@ -536,11 +626,14 @@ async function runWorkflow(contract, workflows, question, toolManager, toolConte
   const item = workflows.find(workflow => workflow.templateId === choice.templateId);
   if (!item) return { reason: `workflow ${choice.templateId} is not in WORKFLOWS` };
   const args = { templateId: item.templateId, inputs: slotInputs(choice, item.inputs, question) };
-  let execution = await toolManager.executeTool('run_workflow', args, toolContext);
+  // Marked as planned: the contract chose it with quoted inputs, so a backend
+  // input check can replace the separate suitability model call.
+  const planned = { ...toolContext, plannedWorkflow: item.templateId };
+  let execution = await toolManager.executeTool('run_workflow', args, planned);
   // A malformed suitability answer is a formatting error, not a rejection: assess once more.
   if (!execution.success && execution.code === 'WORKFLOW_ASSESSMENT_INVALID') {
     step('V2_WORKFLOW_ASSESSMENT_RETRY', { templateId: item.templateId });
-    execution = await toolManager.executeTool('run_workflow', args, toolContext);
+    execution = await toolManager.executeTool('run_workflow', args, planned);
   }
   const state = execution.result?.execution;
   step('V2_WORKFLOW', { templateId: item.templateId, success: execution.success, code: execution.code || null, status: state?.status || null,

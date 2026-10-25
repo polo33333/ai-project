@@ -1,5 +1,5 @@
 'use strict';
-const { normalizeAssistantResponse } = require('../agent_core/harness/tool_call_normalizer');
+const { normalizeAssistantResponse, parseJsonContent } = require('../agent_core/harness/tool_call_normalizer');
 const { safeObject, validateValue } = require('../automation/contract');
 async function choose(dispatch, question, candidates, pending = false) {
   const parameters = { type: 'object', additionalProperties: false, required: ['templateId','inputs','evidence'], properties: {
@@ -13,7 +13,8 @@ async function choose(dispatch, question, candidates, pending = false) {
     { role: 'user', content: JSON.stringify({ question, candidates }) }
   ], 'workflow_preference');
   let value = normalizeAssistantResponse(response).calls?.find(call => call.name === 'choose_workflow')?.arguments;
-  if (!value) { try { value = JSON.parse(response.content); } catch { throw new Error('WORKFLOW_PREFERENCE_INVALID'); } }
+  if (!value) value = parseJsonContent(response.content);
+  if (!value) throw new Error('WORKFLOW_PREFERENCE_INVALID');
   safeObject(value);
   if (!new (require('ajv'))({ strict: false }).compile(parameters)(value)) throw new Error('WORKFLOW_PREFERENCE_INVALID');
   if (!value.templateId) return null;

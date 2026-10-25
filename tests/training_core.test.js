@@ -154,13 +154,35 @@ test('training response evaluator rejects an answer that reports only SQL row co
   assert.ok(result.failures.includes('INSUFFICIENT_DATA_ANSWER'));
 });
 
-test('failure classifier detects history contamination', () => {
-  const failures = classifyCase({
-    question: 'vẽ biểu đồ sản lượng điện',
-    reply: 'Nhân viên Yên Duy có mã NV004.',
-    toolCalls: []
-  });
-  assert.equal(failures.includes('HISTORY_CONTAMINATION'), true);
+test('failure classifier detects history contamination from the previous turn', () => {
+  const previousTurn = { question: 'thông tin nhân viên mã NV104', reply: 'Nhân viên Lê Minh Khang có mã NV104.' };
+  const leaked = classifyCase({ question: 'vẽ biểu đồ sản lượng điện', reply: 'Lê Minh Khang (NV104) có sản lượng cao nhất.',
+    previousTurn, memoryDecision: { mode: 'none' }, toolCalls: [] });
+  assert.equal(leaked.includes('HISTORY_CONTAMINATION'), true);
+
+  // A follow-up may repeat the previous entity; a fresh question may name it itself.
+  const followup = classifyCase({ question: 'người đó thuộc phòng nào', reply: 'Lê Minh Khang thuộc phòng Kỹ thuật.',
+    previousTurn, memoryDecision: { mode: 'reference' }, toolCalls: [] });
+  assert.equal(followup.includes('HISTORY_CONTAMINATION'), false);
+  const named = classifyCase({ question: 'sản lượng của NV104', reply: 'NV104 đạt 120 kWh.', previousTurn, toolCalls: [] });
+  assert.equal(named.includes('HISTORY_CONTAMINATION'), false);
+  // Without the previous turn there is nothing to compare: no guess from names.
+  assert.equal(classifyCase({ question: 'vẽ biểu đồ', reply: 'Lê Minh Khang có mã NV104.', toolCalls: [] })
+    .includes('HISTORY_CONTAMINATION'), false);
+});
+
+test('case collector links each record to the previous turn of its conversation', () => {
+  const { collectCases } = require('../src/backend/training_core/case_collector');
+  const at = minute => `2026-10-26T08:0${minute}:00.000Z`;
+  const cases = collectCases({ feedback: [], history: [
+    { id: 'c', timestamp: at(3), question: 'q3', replyText: 'r3', requestPayload: { sessionId: 's1', principalRef: 'account:1' } },
+    { id: 'b', timestamp: at(2), question: 'q2', replyText: 'r2', requestPayload: { sessionId: 's1', principalRef: 'account:2' } },
+    { id: 'a', timestamp: at(1), question: 'q1', replyText: 'r1', requestPayload: { sessionId: 's1', principalRef: 'account:1' } }
+  ] });
+  const byId = Object.fromEntries(cases.map(item => [item.id, item.previousTurn]));
+  assert.deepEqual(byId.c, { question: 'q1', reply: 'r1' });
+  assert.equal(byId.b, null);
+  assert.equal(byId.a, null);
 });
 
 test('failure classifier exposes memory routing and persistence regressions', () => {

@@ -19,8 +19,8 @@ const EXCLUSION = /(^|[^\p{L}])(trừ|ngoại trừ|không phải|không bao g�
 // -> {"Đã xử lý", "Đang xử lý", "Tiếp nhận"}. Built with the compiler, so the
 // lookup query passes the same JOIN validation as answers.
 async function lookupTerms(root, catalog, execute) {
-  const terms = [];
-  for (const relation of catalog.relations.filter(item => catalogApi.key(item.fromTable) === catalogApi.key(root) && item.display)) {
+  // Each foreign key is an independent read: query the uncached ones together.
+  const entries = await Promise.all(catalog.relations.filter(item => catalogApi.key(item.fromTable) === catalogApi.key(root) && item.display).map(async relation => {
     const ref = `${relation.fromTable}.${relation.pairs[0].source}->${relation.display}`;
     const id = `${catalog.dbSourceId}|${ref}`;
     let entry = cache.get(id);
@@ -34,9 +34,9 @@ async function lookupTerms(root, catalog, execute) {
       } catch { entry = { at: Date.now(), values: [] }; }
       cache.set(id, entry);
     }
-    for (const value of entry.values) terms.push({ value, ref, role: relation.role });
-  }
-  return terms;
+    return { entry, ref, role: relation.role };
+  }));
+  return entries.flatMap(({ entry, ref, role }) => entry.values.map(value => ({ value, ref, role })));
 }
 
 function covered(contract, term) {

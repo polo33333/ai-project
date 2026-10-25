@@ -129,7 +129,7 @@ test('shared harness selects permitted memory but cannot claim an unqueried addr
   const harness = new Harness({ toolManager: { getToolDefinitions: () => [] }, dispatch: async (provider, messages, defs) => {
     calls++;
     if (defs[0]?.function.name === 'resolve_conversation') {
-      assert.ok(messages[1].content.includes('NV007'));
+      assert.ok(messages.find(message => message.role === 'user').content.includes('NV007'));
       return { ...response(result({ presentation: 'table' })), usage: { inputTokens: 10, outputTokens: 5 } };
     }
     assert.ok(messages[0].content.includes('NV004')); assert.ok(!messages[0].content.includes('NV007'));

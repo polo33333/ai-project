@@ -1,0 +1,1413 @@
+[
+  {
+    "label": "after a successful list",
+    "state": {
+      "lastPlan": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "intent": "list",
+        "metric": null,
+        "conversationState": {
+          "operation": "list",
+          "cardinality": "collection",
+          "requestedAttributes": [
+            "CustomerCode"
+          ]
+        }
+      },
+      "references": {
+        "lastEntity": null,
+        "lastDataset": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 2,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 2,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        },
+        "lastExport": null
+      },
+      "entityReferences": [],
+      "conversationState": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "updatedAt": "<time>"
+      },
+      "businessState": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "operation": "list",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "categoryFilters": [],
+        "requestFilters": [],
+        "analysisTask": null,
+        "v2": null,
+        "groups": null,
+        "query": null,
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>",
+        "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+      },
+      "lastWorkflowRun": null,
+      "activeScope": "customer",
+      "summary": {
+        "scope": "customer",
+        "table": "M_Customer",
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>"
+      },
+      "pendingTurn": null
+    },
+    "decision": {
+      "mode": "reference",
+      "reason": "collection_reference_detected",
+      "referenceType": "lastDataset",
+      "previousScope": "customer",
+      "currentScope": "customer",
+      "confidence": "medium",
+      "sessionId": "s1",
+      "reference": {
+        "type": "lastDataset",
+        "data": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 2,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 2,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        }
+      },
+      "accountId": "a1"
+    },
+    "context": [
+      {
+        "role": "system",
+        "content": "Structured memory reference (lastDataset): {\"table\":\"M_Customer\",\"metric\":null,\"timeColumn\":null,\"requiredColumns\":[],\"dbSourceId\":\"db\",\"rowCount\":2,\"queryScope\":{\"question\":null,\"unfilteredList\":false,\"temporalMonths\":null},\"entityKeys\":[],\"identityColumns\":[],\"displayNames\":{},\"columns\":[\"CustomerCode\",\"CustomerName\"],\"datasets\":[{\"label\":null,\"scope\":{\"root\":\"dbo.m_customer\",\"tables\":[\"dbo.m_customer\"],\"outputs\":[{\"name\":\"CustomerCode\",\"column\":\"customercode\",\"table\":\"dbo.m_customer\"},{\"name\":\"CustomerName\",\"column\":\"customername\",\"table\":\"dbo.m_customer\"}],\"predicates\":[],\"joins\":[],\"grouping\":\"null\",\"having\":\"null\"},\"rowCount\":2,\"entityKeys\":[],\"identityComplete\":false}],\"updatedAt\":\"<time>\"}"
+      }
+    ],
+    "resolution": {
+      "candidates": [
+        {
+          "id": "dataset:latest",
+          "kind": "dataset",
+          "data": {
+            "table": "M_Customer",
+            "dbSourceId": "db",
+            "datasets": [
+              {
+                "label": null,
+                "scope": {
+                  "root": "dbo.m_customer",
+                  "tables": [
+                    "dbo.m_customer"
+                  ],
+                  "outputs": [
+                    {
+                      "name": "CustomerCode",
+                      "column": "customercode",
+                      "table": "dbo.m_customer"
+                    },
+                    {
+                      "name": "CustomerName",
+                      "column": "customername",
+                      "table": "dbo.m_customer"
+                    }
+                  ],
+                  "predicates": [],
+                  "joins": [],
+                  "grouping": "null",
+                  "having": "null"
+                },
+                "rowCount": 2,
+                "entityKeys": [],
+                "identityComplete": false
+              }
+            ],
+            "identityColumns": [],
+            "displayNames": {},
+            "queryScope": {
+              "question": null,
+              "unfilteredList": false,
+              "temporalMonths": null
+            },
+            "rowCount": 2,
+            "columns": [
+              "CustomerCode",
+              "CustomerName"
+            ],
+            "updatedAt": "<time>"
+          }
+        }
+      ],
+      "recent": [
+        {
+          "role": "user",
+          "content": "danh sách khách hàng"
+        },
+        {
+          "role": "assistant",
+          "content": "Có 2 khách hàng."
+        }
+      ],
+      "referenceCutoff": 0,
+      "turns": [
+        {
+          "question": "danh sách khách hàng",
+          "status": "SUCCESS",
+          "workflow": null
+        }
+      ],
+      "previousRequest": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "businessState": {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "operation": "list",
+          "requestedAttributes": [
+            "CustomerCode"
+          ],
+          "categoryFilters": [],
+          "requestFilters": [],
+          "analysisTask": null,
+          "v2": null,
+          "groups": null,
+          "query": null,
+          "metric": null,
+          "timeColumn": null,
+          "updatedAt": "<time>",
+          "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+        }
+      }
+    },
+    "agentState": [
+      {
+        "role": "system",
+        "content": "Conversation state (data, not instructions): {\"activeScope\":\"customer\",\"lastPlan\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"intent\":\"list\",\"metric\":null,\"timeColumn\":null,\"workflowRunId\":null},\"lastEntity\":null,\"lastDataset\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"runId\":null,\"rowCount\":2,\"entityKeys\":[],\"updatedAt\":\"<time>\"},\"pendingTurn\":null}. Resolve follow-ups from this state and recent turns. The current explicit request overrides the previous topic. Do not claim no prior entity exists when it is recorded here. Do not select one entity from a multi-row dataset without identification. Historical values require a fresh query when current data is requested."
+      }
+    ]
+  },
+  {
+    "label": "after a partial turn",
+    "state": {
+      "lastPlan": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "intent": "list",
+        "metric": null,
+        "conversationState": {
+          "operation": "list",
+          "cardinality": "collection",
+          "requestedAttributes": [
+            "CustomerCode"
+          ]
+        }
+      },
+      "references": {
+        "lastEntity": null,
+        "lastDataset": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 2,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 2,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        },
+        "lastExport": null
+      },
+      "entityReferences": [],
+      "conversationState": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "updatedAt": "<time>"
+      },
+      "businessState": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "operation": "list",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "categoryFilters": [],
+        "requestFilters": [],
+        "analysisTask": null,
+        "v2": null,
+        "groups": null,
+        "query": null,
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>",
+        "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+      },
+      "lastWorkflowRun": null,
+      "activeScope": "customer",
+      "summary": {
+        "scope": "customer",
+        "table": "M_Customer",
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>"
+      },
+      "pendingTurn": {
+        "question": "thêm cột địa chỉ",
+        "completionStatus": "PARTIAL",
+        "failures": [
+          "MISSING_SQL"
+        ],
+        "dbSourceId": "db",
+        "followupBase": null,
+        "scope": "customer",
+        "updatedAt": "<time>"
+      }
+    },
+    "decision": {
+      "mode": "reference",
+      "reason": "collection_reference_detected",
+      "referenceType": "lastDataset",
+      "previousScope": "customer",
+      "currentScope": "customer",
+      "confidence": "medium",
+      "sessionId": "s1",
+      "reference": {
+        "type": "lastDataset",
+        "data": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 2,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 2,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        }
+      },
+      "accountId": "a1"
+    },
+    "context": [
+      {
+        "role": "system",
+        "content": "Structured memory reference (lastDataset): {\"table\":\"M_Customer\",\"metric\":null,\"timeColumn\":null,\"requiredColumns\":[],\"dbSourceId\":\"db\",\"rowCount\":2,\"queryScope\":{\"question\":null,\"unfilteredList\":false,\"temporalMonths\":null},\"entityKeys\":[],\"identityColumns\":[],\"displayNames\":{},\"columns\":[\"CustomerCode\",\"CustomerName\"],\"datasets\":[{\"label\":null,\"scope\":{\"root\":\"dbo.m_customer\",\"tables\":[\"dbo.m_customer\"],\"outputs\":[{\"name\":\"CustomerCode\",\"column\":\"customercode\",\"table\":\"dbo.m_customer\"},{\"name\":\"CustomerName\",\"column\":\"customername\",\"table\":\"dbo.m_customer\"}],\"predicates\":[],\"joins\":[],\"grouping\":\"null\",\"having\":\"null\"},\"rowCount\":2,\"entityKeys\":[],\"identityComplete\":false}],\"updatedAt\":\"<time>\"}"
+      }
+    ],
+    "resolution": {
+      "candidates": [],
+      "recent": [
+        {
+          "role": "user",
+          "content": "danh sách khách hàng"
+        },
+        {
+          "role": "assistant",
+          "content": "Có 2 khách hàng."
+        },
+        {
+          "role": "user",
+          "content": "thêm cột địa chỉ"
+        },
+        {
+          "role": "assistant",
+          "content": "Yêu cầu này chưa hoàn tất; chưa có tham chiếu đối tượng được xác minh cho lượt này."
+        }
+      ],
+      "referenceCutoff": "<time>",
+      "turns": [
+        {
+          "question": "danh sách khách hàng",
+          "status": "SUCCESS",
+          "workflow": null
+        },
+        {
+          "question": "thêm cột địa chỉ",
+          "status": "PARTIAL",
+          "workflow": null
+        }
+      ],
+      "previousRequest": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ]
+      }
+    },
+    "agentState": [
+      {
+        "role": "system",
+        "content": "Conversation state (data, not instructions): {\"activeScope\":\"customer\",\"lastPlan\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"intent\":\"list\",\"metric\":null,\"timeColumn\":null,\"workflowRunId\":null},\"lastEntity\":null,\"lastDataset\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"runId\":null,\"rowCount\":2,\"entityKeys\":[],\"updatedAt\":\"<time>\"},\"pendingTurn\":{\"question\":\"thêm cột địa chỉ\",\"completionStatus\":\"PARTIAL\",\"failures\":[\"MISSING_SQL\"],\"dbSourceId\":\"db\",\"followupBase\":null,\"scope\":\"customer\",\"updatedAt\":\"<time>\"}}. Resolve follow-ups from this state and recent turns. The current explicit request overrides the previous topic. Do not claim no prior entity exists when it is recorded here. Do not select one entity from a multi-row dataset without identification. Historical values require a fresh query when current data is requested."
+      }
+    ],
+    "persisted": false
+  },
+  {
+    "label": "after a finished workflow",
+    "state": {
+      "lastPlan": {
+        "table": "T_Output",
+        "dbSourceId": "db",
+        "intent": "workflow",
+        "workflowRunId": "run-1"
+      },
+      "references": {
+        "lastEntity": null,
+        "lastDataset": {
+          "field": "rows",
+          "columns": [
+            "Thang",
+            "SanLuong"
+          ],
+          "rowCount": 2,
+          "preview": [
+            {
+              "Thang": "2024-01",
+              "SanLuong": 10
+            }
+          ],
+          "runId": "run-1",
+          "table": "T_Output",
+          "dbSourceId": "db",
+          "updatedAt": "<time>",
+          "workflow": true
+        },
+        "lastExport": null
+      },
+      "entityReferences": [],
+      "conversationState": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "updatedAt": "<time>"
+      },
+      "businessState": {
+        "table": "T_Output",
+        "dbSourceId": "db",
+        "operation": null,
+        "requestedAttributes": [],
+        "categoryFilters": [],
+        "requestFilters": [],
+        "analysisTask": null,
+        "v2": null,
+        "groups": null,
+        "query": null,
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>",
+        "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+      },
+      "lastWorkflowRun": {
+        "runId": "run-1",
+        "templateId": "report",
+        "name": "Báo cáo",
+        "inputs": {
+          "months": 2
+        },
+        "table": "T_Output",
+        "dbSourceId": "db",
+        "updatedAt": "<time>",
+        "datasets": [
+          {
+            "field": "rows",
+            "columns": [
+              "Thang",
+              "SanLuong"
+            ],
+            "rowCount": 2,
+            "preview": [
+              {
+                "Thang": "2024-01",
+                "SanLuong": 10
+              }
+            ]
+          }
+        ]
+      },
+      "activeScope": "table:t_output",
+      "summary": {
+        "scope": "table:t_output",
+        "table": "T_Output",
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>"
+      },
+      "pendingTurn": null
+    },
+    "decision": {
+      "mode": "reference",
+      "reason": "collection_reference_detected",
+      "referenceType": "lastDataset",
+      "previousScope": "table:t_output",
+      "currentScope": "customer",
+      "confidence": "medium",
+      "sessionId": "s1",
+      "reference": {
+        "type": "lastDataset",
+        "data": {
+          "field": "rows",
+          "columns": [
+            "Thang",
+            "SanLuong"
+          ],
+          "rowCount": 2,
+          "preview": [
+            {
+              "Thang": "2024-01",
+              "SanLuong": 10
+            }
+          ],
+          "runId": "run-1",
+          "table": "T_Output",
+          "dbSourceId": "db",
+          "updatedAt": "<time>",
+          "workflow": true
+        }
+      },
+      "accountId": "a1"
+    },
+    "context": [
+      {
+        "role": "system",
+        "content": "Structured memory reference (lastDataset): {\"field\":\"rows\",\"columns\":[\"Thang\",\"SanLuong\"],\"rowCount\":2,\"preview\":[{\"Thang\":\"2024-01\",\"SanLuong\":10}],\"runId\":\"run-1\",\"table\":\"T_Output\",\"dbSourceId\":\"db\",\"updatedAt\":\"<time>\",\"workflow\":true}"
+      }
+    ],
+    "resolution": {
+      "candidates": [
+        {
+          "id": "dataset:latest",
+          "kind": "dataset",
+          "data": {
+            "table": "T_Output",
+            "dbSourceId": "db",
+            "runId": "run-1",
+            "field": "rows",
+            "rowCount": 2,
+            "columns": [
+              "Thang",
+              "SanLuong"
+            ],
+            "updatedAt": "<time>"
+          }
+        }
+      ],
+      "recent": [
+        {
+          "role": "user",
+          "content": "danh sách khách hàng"
+        },
+        {
+          "role": "assistant",
+          "content": "Có 2 khách hàng."
+        },
+        {
+          "role": "user",
+          "content": "Nghiệp vụ: Báo cáo. Input: {\"months\":2}"
+        },
+        {
+          "role": "assistant",
+          "content": "Nghiệp vụ đã hoàn tất. {\"runId\":\"run-1\",\"templateId\":\"report\",\"name\":\"Báo cáo\",\"inputs\":{\"months\":2},\"table\":\"T_Output\",\"dbSourceId\":\"db\",\"updatedAt\":\"<time>\",\"datasets\":[{\"field\":\"rows\",\"columns\":[\"Thang\",\"SanLuong\"],\"rowCount\":2,\"preview\":[{\"Thang\":\"2024-01\",\"SanLuong\":10}]}]}"
+        }
+      ],
+      "referenceCutoff": 0,
+      "turns": [
+        {
+          "question": "danh sách khách hàng",
+          "status": "SUCCESS",
+          "workflow": null
+        },
+        {
+          "question": "thêm cột địa chỉ",
+          "status": "PARTIAL",
+          "workflow": null
+        },
+        {
+          "question": "báo cáo sản lượng 2 tháng",
+          "status": "SUCCESS",
+          "workflow": {
+            "runId": "run-1",
+            "templateId": "report",
+            "name": "Báo cáo",
+            "field": "rows"
+          }
+        }
+      ],
+      "previousRequest": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "businessState": {
+          "table": "T_Output",
+          "dbSourceId": "db",
+          "operation": null,
+          "requestedAttributes": [],
+          "categoryFilters": [],
+          "requestFilters": [],
+          "analysisTask": null,
+          "v2": null,
+          "groups": null,
+          "query": null,
+          "metric": null,
+          "timeColumn": null,
+          "updatedAt": "<time>",
+          "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+        }
+      }
+    },
+    "agentState": [
+      {
+        "role": "system",
+        "content": "Conversation state (data, not instructions): {\"activeScope\":\"table:t_output\",\"lastPlan\":{\"table\":\"T_Output\",\"dbSourceId\":\"db\",\"intent\":\"workflow\",\"metric\":null,\"timeColumn\":null,\"workflowRunId\":\"run-1\"},\"lastEntity\":null,\"lastDataset\":{\"table\":\"T_Output\",\"dbSourceId\":\"db\",\"runId\":\"run-1\",\"rowCount\":2,\"entityKeys\":null,\"updatedAt\":\"<time>\"},\"pendingTurn\":null}. Resolve follow-ups from this state and recent turns. The current explicit request overrides the previous topic. Do not claim no prior entity exists when it is recorded here. Do not select one entity from a multi-row dataset without identification. Historical values require a fresh query when current data is requested."
+      }
+    ]
+  },
+  {
+    "label": "after a single-record lookup",
+    "state": {
+      "lastPlan": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "intent": "record_lookup"
+      },
+      "references": {
+        "lastEntity": {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "filters": {
+            "CustomerCode": "KA0021",
+            "CustomerName": "A"
+          },
+          "updatedAt": "<time>"
+        },
+        "lastDataset": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 1,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 1,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        },
+        "lastExport": null
+      },
+      "entityReferences": [
+        {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "key": {
+            "CustomerCode": "KA0021",
+            "CustomerName": "A"
+          },
+          "updatedAt": "<time>",
+          "resources": []
+        }
+      ],
+      "conversationState": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "updatedAt": "<time>"
+      },
+      "businessState": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "operation": null,
+        "requestedAttributes": [],
+        "categoryFilters": [],
+        "requestFilters": [],
+        "analysisTask": null,
+        "v2": null,
+        "groups": null,
+        "query": null,
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>",
+        "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+      },
+      "lastWorkflowRun": null,
+      "activeScope": "customer",
+      "summary": {
+        "scope": "customer",
+        "table": "M_Customer",
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>"
+      },
+      "pendingTurn": null
+    },
+    "decision": {
+      "mode": "reference",
+      "reason": "collection_reference_detected",
+      "referenceType": "lastDataset",
+      "previousScope": "customer",
+      "currentScope": "customer",
+      "confidence": "medium",
+      "sessionId": "s1",
+      "reference": {
+        "type": "lastDataset",
+        "data": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 1,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 1,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        }
+      },
+      "accountId": "a1"
+    },
+    "context": [
+      {
+        "role": "system",
+        "content": "Structured memory reference (lastDataset): {\"table\":\"M_Customer\",\"metric\":null,\"timeColumn\":null,\"requiredColumns\":[],\"dbSourceId\":\"db\",\"rowCount\":1,\"queryScope\":{\"question\":null,\"unfilteredList\":false,\"temporalMonths\":null},\"entityKeys\":[],\"identityColumns\":[],\"displayNames\":{},\"columns\":[\"CustomerCode\",\"CustomerName\"],\"datasets\":[{\"label\":null,\"scope\":{\"root\":\"dbo.m_customer\",\"tables\":[\"dbo.m_customer\"],\"outputs\":[{\"name\":\"CustomerCode\",\"column\":\"customercode\",\"table\":\"dbo.m_customer\"},{\"name\":\"CustomerName\",\"column\":\"customername\",\"table\":\"dbo.m_customer\"}],\"predicates\":[],\"joins\":[],\"grouping\":\"null\",\"having\":\"null\"},\"rowCount\":1,\"entityKeys\":[],\"identityComplete\":false}],\"updatedAt\":\"<time>\"}"
+      }
+    ],
+    "resolution": {
+      "candidates": [
+        {
+          "id": "entity:0",
+          "kind": "entity",
+          "data": {
+            "table": "M_Customer",
+            "dbSourceId": "db",
+            "key": {
+              "CustomerCode": "KA0021",
+              "CustomerName": "A"
+            },
+            "updatedAt": "<time>",
+            "resources": []
+          }
+        },
+        {
+          "id": "dataset:latest",
+          "kind": "dataset",
+          "data": {
+            "table": "M_Customer",
+            "dbSourceId": "db",
+            "datasets": [
+              {
+                "label": null,
+                "scope": {
+                  "root": "dbo.m_customer",
+                  "tables": [
+                    "dbo.m_customer"
+                  ],
+                  "outputs": [
+                    {
+                      "name": "CustomerCode",
+                      "column": "customercode",
+                      "table": "dbo.m_customer"
+                    },
+                    {
+                      "name": "CustomerName",
+                      "column": "customername",
+                      "table": "dbo.m_customer"
+                    }
+                  ],
+                  "predicates": [],
+                  "joins": [],
+                  "grouping": "null",
+                  "having": "null"
+                },
+                "rowCount": 1,
+                "entityKeys": [],
+                "identityComplete": false
+              }
+            ],
+            "identityColumns": [],
+            "displayNames": {},
+            "queryScope": {
+              "question": null,
+              "unfilteredList": false,
+              "temporalMonths": null
+            },
+            "rowCount": 1,
+            "columns": [
+              "CustomerCode",
+              "CustomerName"
+            ],
+            "updatedAt": "<time>"
+          }
+        }
+      ],
+      "recent": [
+        {
+          "role": "user",
+          "content": "Nghiệp vụ: Báo cáo. Input: {\"months\":2}"
+        },
+        {
+          "role": "assistant",
+          "content": "Nghiệp vụ đã hoàn tất. {\"runId\":\"run-1\",\"templateId\":\"report\",\"name\":\"Báo cáo\",\"inputs\":{\"months\":2},\"table\":\"T_Output\",\"dbSourceId\":\"db\",\"updatedAt\":\"<time>\",\"datasets\":[{\"field\":\"rows\",\"columns\":[\"Thang\",\"SanLuong\"],\"rowCount\":2,\"preview\":[{\"Thang\":\"2024-01\",\"SanLuong\":10}]}]}"
+        },
+        {
+          "role": "user",
+          "content": "thông tin khách hàng KA0021"
+        },
+        {
+          "role": "assistant",
+          "content": "KA0021 là A."
+        }
+      ],
+      "referenceCutoff": 0,
+      "turns": [
+        {
+          "question": "danh sách khách hàng",
+          "status": "SUCCESS",
+          "workflow": null
+        },
+        {
+          "question": "thêm cột địa chỉ",
+          "status": "PARTIAL",
+          "workflow": null
+        },
+        {
+          "question": "báo cáo sản lượng 2 tháng",
+          "status": "SUCCESS",
+          "workflow": {
+            "runId": "run-1",
+            "templateId": "report",
+            "name": "Báo cáo",
+            "field": "rows"
+          }
+        },
+        {
+          "question": "thông tin khách hàng KA0021",
+          "status": "SUCCESS",
+          "workflow": null
+        }
+      ],
+      "previousRequest": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "businessState": {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "operation": null,
+          "requestedAttributes": [],
+          "categoryFilters": [],
+          "requestFilters": [],
+          "analysisTask": null,
+          "v2": null,
+          "groups": null,
+          "query": null,
+          "metric": null,
+          "timeColumn": null,
+          "updatedAt": "<time>",
+          "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+        }
+      }
+    },
+    "agentState": [
+      {
+        "role": "system",
+        "content": "Conversation state (data, not instructions): {\"activeScope\":\"customer\",\"lastPlan\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"intent\":\"record_lookup\",\"metric\":null,\"timeColumn\":null,\"workflowRunId\":null},\"lastEntity\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"runId\":null,\"filters\":{\"CustomerCode\":\"KA0021\",\"CustomerName\":\"A\"},\"updatedAt\":\"<time>\"},\"lastDataset\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"runId\":null,\"rowCount\":1,\"entityKeys\":[],\"updatedAt\":\"<time>\"},\"pendingTurn\":null}. Resolve follow-ups from this state and recent turns. The current explicit request overrides the previous topic. Do not claim no prior entity exists when it is recorded here. Do not select one entity from a multi-row dataset without identification. Historical values require a fresh query when current data is requested."
+      }
+    ]
+  },
+  {
+    "label": "after a reload",
+    "state": {
+      "lastPlan": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "intent": "record_lookup"
+      },
+      "references": {
+        "lastEntity": {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "filters": {
+            "CustomerCode": "KA0021",
+            "CustomerName": "A"
+          },
+          "updatedAt": "<time>"
+        },
+        "lastDataset": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 1,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 1,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        },
+        "lastExport": null
+      },
+      "entityReferences": [
+        {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "key": {
+            "CustomerCode": "KA0021",
+            "CustomerName": "A"
+          },
+          "updatedAt": "<time>",
+          "resources": []
+        }
+      ],
+      "conversationState": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "updatedAt": "<time>"
+      },
+      "businessState": {
+        "table": "M_Customer",
+        "dbSourceId": "db",
+        "operation": null,
+        "requestedAttributes": [],
+        "categoryFilters": [],
+        "requestFilters": [],
+        "analysisTask": null,
+        "v2": null,
+        "groups": null,
+        "query": null,
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>",
+        "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+      },
+      "lastWorkflowRun": null,
+      "activeScope": "customer",
+      "summary": {
+        "scope": "customer",
+        "table": "M_Customer",
+        "metric": null,
+        "timeColumn": null,
+        "updatedAt": "<time>"
+      },
+      "pendingTurn": null
+    },
+    "decision": {
+      "mode": "reference",
+      "reason": "collection_reference_detected",
+      "referenceType": "lastDataset",
+      "previousScope": "customer",
+      "currentScope": "customer",
+      "confidence": "medium",
+      "sessionId": "s1",
+      "reference": {
+        "type": "lastDataset",
+        "data": {
+          "table": "M_Customer",
+          "metric": null,
+          "timeColumn": null,
+          "requiredColumns": [],
+          "dbSourceId": "db",
+          "rowCount": 1,
+          "queryScope": {
+            "question": null,
+            "unfilteredList": false,
+            "temporalMonths": null
+          },
+          "entityKeys": [],
+          "identityColumns": [],
+          "displayNames": {},
+          "columns": [
+            "CustomerCode",
+            "CustomerName"
+          ],
+          "datasets": [
+            {
+              "label": null,
+              "scope": {
+                "root": "dbo.m_customer",
+                "tables": [
+                  "dbo.m_customer"
+                ],
+                "outputs": [
+                  {
+                    "name": "CustomerCode",
+                    "column": "customercode",
+                    "table": "dbo.m_customer"
+                  },
+                  {
+                    "name": "CustomerName",
+                    "column": "customername",
+                    "table": "dbo.m_customer"
+                  }
+                ],
+                "predicates": [],
+                "joins": [],
+                "grouping": "null",
+                "having": "null"
+              },
+              "rowCount": 1,
+              "entityKeys": [],
+              "identityComplete": false
+            }
+          ],
+          "updatedAt": "<time>"
+        }
+      },
+      "accountId": "a1"
+    },
+    "context": [
+      {
+        "role": "system",
+        "content": "Structured memory reference (lastDataset): {\"table\":\"M_Customer\",\"metric\":null,\"timeColumn\":null,\"requiredColumns\":[],\"dbSourceId\":\"db\",\"rowCount\":1,\"queryScope\":{\"question\":null,\"unfilteredList\":false,\"temporalMonths\":null},\"entityKeys\":[],\"identityColumns\":[],\"displayNames\":{},\"columns\":[\"CustomerCode\",\"CustomerName\"],\"datasets\":[{\"label\":null,\"scope\":{\"root\":\"dbo.m_customer\",\"tables\":[\"dbo.m_customer\"],\"outputs\":[{\"name\":\"CustomerCode\",\"column\":\"customercode\",\"table\":\"dbo.m_customer\"},{\"name\":\"CustomerName\",\"column\":\"customername\",\"table\":\"dbo.m_customer\"}],\"predicates\":[],\"joins\":[],\"grouping\":\"null\",\"having\":\"null\"},\"rowCount\":1,\"entityKeys\":[],\"identityComplete\":false}],\"updatedAt\":\"<time>\"}"
+      }
+    ],
+    "resolution": {
+      "candidates": [
+        {
+          "id": "entity:0",
+          "kind": "entity",
+          "data": {
+            "table": "M_Customer",
+            "dbSourceId": "db",
+            "key": {
+              "CustomerCode": "KA0021",
+              "CustomerName": "A"
+            },
+            "updatedAt": "<time>",
+            "resources": []
+          }
+        },
+        {
+          "id": "dataset:latest",
+          "kind": "dataset",
+          "data": {
+            "table": "M_Customer",
+            "dbSourceId": "db",
+            "datasets": [
+              {
+                "label": null,
+                "scope": {
+                  "root": "dbo.m_customer",
+                  "tables": [
+                    "dbo.m_customer"
+                  ],
+                  "outputs": [
+                    {
+                      "name": "CustomerCode",
+                      "column": "customercode",
+                      "table": "dbo.m_customer"
+                    },
+                    {
+                      "name": "CustomerName",
+                      "column": "customername",
+                      "table": "dbo.m_customer"
+                    }
+                  ],
+                  "predicates": [],
+                  "joins": [],
+                  "grouping": "null",
+                  "having": "null"
+                },
+                "rowCount": 1,
+                "entityKeys": [],
+                "identityComplete": false
+              }
+            ],
+            "identityColumns": [],
+            "displayNames": {},
+            "queryScope": {
+              "question": null,
+              "unfilteredList": false,
+              "temporalMonths": null
+            },
+            "rowCount": 1,
+            "columns": [
+              "CustomerCode",
+              "CustomerName"
+            ],
+            "updatedAt": "<time>"
+          }
+        }
+      ],
+      "recent": [
+        {
+          "role": "user",
+          "content": "Nghiệp vụ: Báo cáo. Input: {\"months\":2}"
+        },
+        {
+          "role": "assistant",
+          "content": "Nghiệp vụ đã hoàn tất. {\"runId\":\"run-1\",\"templateId\":\"report\",\"name\":\"Báo cáo\",\"inputs\":{\"months\":2},\"table\":\"T_Output\",\"dbSourceId\":\"db\",\"updatedAt\":\"<time>\",\"datasets\":[{\"field\":\"rows\",\"columns\":[\"Thang\",\"SanLuong\"],\"rowCount\":2,\"preview\":[{\"Thang\":\"2024-01\",\"SanLuong\":10}]}]}"
+        },
+        {
+          "role": "user",
+          "content": "thông tin khách hàng KA0021"
+        },
+        {
+          "role": "assistant",
+          "content": "KA0021 là A."
+        }
+      ],
+      "referenceCutoff": 0,
+      "turns": [
+        {
+          "question": "danh sách khách hàng",
+          "status": "SUCCESS",
+          "workflow": null
+        },
+        {
+          "question": "thêm cột địa chỉ",
+          "status": "PARTIAL",
+          "workflow": null
+        },
+        {
+          "question": "báo cáo sản lượng 2 tháng",
+          "status": "SUCCESS",
+          "workflow": {
+            "runId": "run-1",
+            "templateId": "report",
+            "name": "Báo cáo",
+            "field": "rows"
+          }
+        },
+        {
+          "question": "thông tin khách hàng KA0021",
+          "status": "SUCCESS",
+          "workflow": null
+        }
+      ],
+      "previousRequest": {
+        "operation": "list",
+        "cardinality": "collection",
+        "requestedAttributes": [
+          "CustomerCode"
+        ],
+        "businessState": {
+          "table": "M_Customer",
+          "dbSourceId": "db",
+          "operation": null,
+          "requestedAttributes": [],
+          "categoryFilters": [],
+          "requestFilters": [],
+          "analysisTask": null,
+          "v2": null,
+          "groups": null,
+          "query": null,
+          "metric": null,
+          "timeColumn": null,
+          "updatedAt": "<time>",
+          "instruction": "Historical request structure only. Not evidence of current business values. Reuse only for an explicitly resolved follow-up; current instructions override it. Raw SQL predicates are not reconstructed here."
+        }
+      }
+    },
+    "agentState": [
+      {
+        "role": "system",
+        "content": "Conversation state (data, not instructions): {\"activeScope\":\"customer\",\"lastPlan\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"intent\":\"record_lookup\",\"metric\":null,\"timeColumn\":null,\"workflowRunId\":null},\"lastEntity\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"runId\":null,\"filters\":{\"CustomerCode\":\"KA0021\",\"CustomerName\":\"A\"},\"updatedAt\":\"<time>\"},\"lastDataset\":{\"table\":\"M_Customer\",\"dbSourceId\":\"db\",\"runId\":null,\"rowCount\":1,\"entityKeys\":[],\"updatedAt\":\"<time>\"},\"pendingTurn\":null}. Resolve follow-ups from this state and recent turns. The current explicit request overrides the previous topic. Do not claim no prior entity exists when it is recorded here. Do not select one entity from a multi-row dataset without identification. Historical values require a fresh query when current data is requested."
+      }
+    ]
+  }
+]

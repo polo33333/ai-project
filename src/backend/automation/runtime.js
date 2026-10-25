@@ -30,6 +30,13 @@ async function executePure(step, state) {
   if (step.type === 'delay') return { delayedMs: step.config.delayMs };
   throw error('Primitive không được hỗ trợ.');
 }
+// Stores read when a finished run is written into conversation memory: the
+// owner account and role, embed configs, governed sources, the dictionary (domain
+// of the result table; an unreadable dictionary is swallowed, not reported) and
+// the memory stores.
+const MEMORY_WRITE_STORES = ['accounts.json', 'account_roles.json', 'embed_chat_configs.json', 'db_sources.json', 'library.json', 'dictionary.json',
+  'conversation_memory.json', 'episodic_memory.json', 'long_term_memory.json'];
+
 class AutomationRuntime {
   constructor(repository, registry, { executeSql, executeSource, authorizeContext, lease, enabled = () => process.env.WORKFLOW_PLUGINS_ENABLED === 'true', leaseMs = 90000 } = {}) {
     this.repository = repository; this.registry = registry; this.executeSql = executeSql || require('./sql').executeBinding;
@@ -241,14 +248,19 @@ class AutomationRuntime {
           // transaction with retries: a chat request writing the same
           // conversation must not roll back and re-execute a finished workflow.
           const view = this.view(completed);
+          // It loads only the stores that write reads (a full snapshot takes
+          // seconds, and a follow-up question may already be waiting); a store
+          // missing from that list falls back to the full snapshot.
+          let files = MEMORY_WRITE_STORES;
           const remember = async () => {
             for (let attempt = 1; ; attempt++) {
               try {
                 return await storage.run(() => governance.run(async () => {
                   establish(await this.authorizeContext(completed.ownerId));
                   require('./conversation_memory').persist(completed, view);
-                }), { independent: true });
+                }), { independent: true, files });
               } catch (failure) {
+                if (files && /^Store not loaded for this operation/.test(failure.message)) { files = undefined; continue; }
                 if (failure.code !== 'DATA_CONFLICT' || attempt >= 3) throw failure;
                 await new Promise(resolve => setTimeout(resolve, 200 * attempt));
               }

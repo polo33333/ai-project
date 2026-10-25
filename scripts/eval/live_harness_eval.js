@@ -6,7 +6,7 @@
 // persistence). SQL sources are only read. Each case uses its own "eval-"
 // chat session, so cases never share memory.
 //
-//   node scripts/eval/live_harness_eval.js --label v1 [--only id1,id2] [--repeat 1]
+//   node scripts/eval/live_harness_eval.js --label v1 [--only id1,id2] [--repeat 1] [--provider <providerId>]
 //
 // The harness pipeline is chosen by HARNESS_PIPELINE (unset = current loop).
 const fs = require('node:fs');
@@ -27,6 +27,11 @@ function matches(reply, item) {
   if (typeof item === 'string') return fold(reply).includes(fold(item));
   if (item.num !== undefined) return new RegExp(`(^|\\D)${item.num}(\\D|$)`).test(digits(reply));
   if (item.re) return new RegExp(item.re, 'iu').test(reply);
+  if (item.today) {
+    // The run date in the server's local time, in the forms answers use.
+    const now = new Date(), day = now.getDate(), month = now.getMonth() + 1, year = now.getFullYear(), pad = value => String(value).padStart(2, '0');
+    return new RegExp(`${pad(day)}/${pad(month)}/${year}|${day}/${month}/${year}|${year}-${pad(month)}-${pad(day)}|${day}\\s+tháng\\s+${month}(?!\\d)`, 'iu').test(reply);
+  }
   return false;
 }
 function score(reply, testCase, tools = []) {
@@ -47,7 +52,7 @@ async function ask(storage, account, sessionId, question, history) {
     const session = memoryService.normalizeSessionId(sessionId);
     const requestMemory = memoryService.requestView({ sessionId: session, accountId: account.id, question, history });
     const started = Date.now();
-    const result = await core.chat(question, { history, memoryService: requestMemory, useTools: true,
+    const result = await core.chat(question, { ...(args.provider ? { providerId: String(args.provider) } : {}), history, memoryService: requestMemory, useTools: true,
       knowledgeSearchEnabled: true, knowledgeSourceIds: [], permissions: account.role === 'admin' ? ['admin'] : account.permissions,
       session: { id: session, accountId: account.id, tenantId: account.tenantId } });
     const latencyMs = Date.now() - started;
@@ -59,7 +64,8 @@ async function ask(storage, account, sessionId, question, history) {
       completionStatus: result.trace?.completionStatus, responseEvaluation: result.trace?.training?.responseEvaluation });
     const steps = result.trace?.steps || [];
     const usage = steps.filter(step => step.type === 'MODEL_USAGE');
-    return { reply: String(result.replyText || ''), latencyMs, status: result.trace?.completionStatus || null,
+    return { reply: String(result.replyText || ''), latencyMs, status: result.trace?.completionStatus || (result.success === false ? 'ERROR' : null),
+      ...(result.success === false ? { error: result.errorCode || result.error || 'ERROR' } : {}),
       stopReason: result.trace?.stopReason || null, modelCalls: result.trace?.executionBudget?.modelCalls ?? usage.length,
       inputTokens: usage.reduce((sum, step) => sum + (step.inputTokens || step.inputTokensEstimated || 0), 0),
       stages: usage.map(step => step.stage), sql: (result.toolCalls || []).filter(call => call.toolName === 'execute_sql_query').map(call => ({ ok: call.success, sql: call.args?.sql, error: call.error })),
@@ -137,7 +143,7 @@ const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).
       + (verdict.passed ? '' : ` | missing ${JSON.stringify(verdict.missing)} forbidden ${JSON.stringify(verdict.forbidden)} tools ${JSON.stringify(verdict.missingTools || [])} | ${final.reply.replace(/\s+/g, ' ').slice(0, 140)}`));
   }
   const allTurns = results.flatMap(item => item.turns);
-  const summary = { label, runId, cases: results.length, passed: results.filter(item => item.passed).length,
+  const summary = { label, runId, providerId: args.provider || null, cases: results.length, passed: results.filter(item => item.passed).length,
     accuracy: results.length ? +(results.filter(item => item.passed).length / results.length).toFixed(3) : null,
     genericFailure: allTurns.filter(turn => /^Chưa thể hoàn tất/.test(turn.reply)).length,
     partial: allTurns.filter(turn => turn.status !== 'SUCCESS').length, turns: allTurns.length,

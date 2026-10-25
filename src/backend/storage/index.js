@@ -96,14 +96,18 @@ function scheduleDeferredTask(key, callback) {
   const task = { callback };
   task.timer = setTimeout(() => {
     deferredTasks.delete(key);
+    // The callback opens its own storage operation with the stores it needs;
+    // wrapping it in another one would load every store for nothing.
     deferredTaskChain = deferredTaskChain
-      .then(() => run(task.callback, { independent: true }))
+      .then(() => task.callback())
       .catch(error => console.error(`[Storage] Deferred task '${key}' failed:`, error.code || error.message || error.name || 'ERROR'));
   }, 100);
   task.timer.unref?.();
   deferredTasks.set(key, task);
 }
 
+// Runs callback once the current operation commits. It runs outside any storage
+// operation and must open its own (storage.run) if it reads or writes stores.
 function afterCommit(key, callback) {
   if (!enabled()) return false;
   const work = scopes.getStore();

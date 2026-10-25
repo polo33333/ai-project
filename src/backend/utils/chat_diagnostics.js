@@ -80,7 +80,7 @@ function buildChatDiagnostics(trace) {
       ...(step.failures ? { failures: step.failures } : {}),
       ...(step.type === 'MODEL_USAGE' ? { stage: step.stage, repairAttempt: step.repairAttempt, providerId: step.providerId,
         model: step.model, durationMs: step.durationMs, calls: step.calls, inputTokens: step.inputTokens,
-        outputTokens: step.outputTokens, totalTokens: step.totalTokens, inputTokensEstimated: step.inputTokensEstimated,
+        outputTokens: step.outputTokens, cachedInputTokens: step.cachedInputTokens, totalTokens: step.totalTokens, inputTokensEstimated: step.inputTokensEstimated,
         usageAvailable: step.usageAvailable, messageTokensEstimated: step.messageTokensEstimated,
         toolDefinitionsTokensEstimated: step.toolDefinitionsTokensEstimated, toolResultTokensEstimated: step.toolResultTokensEstimated,
         contextFootprint: step.contextFootprint } : {}) }))

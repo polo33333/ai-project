@@ -83,7 +83,7 @@ async function execute(name, args, context) {
     const definition = await automation.registry.getTemplate(args.templateId, identity); readOnly(definition);
     if (context.governedController) {
       if (typeof context.assessWorkflow !== 'function') throw fail('WORKFLOW_ASSESSMENT_REQUIRED');
-      const assessment = await context.assessWorkflow(definition, args.inputs || {});
+      const assessment = await context.assessWorkflow(definition, args.inputs || {}, { planned: context.plannedWorkflow === args.templateId });
       if (Array.isArray(assessment?.confirmedSlots)) args.inputs = Object.fromEntries(Object.entries(args.inputs || {})
         .filter(([key]) => assessment.confirmedSlots.includes(key)));
     }

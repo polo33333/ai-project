@@ -178,7 +178,9 @@ async function callGemini(provider, messages, tools, signal, options = {}) {
       usage: data.usageMetadata ? {
         inputTokens: data.usageMetadata.promptTokenCount || 0,
         outputTokens: data.usageMetadata.candidatesTokenCount || 0,
-        totalTokens: data.usageMetadata.totalTokenCount || 0
+        totalTokens: data.usageMetadata.totalTokenCount || 0,
+        // Implicit prompt caching: part of promptTokenCount served from cache.
+        cachedInputTokens: data.usageMetadata.cachedContentTokenCount || 0
       } : null,
       tool_calls: funcParts.map((funcPart, index) => ({
         id: `gemini-tool-${Date.now()}-${index}`,
@@ -199,7 +201,8 @@ async function callGemini(provider, messages, tools, signal, options = {}) {
     usage: data.usageMetadata ? {
       inputTokens: data.usageMetadata.promptTokenCount || 0,
       outputTokens: data.usageMetadata.candidatesTokenCount || 0,
-      totalTokens: data.usageMetadata.totalTokenCount || 0
+      totalTokens: data.usageMetadata.totalTokenCount || 0,
+      cachedInputTokens: data.usageMetadata.cachedContentTokenCount || 0
     } : null
   };
 }

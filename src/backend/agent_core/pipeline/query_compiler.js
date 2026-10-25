@@ -84,7 +84,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
   };
 
   // Filters: grounded in the question (or the previous one for carried scope).
-  const where = [], requestFilters = [], scope = [], textFilters = [];
+  const where = [], requestFilters = [], scope = [], textFilters = [], exclusions = [];
   for (const [filterIndex, filter] of (contract.filters || []).entries()) {
     const ref = resolve(filter.ref);
     const operator = filter.operator || 'eq';
@@ -146,6 +146,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
       : asked.every(item => source.includes(fold(item)) || evidence.includes(fold(item)));
     if (!grounded) throw fail('V2_FILTER_UNGROUNDED', `${filter.ref} = ${values.join(',')}${filter.fromResult ? ' (not in the previous result)' : ''}`);
     if (operator === 'eq' && !NUMERIC_TYPES.has(type)) textFilters.push({ index: filterIndex, ...identity });
+    if (['ne', 'notIn'].includes(operator) && !NUMERIC_TYPES.has(type)) exclusions.push({ index: filterIndex, ...identity, values });
     const sqlValues = values.map(item => NUMERIC_TYPES.has(type) ? String(Number(item)) : text(item));
     if (operator === 'contains') {
       const escaped = String(value).replace(/[%_[]/g, char => `[${char}]`);
@@ -163,7 +164,11 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
   }
 
   const select = [], groupBy = [], outputs = [];
-  const operation = contract.operation === 'aggregate' ? 'aggregate' : 'list';
+  // Measures make an aggregate even when the contract omits the operation; an
+  // explicit list that carries them is contradictory. (A list may group: "theo X".)
+  const summarizes = Boolean(contract.measures?.length);
+  if (contract.operation === 'list' && summarizes) throw fail('V2_OPERATION_MISMATCH', 'operation=list with measures; use operation=aggregate or drop the measures');
+  const operation = contract.operation === 'aggregate' || (!contract.operation && summarizes) ? 'aggregate' : 'list';
   if (operation === 'aggregate') {
     for (const group of contract.groupBy || []) {
       const ref = resolve(group.ref, { display: !group.grain });
@@ -174,7 +179,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
         name = { year: 'Năm', day: 'Ngày', month: 'Tháng' }[group.grain] || 'Tháng';
       }
       const alias = label(name, ref.entry);
-      select.push(`${expression} AS ${quote(alias)}`); groupBy.push(expression); outputs.push({ alias, kind: 'dimension' });
+      select.push(`${expression} AS ${quote(alias)}`); groupBy.push(expression); outputs.push({ alias, kind: 'dimension', ...(group.grain ? { grain: group.grain } : {}) });
     }
     if (!contract.measures?.length) throw fail('V2_MEASURE_REQUIRED');
     for (const measure of contract.measures) {
@@ -258,7 +263,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
   if (!joinCheck.valid) throw fail('V2_SELF_CHECK_JOIN', `${joinCheck.code} ${joinCheck.error}`);
   const singleUse = requestFilters.filter(item => joinPlan.tableRefs.filter(ref => key(ref.tableName) === key(item.table)).length === 1);
   if (!require('../harness/schema_scope').matchesScope(sql, singleUse)) throw fail('V2_SELF_CHECK_SCOPE');
-  return { sql, joinPlan, requestFilters, textFilters, outputs, scope, operation, root: root.tableName, analysis: contract.analysis || 'none' };
+  return { sql, joinPlan, requestFilters, textFilters, exclusions, outputs, scope, operation, root: root.tableName, analysis: contract.analysis || 'none' };
 }
 
 module.exports = { compile };

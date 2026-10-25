@@ -60,9 +60,19 @@ function convertMessagesToAnthropicFormat(messages) {
   return result;
 }
 
+// input_tokens excludes prompt-cache reads and writes; count them as input so
+// quotas and budgets see the full prompt, and report the cached share apart.
+function usageOf(usage) {
+  if (!usage) return null;
+  const cached = usage.cache_read_input_tokens || 0;
+  const written = usage.cache_creation_input_tokens || 0;
+  const inputTokens = (usage.input_tokens || 0) + cached + written;
+  return { inputTokens, outputTokens: usage.output_tokens || 0, totalTokens: inputTokens + (usage.output_tokens || 0),
+    cachedInputTokens: cached, cacheWriteTokens: written };
+}
+
 async function callAnthropic(provider, messages, tools, signal) {
-  const systemMessages = messages.filter(m => m.role === 'system');
-  const systemMsg = systemMessages.length ? { content: systemMessages.map(m => m.content).join('\n\n') } : null;
+  const systemMessages = messages.filter(m => m.role === 'system' && m.content);
   const nonSystemMessages = messages.filter(m => m.role !== 'system');
 
   const body = {
@@ -72,7 +82,14 @@ async function callAnthropic(provider, messages, tools, signal) {
     temperature: 0.3
   };
 
-  if (systemMsg) body.system = systemMsg.content;
+  // One block per system message. The first one (persona or stage rules) is the
+  // stable part: a cache breakpoint there covers the tools and that block, and
+  // later blocks (memory, request clock) may change per request.
+  const promptCache = process.env.ANTHROPIC_PROMPT_CACHE !== 'false';
+  if (systemMessages.length) {
+    body.system = systemMessages.map((m, index) => ({ type: 'text', text: String(m.content),
+      ...(promptCache && index === 0 ? { cache_control: { type: 'ephemeral' } } : {}) }));
+  }
 
   if (provider.supportsToolCalling && tools && tools.length > 0) {
     body.tools = tools.map(t => ({
@@ -110,11 +127,7 @@ async function callAnthropic(provider, messages, tools, signal) {
       role: 'assistant',
       content: data.content?.filter(b => b.type === 'text').map(b => b.text).join('\n') || null,
       finish_reason: data.stop_reason,
-      usage: data.usage ? {
-        inputTokens: data.usage.input_tokens || 0,
-        outputTokens: data.usage.output_tokens || 0,
-        totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0)
-      } : null,
+      usage: usageOf(data.usage),
       tool_calls: toolUseBlocks.map((toolUseBlock, index) => ({
         id: toolUseBlock.id || `claude-tool-${Date.now()}-${index}`,
         type: 'function',
@@ -131,11 +144,7 @@ async function callAnthropic(provider, messages, tools, signal) {
     content: data.content?.filter(b => b.type === 'text').map(b => b.text).join('\n') || null,
     finish_reason: data.stop_reason,
     tool_calls: null,
-    usage: data.usage ? {
-      inputTokens: data.usage.input_tokens || 0,
-      outputTokens: data.usage.output_tokens || 0,
-      totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0)
-    } : null
+    usage: usageOf(data.usage)
   };
 }
 

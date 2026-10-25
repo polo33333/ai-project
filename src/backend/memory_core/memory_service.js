@@ -11,6 +11,97 @@ function emptyReferences() {
   return { lastEntity: null, lastDataset: null, lastExport: null };
 }
 
+// The turn log is the single record of conversation state. A turn that passed
+// the quality gate carries a snapshot of the state after it (turn.memory); a
+// turn that did not carries what it waits for (turn.pending). The session
+// fields below are read from the newest of these, so readers are unchanged and
+// two requests writing one conversation merge by turn instead of by field.
+// baseState holds state older than every snapshot in the log (migrated
+// sessions, or a snapshot whose turn was trimmed).
+const STATE_FIELDS = ['lastPlan', 'references', 'entityReferences', 'conversationState', 'businessState', 'lastWorkflowRun', 'activeScope', 'summary'];
+const ATTACHED = Symbol('memoryStateAttached');
+const KEPT_SNAPSHOTS = 2;
+
+function initialState() {
+  return { lastPlan: null, references: emptyReferences(), entityReferences: [], conversationState: null,
+    businessState: null, lastWorkflowRun: null, activeScope: null, summary: '' };
+}
+
+// Events are ordered by time, then by a per-session sequence for writes in the
+// same millisecond.
+// A missing time sorts first ("0" precedes every ISO date).
+const order = (at, seq) => `${at || '0'}|${String(seq || 0).padStart(12, '0')}`;
+const snapshotOrder = turn => order(turn.memory.at, turn.memory.seq);
+function nextSeq(session) {
+  session.seq = (Number(session.seq) || 0) + 1;
+  return session.seq;
+}
+
+function latestSnapshot(session) {
+  let latest = null;
+  for (const turn of session.turns || []) if (turn.memory && (!latest || snapshotOrder(turn) > snapshotOrder(latest))) latest = turn;
+  return latest;
+}
+
+function stateOf(session) {
+  return latestSnapshot(session)?.memory || session.baseState;
+}
+
+const baseOrder = base => order(base.at, base.seq);
+const basePendingOrder = base => order(base.pendingAt || base.pendingTurn?.updatedAt, base.pendingSeq);
+
+function pendingOf(session) {
+  const snapshot = latestSnapshot(session);
+  const since = snapshot ? snapshotOrder(snapshot) : baseOrder(session.baseState);
+  let latest = null;
+  const consider = (value, key) => { if (value && (!latest || key > latest.key)) latest = { value, key }; };
+  for (const turn of session.turns || []) consider(turn.pending, order(turn.pendingAt || turn.pending?.updatedAt, turn.pendingSeq));
+  consider(session.baseState.pendingTurn, basePendingOrder(session.baseState));
+  return latest && latest.key > since ? latest.value : null;
+}
+
+function attachState(session) {
+  if (!session || session[ATTACHED]) return session;
+  for (const field of STATE_FIELDS) Object.defineProperty(session, field, { configurable: true, enumerable: false,
+    get() { return stateOf(this)[field]; },
+    set(value) { stateOf(this)[field] = value; } });
+  Object.defineProperty(session, 'pendingTurn', { configurable: true, enumerable: false,
+    get() { return pendingOf(this); },
+    // Direct assignment (older callers and tests) replaces every waiting turn.
+    set(value) {
+      for (const turn of this.turns || []) { delete turn.pending; delete turn.pendingAt; delete turn.pendingSeq; }
+      this.baseState.pendingTurn = value && typeof value === 'object' ? value : null;
+      this.baseState.pendingAt = this.baseState.pendingTurn ? new Date().toISOString() : null;
+      this.baseState.pendingSeq = this.baseState.pendingTurn ? nextSeq(this) : null;
+    } });
+  Object.defineProperty(session, ATTACHED, { value: true, enumerable: false });
+  return session;
+}
+
+// Keeps the newest snapshots only; the state is always the newest one.
+function pruneSnapshots(session) {
+  const snapshots = (session.turns || []).filter(turn => turn.memory)
+    .sort((a, b) => snapshotOrder(b).localeCompare(snapshotOrder(a)));
+  for (const turn of snapshots.slice(KEPT_SNAPSHOTS)) delete turn.memory;
+}
+
+// Trimming the log never drops the current state: a snapshot that would leave
+// with its turn becomes the base state.
+function trimTurns(session, max) {
+  const turns = session.turns || [];
+  if (turns.length <= max) return;
+  const dropped = turns.slice(0, turns.length - max), kept = turns.slice(-max);
+  const newest = latestSnapshot({ turns });
+  if (newest && dropped.includes(newest)) {
+    const { at, seq, ...state } = newest.memory;
+    const base = session.baseState;
+    const pending = base.pendingTurn && basePendingOrder(base) > order(at, seq)
+      ? { pendingTurn: base.pendingTurn, pendingAt: base.pendingAt, pendingSeq: base.pendingSeq } : {};
+    session.baseState = { ...state, at, seq, ...pending };
+  }
+  session.turns = kept;
+}
+
 class MemoryService {
   constructor(options = {}) {
     this._save = options.save || (store => StorageHelper.saveJson('conversation_memory.json', store));
@@ -37,19 +128,23 @@ class MemoryService {
   }
 
   migrateSession(session, id) {
-    const value = session && typeof session === 'object' ? session : {};
-    return {
+    const value = { ...(session && typeof session === 'object' ? session : {}) };
+    // Sessions written before the turn log held state keep it as the base state.
+    const base = value.baseState && typeof value.baseState === 'object' ? { ...value.baseState } : initialState();
+    if (!value.baseState) for (const field of STATE_FIELDS) if (value[field] !== undefined && value[field] !== null) base[field] = value[field];
+    if (!value.baseState && value.pendingTurn && typeof value.pendingTurn === 'object') base.pendingTurn = value.pendingTurn;
+    base.references = { ...emptyReferences(), ...(base.references || {}) };
+    base.summary = typeof base.summary === 'string' || (base.summary && typeof base.summary === 'object') ? base.summary : '';
+    for (const field of [...STATE_FIELDS, 'pendingTurn']) delete value[field];
+    return attachState({
       ...value,
       id: value.id || id,
-      summary: typeof value.summary === 'string' || (value.summary && typeof value.summary === 'object') ? value.summary : '',
       messages: Array.isArray(value.messages) ? value.messages : [],
-      activeScope: value.activeScope || null,
-      lastPlan: value.lastPlan || null,
-      references: { ...emptyReferences(), ...(value.references || {}) },
-      pendingTurn: value.pendingTurn && typeof value.pendingTurn === 'object' ? value.pendingTurn : null,
+      turns: Array.isArray(value.turns) ? value.turns : [],
+      baseState: base,
       createdAt: value.createdAt || new Date().toISOString(),
       updatedAt: value.updatedAt || value.createdAt || new Date().toISOString()
-    };
+    });
   }
 
   migrateStore() {
@@ -134,6 +229,10 @@ class MemoryService {
         session = this.migrateSession({ accountId: accountId || null }, id);
         this.store.sessions[storageKey] = session;
       }
+    }
+    if (session && !session[ATTACHED]) {
+      session = this.migrateSession(session, id);
+      this.store.sessions[storageKey] = session;
     }
     if (session) Object.defineProperty(session, '_storageKey', { value: storageKey, configurable: true, enumerable: false });
     return session;
@@ -281,7 +380,7 @@ class MemoryService {
     if (!session) return { recorded: false, reason: 'invalid_session' };
     if (embedId) session.embedId = embedId;
     const now = new Date().toISOString();
-    session.pendingTurn = sanitizeObject({
+    const pending = sanitizeObject({
       question: userMessage.content,
       completionStatus: String(completionStatus || 'UNKNOWN').slice(0, 40),
       failures: Array.isArray(responseEvaluation?.failures)
@@ -291,10 +390,19 @@ class MemoryService {
       scope: policy.getDomain(currentPlan?.table),
       updatedAt: now
     });
+    // On the turn just logged for this question, or a turn of its own.
+    let turn = session.turns.at(-1);
+    if (!turn || turn.memory || turn.pending) {
+      turn = { id: crypto.randomUUID(), at: now, question: pending.question.slice(0, 2000), reply: '', status: pending.completionStatus,
+        dbSourceId: pending.dbSourceId, contract: null, result: null };
+      session.turns.push(turn);
+      trimTurns(session, this.maxTurns);
+    }
+    turn.pending = pending; turn.pendingAt = now; turn.pendingSeq = nextSeq(session);
     session.updatedAt = now;
     this.pruneSessions(session.accountId);
     this.persist();
-    return { recorded: true, pendingTurn: session.pendingTurn };
+    return { recorded: true, pendingTurn: pending };
   }
 
   getLegacyContext(sessionId, fallbackHistory = [], limit = 10, accountId = null) {
@@ -360,6 +468,13 @@ class MemoryService {
     if (!session) return { persisted: false, reason: 'invalid_session' };
     if (embedId) session.embedId = embedId;
     const now = new Date().toISOString();
+    const stored = logged.turn && session.turns.find(turn => turn.id === logged.turn.id);
+    if (stored) {
+      const previous = stateOf(session);
+      stored.memory = { ...Object.fromEntries(STATE_FIELDS.map(field => [field, structuredClone(previous[field] ?? initialState()[field])])),
+        at: now, seq: nextSeq(session) };
+      pruneSnapshots(session);
+    }
     userMessage.timestamp = now;
     assistantMessage.timestamp = now;
     userMessage.id = crypto.randomUUID();
@@ -423,10 +538,10 @@ class MemoryService {
     if (ids.length > this.maxSessions) oldestFirst(ids).slice(0, ids.length - this.maxSessions).forEach(id => delete this.store.sessions[id]);
   }
 
-  // Append-only turn log: every answered turn, PARTIAL ones included, with the
-  // v2 query contract and a compact preview of the rows the user saw. Follow-ups
-  // and row references ("người thứ 2 ở trên") read this log; the success-only
-  // fields above stay for the legacy agent loop.
+  // Turn log: every answered turn, PARTIAL ones included, with the v2 query
+  // contract and a compact preview of the rows the user saw. Follow-ups and row
+  // references ("người thứ 2 ở trên") read it, and it carries the state
+  // snapshots the session fields are derived from.
   recordTurn({ sessionId, accountId = null, question, reply, completionStatus, currentPlan, toolCalls = [], turnResult = null } = {}) {
     if (!policy.isEnabled() || currentPlan?.independentWeb) return { recorded: false };
     const session = this.getSession(sessionId, true, accountId);
@@ -437,17 +552,32 @@ class MemoryService {
     const rows = turnResult?.rows || source?.result.rows || [];
     const columns = rows.length ? Object.keys(rows[0]).slice(0, 8) : [];
     const cell = value => value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === 'string' ? value.slice(0, 80) : value ?? null;
+    // The run a turn started or resumed: its result arrives later and belongs to that turn.
+    const started = [...toolCalls].reverse().find(call => ['run_workflow', 'resume_workflow'].includes(call.toolName) && call.success
+      && (call.result?.runId || call.result?.execution?.id));
     const turn = sanitizeObject({ id: crypto.randomUUID(), at: now, question: String(question || '').slice(0, 2000),
       reply: sanitizeMessage({ role: 'assistant', content: reply || '' }, 3000)?.content || '',
       status: String(completionStatus || 'UNKNOWN').slice(0, 40),
       dbSourceId: currentPlan?.v2?.dbSourceId || currentPlan?.dbSourceId || null,
       contract: currentPlan?.v2?.contract || null,
       ...(turnResult?.workflow ? { workflow: turnResult.workflow } : {}),
+      ...(started && !turnResult?.workflow ? { workflowRunId: started.result.runId || started.result.execution.id } : {}),
       result: source || turnResult?.rows ? { rowCount: rows.length, hasMore: Boolean(source?.result.hasMore), columns,
         preview: rows.slice(0, 20).map(row => columns.map(column => cell(row[column]))) } : null });
-    session.turns = [...(session.turns || []), turn].slice(-this.maxTurns);
+    // A finished workflow completes the user's turn that started it, so "kết quả
+    // trên" points at the question the user asked, not a separate system turn.
+    const runId = turnResult?.workflow?.runId;
+    const origin = runId ? (session.turns || []).findLastIndex(item => item.workflowRunId === runId && !item.workflow) : -1;
+    let stored = turn;
+    if (origin >= 0) {
+      const { id, at, question: asked } = session.turns[origin];
+      stored = session.turns[origin] = { ...turn, id, at, question: asked, completedAt: now };
+    } else {
+      session.turns.push(turn);
+      trimTurns(session, this.maxTurns);
+    }
     session.updatedAt = now;
-    return { recorded: true, turn };
+    return { recorded: true, turn: stored };
   }
 
   clearSession(sessionId, accountId = null) {

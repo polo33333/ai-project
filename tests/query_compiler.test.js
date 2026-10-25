@@ -127,3 +127,17 @@ test('a flag filter is grounded by its quoted phrase and only accepts true or fa
   assert.throws(() => compile({ root: 'M_Customer', operation: 'list', fields: ['M_Customer.CustomerCode'],
     filters: [{ ref: 'M_Customer.IsActive', operator: 'eq', value: 1, evidence: 'đang dùng' }] }, catalog, { question }), /V2_FILTER_UNGROUNDED/);
 });
+
+test('measures make an aggregate when the operation is omitted; a list with measures is rejected', () => {
+  const ranking = { root: 'T_ElectricityOutput', groupBy: [{ ref: 'T_ElectricityOutput.CustomerID->CustomerName' }],
+    measures: [{ ref: 'T_ElectricityOutput.FinalTotalAmount', aggregation: 'SUM' }], sort: { by: 'measure:0', direction: 'DESC' }, limit: 1,
+    filters: [{ ref: 'T_ElectricityOutput.ElectricityOutputDate', operator: 'period', value: '2024-02', evidence: 'tháng 2024-02' }] };
+  const question = 'Khách hàng nào có tiền hóa đơn sau thuế cao nhất tháng 2024-02?';
+  const inferred = compile(ranking, catalog, { question });
+  assert.equal(inferred.operation, 'aggregate');
+  assert.match(inferred.sql, /SUM\(t0\.\[FinalTotalAmount\]\)/);
+  assert.match(inferred.sql, /GROUP BY t1\.\[CustomerName\]/);
+  assert.throws(() => compile({ ...ranking, operation: 'list' }, catalog, { question }), { code: 'V2_OPERATION_MISMATCH' });
+  // A plain list without measures stays a list.
+  assert.equal(compile({ root: 'M_Employee' }, catalog, { question: 'ds nv' }).operation, 'list');
+});

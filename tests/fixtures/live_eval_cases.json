@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "IPMS (db-src-1785684548077), oracle values computed 2026-10-23 with hand-written read-only SQL, not from model answers",
-  "scoring": "must: every item present; mustNot: no item present. Strings match case-insensitively; num matches digits with separators removed; re is a case-insensitive regex. mustTools: tool names that must have succeeded in the final turn.",
+  "scoring": "must: every item present; mustNot: no item present. Strings match case-insensitively; num matches digits with separators removed; re is a case-insensitive regex; today matches the run date (dd/mm/yyyy, yyyy-mm-dd or \"d tháng m\"). mustTools: tool names that must have succeeded in the final turn.",
   "cases": [
     {
       "id": "list-employees",
@@ -739,7 +739,7 @@
       ],
       "must": [
         {
-          "re": "24/10/2026|24-10-2026|2026-10-24|24 tháng 10"
+          "today": true
         }
       ],
       "mustNot": [

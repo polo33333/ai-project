@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đánh giá trí tuệ backend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f0f2f5; --border:#e2e5ea;
+  --text:#1b1f27; --muted:#5d6675; --accent:#2f5bd3; --accent-soft:#e8eefc;
+  --good:#1d7f4e; --good-soft:#e5f4ec; --warn:#a86300; --warn-soft:#fbf1e1;
+  --bad:#b4312b; --bad-soft:#fbe9e8; --info:#5b45c2; --info-soft:#efebfb;
+  --code-bg:#eef0f4; --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111318; --surface:#181b22; --surface-2:#1f232c; --border:#2b303b;
+    --text:#e6e8ec; --muted:#9aa3b2; --accent:#7c9cf5; --accent-soft:#1f2a44;
+    --good:#5cc48d; --good-soft:#16301f; --warn:#e6a64a; --warn-soft:#33270f;
+    --bad:#f07a73; --bad-soft:#3a1a19; --info:#a896f2; --info-soft:#261f40;
+    --code-bg:#232833; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111318; --surface:#181b22; --surface-2:#1f232c; --border:#2b303b;
+  --text:#e6e8ec; --muted:#9aa3b2; --accent:#7c9cf5; --accent-soft:#1f2a44;
+  --good:#5cc48d; --good-soft:#16301f; --warn:#e6a64a; --warn-soft:#33270f;
+  --bad:#f07a73; --bad-soft:#3a1a19; --info:#a896f2; --info-soft:#261f40;
+  --code-bg:#232833; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 "Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.86em}
+code{background:var(--code-bg);padding:1px 5px;border-radius:4px;word-break:break-word}
+a{color:var(--accent)}
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:32px;max-width:1240px;margin:0 auto;padding:32px 24px 80px}
+nav.toc{position:sticky;top:24px;align-self:start;font-size:13.5px}
+nav.toc .label{font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-size:11.5px;margin-bottom:8px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:5px 10px;border-left:2px solid var(--border)}
+nav.toc a:hover{color:var(--text);border-left-color:var(--accent)}
+header.hero{margin-bottom:28px}
+.eyebrow{color:var(--accent);font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+h1{font-size:30px;line-height:1.25;margin:6px 0 10px}
+h2{font-size:22px;margin:48px 0 14px;padding-top:8px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:26px 0 10px}
+p{margin:0 0 12px}
+.lead{color:var(--muted);font-size:16px;max-width:780px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:13px;margin-top:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.verdict{border-left:4px solid var(--accent)}
+.verdict strong{color:var(--text)}
+.scores{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.score{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.score .name{font-size:13px;color:var(--muted);font-weight:500}
+.score .val{font-size:26px;font-weight:700;margin:2px 0 6px;font-variant-numeric:tabular-nums}
+.score .val small{font-size:14px;color:var(--muted);font-weight:500}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.bar span{display:block;height:100%;border-radius:3px}
+.score .note{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+.lv-good{background:var(--good)} .lv-mid{background:var(--warn)} .lv-low{background:var(--bad)}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;vertical-align:middle;white-space:nowrap}
+.p-good{background:var(--good-soft);color:var(--good)}
+.p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-bad{background:var(--bad-soft);color:var(--bad)}
+.p-info{background:var(--info-soft);color:var(--info)}
+.p-acc{background:var(--accent-soft);color:var(--accent)}
+ul.clean{margin:0;padding-left:18px}
+ul.clean li{margin:4px 0}
+.pros h4,.cons h4{margin:0 0 8px;font-size:14px}
+.pros h4{color:var(--good)} .cons h4{color:var(--bad)}
+.ev{color:var(--muted);font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600;background:var(--surface-2)}
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.tablewrap table tr:last-child td{border-bottom:0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+/* flow diagrams */
+.flow{display:flex;flex-direction:column;gap:0}
+.stage{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:stretch}
+.stage .tag{font-size:12px;font-weight:600;color:var(--muted);padding-top:12px;text-align:right}
+.stage .boxes{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;border-left:2px dashed var(--border);padding-left:14px}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:13px;line-height:1.4;max-width:100%}
+.box b{display:block;font-size:13px}
+.box .s{color:var(--muted);font-size:12px}
+.box.model{border-color:var(--info);background:var(--info-soft)}
+.box.det{border-color:var(--good);background:var(--good-soft)}
+.box.risk{border-color:var(--bad);background:var(--bad-soft)}
+.box.new{border-color:var(--accent);background:var(--accent-soft)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid}
+.callout{border-radius:10px;padding:12px 14px;font-size:14px;margin:12px 0}
+.callout.warn{background:var(--warn-soft);border:1px solid var(--warn)}
+.callout.info{background:var(--accent-soft);border:1px solid var(--accent)}
+.roadmap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.phase h3{margin-top:0}
+.item{border-top:1px solid var(--border);padding:10px 0}
+.item:first-of-type{border-top:0}
+.item b{font-size:14px}
+.item p{font-size:13.5px;color:var(--muted);margin:4px 0 0}
+.calls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.callrow{display:grid;grid-template-columns:200px minmax(0,1fr) 70px;gap:12px;align-items:center;font-size:13.5px}
+.track{height:18px;background:var(--surface-2);border-radius:5px;position:relative;overflow:hidden}
+.track span{position:absolute;top:0;bottom:0;border-radius:5px}
+.item.done b::after{content:" ✓";color:var(--good)}
+.item.done{opacity:.75}
+.kpi-up{color:var(--good);font-weight:600}
+.footer{margin-top:56px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);padding-top:16px}
+@media (max-width:980px){
+  .layout{grid-template-columns:minmax(0,1fr);padding:20px 16px 60px}
+  nav.toc{display:none}
+  .scores,.g3,.roadmap{grid-template-columns:minmax(0,1fr)}
+  .g2{grid-template-columns:minmax(0,1fr)}
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .stage .tag{text-align:left;padding-top:4px}
+  .callrow{grid-template-columns:minmax(0,1fr);gap:4px}
+  h1{font-size:24px}
+}
+@media print{nav.toc{display:none}.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Mục lục">
+  <div class="label">Mục lục</div>
+  <a href="#tong-quan">1. Kết luận tổng quan</a>
+  <a href="#kien-truc">2. Kiến trúc hiện tại</a>
+  <a href="#tra-loi">3. Độ chính xác câu trả lời</a>
+  <a href="#cong-cu">4. Gọi công cụ</a>
+  <a href="#quy-trinh">5. Quy trình nghiệp vụ</a>
+  <a href="#bo-nho">6. Bộ nhớ</a>
+  <a href="#chi-phi">7. Hiệu năng &amp; chi phí</a>
+  <a href="#bao-tri">8. Bảo trì &amp; quan sát</a>
+  <a href="#de-xuat">9. Kiến trúc đề xuất</a>
+  <a href="#lo-trinh">10. Lộ trình nâng cấp</a>
+  <a href="#do-luong">11. Cách đo tiến bộ</a>
+  <a href="#da-lam">12. Đã làm &amp; kết quả đo</a>
+  <a href="#tiep-theo">13. Công việc tiếp theo</a>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Báo cáo đánh giá · 26/10/2026</div>
+  <h1>Đánh giá khả năng trả lời thông minh của backend</h1>
+  <p class="lead">Rà soát lõi trả lời, cơ chế gọi công cụ, chọn và chạy quy trình nghiệp vụ, bộ nhớ hội thoại và bộ nhớ dài hạn của KnowledgeHub AI Server; kèm hướng nâng cấp và một kiến trúc gọn hơn.</p>
+  <div class="meta">
+    <span>Nhánh <code>main</code> · commit <code>8da1547</code></span>
+    <span>~25.000 dòng backend · 201 tệp kiểm thử</span>
+    <span>Cấu hình đang chạy: <code>HARNESS_PIPELINE=v2</code>, bộ điều khiển có kiểm soát, lưu trữ PostgreSQL</span>
+  </div>
+  <div class="callout info" style="margin-top:16px"><strong>Cập nhật cuối ngày 26/10:</strong> đã làm xong nhóm việc "Ngay" và sửa 4 ca trượt; bộ 57 câu chuẩn trên Gemini Payment tăng từ 53/57 lên <strong>57/57</strong>; qua 3 lần chạy liên tiếp đạt 170/171 lượt câu (99,4%). Đợt 2 làm xong 4 việc nhóm "Kế tiếp": 2 lần đo đều 57/57, thời gian p90 giảm từ 4,27 xuống 3,68 giây. Xem <a href="#da-lam">mục 12</a> và <a href="#tiep-theo">mục 13</a>. Phần đánh giá và chấm điểm ở mục 1–9 là ảnh chụp <em>trước</em> khi sửa; các điểm đã xử lý được gắn nhãn <span class="pill p-good">Đã sửa 26/10</span>.</div>
+</header>
+
+<section id="tong-quan">
+  <h2 style="border-top:0;margin-top:8px">1. Kết luận tổng quan</h2>
+  <div class="card verdict">
+    <p><strong>Nền móng an toàn và căn cứ dữ liệu rất tốt; phần "thông minh" bị kéo xuống bởi độ phức tạp tích tụ.</strong> Hệ thống đã đi đúng hướng ở chỗ quan trọng nhất: mô hình không còn tự viết SQL ở đường chính (v2), mọi bộ lọc phải có trích dẫn từ câu hỏi, kết quả được kiểm chứng trước khi hiển thị, quyền truy cập được kiểm tra lại cả khi đọc bộ nhớ.</p>
+    <p>Điểm yếu nằm ở chỗ có <strong>quá nhiều đường xử lý song song</strong> (v2, vòng lặp có kiểm soát, vòng lặp cũ, bộ định tuyến cũ), <strong>quá nhiều dạng lưu bộ nhớ chồng nhau</strong>, và <strong>logic điều phối viết tay trong một hàm rất lớn</strong>. Hệ quả: một câu hỏi rơi khỏi đường v2 có thể tốn tới 12 lần gọi mô hình, các lỗi tiếp nối ngữ cảnh khó dự đoán, và mỗi bản sửa dễ thêm một nhánh đặc biệt mới.</p>
+    <p style="margin:0">Hướng nâng cấp có lợi nhất: <strong>gộp "hiểu câu hỏi + giải tham chiếu" thành một lần gọi</strong>, <strong>một sổ lượt hội thoại duy nhất làm nguồn sự thật cho bộ nhớ</strong>, <strong>tách bộ điều phối thành máy trạng thái rõ ràng</strong>, và <strong>đo lường tỉ lệ rơi khỏi v2</strong> trước khi tối ưu tiếp.</p>
+  </div>
+
+  <div class="scores">
+    <div class="score"><div class="name">Độ chính xác &amp; căn cứ</div><div class="val">7,5<small>/10</small></div><div class="bar"><span class="lv-good" style="width:75%"></span></div><div class="note">Hợp đồng truy vấn v2, kiểm tra phủ bộ lọc, trích dẫn tài liệu được xác minh.</div></div>
+    <div class="score"><div class="name">Gọi công cụ</div><div class="val">7<small>/10</small></div><div class="bar"><span class="lv-good" style="width:70%"></span></div><div class="note">Danh sách trắng theo quyền, kiểm tra tham số, ngân sách, chống lặp; nhưng điều phối viết tay, chạy tuần tự.</div></div>
+    <div class="score"><div class="name">Quy trình nghiệp vụ</div><div class="val">6,5<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:65%"></span></div><div class="note">Chạy bền, tiếp tục khi thiếu đầu vào, kiểm tra phiên bản; nhưng có 4 điểm quyết định chọn quy trình.</div></div>
+    <div class="score"><div class="name">Bộ nhớ</div><div class="val">6<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:60%"></span></div><div class="note">An toàn, có cổng chất lượng; nhưng 12 dạng trạng thái chồng nhau, sở thích không vào đường v2.</div></div>
+    <div class="score"><div class="name">Hiệu năng &amp; chi phí</div><div class="val">5,5<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:55%"></span></div><div class="note">Không dùng bộ đệm lời nhắc; đường dự phòng tới 12 lần gọi; công cụ chạy tuần tự.</div></div>
+    <div class="score"><div class="name">Bảo trì &amp; quan sát</div><div class="val">6<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:60%"></span></div><div class="note">Vết xử lý rất chi tiết, nhiều kiểm thử; nhưng hàm khổng lồ, 137 biến cấu hình, mã cũ còn sống.</div></div>
+  </div>
+  <p class="ev" style="margin-top:10px">Thang điểm là đánh giá định tính của người rà soát dựa trên đọc mã và các báo cáo kiểm thử đã lưu (tham khảo <code>docs/HARNESS_FULL_AUDIT_20261023.md</code>, <code>docs/MEMORY_CONTINUITY_REVIEW_20261023.md</code>). Lượt rà soát này không chạy lại bộ đánh giá trực tiếp với mô hình.</p>
+</section>
+
+<section id="kien-truc">
+  <h2>2. Kiến trúc hiện tại: một câu hỏi đi qua những đâu</h2>
+  <p>Luồng dưới đây là cấu hình đang bật (<code>GOVERNED_CONTROLLER_MODE</code> mặc định, <code>HARNESS_PIPELINE=v2</code>). Ô tím là một lần gọi mô hình; ô xanh là bước tất định do backend làm; ô đỏ là điểm rủi ro.</p>
+  <div class="legend"><span><i style="background:var(--info-soft);border-color:var(--info)"></i>Gọi mô hình</span><span><i style="background:var(--good-soft);border-color:var(--good)"></i>Tất định (backend)</span><span><i style="background:var(--bad-soft);border-color:var(--bad)"></i>Điểm rủi ro / tốn kém</span></div>
+  <div class="card flow">
+    <div class="stage"><div class="tag">Cổng vào</div><div class="boxes">
+      <div class="box det"><b>IntelligentCore.chat</b><span class="s">core.js:106 · kiểm tra đầu vào, hạn mức, chọn nhà cung cấp</span></div>
+      <div class="box det"><b>Câu hỏi tiếp về tài liệu?</b><span class="s">document_conversation · biểu thức chính quy</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Chuẩn bị ngữ cảnh</div><div class="boxes">
+      <div class="box det"><b>memoryService.route</b><span class="s">chọn chế độ bộ nhớ</span></div>
+      <div class="box det"><b>getResolutionContext</b><span class="s">ứng viên: thực thể, tập dữ liệu, quy trình, sở thích, thuật ngữ</span></div>
+      <div class="box det"><b>Lời nhắc hệ thống</b><span class="s">persona + chỉ dẫn bộ điều khiển + thời gian</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Đường chính v2</div><div class="boxes">
+      <div class="box det"><b>Tìm lược đồ</b><span class="s">không gọi mô hình</span></div>
+      <div class="box model"><b>plan_query</b><span class="s">1 lần + 1 lần sửa · contract_pipeline.js:246</span></div>
+      <div class="box det"><b>Biên dịch → SQL</b><span class="s">query_compiler · kiểm tra phủ</span></div>
+      <div class="box det"><b>Thực thi &amp; hiển thị tất định</b><span class="s">bảng/biểu đồ/tệp</span></div>
+      <div class="box model"><b>Đánh giá quy trình phù hợp</b><span class="s">khi kind=workflow</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Dự phòng (v2 thất bại)</div><div class="boxes">
+      <div class="box model"><b>conversation_resolver</b><span class="s">1 + 1 lần sửa</span></div>
+      <div class="box model"><b>Xem xét ý định ngữ nghĩa</b><span class="s">lời nhắc ~3.000 ký tự · guarded:889</span></div>
+      <div class="box model"><b>Chọn quy trình ưu tiên</b><span class="s">workflow_preference</span></div>
+      <div class="box model risk"><b>Vòng lặp tác tử ≤ 6 vòng</b><span class="s">mô hình tự viết SQL, backend vá sau</span></div>
+      <div class="box model"><b>Kiểm tra phép tính</b><span class="s">calculation_scope</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Kết thúc</div><div class="boxes">
+      <div class="box det"><b>evaluateCompletion</b><span class="s">sửa theo pha · chống không tiến triển</span></div>
+      <div class="box det"><b>Che dữ liệu nhạy cảm, trích dẫn</b></div>
+      <div class="box det"><b>Ghi bộ nhớ</b><span class="s">sổ lượt luôn ghi; trạng thái chính chỉ khi SUCCESS</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Còn tồn tại song song</div><div class="boxes">
+      <div class="box risk"><b>Bộ định tuyến cũ</b><span class="s">chat_router.classifyFlow + orchestrator</span></div>
+      <div class="box risk"><b>AgentHarness không kiểm soát</b><span class="s">agent_harness.js</span></div>
+      <div class="box risk"><b>Vòng lặp cũ trong core.js</b><span class="s">core.js:666–744</span></div>
+      <div class="box risk"><b>WorkflowEngine tuần tự</b><span class="s">chỉ được xuất ra, không thấy nơi dùng</span></div>
+    </div></div>
+  </div>
+  <div class="callout info"><strong>Nhận xét:</strong> thiết kế v2 ("mô hình chỉ lập hợp đồng, backend biên dịch và trả lời") là quyết định đúng nhất trong hệ thống. Vấn đề là mọi thứ v2 chưa làm được đều rơi vào một đường dự phòng đắt hơn, mềm hơn và khó kiểm chứng hơn nhiều.</div>
+</section>
+
+<section id="tra-loi">
+  <h2>3. Độ chính xác và tính tối ưu của câu trả lời</h2>
+  <div class="grid g2">
+    <div class="card pros"><h4>Điểm mạnh</h4><ul class="clean">
+      <li><b>Mô hình không viết SQL ở đường chính.</b> Hợp đồng có lược đồ chặt (AJV), backend biên dịch theo danh mục đã xác minh. <span class="ev">contract_pipeline.js:1–45</span></li>
+      <li><b>Kiểm tra phủ độc lập:</b> mọi mã, ngày, năm xuất hiện trong câu hỏi phải nằm trong một bộ lọc, nếu không hợp đồng bị từ chối. <span class="ev">contract_pipeline.js:90</span></li>
+      <li><b>Mỗi bộ lọc phải kèm trích dẫn nguyên văn</b> từ câu hỏi; giá trị đầu vào quy trình cũng vậy.</li>
+      <li><b>Câu hỏi tiếp nối giữ chỉ tiêu cũ</b> trừ khi người dùng nói rõ sự khác biệt ("trước"/"sau" thuế). <span class="ev">keepMeasures</span></li>
+      <li><b>Nhiều lớp kiểm tra SQL ở đường dự phòng:</b> bộ lọc yêu cầu, phạm vi danh mục, khoảng thời gian tương đối, không mất phạm vi tổng hợp, cấm <code>SELECT *</code>, kiểm tra kế hoạch nối bảng. <span class="ev">guarded:765–810</span></li>
+      <li><b>Trích dẫn tài liệu được xác minh</b> và tự xóa số trích dẫn không hợp lệ. <span class="ev">core.js:775</span></li>
+      <li><b>Thời gian lấy từ backend,</b> không để mô hình đoán "hôm nay". <span class="ev">request_time.js</span></li>
+    </ul></div>
+    <div class="card cons"><h4>Điểm yếu</h4><ul class="clean">
+      <li><b>Hai mức chất lượng rất khác nhau.</b> v2 thành công thì gần như tất định; rơi về vòng lặp tác tử thì mô hình lại viết SQL và backend phải vá (<code>completeProjection</code>, <code>completeAggregation</code>). Chưa có số liệu tỉ lệ rơi.</li>
+      <li><b>Phụ thuộc nhiều vào biểu thức chính quy tiếng Việt</b> để đoán ý (chào hỏi, câu tiếp nối, "không có cột", xuất tệp…). Dễ vỡ với câu không dấu, viết tắt, lỗi chính tả. <span class="ev">guarded:647, core.js:358, request_planner.js (18 chỗ)</span></li>
+      <li><b>Câu trả lời v2 khô.</b> Hiển thị tất định đúng số nhưng ít diễn giải; chỉ có phân tích bất thường. Người dùng thường muốn "con số + ý nghĩa".</li>
+      <li><b>Lời nhắc khổng lồ viết liền một dòng</b> (xem xét ý định ~3.000 ký tự) nằm trong mã, không có phiên bản hóa, khó thử nghiệm A/B.</li>
+      <li><b>Không có độ tin cậy trả về cho người dùng.</b> Khi v2 rơi, người dùng không biết câu trả lời đi đường kém chắc chắn hơn.</li>
+      <li><b>"SQL hợp lệ chưa đồng nghĩa trả lời đúng nghiệp vụ"</b> — đúng như báo cáo 23/10; các bản vá đã thu hẹp nhưng chưa có hợp đồng chỉ tiêu dùng chung cho mọi đường.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="cong-cu">
+  <h2>4. Gọi công cụ</h2>
+  <div class="grid g2">
+    <div class="card pros"><h4>Điểm mạnh</h4><ul class="clean">
+      <li><b>Định nghĩa công cụ sau lọc quyền chính là danh sách trắng thực thi.</b> <span class="ev">guarded:140</span></li>
+      <li><b>Mở công cụ theo giai đoạn:</b> chưa tìm lược đồ thì chưa được chạy SQL, chưa có kết quả thì chưa được vẽ biểu đồ/xuất tệp. <span class="ev">staged_tools.js</span></li>
+      <li><b>Kiểm tra tham số theo lược đồ</b>, dấu vân tay chống gọi lặp (<code>NO_PROGRESS</code>), ngân sách gọi mô hình/SQL/công cụ, giới hạn thời gian cho từng lần gọi. <span class="ev">guarded:35–67, 759–764</span></li>
+      <li><b>Kho kết quả trong yêu cầu</b> + <code>read_context_result</code>: không nhét toàn bộ kết quả lớn vào ngữ cảnh — mẫu thiết kế rất tốt.</li>
+      <li><b>Hỗ trợ nhà cung cấp không có gọi công cụ gốc</b> (gọi công cụ dạng JSON), và công cụ MCP bên ngoài.</li>
+      <li><b>Lời gọi bị từ chối vẫn được ghi</b> với lý do, trạng thái "chưa thực thi" — tốt cho kiểm toán.</li>
+    </ul></div>
+    <div class="card cons"><h4>Điểm yếu</h4><ul class="clean">
+      <li><b>Cả mô hình lẫn backend cùng "lái".</b> Backend chèn ít nhất 6 loại lời gọi tự sinh (khôi phục lược đồ, khám phá danh mục, chọn quy trình, nhóm ngữ nghĩa, SQL đã duyệt, kế hoạch ngữ nghĩa) vào giữa vòng lặp. Thứ tự ưu tiên nằm trong chuỗi <code>if (!response …)</code> dài, khó suy luận. <span class="ev">guarded:545–608</span></li>
+      <li><b>Chạy tuần tự</b> mọi lời gọi trong một lượt, kể cả các truy vấn nhóm độc lập. <span class="ev">guarded:664</span> <span class="pill p-good">Đã sửa 26/10</span></li>
+      <li><b>Khám phá bắt buộc tốn vòng:</b> phải <code>list_workflows</code> rồi <code>search_schema</code> trước SQL; có bộ đệm danh mục nhưng vẫn tốn lượt khi chưa có.</li>
+      <li><b>Mô tả công cụ bị ghi đè trong lúc chạy</b> (ví dụ <code>execute_sql_query</code>, <code>search_schema</code>) — định nghĩa thật không nằm một chỗ. <span class="ev">guarded:126–138</span></li>
+      <li><b>Ba nơi đăng ký công cụ</b>: <code>intelligent_core/tool_registry.js</code> (906 dòng), <code>agent_core/tools/builtins</code>, <code>tool_manager</code>.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="quy-trinh">
+  <h2>5. Quy trình nghiệp vụ (workflow)</h2>
+  <div class="grid g2">
+    <div class="card pros"><h4>Điểm mạnh</h4><ul class="clean">
+      <li><b>Chạy bền, có phiên bản:</b> list/run/status/resume/cancel tách bạch, tiếp tục theo <code>revision</code>, kiểm tra chủ sở hữu và quyền.</li>
+      <li><b>Thiếu đầu vào thì hỏi lại</b> và lần sau trích đầu vào từ câu trả lời (kèm trích dẫn) để chạy tiếp.</li>
+      <li><b>Có bước kiểm tra phù hợp</b> trước khi chạy và ghi nhớ quy trình đã bị loại để không thử lại. <span class="ev">guarded:253, 749</span></li>
+      <li><b>Kết quả quy trình trở thành bộ nhớ</b> để hỏi tiếp, vẽ biểu đồ, xuất tệp mà không chạy lại.</li>
+      <li><b>Có MCP để soạn quy trình</b> từ công cụ bên ngoài.</li>
+    </ul></div>
+    <div class="card cons"><h4>Điểm yếu</h4><ul class="clean">
+      <li><b>Bốn điểm quyết định chọn quy trình:</b> (1) <code>kind=workflow</code> trong hợp đồng v2, (2) <code>workflow_preference.choose</code>, (3) mô hình tự gọi <code>run_workflow</code>, (4) bộ định tuyến cũ <code>orchestrator</code>/<code>tev1_decision</code>. Mỗi điểm có tiêu chí hơi khác nhau.</li>
+      <li><b>Thêm một lần gọi mô hình</b> để đánh giá phù hợp mỗi khi định chạy quy trình.</li>
+      <li><b>Quy trình chưa có "hợp đồng đầu ra" so khớp tất định</b> với câu hỏi (thao tác, mức hạt, bộ lọc hỗ trợ) — đang dựa vào mô hình đọc mô tả.</li>
+      <li><b>Hai cơ chế quy trình:</b> <code>automation/runtime.js</code> (đang dùng) và <code>agent_core/workflows/WorkflowEngine</code> (tuần tự, không lưu bền, chỉ được xuất ra trong <code>agent_core/index.js</code>).</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="bo-nho">
+  <h2>6. Bộ nhớ</h2>
+  <p>Bộ nhớ là phần đầu tư nhiều nhất và an toàn nhất, nhưng cũng phân mảnh nhất. Bảng dưới liệt kê các dạng trạng thái đang cùng tồn tại trong một phiên.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Trạng thái</th><th>Ai đọc</th><th>Ghi khi</th><th>Nhận xét</th></tr></thead>
+    <tbody>
+      <tr><td><code>messages</code></td><td>Đường cũ, ngữ cảnh gần</td><td>Chỉ khi SUCCESS</td><td>Tối đa 40 tin</td></tr>
+      <tr><td><code>turns</code> (sổ lượt)</td><td>v2 (PREVIOUS)</td><td>Mọi lượt, cả PARTIAL</td><td><span class="pill p-good">Tốt nhất</span> có hợp đồng + 20 dòng xem trước</td></tr>
+      <tr><td><code>references</code> (thực thể, tập dữ liệu, tệp)</td><td>Resolver, đường dự phòng</td><td>Khi SUCCESS</td><td>Trùng thông tin với <code>turns</code></td></tr>
+      <tr><td><code>entityReferences</code></td><td>Resolver</td><td>Khi SUCCESS</td><td>Bản dẫn xuất thứ ba</td></tr>
+      <tr><td><code>lastPlan</code>, <code>summary</code></td><td>Lời nhắc trạng thái</td><td>Khi SUCCESS</td><td>"summary" chỉ là bảng/chỉ tiêu, không phải tóm tắt</td></tr>
+      <tr><td><code>conversationState</code>, <code>businessState</code></td><td>Resolver (previousRequest)</td><td>Khi SUCCESS</td><td>Chồng lấn với hợp đồng trong <code>turns</code></td></tr>
+      <tr><td><code>pendingTurn</code></td><td>Resolver, lời nhắc</td><td>Khi không đạt</td><td>Che các tham chiếu cũ hơn (đã gây lỗi 23/10)</td></tr>
+      <tr><td><code>lastWorkflowRun</code>, <code>documentState</code>, <code>retrySnapshots</code></td><td>Nhiều nơi</td><td>Khác nhau</td><td>Mỗi loại một vòng đời riêng</td></tr>
+      <tr><td>Bộ nhớ dài hạn (sở thích, hướng dẫn tổ chức)</td><td>Resolver; v2 <span class="pill p-good">Đã sửa 26/10</span></td><td>Người dùng lưu, có trích dẫn</td><td>Có duyệt, phạm vi, hạn dùng</td></tr>
+      <tr><td>Bộ nhớ sự kiện (90 ngày)</td><td>Chỉ công cụ <code>recall_memory</code></td><td>Khi SQL/quy trình thành công</td><td>Không được dùng chủ động</td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card pros"><h4>Điểm mạnh</h4><ul class="clean">
+      <li><b>Kiểm tra lại quyền khi đọc:</b> tài nguyên đổi chính sách thì bộ nhớ phiên mất hiệu lực. <span class="ev">memory_service.js:121–137</span></li>
+      <li><b>Cổng chất lượng:</b> câu trả lời PARTIAL không được ghi thành trạng thái chính.</li>
+      <li><b>Resolver trả về theo lược đồ chặt</b>, chỉ chọn ID ứng viên có thật, có một lần sửa. <span class="ev">conversation_resolver.js</span></li>
+      <li><b>Sổ lượt có xem trước dòng</b> giúp trả lời "người thứ 2 ở trên" không cần truy vấn lại.</li>
+      <li><b>Bộ nhớ dài hạn có nguồn gốc:</b> chỉ lưu sở thích cá nhân khi có trích dẫn từ câu hiện tại; tổ chức phải được duyệt.</li>
+      <li><b>Tìm lại theo ngữ nghĩa</b> có kiểm tra quyền lại sau mỗi lần chờ, có dự phòng từ vựng.</li>
+    </ul></div>
+    <div class="card cons"><h4>Điểm yếu</h4><ul class="clean">
+      <li><b>Không có một nguồn sự thật.</b> Ba đường xử lý đọc ba dạng trạng thái khác nhau; sửa một chỗ dễ lệch chỗ khác (lỗi "thêm tên khách hàng cho ds trên" ngày 23/10 là ví dụ).</li>
+      <li><b>Sở thích đã lưu không đi vào đường v2.</b> Ở đường chính, <code>memoryHistory</code> bị xóa (core.js:538) và <code>contract_pipeline</code> không đọc sở thích — người dùng lưu "luôn hiển thị theo triệu đồng" nhưng câu trả lời v2 không biết. <span class="pill p-good">Đã sửa 26/10</span></li>
+      <li><b>Không nén hội thoại dài:</b> quá 20 lượt/40 tin là mất; không có tóm tắt theo chủ đề.</li>
+      <li><b>Không tự học:</b> <code>chat_feedback.json</code> và bộ nhớ sự kiện không quay lại thành ví dụ mẫu hay sở thích gợi ý.</li>
+      <li><b>Lỗi resolver rơi về biểu thức chính quy</b> (<code>followup_policy.dependsOnPrevious</code>) để quyết định có hỏi lại hay không.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="chi-phi">
+  <h2>7. Hiệu năng và chi phí</h2>
+  <p>Số lần gọi mô hình cho một câu hỏi dữ liệu, ước tính từ mã (giới hạn cứng là 12 lần, <code>AI_PROVIDER_MAX_MODEL_CALLS</code>):</p>
+  <div class="card calls">
+    <div class="callrow"><span>v2 thành công</span><div class="track"><span class="lv-good" style="left:0;width:8.3%"></span><span style="left:8.3%;width:8.3%;background:var(--good);opacity:.4"></span></div><span class="num">1–2</span></div>
+    <div class="callrow"><span>v2 chọn quy trình</span><div class="track"><span class="lv-good" style="left:0;width:16.6%"></span><span style="left:16.6%;width:8.3%;background:var(--good);opacity:.4"></span></div><span class="num">2–3</span></div>
+    <div class="callrow"><span>v2 rơi → vòng lặp</span><div class="track"><span class="lv-mid" style="left:0;width:33%"></span><span style="left:33%;width:67%;background:var(--bad);opacity:.55"></span></div><span class="num">4–12</span></div>
+    <div class="callrow"><span>Mục tiêu đề xuất</span><div class="track"><span style="left:0;width:8.3%;background:var(--accent)"></span><span style="left:8.3%;width:25%;background:var(--accent);opacity:.35"></span></div><span class="num">1–4</span></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card cons"><h4>Vấn đề</h4><ul class="clean">
+      <li><b>Không dùng bộ đệm lời nhắc.</b> Bộ chuyển Anthropic không đặt <code>cache_control</code>; thứ tự lời nhắc v2 để <code>TODAY</code> trước <code>CATALOG</code>, làm phần ổn định không được đệm tự động ở các nhà cung cấp khác. <span class="pill p-good">Đã sửa 26/10</span></li>
+      <li><b>Cùng một mô hình cho mọi bước</b> (<code>lockProvider: true</code>): bước phân loại nhỏ cũng dùng mô hình lớn.</li>
+      <li><b>Công cụ chạy tuần tự</b>, kể cả nhiều truy vấn nhóm độc lập.</li>
+      <li><b>Ước lượng token thô</b> (chia ký tự cho 3,2) dùng để cắt ngữ cảnh — với tiếng Việt có dấu dễ lệch.</li>
+    </ul></div>
+    <div class="card pros"><h4>Đang làm tốt</h4><ul class="clean">
+      <li>Ngân sách theo yêu cầu (thời gian, lần gọi, SQL, công cụ) và giữ lại một lần gọi cho câu trả lời cuối.</li>
+      <li>Nén ngữ cảnh theo vòng đời và ghi lại dấu vết mỗi lần nén.</li>
+      <li>Ghi token thực tế theo từng giai đoạn — đủ dữ liệu để tối ưu nếu có bảng tổng hợp.</li>
+      <li>Truyền phát câu trả lời chỉ bật cho câu hỏi chung, tránh hiện câu chưa kiểm chứng.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="bao-tri">
+  <h2>8. Bảo trì và khả năng quan sát</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Chỉ báo</th><th>Hiện trạng</th><th>Mức</th></tr></thead>
+    <tbody>
+      <tr><td>Hàm điều phối chính</td><td><code>GuardedAgentHarness.run</code> ~1.300 dòng trong tệp 1.434 dòng; nhiều dòng &gt; 1.000 ký tự</td><td><span class="pill p-bad">Cao</span></td></tr>
+      <tr><td>Hàm lõi trả lời</td><td><code>IntelligentCore._chat</code> ~620 dòng, xử lý tài liệu, web, lược đồ, bộ nhớ, tác tử, vòng lặp cũ</td><td><span class="pill p-bad">Cao</span></td></tr>
+      <tr><td>Biến cấu hình</td><td>137 biến trong <code>.env.example</code>; nhiều cờ bật/tắt đường xử lý</td><td><span class="pill p-warn">Trung bình</span></td></tr>
+      <tr><td>Mã cũ còn chạy được</td><td>Vòng lặp cũ, AgentHarness không kiểm soát, định tuyến cũ, WorkflowEngine</td><td><span class="pill p-warn">Trung bình</span></td></tr>
+      <tr><td>Giá trị cứng theo dữ liệu thật</td><td><code>training_core/failure_classifier.js:16</code> dò tên người cụ thể trong câu trả lời</td><td><span class="pill p-good">Đã sửa 26/10</span></td></tr>
+      <tr><td>Kiểm thử</td><td>201 tệp, lần chạy gần nhất 1.068 ca, 0 lỗi (theo báo cáo 23/10)</td><td><span class="pill p-good">Tốt</span></td></tr>
+      <tr><td>Vết xử lý</td><td>Từng bước, lý do từ chối, token, nén ngữ cảnh, lần thử v2</td><td><span class="pill p-good">Rất tốt</span></td></tr>
+      <tr><td>Bộ đánh giá</td><td>Nhiều kịch bản <code>eval:*</code>, chưa có bảng chỉ số chung theo thời gian</td><td><span class="pill p-warn">Thiếu tổng hợp</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="de-xuat">
+  <h2>9. Kiến trúc đề xuất: bộ điều phối theo trạng thái, một lần hiểu câu hỏi</h2>
+  <p>Giữ nguyên tinh thần v2 (mô hình lập kế hoạch có cấu trúc, backend thực thi và kiểm chứng), nhưng đưa mọi loại câu hỏi vào cùng một khuôn và bỏ đường dự phòng "mô hình tự viết SQL" làm mặc định.</p>
+  <div class="legend"><span><i style="background:var(--info-soft);border-color:var(--info)"></i>Gọi mô hình</span><span><i style="background:var(--good-soft);border-color:var(--good)"></i>Tất định</span><span><i style="background:var(--accent-soft);border-color:var(--accent)"></i>Thành phần mới</span></div>
+  <div class="card flow">
+    <div class="stage"><div class="tag">1. Ngữ cảnh</div><div class="boxes">
+      <div class="box new"><b>Sổ lượt hội thoại</b><span class="s">nguồn sự thật duy nhất: câu hỏi, kế hoạch, mã kết quả, trạng thái</span></div>
+      <div class="box det"><b>Tìm lược đồ + danh mục năng lực</b><span class="s">bảng, chỉ tiêu, quy trình, tài liệu</span></div>
+      <div class="box new"><b>Sở thích + tóm tắt chủ đề</b><span class="s">đưa vào mọi đường</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">2. Hiểu (1 lần)</div><div class="boxes">
+      <div class="box model new"><b>Bộ lập kế hoạch hợp nhất</b><span class="s">giải tham chiếu + loại câu hỏi + hợp đồng (dữ liệu / chỉ tiêu / quy trình / tài liệu / web / trò chuyện / hỏi lại)</span></div>
+      <div class="box det"><b>Kiểm tra hợp đồng</b><span class="s">lược đồ, trích dẫn, phủ, quyền; sai thì sửa 1 lần</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">3. Chọn năng lực</div><div class="boxes">
+      <div class="box det new"><b>So khớp tất định</b><span class="s">hợp đồng đầu vào/đầu ra của quy trình và chỉ tiêu đã duyệt; chỉ hỏi mô hình khi hòa điểm</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">4. Thực thi</div><div class="boxes">
+      <div class="box det"><b>Biên dịch truy vấn</b></div>
+      <div class="box det new"><b>Chạy song song có ngân sách</b><span class="s">các nhóm/truy vấn độc lập</span></div>
+      <div class="box det"><b>Quy trình bền / chỉ tiêu</b></div>
+    </div></div>
+    <div class="stage"><div class="tag">5. Kiểm chứng</div><div class="boxes">
+      <div class="box det"><b>Hợp đồng chỉ tiêu, bộ lọc, thời gian, mức hạt</b><span class="s">cùng một bộ kiểm tra cho mọi đường</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">6. Trình bày</div><div class="boxes">
+      <div class="box det"><b>Bảng/biểu đồ/tệp tất định</b></div>
+      <div class="box model new"><b>Lời bình có khóa số liệu</b><span class="s">tùy chọn; mọi con số phải khớp kết quả, mô hình nhỏ</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Ngoại lệ</div><div class="boxes">
+      <div class="box model"><b>Tác tử tự do có giới hạn</b><span class="s">chỉ cho câu hỏi khám phá thật sự ngoài hợp đồng; gắn nhãn "độ tin cậy thấp"</span></div>
+    </div></div>
+  </div>
+
+  <h3>So sánh hiện tại và đề xuất</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Khía cạnh</th><th>Hiện tại</th><th>Đề xuất</th></tr></thead>
+    <tbody>
+      <tr><td>Hiểu câu hỏi</td><td>Resolver + hợp đồng v2 + xem xét ý định (2–6 lần gọi)</td><td>1 lần gọi lập kế hoạch hợp nhất (+1 lần sửa)</td></tr>
+      <tr><td>Chọn quy trình</td><td>4 điểm quyết định, có lần gọi đánh giá riêng</td><td>So khớp hợp đồng tất định; mô hình chỉ phân xử khi hòa</td></tr>
+      <tr><td>Bộ nhớ</td><td>~12 dạng trạng thái</td><td>Sổ lượt + bộ nhớ dài hạn; các dạng khác là hàm dẫn xuất</td></tr>
+      <tr><td>Điều phối</td><td>Chuỗi <code>if</code> trong một hàm 1.300 dòng</td><td>Máy trạng thái: mỗi trạng thái một mô-đun, bảng chuyển trạng thái khai báo</td></tr>
+      <tr><td>Mô hình</td><td>Một mô hình cho mọi bước</td><td>Mô hình nhỏ cho lập kế hoạch/lời bình, mô hình lớn cho phân tích và tác tử</td></tr>
+      <tr><td>Lời nhắc</td><td>Chuỗi trong mã, không phiên bản</td><td>Tệp lời nhắc có phiên bản, phần tĩnh trước để dùng bộ đệm</td></tr>
+      <tr><td>Câu trả lời</td><td>Đúng số nhưng khô, hoặc tự do khi rơi</td><td>Đúng số + lời bình đã kiểm, có nhãn độ tin cậy</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="lo-trinh">
+  <h2>10. Lộ trình nâng cấp</h2>
+  <div class="roadmap">
+    <div class="card phase">
+      <h3><span class="pill p-good">Ngay</span> 1–2 tuần</h3>
+      <div class="item done"><b>Đo trước khi sửa</b><p>Bảng chỉ số từ vết xử lý đã có: tỉ lệ v2 thành công / rơi / hỏi lại, mã lỗi rơi, số lần gọi mô hình, p50/p95 thời gian. Đây là cơ sở để chọn việc tiếp.</p></div>
+      <div class="item done"><b>Bộ câu hỏi chuẩn</b><p>Lấy 150–300 câu từ <code>chat_history.json</code>, gắn nhãn kết quả đúng, chạy định kỳ.</p></div>
+      <div class="item done"><b>Đưa sở thích vào đường v2</b><p>Thêm sở thích đã duyệt vào lời nhắc của <code>plan_query</code> và bước trình bày.</p></div>
+      <div class="item done"><b>Bộ đệm lời nhắc</b><p>Đặt <code>CATALOG</code>/<code>WORKFLOWS</code> trước <code>TODAY</code>; thêm <code>cache_control</code> cho Anthropic.</p></div>
+      <div class="item done"><b>Chạy song song truy vấn nhóm</b><p>Các truy vấn chỉ đọc, độc lập trong một lượt.</p></div>
+      <div class="item done"><b>Gỡ giá trị cứng</b><p>Bỏ tên người trong <code>failure_classifier.js</code>.</p></div>
+    </div>
+    <div class="card phase">
+      <h3><span class="pill p-warn">Kế tiếp</span> 1–2 tháng</h3>
+      <div class="item"><b>Gộp resolver vào <code>plan_query</code></b><p>Hợp đồng v2 đã đọc PREVIOUS; thêm trường tham chiếu và quan hệ để bỏ một lần gọi riêng.</p></div>
+      <div class="item done"><b>Sổ lượt làm nguồn sự thật</b><p>Dẫn xuất <code>references</code>, <code>businessState</code>, <code>conversationState</code> từ <code>turns</code>; ngừng ghi trùng.</p></div>
+      <div class="item done"><b>Hợp đồng quy trình</b><p>Mỗi quy trình khai báo thao tác, thực thể, bộ lọc hỗ trợ, mức hạt, đầu ra; so khớp tất định.</p></div>
+      <div class="item done"><b>Tách bộ điều phối</b><p>Máy trạng thái: Ngữ cảnh → Hiểu → Chọn → Thực thi → Kiểm chứng → Trình bày. Mỗi lời gọi tự sinh trở thành một trạng thái có tên.</p></div>
+      <div class="item done"><b>Lời bình có khóa số liệu</b><p>Bước tùy chọn sau bảng; kiểm tra mọi con số trong lời bình có trong kết quả.</p></div>
+      <div class="item"><b>Lời nhắc ra tệp có phiên bản</b><p>Ghi mã phiên bản lời nhắc vào vết để so sánh.</p></div>
+    </div>
+    <div class="card phase">
+      <h3><span class="pill p-info">Dài hạn</span> 1 quý</h3>
+      <div class="item"><b>Lớp chỉ tiêu nghiệp vụ</b><p>Mở rộng chỉ tiêu đã duyệt (<code>list_sql_metrics</code>) để phần lớn câu hỏi tổng hợp đi qua định nghĩa có chủ sở hữu.</p></div>
+      <div class="item"><b>Vòng học từ phản hồi</b><p>Phản hồi xấu → ca hồi quy → ví dụ mẫu đề xuất (skill_core) → người duyệt.</p></div>
+      <div class="item"><b>Tóm tắt chủ đề</b><p>Tóm tắt có cấu trúc khi vượt 20 lượt; trạng thái tất định + phần do mô hình viết đã kiểm.</p></div>
+      <div class="item"><b>Định tuyến mô hình theo bước</b><p>Mô hình nhỏ cho phân loại/lập kế hoạch, lớn cho phân tích.</p></div>
+      <div class="item"><b>Dọn mã cũ</b><p>Bỏ vòng lặp cũ, AgentHarness không kiểm soát, định tuyến cũ, WorkflowEngine; giảm cờ cấu hình.</p></div>
+    </div>
+  </div>
+  <div class="callout warn"><strong>Lưu ý thứ tự:</strong> chưa nên tách bộ điều phối hay gộp resolver trước khi có bảng chỉ số và bộ câu hỏi chuẩn. Không có hai thứ này, mọi thay đổi kiến trúc đều không chứng minh được là tốt hơn, và dễ tái diễn lỗi tiếp nối ngữ cảnh như ngày 23/10.</div>
+</section>
+
+<section id="do-luong">
+  <h2>11. Cách đo tiến bộ</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Chỉ số</th><th>Cách tính</th><th>Mục tiêu sau 2 tháng</th></tr></thead>
+    <tbody>
+      <tr><td>Tỉ lệ trả lời đúng</td><td>Bộ câu hỏi chuẩn, so với nhãn</td><td class="num">≥ 90%</td></tr>
+      <tr><td>Tỉ lệ đi đường tất định</td><td>v2 SUCCESS / tổng câu hỏi dữ liệu</td><td class="num">≥ 85%</td></tr>
+      <tr><td>Câu tiếp nối giữ đúng phạm vi</td><td>Bộ ca tiếp nối ("ds trên", "còn tháng 1")</td><td class="num">≥ 95%</td></tr>
+      <tr><td>Lần gọi mô hình / câu hỏi dữ liệu</td><td>Trung bình và p95 từ vết</td><td class="num">TB ≤ 2, p95 ≤ 4</td></tr>
+      <tr><td>Thời gian phản hồi</td><td>p50 / p95</td><td class="num">Giảm 30–40%</td></tr>
+      <tr><td>Chi phí token đầu vào</td><td>Token đầu vào sau bộ đệm / câu hỏi</td><td class="num">Giảm ≥ 40%</td></tr>
+      <tr><td>Hỏi lại không cần thiết</td><td>Ca có đủ thông tin nhưng vẫn hỏi lại</td><td class="num">≤ 3%</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="da-lam">
+  <h2>12. Đã làm và kết quả đo (26/10)</h2>
+  <p>Bộ 57 câu chuẩn (đáp án lấy từ truy vấn SQL viết tay trên dữ liệu IPMS) chạy trên mô hình <strong>Google Gemini - Payment</strong>, trước và sau các bản sửa trong cùng ngày.</p>
+  <div class="scores">
+    <div class="score"><div class="name">Số câu đạt</div><div class="val">57/57</div><div class="note">Trước: 53/57 (93%). Mọi nhóm câu hỏi đều đạt.</div></div>
+    <div class="score"><div class="name">Tổng lần gọi mô hình (74 lượt)</div><div class="val">89</div><div class="note">Trước: 101. p50 / p90 mỗi lượt vẫn là 1 / 2.</div></div>
+    <div class="score"><div class="name">Thời gian phản hồi p50 / p90</div><div class="val">2,50 / 3,70 s</div><div class="note">Trước: 2,56 / 4,18 s. Câu chậm nhất nhanh hơn rõ nhất.</div></div>
+  </div>
+  <p class="ev" style="margin-top:10px">Kết quả lần chạy ngay sau khi sửa; độ dao động qua 3 lần chạy ở phần "Độ ổn định" bên dưới. p50 là thời gian mà một nửa số lượt nhanh hơn, p90 là thời gian mà 90% số lượt nhanh hơn.</p>
+
+  <h3>Nhóm việc "Ngay"</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Việc</th><th>Đã làm</th><th>Kiểm chứng</th></tr></thead>
+    <tbody>
+      <tr><td>Sở thích vào đường v2</td><td>Sở thích cá nhân và hướng dẫn tổ chức đã duyệt được đưa vào bước lập kế hoạch, câu trả lời trò chuyện và câu trả lời theo tài liệu; chỉ ảnh hưởng cách diễn đạt và nghĩa mặc định của thuật ngữ, không thêm điều kiện lọc. <span class="ev">pipeline/preferences.js</span></td><td><span class="pill p-good">Kiểm thử mã</span></td></tr>
+      <tr><td>Bộ đệm lời nhắc</td><td>Khối giờ hệ thống (đổi mỗi yêu cầu) được tách khỏi phần quy tắc cố định; Anthropic đánh dấu khối đầu để lưu đệm; số token đọc từ bộ đệm được ghi riêng (cả Gemini) và vẫn tính vào hạn mức.</td><td><span class="pill p-warn">Chờ số liệu dùng thật</span></td></tr>
+      <tr><td>Chạy song song</td><td>Tìm lược đồ cùng lúc với lấy danh mục quy trình; các truy vấn tách nhóm; các tệp "mỗi nhóm một file" (tên trùng sau khi bỏ dấu được thêm hậu tố); các tra cứu giá trị đối chiếu.</td><td><span class="pill p-good">Kiểm thử mã</span></td></tr>
+      <tr><td>Gỡ giá trị cứng</td><td>Bộ phân loại lỗi so câu trả lời với lượt trước trong cùng phiên thay vì dò một tên người cụ thể.</td><td><span class="pill p-good">Kiểm thử mã</span></td></tr>
+      <tr><td>Bảng chỉ số</td><td><code>npm run report:pipeline</code>: tỉ lệ v2 trả lời trọn, chuyển dự phòng, hỏi lại; lý do chuyển; lần gọi mô hình, thời gian, token và bộ đệm theo ngày (HTML + JSON trong <code>output/pipeline-metrics/</code>).</td><td><span class="pill p-good">Chạy trên nhật ký thật</span></td></tr>
+      <tr><td>Bộ câu hỏi chuẩn</td><td><code>npm run eval:golden:build</code> rút 120 câu hỏi thật chờ gắn nhãn; <code>eval:golden:promote</code> chỉ đưa câu đã duyệt và có điều kiện chấm vào bộ chuẩn. Công cụ chấm nhận <code>--provider</code> và ghi rõ lý do khi bị từ chối.</td><td><span class="pill p-warn">Chờ gắn nhãn</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Bốn ca trượt đã sửa</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Ca</th><th>Nguyên nhân</th><th>Cách sửa</th></tr></thead>
+    <tbody>
+      <tr><td>Tra cứu nhân viên NV007</td><td>Mô hình trả lời đúng nhưng bọc kết quả trong khối mã JSON; mã chỉ đọc JSON trần nên bỏ quy trình.</td><td>Hàm đọc chung chấp nhận khối JSON, dùng cho 4 chỗ cùng điểm yếu (đánh giá quy trình, giải tham chiếu bộ nhớ, chọn quy trình, kiểm tra phép tính).</td></tr>
+      <tr><td>"Xuất file / vẽ biểu đồ cho kết quả trên" sau khi chạy quy trình (2 ca)</td><td>(1) Kết quả quy trình được ghi thành một lượt riêng, tách khỏi câu hỏi gốc. (2) Kết quả vào bộ nhớ chậm khoảng 8 giây sau khi quy trình xong. (3) Khi hai yêu cầu cùng ghi một phiên, quy tắc gộp làm mất sổ lượt của lượt chưa hoàn tất.</td><td>Gắn kết quả vào đúng lượt đã khởi chạy; bước lập kế hoạch tự đọc kết quả quy trình đã xong (có kiểm quyền) nếu bộ nhớ chưa kịp ghi; gộp sổ lượt theo từng lượt khi ghi đồng thời; báo ngay khi không có quy trình nào đang chờ, kèm gợi ý lượt chứa kết quả.</td></tr>
+      <tr><td>"Hôm nay là ngày mấy"</td><td>Bộ chuẩn ghi cứng ngày 24/10.</td><td>So với ngày chạy thật.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Độ ổn định: 3 lần chạy bộ 57 câu</h3>
+  <p>Chạy lại cùng bộ 57 câu 3 lần liên tiếp trên Gemini Payment để biết kết quả 57/57 có giữ được không.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Chỉ số</th><th class="num">Lần 1</th><th class="num">Lần 2</th><th class="num">Lần 3</th></tr></thead>
+    <tbody>
+      <tr><td>Số câu đạt</td><td class="num">57/57</td><td class="num">56/57</td><td class="num">57/57</td></tr>
+      <tr><td>Tổng lần gọi mô hình (74 lượt)</td><td class="num">90</td><td class="num">91</td><td class="num">91</td></tr>
+      <tr><td>Thời gian p50</td><td class="num">2,65 s</td><td class="num">2,66 s</td><td class="num">2,72 s</td></tr>
+      <tr><td>Thời gian p90</td><td class="num">3,92 s</td><td class="num">4,36 s</td><td class="num">4,27 s</td></tr>
+      <tr><td>Token đầu vào p50</td><td class="num">4.879</td><td class="num">4.880</td><td class="num">4.879</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:10px">Gộp cả 3 lần: <strong>170/171 lượt câu đạt (99,4%)</strong>; thời gian p50 2,67 s, p90 4,27 s, p95 5,24 s; mỗi lượt tối đa 3 lần gọi mô hình. Số lần gọi và token gần như không đổi; thời gian dao động khoảng ±0,4 s ở p90, chủ yếu do tốc độ phản hồi của nhà cung cấp.</p>
+  <div class="callout warn"><strong>Ca dao động duy nhất: <code>top-feb</code></strong> ("Khách hàng nào có tiền hóa đơn điện sau thuế cao nhất tháng 2024-02?"), đạt 2/3 lần. Ở lần trượt, mô hình ghi đủ phép tính tổng và cách nhóm theo khách hàng nhưng bỏ sót trường thao tác; bộ biên dịch mặc định coi là "liệt kê", lặng lẽ bỏ phép tính và trả về một hóa đơn lẻ — câu trả lời sai mà trông vẫn hợp lệ.<br>
+  <strong>Đã sửa</strong> (<code>query_compiler.js</code>): hợp đồng có phép tính mà thiếu thao tác được hiểu là "tổng hợp"; hợp đồng ghi "liệt kê" nhưng kèm phép tính bị từ chối để mô hình sửa. Chạy lại <code>top-feb</code> và 3 câu tổng hợp khác, mỗi câu 5 lần: đạt 20/20. Trong 5 lần đó mô hình đều ghi đủ thao tác, nên bản sửa hiện mới được kiểm chứng bằng kiểm thử mã.</div>
+
+  <h3>Đợt 2: bốn việc nhóm "Kế tiếp"</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Việc</th><th>Nguyên nhân / cách làm</th><th>Kết quả</th></tr></thead>
+    <tbody>
+      <tr><td>Trễ 8 giây khi ghi kết quả quy trình</td><td>Mỗi lần mở phiên lưu trữ mà không chỉ định kho sẽ nạp toàn bộ kho (~1,9 s); lần ghi bộ nhớ mở hai phiên như vậy chồng nhau. Nay tác vụ hoãn không mở phiên thừa, lần ghi chỉ nạp 9 kho cần thiết (69 ms); thiếu kho thì tự thử lại với toàn bộ kho.</td><td>Kết quả vào bộ nhớ sau <strong>0,17–0,30 s</strong> (trước: 5–8 s)</td></tr>
+      <tr><td>Khai báo đầu vào/đầu ra cho quy trình</td><td>Danh mục quy trình nêu rõ mỗi đầu vào lọc theo cột nào (đọc từ SQL của quy trình). Khi bước lập kế hoạch đã chọn quy trình kèm trích dẫn, backend dò giá trị trong đúng các cột đó; khớp thì bỏ qua lần gọi mô hình "đánh giá quy trình", không chắc thì vẫn hỏi mô hình.</td><td>Lần gọi đánh giá: 6 → 1 mỗi lượt 57 câu</td></tr>
+      <tr><td>Lời bình có kiểm tra số liệu</td><td>Câu trả lời tổng hợp từ 2 dòng trở lên có thêm 1–3 câu nhận xét; mọi con số trong lời bình phải có trong bảng (đúng định dạng Việt Nam), có số lạ thì bỏ lời bình. Tháng hiển thị dạng 02/2024. Tắt bằng <code>V2_NARRATION=off</code>.</td><td>6/6 lời bình qua kiểm tra số</td></tr>
+      <tr><td>Gộp giải tham chiếu vào bước lập kế hoạch</td><td>Khi v2 chuyển sang vòng dự phòng mà hợp đồng đã cho thấy câu hỏi độc lập (không hỏi tiếp, không kế thừa bộ lọc, không đọc dòng cũ), dùng luôn kết quả đó thay cho lần gọi giải tham chiếu riêng. Câu hỏi tiếp vẫn qua bước giải tham chiếu.</td><td>Bớt 1–2 lần gọi ở đường dự phòng (kiểm thử mã)</td></tr>
+      <tr><td>Phát sinh khi đo: loại trừ sai cột</td><td>Sau khi danh mục quy trình nêu cột lọc, mô hình có lần đặt "trừ Demo3" lên cột mã — phép loại trừ không loại gì mà vẫn trông hợp lệ. Nay backend kiểm tra giá trị bị loại trừ có trong cột đã chọn; không có thì chuyển sang cột văn bản cùng bảng chứa giá trị đó, không tìm thấy thì ghi rõ trong câu trả lời.</td><td>Ca <code>exclude-name</code> đạt lại</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th>Chỉ số (bộ 57 câu, Gemini Payment)</th><th class="num">Trước đợt 2 (3 lần)</th><th class="num">Sau đợt 2 (2 lần)</th></tr></thead>
+    <tbody>
+      <tr><td>Số câu đạt</td><td class="num">57 / 56 / 57</td><td class="num"><strong>57 / 57</strong></td></tr>
+      <tr><td>Thời gian p50</td><td class="num">2,67 s</td><td class="num"><strong>2,37 s</strong></td></tr>
+      <tr><td>Thời gian p90</td><td class="num">4,27 s</td><td class="num"><strong>3,68 s</strong></td></tr>
+      <tr><td>Thời gian p95</td><td class="num">5,24 s</td><td class="num"><strong>4,52 s</strong></td></tr>
+      <tr><td>Lần gọi mô hình mỗi lượt 57 câu</td><td class="num">90,7</td><td class="num">91,5</td></tr>
+      <tr><td>Token đầu vào p50</td><td class="num">4.879</td><td class="num">4.908</td></tr>
+    </tbody>
+  </table></div>
+  <p class="ev" style="margin-top:10px">Tổng lần gọi mô hình gần như không đổi: bớt khoảng 5 lần gọi đánh giá quy trình, thêm khoảng 3 lần gọi viết lời bình. Thời gian giảm chủ yếu nhờ bỏ lần gọi đánh giá quy trình và ghi bộ nhớ nhanh hơn. Trong 2 lần đo, mô hình không đặt sai cột loại trừ nên phần kiểm tra loại trừ mới được kiểm chứng bằng kiểm thử mã.</p>
+
+  <h3>Đợt 3: sổ lượt làm nguồn dữ liệu chung cho bộ nhớ</h3>
+  <p>Trước đây trạng thái hội thoại nằm rải ở nhiều trường riêng của phiên (kế hoạch trước, tham chiếu, trạng thái hội thoại, trạng thái nghiệp vụ, quy trình gần nhất, lượt đang chờ…), mỗi trường ghi theo quy tắc riêng, và khi hai yêu cầu cùng ghi một phiên thì có thể mất trường. Nay:</p>
+  <ul class="clean">
+    <li><b>Sổ lượt là nơi lưu duy nhất:</b> lượt đạt cổng chất lượng mang ảnh chụp trạng thái sau lượt đó; lượt chưa hoàn tất mang thông tin "đang chờ". Các trường của phiên được suy ra từ sự kiện mới nhất nên mọi nơi đọc không phải sửa. Chỉ giữ 2 ảnh chụp mới nhất.</li>
+    <li><b>Ghi đồng thời gộp theo từng lượt</b>, không còn ghi đè theo trường.</li>
+    <li><b>Dữ liệu cũ</b> được chuyển một lần thành trạng thái gốc; cắt bớt sổ lượt không bao giờ làm mất trạng thái hiện tại.</li>
+    <li><b>Kiểm chứng:</b> một kịch bản 5 bước ghi lại đầu ra của mọi nơi đọc trạng thái từ mã cũ; mã mới cho kết quả <strong>giống hệt</strong>. Thêm 6 kiểm thử cho cách lưu, chuyển dữ liệu cũ, cắt sổ lượt và ghi đồng thời. Chạy thật một lần 15 ca liên quan đến bộ nhớ trên Gemini Payment: <strong>15/15</strong>, 38 lần gọi mô hình.</li>
+  </ul>
+  <div class="callout warn"><strong>Lưu ý khi triển khai:</strong> cần khởi động lại máy chủ để mọi tiến trình dùng cùng cách lưu mới. Tiến trình cũ còn chạy sẽ ghi trạng thái theo kiểu cũ, và phần đó không được đọc.</div>
+
+  <h3>Đợt 4: tách bộ điều phối</h3>
+  <p><code>GuardedAgentHarness.run</code> từ một hàm khoảng 1.400 dòng nay là 7 bước có tên, mỗi bước một mô-đun trong <code>agent_core/harness/steps/</code>; mã của từng khối được chuyển nguyên văn, chỉ đổi cách lấy biến từ trạng thái chung của yêu cầu.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Bước</th><th>Mô-đun</th><th class="num">Dòng</th></tr></thead>
+    <tbody>
+      <tr><td>Chuẩn bị (kế hoạch, công cụ được phép, lời nhắc, ngân sách)</td><td><code>prepare.js</code></td><td class="num">93</td></tr>
+      <tr><td>Gọi mô hình (dự phòng nhà cung cấp, nén ngữ cảnh, ghi token)</td><td><code>dispatch.js</code></td><td class="num">113</td></tr>
+      <tr><td>Đánh giá quy trình</td><td><code>workflow_assessment.js</code></td><td class="num">49</td></tr>
+      <tr><td>Hợp đồng v2</td><td><code>contract_stage.js</code></td><td class="num">78</td></tr>
+      <tr><td>Danh sách tất định</td><td><code>direct_list.js</code></td><td class="num">52</td></tr>
+      <tr><td>Giải tham chiếu bộ nhớ</td><td><code>memory_resolution.js</code></td><td class="num">176</td></tr>
+      <tr><td>Vòng lặp tác tử</td><td><code>agent_loop.js</code></td><td class="num">550</td></tr>
+      <tr><td>Xem xét kết quả tìm lược đồ</td><td><code>schema_review.js</code></td><td class="num">260</td></tr>
+      <tr><td>Hoàn thiện đầu ra (biểu đồ, xuất file, tổng hợp)</td><td><code>outputs.js</code></td><td class="num">97</td></tr>
+      <tr><td>Chốt câu trả lời</td><td><code>finalize.js</code></td><td class="num">130</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:10px"><code>guarded_agent_harness.js</code> còn 44 dòng: thứ tự các bước. <b>Kiểm chứng:</b> toàn bộ kiểm thử mã 1.230/1.244 đạt, 0 lỗi; rà bằng máy rằng mọi biến cấp hàm cũ đều có trong bước dùng đến nó; chạy thật một lần 10 ca trộn (danh sách, tổng hợp, quy trình, hỏi tiếp, đọc dòng cũ, xuất theo nhóm, loại trừ, tài liệu, trò chuyện) trên Gemini Payment: <strong>10/10</strong>, 15 lần gọi mô hình.</p>
+  <p class="ev">Còn có thể tách tiếp bên trong vòng lặp tác tử (chọn lời gọi do backend lập, kiểm tra lời gọi, kết thúc vòng). Các phần này dùng chung nhiều biến của vòng nên nên tách sau khi bộ câu hỏi chuẩn lớn hơn.</p>
+  <p class="ev" style="margin-top:10px">Toàn bộ kiểm thử mã: 1.244 bài, 1.230 đạt, 0 lỗi, 14 bỏ qua. Chưa commit.</p>
+</section>
+
+<section id="tiep-theo">
+  <h2>13. Công việc tiếp theo</h2>
+  <div class="roadmap">
+    <div class="card phase">
+      <h3><span class="pill p-good">Ngay</span> vài ngày</h3>
+      <div class="item"><b>Commit theo từng nhóm</b><p>Tách riêng khỏi các thay đổi giao diện và tệp sao lưu .rar đang có trong thư mục.</p></div>
+      <div class="item"><b>Gắn nhãn câu hỏi chuẩn</b><p>Duyệt <code>artifacts/golden/candidates-2026-10-26.json</code>, điền đáp án từ dữ liệu thật, đưa vào bộ chuẩn để vượt 57 câu và phủ cách hỏi thật của người dùng.</p></div>
+      <div class="item done"><b>Đo độ ổn định</b><p>Đã chạy 3 lần: 57, 56, 57 câu (99,4%); ca dao động duy nhất đã sửa.</p></div>
+      <div class="item"><b>Theo dõi bảng chỉ số</b><p>Sau vài ngày dùng thật: tỉ lệ bộ đệm, tỉ lệ chuyển dự phòng và lý do, thời gian p90.</p></div>
+      <div class="item"><b>Tài khoản riêng cho chấm điểm</b><p>Công cụ chấm đang tiêu hạn mức của tài khoản admin đầu tiên; nên có tài khoản đánh giá với hạn mức riêng.</p></div>
+    </div>
+    <div class="card phase">
+      <h3><span class="pill p-warn">Kế tiếp</span> 1–2 tháng</h3>
+      <div class="item done"><b>Tìm gốc độ trễ 8 giây</b><p>Lần ghi kết quả quy trình vào bộ nhớ chạy qua hàng đợi tác vụ sau khi lưu; đã che ở bước đọc nhưng cần biết vì sao chậm.</p></div>
+      <div class="item done"><b>Gộp giải tham chiếu vào <code>plan_query</code></b><p>Bỏ một lần gọi mô hình ở đường dự phòng của câu hỏi tiếp.</p></div>
+      <div class="item done"><b>Sổ lượt làm nguồn sự thật</b><p>Sổ lượt nay đã giữ cả kết quả quy trình; bước tiếp là suy ra các trạng thái khác từ nó thay vì ghi trùng.</p></div>
+      <div class="item done"><b>Hợp đồng quy trình</b><p>Khai báo thao tác, bộ lọc hỗ trợ, mức hạt, đầu ra; so khớp tất định thay vì nhờ mô hình đánh giá.</p></div>
+      <div class="item done"><b>Tách bộ điều phối</b><p>Máy trạng thái thay cho hàm 1.300 dòng.</p></div>
+      <div class="item done"><b>Lời bình có khóa số liệu</b><p>Câu trả lời v2 đúng số nhưng khô; thêm diễn giải ngắn, mọi con số đối chiếu với kết quả.</p></div>
+    </div>
+    <div class="card phase">
+      <h3><span class="pill p-info">Dài hạn</span> 1 quý</h3>
+      <div class="item"><b>Lớp chỉ tiêu nghiệp vụ</b><p>Phần lớn câu tổng hợp đi qua chỉ tiêu đã duyệt.</p></div>
+      <div class="item"><b>Vòng học từ phản hồi</b><p>Phản hồi xấu → ca kiểm thử → ví dụ mẫu đề xuất → người duyệt.</p></div>
+      <div class="item"><b>Mô hình cục bộ</b><p>Chưa tối ưu; hiện ngoài phạm vi kiểm thử.</p></div>
+      <div class="item"><b>Dọn mã cũ</b><p>Bỏ vòng lặp cũ và các đường định tuyến cũ sau khi v2 chạy ổn trên máy chủ; giảm cờ cấu hình.</p></div>
+    </div>
+  </div>
+  <div class="footer">
+    Phạm vi rà soát (mục 1–11): đọc mã <code>src/backend</code> và các báo cáo trong <code>docs/</code>. Mục 12–13 cập nhật cuối ngày 26/10 sau khi sửa mã, chạy toàn bộ kiểm thử và bộ 57 câu chuẩn trên Gemini Payment (1 lần sau khi sửa, thêm 3 lần đo độ ổn định, 2 lần sau đợt 2). Các con số mục tiêu ở mục 11 là đề xuất, cần hiệu chỉnh khi có số liệu nền thực tế.
+  </div>
+</section>
+</main>
+</div>
+</body>
+</html>

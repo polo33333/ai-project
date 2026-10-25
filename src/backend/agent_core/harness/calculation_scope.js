@@ -1,5 +1,5 @@
 ﻿'use strict';
-const { normalizeAssistantResponse } = require('./tool_call_normalizer');
+const { normalizeAssistantResponse, parseJsonContent } = require('./tool_call_normalizer');
 const schema = { type: 'object', additionalProperties: false, required: ['allowed', 'answer'], properties: {
   allowed: { type: 'boolean' }, answer: { type: 'string', maxLength: 3000 }
 } };
@@ -12,7 +12,7 @@ async function assessCalculation(dispatch, question, args, evidence = []) {
     { role: 'user', content: JSON.stringify({ question, expression: args.expression, evidence }) }
   ], 'calculation_scope_assessment');
   let result = normalizeAssistantResponse(response).calls.find(call => call.name === 'assess_calculation')?.arguments;
-  if (!result) { try { result = JSON.parse(response.content); } catch {} }
+  if (!result) result = parseJsonContent(response.content);
   if (!validate(result) || (!result.allowed && !result.answer.trim())) throw Object.assign(new Error('Calculation scope assessment invalid'), { code: 'CALCULATION_ASSESSMENT_INVALID' });
   return result;
 }
