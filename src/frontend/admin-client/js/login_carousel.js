@@ -8,16 +8,16 @@
   const story = region.closest('.story');
   const caption = story.querySelector('.storyfoot > span');
   const captions = [caption.innerHTML,
-    'Tra cứu tài liệu, kết nối tri thức trong tổ chức',
-    'Khám phá dữ liệu và trình bày kết quả trực quan'];
-  const titles = ['Hỏi đáp AI', 'Tra cứu tri thức', 'Phân tích dữ liệu'];
+    'Tổ chức tài liệu và quản lý quyền truy cập tri thức',
+    'Theo dõi mức sử dụng AI và nhật ký hệ thống'];
+  const titles = ['Quản lý hệ thống', 'Quản lý tri thức', 'Giám sát hoạt động'];
   const paragraph = story.querySelector('.intro > p');
   const original = document.createElement('span');
   original.append(...[...(paragraph?.childNodes || [])].map(node => node.cloneNode(true)));
   const phrases = [original];
   for (const text of [
-    'Tìm đúng tri thức từ tài liệu nội bộ, kết nối kiến thức của đội ngũ và đưa thông tin hữu ích vào công việc mỗi ngày.',
-    'Từ dữ liệu đến câu trả lời, từ thông tin đến góc nhìn. Cùng AI khám phá số liệu và đưa ra quyết định có cơ sở.'
+    'Tổ chức kho tài liệu nội bộ, cập nhật nguồn tri thức và thiết lập quyền truy cập phù hợp cho từng nhóm người dùng.',
+    'Theo dõi mức sử dụng AI, kiểm tra nhật ký hoạt động và quản lý cấu hình để chủ động vận hành hệ thống.'
   ]) {
     const phrase = document.createElement('span');
     phrase.textContent = text;
