@@ -1,17 +1,15 @@
 /**
  * Agent Core — Entry Point Module V2
- * Nạp đầy đủ 9 built-in tools, ToolManager, Harness, Workflows và SearchHub
+ * Nạp built-in tools, ToolManager, Workflows và SearchHub. Bộ điều phối chat là
+ * harness/guarded_agent_harness.js (intelligent_core/core.js tạo mỗi yêu cầu).
  */
 
 const BaseTool = require('./tools/base_tool');
 const ToolManager = require('./tools/tool_manager');
-const AgentHarness = require('./harness/agent_harness');
-const LocalModelHarness = require('./harness/local_model_harness');
 const errorRecovery = require('./harness/error_recovery');
 const searchHub = require('./search/search_hub');
 const BaseStep = require('./workflows/base_step');
 const WorkflowEngine = require('./workflows/workflow_engine');
-const builtinWorkflows = require('./workflows/builtin_workflows');
 const workflowService = require('./workflows/workflow_service');
 const {
   ListSqlMetricsTool, QuerySqlMetricTool, GovernedWorkflowTool, MemoryTool,
@@ -48,13 +46,6 @@ defaultToolManager.registerTools([
 ]);
 require('../services/mcp_service').bindToolManager(defaultToolManager, BaseTool);
 
-// Khởi tạo một Harness mặc định
-const defaultHarness = new AgentHarness({
-  toolManager: defaultToolManager,
-  maxIterations: 10
-});
-const localHarness = new LocalModelHarness({ toolManager: defaultToolManager });
-
 module.exports = {
   // Lớp cơ sở & Quản lý Tool
   BaseTool,
@@ -77,11 +68,7 @@ module.exports = {
     SearchKnowledgeTool
   },
 
-  // Execution Harness & Self-Correction
-  AgentHarness,
-  defaultHarness,
-  LocalModelHarness,
-  localHarness,
+  // Self-Correction
   errorRecovery,
 
   // Search & Knowledge Integration
@@ -90,6 +77,5 @@ module.exports = {
   // Workflow Engine (Pipelines)
   BaseStep,
   WorkflowEngine,
-  builtinWorkflows,
   workflowService
 };

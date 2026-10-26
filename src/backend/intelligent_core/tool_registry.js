@@ -8,7 +8,6 @@ const sqlConnector = require('../services/sql_connector');
 const dictionaryService = require('../services/dictionary_service');
 const qdrantService = require('../services/qdrant_service');
 const libraryService = require('../knowledge_core/services/library_service');
-const retrievalService = require('../knowledge_core/services/retrieval_service');
 const securityGuard = require('./security_guard');
 const fs = require('fs');
 const path = require('path');
@@ -865,26 +864,19 @@ class ToolRegistry {
     if (!query) return { success: false, error: 'Thiếu từ khóa/câu hỏi tra cứu Vector DB.' };
     try {
       const safeLimit = Math.max(1, Math.min(10, Number(limit) || 5));
-      const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const queryText = normalize(query);
       const destination = context.modelDestination;
       const documents = libraryService.getDocuments().filter(document => !destination || require('../governance/context').canSend(document, destination.id, destination.local));
       if (!documents.length) return { success: true, result: { query, totalResults: 0, documents: [], message: 'Không có tài liệu được cấp quyền xử lý bởi model hiện tại.' } };
-      const directMatches = documents
-        .filter(item => queryText.includes(normalize(item.title)) || normalize(item.title).includes(queryText))
-        .slice(0, safeLimit)
-        .map(item => {
-          const content = libraryService.getContent(item.id).content;
-          return { score: 1, payload: { fullText: content.slice(0, 12000), title: item.title, documentId: item.id, chunkIndex: 0 } };
-        });
-      const retrieval = await retrievalService.search(query, { limit: safeLimit, documentIds: documents.map(document => document.id), scopeMode: 'selected' });
-      const vectorResults = retrieval.results;
-      const seen = new Set(directMatches.map(item => item.payload.documentId));
-      const results = [...directMatches, ...vectorResults.filter(item => !seen.has(item.payload?.documentId))].slice(0, safeLimit);
+      // A file name in the query scopes the search to that document; its passages are still ranked.
+      const rag = require('../knowledge_core/rag');
+      const retrieval = await rag.retrieve({ question: query, previous: context.ragPrevious || null,
+        limit: safeLimit, documentIds: documents.map(document => document.id), scopeMode: 'selected' });
+      const results = retrieval.results;
       return {
         success: true,
         result: {
           query,
+          retrieval: rag.summarize(retrieval),
           totalResults: results.length,
           documents: results.map(r => ({
             score: Math.round((r.score || 0) * 100) / 100,

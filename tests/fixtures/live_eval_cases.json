@@ -841,6 +841,142 @@
           "re": "tháng"
         }
       ]
+    },
+    {
+      "id": "doc-sql-port",
+      "group": "document",
+      "turns": [
+        "Theo kế hoạch Phase 1 SQL Server connector, kết nối SQL Server dùng cổng nào?"
+      ],
+      "must": [
+        "1433",
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-prefix-password",
+      "group": "document",
+      "turns": [
+        "kho tri thức: cách đổi mật khẩu trên app IPMS"
+      ],
+      "must": [
+        {
+          "re": "Cài đặt"
+        },
+        {
+          "re": "Thay đổi mật khẩu"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-table-effort",
+      "group": "document",
+      "turns": [
+        "Theo kế hoạch Phase 1 SQL Server connector, tổng effort ước tính là bao nhiêu ngày làm việc?"
+      ],
+      "must": [
+        {
+          "re": "12\\s*[–-]\\s*17"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-pdf-uat",
+      "group": "document",
+      "turns": [
+        "Địa chỉ service UAT của VNPT SmartCA là gì?"
+      ],
+      "must": [
+        "rmgateway.vnptit.vn/sca/sp769",
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-pdf-error-401",
+      "group": "document",
+      "turns": [
+        "Trong tài liệu tích hợp SmartCA, mã lỗi 401 nghĩa là gì?"
+      ],
+      "must": [
+        {
+          "re": "SP_CREDENTIAL_INVALI\\s*D|không hợp lệ"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-followup-scope",
+      "group": "document",
+      "turns": [
+        "Hướng dẫn sử dụng app IPMS có những chức năng nào?",
+        "phần đường ống thì sao"
+      ],
+      "must": [
+        {
+          "re": "khí"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-followup-reference",
+      "group": "document",
+      "turns": [
+        "Phase 1 SQL Server connector cần lưu ý những rủi ro nào?",
+        "tài liệu trên nói rò rỉ dữ liệu nhạy cảm được giảm thiểu thế nào?"
+      ],
+      "must": [
+        {
+          "re": "sensitivity|nhạy cảm"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-filename",
+      "group": "document",
+      "turns": [
+        "KnowledgeHub_Master_Plan_v3.docx dùng vector DB nào?"
+      ],
+      "must": [
+        "Qdrant",
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "doc-no-answer",
+      "group": "document",
+      "turns": [
+        "Theo tài liệu công ty, chính sách nghỉ phép năm là bao nhiêu ngày?"
+      ],
+      "must": [
+        {
+          "re": "không (?:đề cập|tìm thấy|có thông tin|có nội dung)|chưa tìm thấy"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "(?:^|\\D)1[2-5] ngày"
+        }
+      ]
     }
   ],
   "note": "PowerMoney is labelled \"Tiền điện\" (empty in this IPMS copy); amount questions use \"tiền hóa đơn điện sau thuế\" (FinalTotalAmount)."

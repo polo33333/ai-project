@@ -24,7 +24,10 @@ test('RRF rewards a chunk returned by multiple retrievers', () => {
   assert.deepEqual(fused[0].retrievalSources, ['dense', 'bm25']);
 });
 
-test('GraphRAG router only activates for relationship questions', () => {
+test('GraphRAG router only activates for relationship questions', t => {
+  const before = process.env.GRAPHRAG_ENABLED;
+  process.env.GRAPHRAG_ENABLED = 'true';
+  t.after(() => { if (before === undefined) delete process.env.GRAPHRAG_ENABLED; else process.env.GRAPHRAG_ENABLED = before; });
   assert.equal(retrievalService.graphRoute('Mối quan hệ giữa Qdrant và tài liệu là gì?'), true);
   assert.equal(retrievalService.graphRoute('Qdrant là gì?'), false);
 });

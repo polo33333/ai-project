@@ -154,7 +154,7 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04
     <span>~25.000 dòng backend · 201 tệp kiểm thử</span>
     <span>Cấu hình đang chạy: <code>HARNESS_PIPELINE=v2</code>, bộ điều khiển có kiểm soát, lưu trữ PostgreSQL</span>
   </div>
-  <div class="callout info" style="margin-top:16px"><strong>Cập nhật cuối ngày 26/10:</strong> đã làm xong nhóm việc "Ngay" và sửa 4 ca trượt; bộ 57 câu chuẩn trên Gemini Payment tăng từ 53/57 lên <strong>57/57</strong>; qua 3 lần chạy liên tiếp đạt 170/171 lượt câu (99,4%). Đợt 2 làm xong 4 việc nhóm "Kế tiếp": 2 lần đo đều 57/57, thời gian p90 giảm từ 4,27 xuống 3,68 giây. Xem <a href="#da-lam">mục 12</a> và <a href="#tiep-theo">mục 13</a>. Phần đánh giá và chấm điểm ở mục 1–9 là ảnh chụp <em>trước</em> khi sửa; các điểm đã xử lý được gắn nhãn <span class="pill p-good">Đã sửa 26/10</span>.</div>
+  <div class="callout info" style="margin-top:16px"><strong>Cập nhật cuối ngày 26/10:</strong> đã làm xong nhóm việc "Ngay" và sửa 4 ca trượt; bộ 57 câu chuẩn trên Gemini Payment tăng từ 53/57 lên <strong>57/57</strong>; qua 3 lần chạy liên tiếp đạt 170/171 lượt câu (99,4%). Đợt 2 làm xong 4 việc nhóm "Kế tiếp": 2 lần đo đều 57/57, thời gian p90 giảm từ 4,27 xuống 3,68 giây. Đợt 3–5: sổ lượt làm nơi lưu duy nhất của bộ nhớ, tách bộ điều phối và vòng lặp tác tử. Đợt 6–7: lớp chỉ tiêu nghiệp vụ (11 chỉ tiêu IPMS) và vòng học từ phản hồi. Đợt 8: gỡ chế độ legacy, định tuyến TEV1 và harness cũ. Đo lại sau đợt 6–8 trên Gemini Payment: <strong>57/57</strong>, 74/74 lượt do v2 trả lời trọn, 30/34 lượt tổng hợp qua chỉ tiêu đã duyệt; thời gian p50/p90 2,80 / 4,73 s (chậm hơn đợt 2, nguyên nhân ở mục 12). Luồng ở <a href="#kien-truc">mục 2</a> đã cập nhật theo mã mới. Xem <a href="#da-lam">mục 12</a> và thứ tự việc còn lại ở <a href="#tiep-theo">mục 13</a>. Bảng điểm ở mục 1 đã chấm lại (kèm điểm trước) và luồng ở mục 2 đã cập nhật; phần lời văn còn lại của mục 1–9 là ảnh chụp <em>trước</em> khi sửa; các điểm đã xử lý được gắn nhãn <span class="pill p-good">Đã sửa 26/10</span>.</div>
 </header>
 
 <section id="tong-quan">
@@ -166,19 +166,19 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04
   </div>
 
   <div class="scores">
-    <div class="score"><div class="name">Độ chính xác &amp; căn cứ</div><div class="val">7,5<small>/10</small></div><div class="bar"><span class="lv-good" style="width:75%"></span></div><div class="note">Hợp đồng truy vấn v2, kiểm tra phủ bộ lọc, trích dẫn tài liệu được xác minh.</div></div>
-    <div class="score"><div class="name">Gọi công cụ</div><div class="val">7<small>/10</small></div><div class="bar"><span class="lv-good" style="width:70%"></span></div><div class="note">Danh sách trắng theo quyền, kiểm tra tham số, ngân sách, chống lặp; nhưng điều phối viết tay, chạy tuần tự.</div></div>
-    <div class="score"><div class="name">Quy trình nghiệp vụ</div><div class="val">6,5<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:65%"></span></div><div class="note">Chạy bền, tiếp tục khi thiếu đầu vào, kiểm tra phiên bản; nhưng có 4 điểm quyết định chọn quy trình.</div></div>
-    <div class="score"><div class="name">Bộ nhớ</div><div class="val">6<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:60%"></span></div><div class="note">An toàn, có cổng chất lượng; nhưng 12 dạng trạng thái chồng nhau, sở thích không vào đường v2.</div></div>
-    <div class="score"><div class="name">Hiệu năng &amp; chi phí</div><div class="val">5,5<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:55%"></span></div><div class="note">Không dùng bộ đệm lời nhắc; đường dự phòng tới 12 lần gọi; công cụ chạy tuần tự.</div></div>
-    <div class="score"><div class="name">Bảo trì &amp; quan sát</div><div class="val">6<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:60%"></span></div><div class="note">Vết xử lý rất chi tiết, nhiều kiểm thử; nhưng hàm khổng lồ, 137 biến cấu hình, mã cũ còn sống.</div></div>
+    <div class="score"><div class="name">Độ chính xác &amp; căn cứ</div><div class="val">8,5<small>/10 · trước: 7,5</small></div><div class="bar"><span class="lv-good" style="width:85%"></span></div><div class="note">Bộ 57 câu: 57/57 ở 2 lần đo, 170/171 qua 3 lần chạy; bộ biên dịch không còn lặng lẽ bỏ phép tính; kiểm tra loại trừ sai cột; lời bình đối chiếu số. Sau đợt 6–8: 57/57 trên mô hình thật, 30/34 lượt tổng hợp qua chỉ tiêu đã duyệt. Còn thiếu: bộ chuẩn mới 57 câu, chưa có chỉ tiêu nhân sự.</div></div>
+    <div class="score"><div class="name">Gọi công cụ</div><div class="val">8<small>/10 · trước: 7</small></div><div class="bar"><span class="lv-good" style="width:80%"></span></div><div class="note">Truy vấn nhóm, xuất tệp, tìm lược đồ ∥ danh mục, tra giá trị chạy song song; đọc được JSON trong khối mã ở 4 chỗ; điều phối thành các bước có tên. Còn: vòng lặp dự phòng vẫn để mô hình tự viết SQL.</div></div>
+    <div class="score"><div class="name">Quy trình nghiệp vụ</div><div class="val">7,5<small>/10 · trước: 6,5</small></div><div class="bar"><span class="lv-good" style="width:75%"></span></div><div class="note">Danh mục nêu cột lọc của từng đầu vào; backend dò giá trị thay cho lần gọi đánh giá (6 → 1 lần mỗi lượt 57 câu); kết quả gắn đúng lượt, vào bộ nhớ sau 0,2–0,3 s. Còn: vẫn nhiều nơi chọn quy trình (v2 và đường dự phòng); WorkflowEngine cũ còn trong mã.</div></div>
+    <div class="score"><div class="name">Bộ nhớ</div><div class="val">7,5<small>/10 · trước: 6</small></div><div class="bar"><span class="lv-good" style="width:75%"></span></div><div class="note">Sổ lượt là nơi lưu duy nhất, ghi đồng thời gộp theo lượt, sở thích đã vào đường v2; hành vi được ghim bằng kịch bản đối chiếu; 15/15 ca bộ nhớ chạy thật. Còn: lớp tương thích cho các trường cũ; chưa có số liệu dùng thật sau khi khởi động lại máy chủ.</div></div>
+    <div class="score"><div class="name">Hiệu năng &amp; chi phí</div><div class="val">7<small>/10 · trước: 5,5</small></div><div class="bar"><span class="lv-good" style="width:70%"></span></div><div class="note">p50 2,56 → 2,37 s, p90 4,18 → 3,68 s; bộ đệm lời nhắc đã bật; đường dự phòng bớt 1–2 lần gọi. Đo lại sau đợt 6–8: p50/p90 2,80 / 4,73 s — chậm hơn đợt 2 do lời nhắc dài thêm 8% và 3 lần sửa hợp đồng thiếu bảng gốc (lỗi này đã sửa sau lần đo, chưa đo lại). Tổng lần gọi ~90 cho 74 lượt; tỉ lệ đọc bộ đệm chưa có số liệu dùng thật.</div></div>
+    <div class="score"><div class="name">Bảo trì &amp; quan sát</div><div class="val">8<small>/10 · trước: 6</small></div><div class="bar"><span class="lv-good" style="width:80%"></span></div><div class="note">Hàm điều phối ~1.400 dòng thành các bước có tên, vòng lặp tác tử 550 → 86 dòng; chế độ legacy, định tuyến TEV1 và harness cũ đã gỡ (≈3.100 dòng, 23 cờ); có bảng chỉ số và công cụ dựng bộ chuẩn. Sau khi gỡ: 57/57 trên mô hình thật, 74/74 lượt đi một đường. Còn: khoảng 120 biến cấu hình.</div></div>
   </div>
-  <p class="ev" style="margin-top:10px">Thang điểm là đánh giá định tính của người rà soát dựa trên đọc mã và các báo cáo kiểm thử đã lưu (tham khảo <code>docs/HARNESS_FULL_AUDIT_20261023.md</code>, <code>docs/MEMORY_CONTINUITY_REVIEW_20261023.md</code>). Lượt rà soát này không chạy lại bộ đánh giá trực tiếp với mô hình.</p>
+  <p class="ev" style="margin-top:10px">Thang điểm là đánh giá định tính của người rà soát. Điểm "trước" dựa trên đọc mã và các báo cáo kiểm thử đã lưu (tham khảo <code>docs/HARNESS_FULL_AUDIT_20261023.md</code>, <code>docs/MEMORY_CONTINUITY_REVIEW_20261023.md</code>). Điểm hiện tại chấm lại cuối ngày 26/10 sau 5 đợt sửa, dựa trên mã mới, kiểm thử mã và các lần chạy thật trên Gemini Payment ở <a href="#da-lam">mục 12</a>. Phần lời văn của mục 1 và mục 3–9 vẫn là ảnh chụp trước khi sửa.</p>
 </section>
 
 <section id="kien-truc">
   <h2>2. Kiến trúc hiện tại: một câu hỏi đi qua những đâu</h2>
-  <p>Luồng dưới đây là cấu hình đang bật (<code>GOVERNED_CONTROLLER_MODE</code> mặc định, <code>HARNESS_PIPELINE=v2</code>). Ô tím là một lần gọi mô hình; ô xanh là bước tất định do backend làm; ô đỏ là điểm rủi ro.</p>
+  <p>Luồng dưới đây là cấu hình đang bật (<code>GOVERNED_CONTROLLER_MODE</code> mặc định, <code>HARNESS_PIPELINE=v2</code>), <strong>cập nhật theo mã cuối ngày 26/10</strong> sau 5 đợt sửa. Ô tím là một lần gọi mô hình; ô xanh là bước tất định do backend làm; ô đỏ là điểm rủi ro. Bộ điều phối <code>GuardedAgentHarness.run</code> nay đi qua các bước có tên trong <code>agent_core/harness/steps/</code>: chuẩn bị → hợp đồng v2 → danh sách tất định → giải tham chiếu bộ nhớ → vòng lặp tác tử → hoàn thiện đầu ra → chốt câu trả lời.</p>
   <div class="legend"><span><i style="background:var(--info-soft);border-color:var(--info)"></i>Gọi mô hình</span><span><i style="background:var(--good-soft);border-color:var(--good)"></i>Tất định (backend)</span><span><i style="background:var(--bad-soft);border-color:var(--bad)"></i>Điểm rủi ro / tốn kém</span></div>
   <div class="card flow">
     <div class="stage"><div class="tag">Cổng vào</div><div class="boxes">
@@ -186,37 +186,42 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04
       <div class="box det"><b>Câu hỏi tiếp về tài liệu?</b><span class="s">document_conversation · biểu thức chính quy</span></div>
     </div></div>
     <div class="stage"><div class="tag">Chuẩn bị ngữ cảnh</div><div class="boxes">
-      <div class="box det"><b>memoryService.route</b><span class="s">chọn chế độ bộ nhớ</span></div>
+      <div class="box det"><b>memoryService.route</b><span class="s">chọn chế độ bộ nhớ; trạng thái suy ra từ sổ lượt</span></div>
       <div class="box det"><b>getResolutionContext</b><span class="s">ứng viên: thực thể, tập dữ liệu, quy trình, sở thích, thuật ngữ</span></div>
-      <div class="box det"><b>Lời nhắc hệ thống</b><span class="s">persona + chỉ dẫn bộ điều khiển + thời gian</span></div>
+      <div class="box det"><b>Lời nhắc hệ thống</b><span class="s">quy tắc cố định (lưu bộ đệm) tách khỏi khối giờ hệ thống · steps/prepare.js</span></div>
     </div></div>
     <div class="stage"><div class="tag">Đường chính v2</div><div class="boxes">
-      <div class="box det"><b>Tìm lược đồ</b><span class="s">không gọi mô hình</span></div>
-      <div class="box model"><b>plan_query</b><span class="s">1 lần + 1 lần sửa · contract_pipeline.js:246</span></div>
-      <div class="box det"><b>Biên dịch → SQL</b><span class="s">query_compiler · kiểm tra phủ</span></div>
-      <div class="box det"><b>Thực thi &amp; hiển thị tất định</b><span class="s">bảng/biểu đồ/tệp</span></div>
-      <div class="box model"><b>Đánh giá quy trình phù hợp</b><span class="s">khi kind=workflow</span></div>
+      <div class="box det"><b>Tìm lược đồ ∥ danh mục quy trình</b><span class="s">chạy song song, không gọi mô hình</span></div>
+      <div class="box model"><b>plan_query</b><span class="s">1 lần + 1 lần sửa · có sở thích đã lưu, chỉ tiêu đã duyệt (METRICS) và ví dụ đã duyệt từ phản hồi (EXAMPLES)</span></div>
+      <div class="box det"><b>Biên dịch → SQL</b><span class="s">query_compiler · kiểm tra phủ · có phép tính mà thiếu thao tác thì hiểu là tổng hợp</span></div>
+      <div class="box det"><b>Kiểm tra loại trừ</b><span class="s">giá trị bị loại có trong cột đã chọn không · checkExclusions</span></div>
+      <div class="box det"><b>Thực thi &amp; hiển thị tất định</b><span class="s">bảng/biểu đồ/tệp; truy vấn nhóm và tệp theo nhóm chạy song song</span></div>
+      <div class="box model"><b>Lời bình có kiểm tra số</b><span class="s">kết quả tổng hợp ≥ 2 dòng · pipeline/narration.js · có số lạ thì bỏ</span></div>
+      <div class="box det"><b>Chọn quy trình</b><span class="s">backend dò giá trị đầu vào trong đúng cột (workflow_suitability); chỉ gọi mô hình đánh giá khi không chắc</span></div>
     </div></div>
     <div class="stage"><div class="tag">Dự phòng (v2 thất bại)</div><div class="boxes">
-      <div class="box model"><b>conversation_resolver</b><span class="s">1 + 1 lần sửa</span></div>
-      <div class="box model"><b>Xem xét ý định ngữ nghĩa</b><span class="s">lời nhắc ~3.000 ký tự · guarded:889</span></div>
-      <div class="box model"><b>Chọn quy trình ưu tiên</b><span class="s">workflow_preference</span></div>
-      <div class="box model risk"><b>Vòng lặp tác tử ≤ 6 vòng</b><span class="s">mô hình tự viết SQL, backend vá sau</span></div>
-      <div class="box model"><b>Kiểm tra phép tính</b><span class="s">calculation_scope</span></div>
+      <div class="box det"><b>Giải tham chiếu từ hợp đồng</b><span class="s">câu độc lập dùng lại hợp đồng v2, không gọi mô hình · steps/memory_resolution.js</span></div>
+      <div class="box model"><b>conversation_resolver</b><span class="s">chỉ còn cho câu hỏi tiếp · 1 + 1 lần sửa</span></div>
+      <div class="box model"><b>Xem xét ý định ngữ nghĩa</b><span class="s">lời nhắc ~3.000 ký tự · steps/schema_review.js</span></div>
+      <div class="box model"><b>Chọn quy trình ưu tiên</b><span class="s">workflow_preference · steps/loop/backend_calls.js</span></div>
+      <div class="box model risk"><b>Vòng lặp tác tử ≤ 6 vòng</b><span class="s">mô hình tự viết SQL, backend vá sau · steps/agent_loop.js + steps/loop/</span></div>
+      <div class="box model"><b>Kiểm tra phép tính</b><span class="s">calculation_scope · steps/loop/call_checks.js</span></div>
     </div></div>
     <div class="stage"><div class="tag">Kết thúc</div><div class="boxes">
       <div class="box det"><b>evaluateCompletion</b><span class="s">sửa theo pha · chống không tiến triển</span></div>
       <div class="box det"><b>Che dữ liệu nhạy cảm, trích dẫn</b></div>
-      <div class="box det"><b>Ghi bộ nhớ</b><span class="s">sổ lượt luôn ghi; trạng thái chính chỉ khi SUCCESS</span></div>
+      <div class="box det"><b>Ghi bộ nhớ vào sổ lượt</b><span class="s">nơi lưu duy nhất: ảnh chụp trạng thái khi đạt, thông tin "đang chờ" khi chưa xong; ghi đồng thời gộp theo lượt</span></div>
+      <div class="box det"><b>Kết quả quy trình</b><span class="s">gắn vào lượt đã khởi chạy, vào bộ nhớ sau 0,2–0,3 s</span></div>
     </div></div>
-    <div class="stage"><div class="tag">Còn tồn tại song song</div><div class="boxes">
-      <div class="box risk"><b>Bộ định tuyến cũ</b><span class="s">chat_router.classifyFlow + orchestrator</span></div>
-      <div class="box risk"><b>AgentHarness không kiểm soát</b><span class="s">agent_harness.js</span></div>
-      <div class="box risk"><b>Vòng lặp cũ trong core.js</b><span class="s">core.js:666–744</span></div>
-      <div class="box risk"><b>WorkflowEngine tuần tự</b><span class="s">chỉ được xuất ra, không thấy nơi dùng</span></div>
+    <div class="stage"><div class="tag">Đã gỡ (đợt 8)</div><div class="boxes">
+      <div class="box det"><b>Chế độ legacy</b><span class="s">GOVERNED_CONTROLLER_MODE bỏ; bộ điều khiển có kiểm soát là chế độ duy nhất</span></div>
+      <div class="box det"><b>Định tuyến TEV1</b><span class="s">chat_router, tev1_decision, workflow_retrieval, orchestrator.handle</span></div>
+      <div class="box det"><b>Harness cũ</b><span class="s">agent_harness.js, local_model_harness.js, vòng lặp cuối core.js</span></div>
+      <div class="box det"><b>WorkflowEngine</b><span class="s">giữ lại: màn hình Quản trị → Workflows dùng qua workflow_service; chỉ gỡ điểm cuối demo</span></div>
     </div></div>
   </div>
-  <div class="callout info"><strong>Nhận xét:</strong> thiết kế v2 ("mô hình chỉ lập hợp đồng, backend biên dịch và trả lời") là quyết định đúng nhất trong hệ thống. Vấn đề là mọi thứ v2 chưa làm được đều rơi vào một đường dự phòng đắt hơn, mềm hơn và khó kiểm chứng hơn nhiều.</div>
+  <div class="callout info"><strong>Đã thay đổi so với lần rà soát đầu (26/10):</strong> khung đi của một câu hỏi vẫn như cũ (cổng vào → chuẩn bị → v2 → dự phòng → kết thúc), nhưng bên trong đã đổi ở 5 chỗ: (1) v2 dùng sở thích đã lưu, chạy song song các tra cứu và có thêm bước kiểm tra loại trừ, lời bình có kiểm tra số; (2) chọn quy trình do backend dò đầu vào, bỏ phần lớn lần gọi đánh giá; (3) đường dự phòng bỏ lần gọi giải tham chiếu cho câu độc lập; (4) bộ nhớ chỉ còn một nơi lưu là sổ lượt; (5) bộ điều phối từ một hàm ~1.400 dòng thành các bước có tên, vòng lặp tác tử tách tiếp thành 6 mô-đun; (6) đợt 8 gỡ hẳn chế độ legacy: mọi câu hỏi đi qua đúng một đường (hàng cuối).</div>
+  <div class="callout info"><strong>Nhận xét:</strong> thiết kế v2 ("mô hình chỉ lập hợp đồng, backend biên dịch và trả lời") là quyết định đúng nhất trong hệ thống. Đường dự phòng vẫn đắt hơn và khó kiểm chứng hơn, nhưng nay ít bị rơi vào hơn và rẻ hơn: trong 10 ca kiểm tra gần nhất, cả 13 lượt đều được v2 trả lời trọn.</div>
 </section>
 
 <section id="tra-loi">
@@ -574,39 +579,109 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04
     </tbody>
   </table></div>
   <p style="margin-top:10px"><b>Kiểm chứng:</b> kiểm thử mã 1.234/1.248 đạt, 0 lỗi (thêm 4 bài trong <code>tests/agent_loop_steps.test.js</code> cho các nhánh mà kiểm thử đầu-cuối chưa chạm: câu hỏi tiếp không giữ được phạm vi, khôi phục bảng gốc, đầu vào quy trình đang chờ). Độ phủ dòng của các mô-đun mới 82–100%; phần chưa phủ chủ yếu là các câu từ chối được chuyển nguyên văn. Chạy thật một lần 10 ca trộn trên Gemini Payment (v2): <strong>10/10</strong>, 16 lần gọi mô hình, p50 2,53 s, p90 3,79 s. Tuy nhiên cả 13 lượt đều được v2 trả lời trọn, không lượt nào chuyển sang vòng lặp tác tử, nên lần chạy này chỉ xác nhận việc tách không làm hỏng đường chính; mã vòng lặp mới được kiểm chứng bằng kiểm thử mã.</p>
-  <p class="ev" style="margin-top:10px">Toàn bộ kiểm thử mã: 1.248 bài, 1.234 đạt, 0 lỗi, 14 bỏ qua. Chưa commit.</p>
+  <h3>Đợt 6: lớp chỉ tiêu nghiệp vụ</h3>
+  <p>Dùng lại kho chỉ tiêu có sẵn (<code>governance/metrics.js</code>, màn hình Quản trị → Chỉ tiêu nghiệp vụ), trước đây chỉ vòng dự phòng dùng được qua công cụ <code>query_sql_metric</code>. Nay chỉ tiêu đi vào đường chính v2:</p>
+  <ul class="clean">
+    <li><b>Định nghĩa mở rộng:</b> thêm tên nghiệp vụ, cách gọi khác và điều kiện cố định trên chính bảng của chỉ tiêu (ví dụ loại dòng phí); công cụ <code>query_sql_metric</code> áp cùng điều kiện.</li>
+    <li><b>Danh mục v2</b> (<code>query_catalog.js</code>) liệt kê các chỉ tiêu đã duyệt có bảng, cột đo và cột ngày đang hiển thị; chỉ tiêu dùng cột bị chặn không được đưa ra.</li>
+    <li><b>Hợp đồng</b> cho phép <code>measures: [{metric}]</code>; bộ biên dịch thay bằng đúng cột, phép tính, tên và điều kiện. Số đo tự viết trùng một chỉ tiêu không điều kiện được coi là chỉ tiêu đó. Một số đo có điều kiện thì điều kiện vào WHERE; nhiều số đo khác điều kiện thì mỗi số đo chỉ cộng dòng của mình (CASE).</li>
+    <li><b>Câu trả lời</b> ghi "theo chỉ tiêu đã duyệt" kèm đơn vị; vết xử lý ghi chỉ tiêu và phiên bản; <code>report:pipeline</code> có ô "Câu tổng hợp qua chỉ tiêu".</li>
+    <li><b>Quy tắc chọn:</b> chỉ dùng chỉ tiêu khi câu hỏi nêu từ phân biệt của nó; cột có nhãn khớp hơn được ưu tiên (giữ đúng ca <code>power-money-empty</code>: "Tiền điện" khác "Tiền hóa đơn sau thuế").</li>
+  </ul>
+  <div class="tablewrap"><table>
+    <thead><tr><th>11 chỉ tiêu đã soạn và tự duyệt (nguồn IPMS mặc định)</th><th>Định nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td>Tiền hóa đơn điện sau thuế / trước thuế / thuế VAT</td><td>SUM FinalTotalAmount / PreTotalAmount / VATTotalAmount, T_ElectricityOutput, theo ngày chứng từ</td></tr>
+      <tr><td>Sản lượng điện bán ra · Số hóa đơn điện bán ra</td><td>SUM TotalQty (giả định kWh) · COUNT ElectricityOutputID</td></tr>
+      <tr><td>Tiền điện mua vào sau thuế / trước thuế · Sản lượng điện mua vào</td><td>T_ElectricityInput, theo ngày chứng từ đầu vào</td></tr>
+      <tr><td>Tổng tiền phiếu thu · Số phản ánh · Số bản ghi công nợ</td><td>SUM T_Revenue.TotalAmount · COUNT T_Feedback.FeedbackID · COUNT T_CustomerDebt.CustomerDebtID</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn" style="margin-top:12px"><strong>Giả định cần nghiệp vụ rà:</strong> đơn vị sản lượng là kWh; tiền phiếu thu lọc theo ngày phiếu; không định nghĩa chỉ tiêu số dư công nợ (số dư cuối kỳ không cộng dồn được) và phí vận hành (bảng chi tiết không có cột ngày, cần nối chứng từ). Các chỉ tiêu được tự duyệt theo yêu cầu người dùng (chủ sở hữu ghi "Bản soạn tự động 26/10"); sửa tại màn hình quản trị hoặc chạy lại <code>npm run metrics:seed -- --apply</code> (sao lưu trong <code>data/backup/</code>). Không ghi gì vào SQL Server.</div>
+  <p style="margin-top:10px"><b>Kiểm chứng:</b> 8 bài kiểm thử mới (<code>tests/business_metrics.test.js</code>, gồm một lượt v2 trọn vẹn với mô hình giả lập). Biên dịch hợp đồng dùng chỉ tiêu trên từ điển thật và chạy truy vấn chỉ đọc trên IPMS: <strong>7/7 khớp đáp án bộ chuẩn</strong> (<code>bill-ka-feb</code> 6.652.704, <code>bill-ka-feb-pretax</code>, <code>qty-ka-jan</code>, <code>bill-all-jan</code>, <code>qty-all-feb</code>, <code>count-invoices-jan</code>, <code>debt-count-ka</code>). Đo lại trên mô hình thật sau đợt 8: 30/34 lượt tổng hợp qua chỉ tiêu, các câu tổng hợp đều đạt (xem phần đo lại cuối mục).</p>
+
+  <h3>Đợt 7: vòng học từ phản hồi</h3>
+  <p>Trước đây phản hồi xấu chỉ đi tới màn hình duyệt và tệp ca hồi quy, không quay lại giúp mô hình. Nay (<code>training_core/feedback_loop.js</code>, <code>scripts/learn_from_feedback.js</code>):</p>
+  <ul class="clean">
+    <li><b><code>npm run learn:build</code></b> rút bản nháp từ lượt được đánh giá: câu bị chê / "xem lại" → ca kiểm thử nháp (số trong "kết quả kỳ vọng" thành điều kiện chấm) và ví dụ nháp lấy từ lần hỏi lại thành công trong cùng phiên; câu được khen / "đạt" của v2 → ví dụ hợp đồng đã xác nhận.</li>
+    <li><b>Người duyệt</b> đặt <code>accept=true</code>, sửa hợp đồng hoặc điều kiện chấm; <b><code>npm run learn:approve</code></b> lưu ví dụ lên nguồn dữ liệu (kho ứng dụng, có sao lưu) và thêm ca vào bộ chuẩn.</li>
+    <li><b>Bước lập hợp đồng v2</b> nhận tối đa 3 ví dụ giống câu hỏi nhất (so từ ngữ, bỏ mã và số), và chỉ những ví dụ còn biên dịch được trên danh mục hiện tại; mô hình chỉ dùng lại lựa chọn khi câu hỏi có cùng từ ngữ, giá trị luôn lấy từ câu hỏi.</li>
+  </ul>
+  <p style="margin-top:10px"><b>Kiểm chứng:</b> 5 bài kiểm thử mới (<code>tests/feedback_loop.test.js</code>). Trên 57 câu chuẩn, một ví dụ về tiền hóa đơn điện chỉ đến các câu về điện (không đến câu nhân viên, khách hàng, phản ánh, tài liệu, trò chuyện); ví dụ không còn biên dịch được thì không đưa ra. Chạy <code>learn:build</code> trên dữ liệu thật: 19 bản nháp sửa lỗi, đều từ trước khi có v2 nên chưa có ví dụ; chưa duyệt bản nào — để người dùng rà trong <code>artifacts/learning/feedback-2026-10-26.json</code>.</p>
+  <h3>Đợt 8: dọn mã cũ</h3>
+  <p>Người dùng chọn gỡ hẳn chế độ legacy và khung mô hình cục bộ cũ. Số liệu dùng thật 30 ngày (<code>report:pipeline</code>): đường legacy không có lượt nào từ 12/10, khung mô hình cục bộ không có lượt nào từ 09/10; v2 trả lời trọn 92% trong 36 lượt từ 24/10.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phần</th><th>Đã làm</th></tr></thead>
+    <tbody>
+      <tr><td><code>intelligent_core/core.js</code></td><td>869 → 583 dòng: bỏ phân loại luồng TEV1, <code>orchestrator.handle</code>, chọn bảng bằng mô hình, theo dõi quy trình kiểu cũ, chọn harness cũ và vòng lặp dự phòng cuối hàm. Mọi câu hỏi đi qua <code>GuardedAgentHarness</code>.</td></tr>
+      <tr><td>Mô-đun đã xóa (≈2.750 dòng)</td><td><code>chat_router</code>, <code>tev1_decision</code>, <code>workflow_retrieval</code>, <code>workflow_explanation</code>, <code>orchestrator</code>, <code>agent_harness</code>, <code>local_model_harness</code>, <code>builtin_workflows</code> + điểm cuối demo <code>/api/agent/workflow/run</code>; bỏ bước lập chỉ mục định tuyến khi publish quy trình.</td></tr>
+      <tr><td>Giữ lại</td><td>Phần hiểu quy trình mà màn hình soạn quy trình dùng → <code>automation/workflow_interpreter.js</code>. <code>WorkflowEngine</code> vẫn được màn hình Quản trị → Workflows dùng (nhận định "không thấy nơi dùng" ở bản rà soát đầu là sai). Vòng lặp tác tử (đường dự phòng của v2) giữ nguyên.</td></tr>
+      <tr><td>Cờ cấu hình</td><td>Bỏ 23 khóa chỉ đường cũ đọc: <code>GOVERNED_CONTROLLER_MODE</code>, <code>AGENT_CORE_ENABLED</code>, <code>AI_MAX_TOOL_ITERATIONS</code>, 13 khóa <code>CHAT_ROUTING_*</code>/<code>CHAT_QUICK_GREETING_*</code>, 7 khóa <code>LOCAL_MODEL_*</code>/<code>MODEL_DATA_INTENT_PLANNER_ENABLED</code>; nhóm "Tương thích legacy" không còn trong Cài đặt. Dòng cũ trong <code>.env</code> được giữ nguyên nhưng không còn tác dụng.</td></tr>
+      <tr><td>Kiểm thử và script</td><td>Xóa 11 tệp kiểm thử và 13 script chỉ dành cho đường cũ (TEV1, harness cũ) cùng 5 lệnh npm; chuyển <code>provider_core_integration</code> sang chế độ hiện tại (giữ 11 bài về tài liệu đã chọn, đếm trang, ghim mô hình, web).</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn" style="margin-top:12px"><strong>Còn lại:</strong> <code>scripts/backup_all.js</code> vẫn sao lưu collection Qdrant <code>workflow_routing_v1</code> của định tuyến cũ (để không đổi định dạng sao lưu/khôi phục 3 collection) — có thể bỏ trong một đợt riêng. Hành vi "thử lại khi mô hình từ chối kết quả web" chỉ có trong harness cũ nên đã mất theo. Cần khởi động lại máy chủ khi triển khai.</div>
+  <p style="margin-top:10px"><b>Kiểm chứng:</b> kiểm thử mã 1.056 bài, 1.042 đạt, 0 lỗi, 14 bỏ qua (giảm 208 bài của mã đã gỡ); quét toàn bộ <code>src</code>, <code>tests</code>, <code>scripts</code>, <code>package.json</code> không còn tham chiếu tới tệp đã xóa; nạp toàn bộ mô-đun máy chủ với kho dữ liệu thật thành công; máy chủ đã khởi động lại bằng <code>npm start</code> và phản hồi HTTP 200. Chạy thật: xem phần đo lại ngay dưới.</p>
+
+  <h3>Đo lại trên mô hình thật sau đợt 6–8</h3>
+  <p>Chạy một lần toàn bộ 57 câu chuẩn (74 lượt) trên <strong>Google Gemini - Payment</strong>, đường v2, ngày 26/10, sau khi khởi động lại máy chủ. Kết quả lưu ở <code>artifacts/live-eval/v2-after-cleanup-2026-10-26T04-13-31-269Z.json</code>.</p>
+  <div class="scores">
+    <div class="score"><div class="name">Số câu đạt</div><div class="val">57/57</div><div class="note">Mọi nhóm câu hỏi đều đạt; không có câu trả lời "Chưa thể hoàn tất".</div></div>
+    <div class="score"><div class="name">Lượt v2 trả lời trọn</div><div class="val">74/74</div><div class="note">Không lượt nào chuyển sang vòng lặp dự phòng; mọi câu hỏi đi qua đúng một đường.</div></div>
+    <div class="score"><div class="name">Câu tổng hợp qua chỉ tiêu</div><div class="val">30/34</div><div class="note">4 lượt không qua chỉ tiêu: 3 câu đếm nhân viên (chưa có chỉ tiêu nhân sự) và <code>power-money-empty</code> (đúng: "Tiền điện" không phải tiền hóa đơn).</div></div>
+  </div>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th>Chỉ số (bộ 57 câu, Gemini Payment)</th><th class="num">Sau đợt 2 (2 lần)</th><th class="num">Sau đợt 6–8 (1 lần)</th></tr></thead>
+    <tbody>
+      <tr><td>Số câu đạt</td><td class="num">57 / 57</td><td class="num"><strong>57</strong></td></tr>
+      <tr><td>Lần gọi mô hình (74 lượt)</td><td class="num">91,5</td><td class="num">90</td></tr>
+      <tr><td>Token đầu vào p50</td><td class="num">4.908</td><td class="num">5.321 (+8%)</td></tr>
+      <tr><td>Thời gian p50</td><td class="num">2,37 s</td><td class="num">2,80 s</td></tr>
+      <tr><td>Thời gian p90</td><td class="num">3,68 s</td><td class="num">4,73 s</td></tr>
+      <tr><td>Thời gian p95</td><td class="num">4,52 s</td><td class="num">5,62 s</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="clean" style="margin-top:10px">
+    <li><b>Chậm hơn:</b> danh sách chỉ tiêu làm lời nhắc lập hợp đồng dài thêm khoảng 8%, và 3 câu tổng hợp (<code>compare-ka</code>, <code>top-feb</code>, <code>anomaly-ka-2024</code>) phải gọi thêm một lần sửa vì mô hình chọn đúng chỉ tiêu nhưng bỏ trống bảng gốc (<code>V2_ROOT_UNKNOWN</code>); <code>compare-ka</code> mất 11,3 s. Bỏ các lượt có lần sửa, p50/p90 là 2,71 / 4,17 s. Tốc độ nhà cung cấp còn dao động khoảng ±0,4 s giữa các lần chạy.</li>
+    <li><b>8 lượt cần một lần sửa hợp đồng:</b> 3 do thiếu bảng gốc khi dùng chỉ tiêu (mới, sửa được bằng mã: suy bảng gốc từ chỉ tiêu), 4 do quy trình thiếu trích dẫn đầu vào, 1 do định dạng bộ lọc. Mỗi lượt tối đa 3 lần gọi mô hình.</li>
+    <li><b>7 lượt PARTIAL</b> đều là lượt khởi chạy quy trình (đã tiếp nhận hoặc đang chờ nhập thêm) — đúng thiết kế, không phải lỗi.</li>
+    <li><b>Ví dụ từ phản hồi:</b> chưa có ví dụ nào được duyệt nên bước lập hợp đồng chưa nhận ví dụ (0 lượt).</li>
+  </ul>
+  <div class="callout info" style="margin-top:12px"><strong>Đã sửa sau lần đo (không gọi mô hình):</strong> hợp đồng chỉ đo các chỉ tiêu của cùng một bảng mà bỏ trống bảng gốc thì lấy bảng của chỉ tiêu làm bảng gốc (<code>metricRoot</code> trong <code>query_compiler.js</code>), trước mọi bước kiểm tra nên kiểm tra phủ bộ lọc vẫn chạy; vết xử lý ghi <code>V2_ROOT_FROM_METRIC</code>. Quy tắc tổng quát theo dữ liệu chỉ tiêu, không ghi tên bảng nào trong mã; chỉ tiêu ở nhiều bảng, trộn số đo tự viết hoặc bảng gốc mô hình đã ghi thì giữ nguyên như cũ. <b>Kiểm chứng:</b> 2 bài kiểm thử mới (gồm một lượt v2 trọn vẹn: 1 lần gọi lập hợp đồng thay vì 2, và hợp đồng thiếu tiêu chí vẫn bị từ chối); biên dịch lại đúng 3 hợp đồng lần đầu bị từ chối trong lần đo trên từ điển thật và chạy truy vấn chỉ đọc: cả 3 cho đúng đáp án chuẩn (<code>compare-ka</code> 123.854.696 tháng 01, <code>top-feb</code> “Cty dược ABC”, <code>anomaly-ka-2024</code> 2 tháng → chưa đủ dữ liệu). Ước tính bớt 3 lần gọi mô hình mỗi lượt chạy bộ 57 câu; chưa đo lại trên mô hình thật. Cần khởi động lại máy chủ để áp dụng.</div>
+  <p class="ev" style="margin-top:10px">Toàn bộ kiểm thử mã sau bản sửa: 1.058 bài, 1.044 đạt, 0 lỗi, 14 bỏ qua. Chưa commit.</p>
 </section>
 
 <section id="tiep-theo">
   <h2>13. Công việc tiếp theo</h2>
+  <p>Các việc nhóm "Kế tiếp" đã xong hết; việc kỹ thuật 1–3 đã có mã (đợt 6–8). Còn lại: rà chỉ tiêu và bản nháp phản hồi, gắn nhãn câu chuẩn, theo dõi bảng chỉ số, rồi mô hình cục bộ (nay sẽ làm trên v2 vì khung cục bộ cũ đã gỡ).</p>
   <div class="roadmap">
     <div class="card phase">
-      <h3><span class="pill p-good">Ngay</span> vài ngày</h3>
+      <h3><span class="pill p-good">Người dùng</span> làm song song</h3>
       <div class="item"><b>Commit theo từng nhóm</b><p>Tách riêng khỏi các thay đổi giao diện và tệp sao lưu .rar đang có trong thư mục.</p></div>
-      <div class="item"><b>Gắn nhãn câu hỏi chuẩn</b><p>Duyệt <code>artifacts/golden/candidates-2026-10-26.json</code>, điền đáp án từ dữ liệu thật, đưa vào bộ chuẩn để vượt 57 câu và phủ cách hỏi thật của người dùng.</p></div>
-      <div class="item done"><b>Đo độ ổn định</b><p>Đã chạy 3 lần: 57, 56, 57 câu (99,4%); ca dao động duy nhất đã sửa.</p></div>
-      <div class="item"><b>Theo dõi bảng chỉ số</b><p>Sau vài ngày dùng thật: tỉ lệ bộ đệm, tỉ lệ chuyển dự phòng và lý do, thời gian p90.</p></div>
+      <div class="item"><b>Gắn nhãn câu hỏi chuẩn</b><p>Duyệt <code>artifacts/golden/candidates-2026-10-26.json</code>, điền đáp án từ dữ liệu thật, rồi <code>npm run eval:golden:promote</code> để bộ chuẩn vượt 57 câu. <b>Cần trước việc 2.</b></p></div>
+      <div class="item"><b>Theo dõi bảng chỉ số</b><p><code>npm run report:pipeline</code> sau vài ngày dùng thật: tỉ lệ bộ đệm, lời bình bị bỏ, tỉ lệ chuyển dự phòng và lý do, thời gian p90. <b>Cần trước việc 3.</b> Nhớ khởi động lại máy chủ khi triển khai.</p></div>
       <div class="item"><b>Tài khoản riêng cho chấm điểm</b><p>Công cụ chấm đang tiêu hạn mức của tài khoản admin đầu tiên; nên có tài khoản đánh giá với hạn mức riêng.</p></div>
     </div>
     <div class="card phase">
-      <h3><span class="pill p-warn">Kế tiếp</span> 1–2 tháng</h3>
-      <div class="item done"><b>Tìm gốc độ trễ 8 giây</b><p>Lần ghi kết quả quy trình vào bộ nhớ chạy qua hàng đợi tác vụ sau khi lưu; đã che ở bước đọc nhưng cần biết vì sao chậm.</p></div>
-      <div class="item done"><b>Gộp giải tham chiếu vào <code>plan_query</code></b><p>Bỏ một lần gọi mô hình ở đường dự phòng của câu hỏi tiếp.</p></div>
-      <div class="item done"><b>Sổ lượt làm nguồn sự thật</b><p>Sổ lượt nay đã giữ cả kết quả quy trình; bước tiếp là suy ra các trạng thái khác từ nó thay vì ghi trùng.</p></div>
-      <div class="item done"><b>Hợp đồng quy trình</b><p>Khai báo thao tác, bộ lọc hỗ trợ, mức hạt, đầu ra; so khớp tất định thay vì nhờ mô hình đánh giá.</p></div>
-      <div class="item done"><b>Tách bộ điều phối</b><p>Máy trạng thái thay cho hàm 1.300 dòng; vòng lặp tác tử tách tiếp thành 6 mô-đun (đợt 5).</p></div>
-      <div class="item done"><b>Lời bình có khóa số liệu</b><p>Câu trả lời v2 đúng số nhưng khô; thêm diễn giải ngắn, mọi con số đối chiếu với kết quả.</p></div>
+      <h3><span class="pill p-warn">Thứ tự làm</span> việc kỹ thuật</h3>
+      <div class="item done"><b>1. Lớp chỉ tiêu nghiệp vụ</b><p>Xong phần mã (đợt 6): 11 chỉ tiêu IPMS đã soạn và tự duyệt, 7/7 khớp đáp án bộ chuẩn khi chạy truy vấn chỉ đọc. Chạy thật: 30/34 lượt tổng hợp qua chỉ tiêu, 57/57 đạt. Đã sửa lỗi thiếu bảng gốc khi dùng chỉ tiêu (bỏ 3 lần sửa hợp đồng). Còn: nghiệp vụ rà giả định; theo dõi ô "Câu tổng hợp qua chỉ tiêu".</p></div>
+      <div class="item done"><b>2. Vòng học từ phản hồi</b><p>Xong phần mã (đợt 7): <code>learn:build</code> → người duyệt → <code>learn:approve</code> → ví dụ cho bước lập hợp đồng và ca cho bộ chuẩn. Còn: rà 19 bản nháp hiện có và chạy lại <code>learn:build</code> định kỳ khi có phản hồi trên v2.</p></div>
+      <div class="item done"><b>3. Dọn mã cũ</b><p>Xong (đợt 8): gỡ chế độ legacy, định tuyến TEV1, harness cũ và 23 cờ cấu hình. Làm sớm hơn điều kiện đề ra theo quyết định của người dùng; chạy thật 57/57, 74/74 lượt đi một đường; còn: bỏ collection định tuyến khỏi sao lưu.</p></div>
+      <div class="item"><b>4. Mô hình cục bộ</b><p>Tối ưu chi phí, không tăng độ chính xác; hiện ngoài phạm vi kiểm thử. Để sau cùng vì v2 đã gọn (sau việc 3) chỉ đòi mô hình lập hợp đồng, mô hình nhỏ dễ đạt hơn.</p></div>
     </div>
     <div class="card phase">
-      <h3><span class="pill p-info">Dài hạn</span> 1 quý</h3>
-      <div class="item"><b>Lớp chỉ tiêu nghiệp vụ</b><p>Phần lớn câu tổng hợp đi qua chỉ tiêu đã duyệt.</p></div>
-      <div class="item"><b>Vòng học từ phản hồi</b><p>Phản hồi xấu → ca kiểm thử → ví dụ mẫu đề xuất → người duyệt.</p></div>
-      <div class="item"><b>Mô hình cục bộ</b><p>Chưa tối ưu; hiện ngoài phạm vi kiểm thử.</p></div>
-      <div class="item"><b>Dọn mã cũ</b><p>Bỏ vòng lặp cũ và các đường định tuyến cũ sau khi v2 chạy ổn trên máy chủ; giảm cờ cấu hình.</p></div>
+      <h3><span class="pill p-info">Đã xong</span> 26/10</h3>
+      <div class="item done"><b>Đo độ ổn định</b><p>3 lần: 57, 56, 57 câu (99,4%); ca dao động duy nhất đã sửa.</p></div>
+      <div class="item done"><b>Tìm gốc độ trễ 8 giây</b><p>Ghi bộ nhớ chỉ nạp 9 kho cần thiết: 0,2–0,3 s.</p></div>
+      <div class="item done"><b>Gộp giải tham chiếu vào <code>plan_query</code></b><p>Câu độc lập ở đường dự phòng dùng lại hợp đồng v2.</p></div>
+      <div class="item done"><b>Sổ lượt làm nguồn sự thật</b><p>Nơi lưu duy nhất cho trạng thái bộ nhớ (đợt 3).</p></div>
+      <div class="item done"><b>Hợp đồng quy trình</b><p>Backend dò giá trị đầu vào thay cho lần gọi đánh giá.</p></div>
+      <div class="item done"><b>Tách bộ điều phối</b><p>Các bước có tên (đợt 4); vòng lặp tác tử tách tiếp thành 6 mô-đun (đợt 5).</p></div>
+      <div class="item done"><b>Lời bình có khóa số liệu</b><p>Mọi con số trong lời bình đối chiếu với kết quả.</p></div>
     </div>
   </div>
   <div class="footer">
-    Phạm vi rà soát (mục 1–11): đọc mã <code>src/backend</code> và các báo cáo trong <code>docs/</code>. Mục 12–13 cập nhật cuối ngày 26/10 sau khi sửa mã, chạy toàn bộ kiểm thử và bộ 57 câu chuẩn trên Gemini Payment (1 lần sau khi sửa, thêm 3 lần đo độ ổn định, 2 lần sau đợt 2). Các con số mục tiêu ở mục 11 là đề xuất, cần hiệu chỉnh khi có số liệu nền thực tế.
+    Phạm vi rà soát (mục 1–11): đọc mã <code>src/backend</code> và các báo cáo trong <code>docs/</code>. Mục 2 và 12–13 cập nhật cuối ngày 26/10 sau khi sửa mã, chạy toàn bộ kiểm thử và bộ 57 câu chuẩn trên Gemini Payment (1 lần sau khi sửa, thêm 3 lần đo độ ổn định, 2 lần sau đợt 2). Các con số mục tiêu ở mục 11 là đề xuất, cần hiệu chỉnh khi có số liệu nền thực tế.
   </div>
 </section>
 </main>

@@ -11,7 +11,7 @@ const suites = [
   'memory_resolution', 'governed_read_only', 'governed_controller',
   'answer_envelope', 'governance_policy', 'governed_tool_foundation',
   'governed_artifacts_audit', 'tool_result', 'request_execution_budget', 'knowledge_prompt_policy',
-  'workflow_retrieval', 'sql_security_corpus', 'durable_memory',
+  'sql_security_corpus', 'durable_memory',
   'tool_registry', 'mcp_service', 'automation_api_full', 'retrieval_measurement',
   'agent_operations', 'agent_release', 'document_tool_contract', 'channel_contract_rendering'
 ].map(name => `tests/${name}.test.js`);

@@ -7,8 +7,14 @@
 const MAX_TABLES = 10;
 const key = value => String(value ?? '').trim().toLowerCase();
 
+// Approved metrics of the source the caller may read (governance/metrics).
+function approvedMetrics(dbSourceId) {
+  try { return require('../../governance/metrics').list().filter(metric => metric.sourceId === dbSourceId); }
+  catch { return []; }
+}
+
 function build(selection, { include = [], policy = null, dictionary = require('../../services/dictionary_service'),
-  relationships = require('../../services/relationship_service') } = {}) {
+  relationships = require('../../services/relationship_service'), metrics = null } = {}) {
   const dbSourceId = selection.dbSourceId;
   const authorized = new Set([...(selection.tableDirectory || []).map(item => key(item.tableName)),
     ...(selection.intentCatalog || []).map(item => key(item.tableName))]);
@@ -53,8 +59,23 @@ function build(selection, { include = [], policy = null, dictionary = require('.
     .map(relation => ({ id: relation.id, revision: relation.revision, fromTable: tables.get(key(relation.sourceTable)).tableName,
       toTable: tables.get(key(relation.targetTable)).tableName, pairs: relation.columnPairs.map(pair => ({ source: pair.sourceColumn, target: pair.targetColumn })),
       role: relation.businessRole || '', display: tables.get(key(relation.targetTable)).columns.has(key(relation.displayColumn)) ? relation.displayColumn : '' }));
-  return { dbSourceId, tables, relations };
+  // A metric is offered when its table, measure and date are in the catalog;
+  // its fixed conditions may use columns not shown to the model, never blocked ones.
+  const offered = (metrics || approvedMetrics(dbSourceId)).flatMap(metric => {
+    const [schemaName, tableName] = String(metric.table).split('.');
+    const entry = tables.get(key(tableName)), raw = byName.get(key(tableName));
+    if (!entry || key(entry.schemaName) !== key(schemaName) || !entry.columns.has(key(metric.valueColumn)) || !entry.columns.has(key(metric.timeColumn))) return [];
+    if ((metric.conditions || []).some(condition => blocked.has(key(condition.column))
+      || !raw.columns.some(column => key(column.columnName) === key(condition.column)))) return [];
+    return [{ id: metric.metricId, version: metric.version, label: metric.label || metric.metricId, aliases: metric.aliases || [],
+      definition: metric.definition, table: entry.tableName, column: entry.columns.get(key(metric.valueColumn)).name,
+      aggregation: metric.aggregation, unit: metric.unit, dateColumn: entry.columns.get(key(metric.timeColumn)).name,
+      conditions: structuredClone(metric.conditions || []) }];
+  });
+  return { dbSourceId, tables, relations, metrics: offered };
 }
+
+function metric(catalog, id) { return (catalog.metrics || []).find(item => key(item.id) === key(id)) || null; }
 
 function table(catalog, name) { return catalog.tables.get(key(name)) || null; }
 function column(catalog, tableName, columnName) { return table(catalog, tableName)?.columns.get(key(columnName)) || null; }
@@ -79,7 +100,15 @@ function describe(catalog) {
         + (fk ? ` -> ${fk.toTable}${fk.role ? ` [${fk.role}]` : ''}${fk.display ? ` shows ${fk.display}` : ''}` : ''));
     }
   }
+  if (catalog.metrics?.length) {
+    lines.push('METRICS (approved business definitions):');
+    for (const item of catalog.metrics) {
+      const conditions = require('../../governance/metrics').conditionSql({ conditions: item.conditions });
+      lines.push(`  ${item.id} "${item.label}" = ${item.aggregation}(${item.table}.${item.column})${conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''}`
+        + ` (${[item.unit, `date: ${item.dateColumn}`, item.aliases.length && `also: ${item.aliases.join(', ')}`].filter(Boolean).join('; ')})`);
+    }
+  }
   return lines.join('\n');
 }
 
-module.exports = { build, table, column, foreignKey, describe, key };
+module.exports = { build, table, column, foreignKey, metric, describe, key };

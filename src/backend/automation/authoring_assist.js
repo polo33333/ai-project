@@ -36,7 +36,7 @@ async function routeTest(body, context) {
   // Same catalog the assistant sees, with this package's saved version replaced by the form being edited.
   const published = (await automation.registry.list(context)).filter(item => item.packageId !== packageId);
   const routing = [];
-  const interpreted = await require('./orchestrator').interpretLegacy(question, [...published, ...drafts], null, {
+  const interpreted = await require('./workflow_interpreter').interpret(question, [...published, ...drafts], null, {
     providerId: body.providerId, onWorkflowRouting: event => routing.push(event.reason)
   });
   if (!interpreted) return { status: 'unavailable', routing };

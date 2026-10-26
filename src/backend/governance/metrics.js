@@ -2,14 +2,38 @@
 const crypto = require('node:crypto');
 const context = require('./context');
 const identifier = { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]*$', maxLength: 128 };
+const literal = { type: ['string', 'number'], maxLength: 200 };
 const validate = new (require('ajv'))({ strict: false }).compile({ type: 'object', additionalProperties: false,
   required: ['metricId', 'owner', 'definition', 'table', 'valueColumn', 'aggregation', 'unit', 'grain', 'timeColumn', 'timezone', 'dimensions', 'nullRule', 'rounding', 'approved'],
   properties: { metricId: identifier, owner: { type: 'string', minLength: 1, maxLength: 200 }, definition: { type: 'string', minLength: 1, maxLength: 2000 },
     table: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$', maxLength: 257 }, valueColumn: identifier,
     aggregation: { enum: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'] }, unit: { type: 'string', minLength: 1, maxLength: 40 }, grain: { type: 'string', minLength: 1, maxLength: 200 },
     timeColumn: identifier, timezone: { enum: ['Asia/Ho_Chi_Minh', 'UTC'] }, dimensions: { type: 'array', items: identifier, uniqueItems: true, maxItems: 10 },
-    nullRule: { enum: ['exclude', 'zero'] }, rounding: { type: 'integer', minimum: 0, maximum: 8 }, approved: { type: 'boolean' } } });
+    nullRule: { enum: ['exclude', 'zero'] }, rounding: { type: 'integer', minimum: 0, maximum: 8 }, approved: { type: 'boolean' },
+    // Business name and wording users ask with; offered to the v2 query contract.
+    label: { type: 'string', minLength: 1, maxLength: 120 },
+    aliases: { type: 'array', maxItems: 10, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 80 } },
+    // Fixed conditions on the metric's own table that are part of its meaning
+    // (a fee line type, a document kind); every query of the metric applies them.
+    conditions: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['column', 'operator'], properties: {
+      column: identifier, operator: { enum: ['eq', 'ne', 'in', 'notIn', 'isNull', 'notNull'] }, value: literal,
+      values: { type: 'array', minItems: 1, maxItems: 20, items: literal } } } } } });
 const fail = (code, statusCode = 400) => Object.assign(new Error(code), { code, statusCode });
+
+// T-SQL predicates for a metric's fixed conditions, on the table alias given.
+// "Not X" keeps empty values, as in the query compiler: NULL is not X.
+function conditionSql(metric, alias = '') {
+  const column = name => `${alias ? `${alias}.` : ''}[${name}]`;
+  const value = item => typeof item === 'number' && Number.isFinite(item) ? String(item) : `N'${String(item).replaceAll("'", "''")}'`;
+  return (metric.conditions || []).map(condition => {
+    const target = column(condition.column), values = condition.values || [condition.value];
+    if (condition.operator === 'isNull' || condition.operator === 'notNull') return `${target} IS ${condition.operator === 'isNull' ? '' : 'NOT '}NULL`;
+    if (values.some(item => item === undefined || item === null || item === '')) throw fail('METRIC_CONDITION_INVALID');
+    if (condition.operator === 'eq') return `${target} = ${value(values[0])}`;
+    if (condition.operator === 'in') return `${target} IN (${values.map(value).join(', ')})`;
+    return `(${target} ${condition.operator === 'ne' ? `<> ${value(values[0])}` : `NOT IN (${values.map(value).join(', ')})`} OR ${target} IS NULL)`;
+  });
+}
 function sources() { return require('../services/sql_connector').dbSources; }
 function list() {
   return sources().filter(source => context.canRead(source)).flatMap(source => (source.governedMetrics || []).filter(metric => metric.approved)
@@ -26,7 +50,8 @@ function save(sourceId, definition, expectedRevision) {
     updatedAt: new Date().toISOString(), approvedBy: definition.approved ? context.principal()?.subject || null : null,
     permittedJoins: [], effectiveFrom: new Date().toISOString() };
   // Validate source/table/column restrictions before publishing a definition.
-  require('./sql_policy').check(`SELECT ${definition.valueColumn}, ${definition.timeColumn}${definition.dimensions.length ? ', ' + definition.dimensions.join(', ') : ''} FROM ${definition.table}`, source);
+  const conditions = conditionSql(definition);
+  require('./sql_policy').check(`SELECT ${definition.valueColumn}, ${definition.timeColumn}${definition.dimensions.length ? ', ' + definition.dimensions.join(', ') : ''} FROM ${definition.table}${conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''}`, source);
   if (index < 0) metrics.push(record); else metrics[index] = record;
   require('../services/sql_connector').persist(); return structuredClone(record);
 }
@@ -42,7 +67,8 @@ function compile(metric, input) {
   // SQL DECIMAL keeps monetary aggregation outside JavaScript floating point.
   const expression = metric.aggregation === 'COUNT' ? `COUNT_BIG(${quote(metric.valueColumn)})` : `${metric.aggregation}(CAST(${value} AS DECIMAL(38,8)))`;
   const group = dimensions.map(quote).join(', ');
-  const sql = `SELECT ${group ? group + ', ' : ''}CAST(${expression} AS DECIMAL(38,${metric.rounding})) AS [value] FROM ${metric.table.split('.').map(quote).join('.')} WHERE ${quote(metric.timeColumn)} >= @metric_start AND ${quote(metric.timeColumn)} < @metric_end${group ? ` GROUP BY ${group} ORDER BY ${group}` : ''}`;
+  const conditions = conditionSql(metric).map(condition => ` AND ${condition}`).join('');
+  const sql = `SELECT ${group ? group + ', ' : ''}CAST(${expression} AS DECIMAL(38,${metric.rounding})) AS [value] FROM ${metric.table.split('.').map(quote).join('.')} WHERE ${quote(metric.timeColumn)} >= @metric_start AND ${quote(metric.timeColumn)} < @metric_end${conditions}${group ? ` GROUP BY ${group} ORDER BY ${group}` : ''}`;
   return { sql, parameters: [{ name: 'metric_start', type: 'date', value: start }, { name: 'metric_end', type: 'date', value: end }],
     normalizedQueryHash: crypto.createHash('sha256').update(sql).digest('hex'),
     parameterHash: crypto.createHash('sha256').update(JSON.stringify([start, end, dimensions])).digest('hex') };
@@ -61,4 +87,4 @@ async function execute(input, toolContext = {}) {
     lineage: [{ metricId: metric.metricId, version: metric.version, normalizedQueryHash: query.normalizedQueryHash, parameterHash: query.parameterHash }],
     assurance: 'source_supported', snapshot: 'live_read', sql: query.sql };
 }
-module.exports = { list, save, compile, execute, validate };
+module.exports = { list, save, compile, execute, validate, conditionSql };

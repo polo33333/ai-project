@@ -19,24 +19,18 @@ const exampleValues = fs.existsSync(examplePath) ? parse(fs.readFileSync(example
 const safeServerKeys = ['HOST', 'SHUTDOWN_TIMEOUT_MS', 'CORS_ALLOWED_ORIGINS', 'SESSION_TOUCH_INTERVAL_MS', 'KNOWLEDGEHUB_BACKUP_DIR'];
 // These names have no runtime consumer. Keep old env lines as comments only.
 const obsoleteKeys = new Set(['AI_MEMORY_RECENT_MESSAGES', 'AI_MEMORY_SUMMARY_CHARS', 'AI_DOCUMENT_CONTEXT_CHARS', 'AI_DOCUMENT_MIN_SCORE', 'AI_CONVERSATION_HISTORY', 'MEMORY_SEMANTIC_ROUTING_ENABLED']);
-const legacyOnly = key => /^(CHAT_ROUTING_|CHAT_QUICK_GREETING_)/.test(key) || ['AGENT_CORE_ENABLED', 'AI_MAX_TOOL_ITERATIONS'].includes(key);
 const allowedKeys = [...new Set([...safeServerKeys, ...Object.keys(help)])]
   .filter(key => key !== 'QDRANT_EXE' && !obsoleteKeys.has(key) && (safeServerKeys.includes(key) || key in envValuesAtStartup || key in exampleValues));
 const defaults = Object.fromEntries(allowedKeys.map(key => [key, envValuesAtStartup[key] ?? exampleValues[key] ?? '']));
 Object.assign(defaults, {
   // An unset flag uses the existing agent loop; the example opts into v2 explicitly.
   HARNESS_PIPELINE: 'v1',
-  AI_MAX_TOOL_ITERATIONS: envValuesAtStartup.AI_MAX_TOOL_ITERATIONS ?? exampleValues.AI_MAX_TOOL_ITERATIONS ?? '10',
   LOCAL_AI_MODEL: envValuesAtStartup.LOCAL_AI_MODEL ?? exampleValues.LOCAL_AI_MODEL ?? 'qwen3.5:9b',
   LOCAL_MODEL_SKILL_CORE_ENABLED: envValuesAtStartup.LOCAL_MODEL_SKILL_CORE_ENABLED ?? exampleValues.LOCAL_MODEL_SKILL_CORE_ENABLED ?? 'false',
   LOCAL_MODEL_FEW_SHOT_ENABLED: envValuesAtStartup.LOCAL_MODEL_FEW_SHOT_ENABLED ?? exampleValues.LOCAL_MODEL_FEW_SHOT_ENABLED ?? 'false'
 });
 const choices = {
-  GOVERNED_CONTROLLER_MODE: ['agent', 'legacy'],
   HARNESS_PIPELINE: ['v1', 'v2'],
-  CHAT_ROUTING_MODE: ['local_tev1', 'chat_model', 'auto'],
-  CHAT_ROUTING_RETRIEVAL_MODE: ['off', 'shadow', 'on'],
-  CHAT_ROUTING_RETRIEVAL_METHOD: ['lexical', 'hybrid'],
   NODE_ENV: ['production', 'development', 'test'],
   APP_STORAGE_BACKEND: ['postgres', 'json'],
   EMBEDDING_PROVIDER: ['ollama', 'openai'],
@@ -52,11 +46,10 @@ const descriptions = {
   QDRANT_DOCUMENT_VECTOR_SIZE: 'Phải khớp số chiều model embedding tài liệu.',
   EMBEDDING_FALLBACK_MODE: 'error: dừng khi embedding lỗi; deterministic: vector dự phòng, không đảm bảo chất lượng tìm kiếm.',
 };
-const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT', 'CHAT_ROUTING_LOCAL_BASE_URL']);
+const urlKeys = new Set(['QDRANT_URL', 'EMBEDDING_BASE_URL', 'RERANKER_BASE_URL', 'WEB_SEARCH_ENDPOINT']);
 const schema = Object.entries(defaults).map(([key, value]) => ({
   key, defaultValue: value, label: help[key]?.[0] || key.replace(/_/g, ' '),
-  group: legacyOnly(key) ? 'Tương thích legacy'
-    : key === 'HARNESS_PIPELINE' || /^(GOVERNED_)/.test(key) ? 'Điều phối agent và giới hạn'
+  group: key === 'HARNESS_PIPELINE' || /^(GOVERNED_)/.test(key) ? 'Điều phối agent và giới hạn'
     : key === 'WORKFLOW_PLUGINS_ENABLED' ? 'Mẫu nghiệp vụ'
     : /^(LOCAL_MODEL|LOCAL_AI|MODEL_DATA_INTENT|AI_MAX_TOOL|AI_DEFAULT|AI_LOCAL)/.test(key) ? 'AI và model local'
     : /^(AI_PROVIDER|AGENT_CORE)/.test(key) ? 'AI provider bên thứ ba'
@@ -69,7 +62,7 @@ const schema = Object.entries(defaults).map(([key, value]) => ({
   type: choices[key] ? 'select' : /^(true|false)$/.test(value) ? 'boolean'
     : /^\d+(\.\d+)?$/.test(value) ? 'number' : urlKeys.has(key) ? 'url' : 'text',
   options: choices[key], readOnly: false,
-  description: (legacyOnly(key) ? 'Chỉ áp dụng khi GOVERNED_CONTROLLER_MODE=legacy. ' : '') + (help[key]?.[1] || descriptions[key] || 'Áp dụng sau khi khởi động lại máy chủ.')
+  description: (help[key]?.[1] || descriptions[key] || 'Áp dụng sau khi khởi động lại máy chủ.')
 }));
 
 function revision(text) { return crypto.createHash('sha256').update(text).digest('hex'); }
@@ -81,9 +74,9 @@ function validate(field, value) {
   if (field.options && !field.options.includes(value)) fail(`Lựa chọn không hợp lệ: ${field.key}`);
   if (field.type === 'number') {
     const n = Number(value);
-    const fractional = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN', 'CHAT_ROUTING_MIN_PROBABILITY', 'CHAT_ROUTING_MIN_MARGIN'].includes(field.key);
-    const allowZero = fractional || ['LOCAL_MODEL_MAX_REPAIRS', 'AI_PROVIDER_MAX_REPAIRS'].includes(field.key);
-    const max = field.key === 'PORT' ? 65535 : ['AI_DOCUMENT_MIN_SCORE', 'CHAT_ROUTING_MIN_PROBABILITY', 'CHAT_ROUTING_MIN_MARGIN'].includes(field.key) ? 1 : field.key === 'LOCAL_MODEL_TEMPERATURE' ? 2 : 1000000000;
+    const fractional = ['LOCAL_MODEL_TEMPERATURE', 'AI_DOCUMENT_MIN_SCORE', 'MEMORY_TOKEN_CHARS_PER_TOKEN'].includes(field.key);
+    const allowZero = fractional || ['AI_PROVIDER_MAX_REPAIRS'].includes(field.key);
+    const max = field.key === 'PORT' ? 65535 : ['AI_DOCUMENT_MIN_SCORE'].includes(field.key) ? 1 : field.key === 'LOCAL_MODEL_TEMPERATURE' ? 2 : 1000000000;
     if (!Number.isFinite(n) || n < (allowZero ? 0 : 1) || n > max || (!fractional && !Number.isInteger(n))) fail(`Số ngoài phạm vi: ${field.key}`);
   }
   if (field.type === 'url') {
@@ -99,8 +92,7 @@ function createSettingsService(envPath = path.join(root, '.env')) {
   return {
     get() {
       const text = read(); const values = parse(text);
-      const controllerMode = values.GOVERNED_CONTROLLER_MODE ?? defaults.GOVERNED_CONTROLLER_MODE ?? 'agent';
-      return { revision: revision(text), restartRequired: true, fields: schema.filter(field => controllerMode === 'legacy' || !legacyOnly(field.key)).map(field => {
+      return { revision: revision(text), restartRequired: true, fields: schema.map(field => {
         const candidate = values[field.key] ?? defaults[field.key];
         // Never expose URL credentials or malformed values from a hand-edited file.
         let value = candidate;

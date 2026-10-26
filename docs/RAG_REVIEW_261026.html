@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đánh giá RAG tài liệu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f0f2f5; --border:#e2e5ea;
+  --text:#1b1f27; --muted:#5d6675; --accent:#2f5bd3; --accent-soft:#e8eefc;
+  --good:#1d7f4e; --good-soft:#e5f4ec; --warn:#a86300; --warn-soft:#fbf1e1;
+  --bad:#b4312b; --bad-soft:#fbe9e8; --info:#5b45c2; --info-soft:#efebfb;
+  --code-bg:#eef0f4; --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111318; --surface:#181b22; --surface-2:#1f232c; --border:#2b303b;
+    --text:#e6e8ec; --muted:#9aa3b2; --accent:#7c9cf5; --accent-soft:#1f2a44;
+    --good:#5cc48d; --good-soft:#16301f; --warn:#e6a64a; --warn-soft:#33270f;
+    --bad:#f07a73; --bad-soft:#3a1a19; --info:#a896f2; --info-soft:#261f40;
+    --code-bg:#232833; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111318; --surface:#181b22; --surface-2:#1f232c; --border:#2b303b;
+  --text:#e6e8ec; --muted:#9aa3b2; --accent:#7c9cf5; --accent-soft:#1f2a44;
+  --good:#5cc48d; --good-soft:#16301f; --warn:#e6a64a; --warn-soft:#33270f;
+  --bad:#f07a73; --bad-soft:#3a1a19; --info:#a896f2; --info-soft:#261f40;
+  --code-bg:#232833; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 "Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.86em}
+code{background:var(--code-bg);padding:1px 5px;border-radius:4px;word-break:break-word}
+a{color:var(--accent)}
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:32px;max-width:1240px;margin:0 auto;padding:32px 24px 80px}
+nav.toc{position:sticky;top:24px;align-self:start;font-size:13.5px}
+nav.toc .label{font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-size:11.5px;margin-bottom:8px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:5px 10px;border-left:2px solid var(--border)}
+nav.toc a:hover{color:var(--text);border-left-color:var(--accent)}
+header.hero{margin-bottom:28px}
+.eyebrow{color:var(--accent);font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+h1{font-size:30px;line-height:1.25;margin:6px 0 10px}
+h2{font-size:22px;margin:48px 0 14px;padding-top:8px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:26px 0 10px}
+p{margin:0 0 12px}
+.lead{color:var(--muted);font-size:16px;max-width:780px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:13px;margin-top:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.verdict{border-left:4px solid var(--accent)}
+.verdict strong{color:var(--text)}
+.scores{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.score{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.score .name{font-size:13px;color:var(--muted);font-weight:500}
+.score .val{font-size:26px;font-weight:700;margin:2px 0 6px;font-variant-numeric:tabular-nums}
+.score .val small{font-size:14px;color:var(--muted);font-weight:500}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.bar span{display:block;height:100%;border-radius:3px}
+.score .note{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+.lv-good{background:var(--good)} .lv-mid{background:var(--warn)} .lv-low{background:var(--bad)}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;vertical-align:middle;white-space:nowrap}
+.p-good{background:var(--good-soft);color:var(--good)}
+.p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-bad{background:var(--bad-soft);color:var(--bad)}
+.p-info{background:var(--info-soft);color:var(--info)}
+.p-acc{background:var(--accent-soft);color:var(--accent)}
+ul.clean{margin:0;padding-left:18px}
+ul.clean li{margin:4px 0}
+.pros h4,.cons h4{margin:0 0 8px;font-size:14px}
+.pros h4{color:var(--good)} .cons h4{color:var(--bad)}
+.ev{color:var(--muted);font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600;background:var(--surface-2)}
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.tablewrap table tr:last-child td{border-bottom:0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+/* flow diagrams */
+.flow{display:flex;flex-direction:column;gap:0}
+.stage{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:stretch}
+.stage .tag{font-size:12px;font-weight:600;color:var(--muted);padding-top:12px;text-align:right}
+.stage .boxes{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;border-left:2px dashed var(--border);padding-left:14px}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:13px;line-height:1.4;max-width:100%}
+.box b{display:block;font-size:13px}
+.box .s{color:var(--muted);font-size:12px}
+.box.model{border-color:var(--info);background:var(--info-soft)}
+.box.det{border-color:var(--good);background:var(--good-soft)}
+.box.risk{border-color:var(--bad);background:var(--bad-soft)}
+.box.new{border-color:var(--accent);background:var(--accent-soft)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid}
+.callout{border-radius:10px;padding:12px 14px;font-size:14px;margin:12px 0}
+.callout.warn{background:var(--warn-soft);border:1px solid var(--warn)}
+.callout.info{background:var(--accent-soft);border:1px solid var(--accent)}
+.roadmap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.phase h3{margin-top:0}
+.item{border-top:1px solid var(--border);padding:10px 0}
+.item:first-of-type{border-top:0}
+.item b{font-size:14px}
+.item p{font-size:13.5px;color:var(--muted);margin:4px 0 0}
+.calls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.callrow{display:grid;grid-template-columns:200px minmax(0,1fr) 70px;gap:12px;align-items:center;font-size:13.5px}
+.track{height:18px;background:var(--surface-2);border-radius:5px;position:relative;overflow:hidden}
+.track span{position:absolute;top:0;bottom:0;border-radius:5px}
+.item.done b::after{content:" ✓";color:var(--good)}
+.item.done{opacity:.75}
+.kpi-up{color:var(--good);font-weight:600}
+.footer{margin-top:56px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);padding-top:16px}
+@media (max-width:980px){
+  .layout{grid-template-columns:minmax(0,1fr);padding:20px 16px 60px}
+  nav.toc{display:none}
+  .scores,.g3,.roadmap{grid-template-columns:minmax(0,1fr)}
+  .g2{grid-template-columns:minmax(0,1fr)}
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .stage .tag{text-align:left;padding-top:4px}
+  .callrow{grid-template-columns:minmax(0,1fr);gap:4px}
+  h1{font-size:24px}
+}
+@media print{nav.toc{display:none}.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Mục lục">
+  <div class="label">Mục lục</div>
+  <a href="#tong-quan">1. Kết luận</a>
+  <a href="#hien-trang">2. Hiện trạng đo được</a>
+  <a href="#kien-truc">3. Kiến trúc hiện tại</a>
+  <a href="#phat-hien">4. Phát hiện</a>
+  <a href="#de-xuat">5. Kiến trúc đề xuất</a>
+  <a href="#ke-hoach">6. Kế hoạch nâng cấp</a>
+  <a href="#do-luong">7. Cách đo</a>
+  <a href="#tien-do">8. Tiến độ</a>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Báo cáo đánh giá · 26/10/2026</div>
+  <h1>Đánh giá hệ thống RAG tài liệu và kế hoạch nâng cấp</h1>
+  <p class="lead">Rà soát phần hỏi đáp trên tài liệu doanh nghiệp của KnowledgeHub: nạp và cắt đoạn, lập chỉ mục, truy hồi, xếp hạng, đóng gói ngữ cảnh, sinh câu trả lời có trích dẫn và hỏi tiếp nhiều lượt; kèm kiến trúc chuẩn hóa và kế hoạch theo đợt.</p>
+  <div class="meta">
+    <span>Mã: <code>src/backend/knowledge_core</code>, <code>services/qdrant_service.js</code>, <code>agent_core/pipeline/conversation_answer.js</code>, <code>intelligent_core/core.js</code></span>
+    <span>Đo ngày 26/10 trên kho thật (chỉ đọc); truy hồi gọi mô hình nhúng cục bộ bge-m3, không gọi mô hình trả lời</span>
+  </div>
+</header>
+
+<section id="tong-quan">
+  <h2 style="border-top:0;margin-top:8px">1. Kết luận</h2>
+  <div class="card verdict">
+    <p><strong>Nền móng đúng hướng, nhưng có hai đường RAG chạy song song với chất lượng khác nhau, và chưa có cách đo truy hồi.</strong> Hệ thống đã có những phần mà nhiều RAG nội bộ còn thiếu: tìm kiếm lai vector + BM25 trộn bằng RRF, phạm vi theo quyền đọc và quyền gửi cho từng mô hình, lọc đoạn lệch phiên bản, cắt đoạn hiểu bảng và tiêu đề mục, vị trí trích dẫn tới trang/mục/dòng, hàng đợi nạp tài liệu bền trên PostgreSQL.</p>
+    <p>Điểm yếu chính: câu hỏi tài liệu đi qua v2 không dùng chung đóng gói ngữ cảnh và giải câu hỏi tiếp của đường cũ trong <code>core.js</code>; câu hỏi được tìm nguyên văn (kể cả "vậy nó có bao nhiêu trang", tiền tố "kho tri thức:"); "GraphRAG" thực chất là một quy tắc từ khóa bật mặc định; kiểm tra trích dẫn chỉ xác nhận số [n] tồn tại, không xác nhận nội dung; bộ câu chuẩn truy hồi chỉ là mẫu giữ chỗ.</p>
+    <p style="margin:0">Hướng nâng cấp có lợi nhất: <strong>đo trước</strong> (bộ câu chuẩn truy hồi từ 4 tài liệu hiện có), rồi <strong>gộp hai đường thành một dịch vụ RAG</strong> có các bước rõ ràng (hiểu câu hỏi → truy hồi → xếp hạng → đóng gói → trả lời → kiểm chứng), sau đó mới tối ưu từng bước theo số đo.</p>
+  </div>
+  <div class="scores">
+    <div class="score"><div class="name">Nạp &amp; cắt đoạn</div><div class="val">7<small>/10</small></div><div class="bar"><span class="lv-good" style="width:70%"></span></div><div class="note">Hiểu bảng, tiêu đề mục, trang PDF, số trang Word; hàng đợi bền. Thiếu: OCR cho PDF scan, nhiều đoạn quá ngắn, thay chỉ mục không nguyên tử.</div></div>
+    <div class="score"><div class="name">Truy hồi &amp; xếp hạng</div><div class="val">6<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:60%"></span></div><div class="note">Lai vector + BM25 + RRF, lọc quyền và phiên bản. Thiếu: viết lại câu hỏi, xếp hạng lại (đang tắt), đa dạng kết quả; "đồ thị" là quy tắc từ khóa gây nhiễu.</div></div>
+    <div class="score"><div class="name">Trả lời &amp; trích dẫn</div><div class="val">6<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:60%"></span></div><div class="note">Bắt buộc [n], có một lần sửa, đoạn trích có vị trí. Thiếu: kiểm tra nội dung câu có trong đoạn được trích; hai đường đóng gói ngữ cảnh khác nhau.</div></div>
+    <div class="score"><div class="name">Hỏi tiếp nhiều lượt</div><div class="val">5<small>/10</small></div><div class="bar"><span class="lv-mid" style="width:50%"></span></div><div class="note">Đường <code>core.js</code> có trạng thái tài liệu và giải tham chiếu bằng quy tắc; đường v2 tìm nguyên văn câu hỏi tiếp.</div></div>
+    <div class="score"><div class="name">Đo lường &amp; quan sát</div><div class="val">3,5<small>/10</small></div><div class="bar"><span class="lv-low" style="width:35%"></span></div><div class="note">Bộ câu chuẩn truy hồi là mẫu giữ chỗ; bộ 57 câu chỉ có 1 câu tài liệu; lỗi vector bị nuốt im lặng.</div></div>
+    <div class="score"><div class="name">Quyền &amp; an toàn</div><div class="val">8<small>/10</small></div><div class="bar"><span class="lv-good" style="width:80%"></span></div><div class="note">Lọc theo quyền đọc và quyền gửi tới từng mô hình; nội dung tài liệu được đánh dấu là dữ liệu, không phải lệnh.</div></div>
+  </div>
+  <p class="ev" style="margin-top:10px">Thang điểm là đánh giá định tính của người rà soát dựa trên đọc mã và số đo ở mục 2.</p>
+</section>
+
+<section id="hien-trang">
+  <h2>2. Hiện trạng đo được (26/10)</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td>Kho tài liệu</td><td>4 tài liệu (3 DOCX, 1 PDF), 86 đoạn, cả 4 "Đã lập chỉ mục"</td><td>Collection Qdrant <code>knowledge_documents_bge_m3_v1</code>: 86 điểm, trạng thái green; chỉ mục trường <code>documentId</code>, <code>type</code>, <code>chunkIndex</code></td></tr>
+      <tr><td>Kích thước đoạn (ký tự)</td><td>p10 99 · p50 433 · p90 1.258 · max 2.200</td><td>10% đoạn dưới 100 ký tự: thường chỉ là tiêu đề hoặc một dòng, ít thông tin cho truy hồi</td></tr>
+      <tr><td>Cấu hình</td><td>bge-m3 qua Ollama, ứng viên 30, RRF k=60, ngữ cảnh 3.000 token, xếp hạng lại <b>tắt</b>, GraphRAG <b>bật</b></td><td><code>.env</code></td></tr>
+      <tr><td>Sử dụng 30 ngày</td><td>28 lượt hỏi tài liệu / 1.492 lượt</td><td>23 SUCCESS, 5 PARTIAL (18%); chưa có đánh giá thích/không thích nào</td></tr>
+      <tr><td>Thời gian lượt hỏi tài liệu</td><td>p50 3,8 s · p90 10,0 s</td><td>Phần lớn là các lần gọi mô hình (trả lời + sửa trích dẫn)</td></tr>
+      <tr><td>Thời gian truy hồi</td><td>13–70 ms; lần đầu 1,9 s</td><td>12 câu hỏi tài liệu thật trong lịch sử; lần đầu là nạp mô hình nhúng</td></tr>
+      <tr><td>Bộ câu chuẩn truy hồi</td><td>1 câu mẫu giữ chỗ</td><td><code>tests/fixtures/retrieval_golden.sample.json</code>; bộ 57 câu chỉ có <code>doc-ipms-purpose</code></td></tr>
+    </tbody>
+  </table></div>
+  <h3>Quan sát khi chạy 12 câu hỏi tài liệu thật</h3>
+  <ul class="clean">
+    <li>Câu hỏi tiếp "vậy nó có bao nhiêu trang", "tài liệu trên có mấy trang" được tìm nguyên văn; kết quả lẫn đoạn của tài liệu khác (KnowledgeHub_Master).</li>
+    <li>Tiền tố lệnh "kho tri thức:", "tìm trong kho tri thức" đi thẳng vào truy vấn và làm đổi thứ tự kết quả so với câu không tiền tố.</li>
+    <li>"GraphRAG" bật khi câu có các từ như "liên quan", "tổng hợp" (ví dụ câu về sản lượng điện), thêm 4–5 ứng viên chỉ vì trùng từ viết hoa.</li>
+    <li>Câu chỉ là tên tệp ("TPSOFT_HDSD_IPMS_APP__v1.0.docx") đưa một đoạn của tài liệu khác lên đầu ở truy hồi; công cụ v2 bù bằng cách đổ nguyên 12.000 ký tự tài liệu khớp tên.</li>
+  </ul>
+</section>
+
+<section id="kien-truc">
+  <h2>3. Kiến trúc hiện tại</h2>
+  <div class="legend"><span><i style="background:var(--info-soft);border-color:var(--info)"></i>Gọi mô hình</span><span><i style="background:var(--good-soft);border-color:var(--good)"></i>Tất định (backend)</span><span><i style="background:var(--bad-soft);border-color:var(--bad)"></i>Điểm yếu</span></div>
+  <div class="card flow">
+    <div class="stage"><div class="tag">Nạp</div><div class="boxes">
+      <div class="box det"><b>Tải lên / thư mục theo dõi</b><span class="s">library_service · hàng đợi document.ingest (PostgreSQL)</span></div>
+      <div class="box det"><b>Bóc tách</b><span class="s">structured_document: PDF theo trang, DOCX giữ tiêu đề + bảng, XLSX/CSV theo dòng</span></div>
+      <div class="box risk"><b>Cắt đoạn</b><span class="s">2.200 ký tự, chồng 250, tiền tố tên mục; nhiều đoạn rất ngắn</span></div>
+      <div class="box risk"><b>Lập chỉ mục</b><span class="s">nhúng "tên tài liệu + đoạn" bằng bge-m3; xóa hết rồi ghi lại (không nguyên tử)</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Đường A: core.js</div><div class="boxes">
+      <div class="box det"><b>Phạm vi tài liệu</b><span class="s">chỉ khi người dùng chọn tài liệu hoặc hỏi tiếp về tài liệu</span></div>
+      <div class="box det"><b>Giải câu hỏi tiếp</b><span class="s">document_conversation: trạng thái tài liệu + quy tắc</span></div>
+      <div class="box det"><b>Đóng gói</b><span class="s">packContext: ngân sách 3.000 token, đánh số [n] kèm vị trí</span></div>
+      <div class="box model"><b>Trả lời</b><span class="s">qua harness, bắt buộc trích dẫn</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Đường B: v2</div><div class="boxes">
+      <div class="box model"><b>plan_query → kind=document</b><span class="s">mô hình quyết định đây là câu hỏi tài liệu</span></div>
+      <div class="box risk"><b>search_knowledge_base</b><span class="s">câu hỏi nguyên văn, 5 kết quả; khớp tên tệp thì đổ 12.000 ký tự cả tài liệu</span></div>
+      <div class="box risk"><b>Đóng gói</b><span class="s">cắt mỗi kết quả 4.000 ký tự, không ngân sách token, không giải câu hỏi tiếp</span></div>
+      <div class="box model"><b>Trả lời + 1 lần sửa trích dẫn</b><span class="s">conversation_answer.documents</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Truy hồi chung</div><div class="boxes">
+      <div class="box det"><b>Vector</b><span class="s">Qdrant, lọc documentId + phiên bản; lỗi trả [] im lặng</span></div>
+      <div class="box det"><b>BM25</b><span class="s">tính lại trong bộ nhớ cho toàn kho mỗi câu hỏi</span></div>
+      <div class="box risk"><b>"GraphRAG"</b><span class="s">bật theo từ khóa, chấm theo trùng từ viết hoa</span></div>
+      <div class="box det"><b>RRF k=60 → xếp hạng lại</b><span class="s">xếp hạng lại đang tắt (cần dịch vụ ngoài)</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">Kiểm chứng</div><div class="boxes">
+      <div class="box risk"><b>citation_service</b><span class="s">số [n] phải tồn tại; không kiểm nội dung câu có trong đoạn</span></div>
+      <div class="box det"><b>Đoạn trích hiển thị</b><span class="s">chọn đoạn liên quan nhất kèm trang/mục, liên kết tệp gốc</span></div>
+    </div></div>
+  </div>
+</section>
+
+<section id="phat-hien">
+  <h2>4. Phát hiện</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mức</th><th>Phát hiện</th><th>Bằng chứng</th><th>Ảnh hưởng</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-bad">Cao</span></td><td>Hai đường RAG khác nhau</td><td><code>core.js</code> dùng <code>packContext</code> + <code>document_conversation</code>; v2 (<code>conversation_answer.searchDocuments</code>) dùng câu hỏi nguyên văn, cắt 4.000 ký tự/kết quả</td><td>Cùng một câu hỏi có ngữ cảnh, độ dài lời nhắc và khả năng hỏi tiếp khác nhau tùy đường đi</td></tr>
+      <tr><td><span class="pill p-bad">Cao</span></td><td>Không viết lại câu hỏi trên v2</td><td>Câu hỏi tiếp và tiền tố lệnh đi thẳng vào truy hồi (mục 2)</td><td>Hỏi tiếp về tài liệu trên v2 lấy nhầm đoạn; người dùng phải hỏi lại đủ ý</td></tr>
+      <tr><td><span class="pill p-bad">Cao</span></td><td>Chưa đo được truy hồi</td><td>Bộ câu chuẩn truy hồi là mẫu giữ chỗ; 1/57 câu chuẩn là câu tài liệu</td><td>Mọi thay đổi cắt đoạn, xếp hạng, GraphRAG hiện không chứng minh được tốt hơn hay tệ hơn</td></tr>
+      <tr><td><span class="pill p-warn">Vừa</span></td><td>Kiểm tra trích dẫn chỉ về hình thức</td><td><code>citation_service.buildVerifiedCitations</code> chỉ so số [n] với danh sách đoạn</td><td>Câu có [1] nhưng nội dung không có trong đoạn 1 vẫn được chấp nhận</td></tr>
+      <tr><td><span class="pill p-warn">Vừa</span></td><td>"GraphRAG" là quy tắc từ khóa, bật mặc định</td><td><code>retrieval_service.graphRoute/graphSearch</code>: từ khóa → trùng cụm viết hoa</td><td>Thêm ứng viên nhiễu vào RRF; không có số đo chứng minh lợi ích</td></tr>
+      <tr><td><span class="pill p-warn">Vừa</span></td><td>Khớp tên tệp đổ cả tài liệu</td><td><code>tool_registry._searchKnowledgeBase</code>: 12.000 ký tự đầu, ghi là đoạn 0</td><td>Lời nhắc dài, trích dẫn trỏ sai vị trí (đoạn 0 thay vì đoạn thật)</td></tr>
+      <tr><td><span class="pill p-warn">Vừa</span></td><td>Đoạn quá ngắn, không mở rộng lân cận</td><td>p10 99 ký tự; đoạn được chọn không kèm đoạn liền trước/sau hay mục cha</td><td>Câu trả lời thiếu ngữ cảnh khi ý trải qua nhiều đoạn</td></tr>
+      <tr><td><span class="pill p-warn">Vừa</span></td><td>Suy giảm im lặng</td><td><code>qdrant_service.searchDocuments</code> nuốt lỗi trả []; xếp hạng lại lỗi chỉ ghi console</td><td>Khi Qdrant/embedding hỏng, hệ thống âm thầm thành tìm từ khóa, vết xử lý không cho biết</td></tr>
+      <tr><td><span class="pill p-info">Thấp</span></td><td>Thay chỉ mục không nguyên tử</td><td><code>indexDocumentChunks</code>: xóa mọi điểm của tài liệu rồi mới ghi</td><td>Có khoảng trống không có vector; lỗi giữa chừng để tài liệu chỉ còn tìm từ khóa</td></tr>
+      <tr><td><span class="pill p-info">Thấp</span></td><td>BM25 tính lại mỗi câu hỏi; bỏ dấu tiếng Việt</td><td><code>retrieval_service.bm25</code> tách từ cả kho mỗi lần; <code>lexical_normalize</code> bỏ dấu</td><td>Ổn ở 86 đoạn; chậm dần khi kho lớn; "bán"/"bàn" thành một từ</td></tr>
+      <tr><td><span class="pill p-info">Thấp</span></td><td>Chưa có OCR</td><td>PDF không có lớp chữ báo lỗi "cần OCR"</td><td>Tài liệu scan không dùng được</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout info" style="margin-top:12px"><strong>Giữ nguyên:</strong> lọc quyền đọc/gửi theo mô hình, lọc đoạn lệch phiên bản, cắt đoạn hiểu bảng, vị trí trích dẫn tới trang/mục/dòng, hàng đợi nạp bền, nhúng kèm tên tài liệu, chế độ chỉ tìm từ khóa khi tắt embedding.</div>
+</section>
+
+<section id="de-xuat">
+  <h2>5. Kiến trúc đề xuất: một dịch vụ RAG, sáu bước có tên</h2>
+  <p>Gộp hai đường thành <code>knowledge_core/rag/</code>, dùng chung cho v2, đường dự phòng và đường tài liệu đã chọn. Mỗi bước là một mô-đun nhỏ, ghi vết riêng, đo được riêng (giống cách đã tách bộ điều phối).</p>
+  <div class="card flow">
+    <div class="stage"><div class="tag">1. Hiểu câu hỏi</div><div class="boxes">
+      <div class="box det"><b>Chuẩn hóa</b><span class="s">bỏ tiền tố lệnh ("kho tri thức:", "tìm trong…")</span></div>
+      <div class="box det"><b>Giải câu hỏi tiếp</b><span class="s">trạng thái tài liệu dùng chung cho mọi đường</span></div>
+      <div class="box model"><b>Truy vấn tài liệu trong hợp đồng v2</b><span class="s">thêm trường documentQuery vào plan_query: không tốn thêm lần gọi</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">2. Truy hồi</div><div class="boxes">
+      <div class="box det"><b>Vector + từ khóa</b><span class="s">giữ BM25 tới ~2.000 đoạn; sau đó dùng sparse vector của Qdrant</span></div>
+      <div class="box det"><b>Tên tài liệu</b><span class="s">khớp tên → lọc/ưu tiên tài liệu, không đổ cả tài liệu</span></div>
+      <div class="box det"><b>GraphRAG</b><span class="s">tắt mặc định; chỉ bật lại khi bộ đo chứng minh có lợi</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">3. Xếp hạng</div><div class="boxes">
+      <div class="box det"><b>RRF</b><span class="s">trọng số theo nguồn, chỉnh bằng số đo</span></div>
+      <div class="box det"><b>Xếp hạng lại cục bộ</b><span class="s">bge-reranker-v2-m3 khi có dịch vụ; bật theo số đo</span></div>
+      <div class="box det"><b>Đa dạng</b><span class="s">bỏ đoạn trùng lặp, giới hạn số đoạn mỗi tài liệu</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">4. Đóng gói</div><div class="boxes">
+      <div class="box det"><b>Ngân sách token chung</b><span class="s">packContext cho mọi đường</span></div>
+      <div class="box det"><b>Mở rộng lân cận</b><span class="s">gộp đoạn liền kề cùng mục khi đoạn quá ngắn</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">5. Trả lời</div><div class="boxes">
+      <div class="box model"><b>Một lần gọi</b><span class="s">bắt buộc [n]; sửa trích dẫn chỉ khi kiểm tra trượt</span></div>
+    </div></div>
+    <div class="stage"><div class="tag">6. Kiểm chứng</div><div class="boxes">
+      <div class="box det"><b>Câu ↔ đoạn</b><span class="s">số, ngày, mã, tên riêng trong câu phải có trong đoạn được trích</span></div>
+      <div class="box det"><b>Vết xử lý</b><span class="s">chế độ truy hồi thật (vector/từ khóa/suy giảm), đoạn dùng, lý do loại</span></div>
+    </div></div>
+  </div>
+</section>
+
+<section id="ke-hoach">
+  <h2>6. Kế hoạch nâng cấp</h2>
+  <p>Làm theo thứ tự: không đợt nào thay đổi truy hồi trước khi đợt R1 có số đo nền. Mỗi đợt kết thúc bằng kiểm thử mã, chạy bộ đo truy hồi (không cần mô hình trả lời) và — khi người dùng quyết định — chạy nhóm câu tài liệu trên Gemini Payment.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Đợt</th><th>Việc</th><th>Mã chính</th><th>Xong khi</th></tr></thead>
+    <tbody>
+      <tr><td><b>R1 · Đo trước</b><br><span class="ev">1–2 ngày</span></td><td>Bộ câu chuẩn truy hồi 40–60 câu từ 4 tài liệu (câu hỏi → tài liệu + đoạn đúng, gồm câu hỏi tiếp, câu có tiền tố, câu chỉ tên tệp, câu không có trong tài liệu); <code>eval:retrieval</code> tính recall@5, MRR, tỉ lệ đúng tài liệu; thêm 8–10 câu tài liệu vào bộ 57 câu; thêm chỉ số RAG vào <code>report:pipeline</code> (lượt tài liệu, PARTIAL, lần sửa trích dẫn, truy hồi rỗng, suy giảm)</td><td><code>scripts/evaluate_retrieval.js</code>, <code>tests/fixtures/retrieval_golden.json</code>, <code>training_core/pipeline_metrics.js</code></td><td>Có số nền recall@5/MRR cho từng chế độ (lai, chỉ từ khóa, có/không GraphRAG)</td></tr>
+      <tr><td><b>R2 · Một dịch vụ RAG</b><br><span class="ev">2–3 ngày</span></td><td>Tách <code>knowledge_core/rag/</code> (query, retrieve, rank, pack, answer, verify); v2 và <code>core.js</code> gọi chung; trạng thái tài liệu và giải câu hỏi tiếp dùng cho v2; bỏ việc đổ 12.000 ký tự khi khớp tên (thành lọc/ưu tiên tài liệu); vết xử lý ghi chế độ truy hồi thật</td><td><code>conversation_answer.js</code>, <code>tool_registry._searchKnowledgeBase</code>, <code>core.js</code>, <code>retrieval_service.js</code></td><td>Kiểm thử mã đạt; bộ đo truy hồi không giảm; câu hỏi tiếp về tài liệu đạt trên v2</td></tr>
+      <tr><td><b>R3 · Chất lượng truy hồi</b><br><span class="ev">2–3 ngày</span></td><td>Chuẩn hóa câu hỏi; trường <code>documentQuery</code> trong hợp đồng v2; tắt GraphRAG mặc định (bật lại nếu số đo chứng minh); cắt đoạn v2: gộp đoạn &lt;300 ký tự vào đoạn kề cùng mục, mở rộng lân cận khi đóng gói; bỏ trùng và giới hạn đoạn mỗi tài liệu; thử xếp hạng lại cục bộ và chỉ bật nếu recall/MRR tăng</td><td><code>structured_document.js</code>, <code>retrieval_service.js</code>, <code>contract_pipeline.js</code></td><td>recall@5 và MRR tăng so với R1; không câu nào trong bộ 57 câu trượt</td></tr>
+      <tr><td><b>R4 · Trả lời tin cậy hơn</b><br><span class="ev">2 ngày</span></td><td>Kiểm tra câu ↔ đoạn tất định (số, ngày, mã, tên riêng của câu phải có trong đoạn được trích; câu không có căn cứ thì bỏ trích dẫn hoặc nói rõ); câu trả lời không có căn cứ thì nói "không tìm thấy trong tài liệu" thay vì đoán; giảm lần sửa trích dẫn</td><td><code>citation_service.js</code>, <code>conversation_answer.js</code></td><td>Tỉ lệ câu có trích dẫn sai nội dung trên bộ đo = 0; lần sửa trích dẫn giảm; p90 lượt tài liệu giảm</td></tr>
+      <tr><td><b>R5 · Vận hành &amp; quy mô</b><br><span class="ev">khi cần</span></td><td>Thay chỉ mục theo phiên bản (ghi phiên bản mới rồi xóa cũ); báo suy giảm vector/xếp hạng lại lên vết xử lý và bảng chỉ số; sparse vector Qdrant thay BM25 trong bộ nhớ khi kho &gt;~2.000 đoạn; OCR cho PDF scan</td><td><code>qdrant_service.js</code>, <code>library_service.js</code></td><td>Lập chỉ mục lại không có khoảng trống; suy giảm hiện trên <code>report:pipeline</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn" style="margin-top:12px"><strong>Cần người dùng:</strong> (1) duyệt đáp án của bộ câu chuẩn truy hồi R1 (tài liệu và đoạn đúng cho từng câu) — tôi có thể soạn nháp từ 4 tài liệu; (2) quyết định khi nào chạy nhóm câu tài liệu trên mô hình thật; (3) nếu muốn xếp hạng lại, cần dịch vụ reranker cục bộ ở <code>RERANKER_BASE_URL</code>.</div>
+</section>
+
+<section id="do-luong">
+  <h2>7. Cách đo</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Chỉ số</th><th>Cách đo</th><th>Hiện tại</th><th>Mục tiêu đề xuất</th></tr></thead>
+    <tbody>
+      <tr><td>recall@5 (đúng đoạn trong 5 kết quả)</td><td><code>eval:retrieval</code> trên bộ câu chuẩn R1</td><td>nền 0,984 → 1,0 (mục 8)</td><td>≥ 0,9</td></tr>
+      <tr><td>MRR</td><td>như trên</td><td>nền 0,882 → 0,941 (mục 8)</td><td>≥ 0,75</td></tr>
+      <tr><td>Câu tài liệu đạt trên mô hình thật</td><td>nhóm câu tài liệu trong bộ chuẩn, Gemini Payment</td><td>1/1</td><td>100% với 10+ câu</td></tr>
+      <tr><td>Lượt tài liệu PARTIAL</td><td><code>report:pipeline</code></td><td>18% (5/28, 30 ngày)</td><td>≤ 5%</td></tr>
+      <tr><td>Thời gian lượt tài liệu p90</td><td><code>report:pipeline</code></td><td>10,0 s</td><td>≤ 6 s</td></tr>
+      <tr><td>Trích dẫn sai nội dung</td><td>kiểm tra câu ↔ đoạn (R4)</td><td>không đo được</td><td>0 trên bộ đo</td></tr>
+    </tbody>
+  </table></div>
+  <div class="footer">Phạm vi: đọc mã <code>knowledge_core</code>, <code>qdrant_service</code>, <code>conversation_answer</code>, <code>tool_registry</code>, <code>core.js</code>; đo kho và lịch sử chat 30 ngày (chỉ đọc); chạy truy hồi trên 12 câu hỏi tài liệu thật với mô hình nhúng cục bộ. Không gọi mô hình trả lời, không sửa mã. Mục tiêu ở mục 7 là đề xuất, cần hiệu chỉnh khi có số nền R1.</div>
+</section>
+
+<section id="tien-do">
+  <h2>8. Tiến độ triển khai (cập nhật 26/10)</h2>
+  <p>Đã làm R1 và phần lớn R2–R5 bằng mã; không gọi mô hình trả lời. Số đo dưới đây từ <code>npm run eval:retrieval</code> trên bộ câu chuẩn nháp (65 câu: 62 có đáp án, 3 câu không có trong tài liệu), cùng kho 4 tài liệu.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Chế độ truy hồi</th><th class="num">recall@1</th><th class="num">recall@5</th><th class="num">MRR@10</th><th class="num">Đúng tài liệu @1</th></tr></thead>
+    <tbody>
+      <tr><td>Nền R1: lai, GraphRAG bật (như đang chạy)</td><td class="num">80,6%</td><td class="num">98,4%</td><td class="num">88,2%</td><td class="num">95,2%</td></tr>
+      <tr><td>Nền R1: công cụ v2 (câu nguyên văn, đổ cả tài liệu khi khớp tên)</td><td class="num">83,9%</td><td class="num">98,4%</td><td class="num">90,1%</td><td class="num">98,4%</td></tr>
+      <tr><td>Sau: lai (GraphRAG tắt, giữ chữ số, bỏ đoạn chỉ có tiêu đề/trùng)</td><td class="num">83,9%</td><td class="num">100%</td><td class="num">91,1%</td><td class="num">93,5%</td></tr>
+      <tr><td>Sau: dịch vụ RAG (bỏ tiền tố, tên tệp → phạm vi, hỏi tiếp trong tài liệu trước)</td><td class="num"><b>88,7%</b></td><td class="num"><b>100%</b></td><td class="num"><b>94,1%</b></td><td class="num"><b>100%</b></td></tr>
+      <tr><td>Đã lập chỉ mục lại (bộ cắt đoạn v2, 86 → 77 đoạn): dịch vụ RAG</td><td class="num"><b>90,3%</b></td><td class="num">100%</td><td class="num"><b>94,6%</b></td><td class="num">100%</td></tr>
+      <tr><td>Đã lập chỉ mục lại: công cụ v2</td><td class="num">90,3%</td><td class="num">100%</td><td class="num">94,4%</td><td class="num">98,4%</td></tr>
+      <tr><td>Chỉ từ khóa (khi mất vector): trước → sau lập chỉ mục lại</td><td class="num">61,3% → 69,4%</td><td class="num">90,3% → 91,9%</td><td class="num">75,1% → 78,7%</td><td class="num">87,1%</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout info"><strong>Phát hiện mới:</strong> PDF SmartCA bị bóc chữ vỡ dấu ("Tài li ệ u tích h ợ p") vì phông tách chữ quanh ký tự có dấu và các mảnh được nối bằng dấu cách. Ảnh hưởng tìm từ khóa và đoạn trích hiển thị cho người dùng. Đã sửa trong bộ cắt đoạn v2 (ghép mảnh chạm nhau theo tọa độ) và đã lập chỉ mục lại ngày 26/10: kho hiện chứa "Tài liệu tích hợp VNPT SMARTCA".</div>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th>Đợt</th><th>Đã làm</th><th>Còn lại</th></tr></thead>
+    <tbody>
+      <tr><td><b>R1</b> <span class="pill p-good">xong</span></td><td><code>tests/fixtures/retrieval_golden.json</code> (đoạn đúng xác định bằng cụm bằng chứng, không vỡ khi cắt đoạn lại); <code>eval:retrieval</code> đo 5 chế độ, so với báo cáo nền, mô phỏng lập chỉ mục lại; <code>report:pipeline</code> có mục RAG (PARTIAL, sửa trích dẫn, truy hồi rỗng, suy giảm, trích dẫn sai nội dung).</td><td>Duyệt đáp án bộ câu chuẩn; thêm câu tài liệu vào bộ 57 câu.</td></tr>
+      <tr><td><b>R2</b> <span class="pill p-good">xong</span></td><td><code>knowledge_core/rag/</code> (query, retrieve, pack, verify) dùng chung cho core.js, công cụ <code>search_knowledge_base</code> và v2; bỏ đổ 12.000 ký tự khi khớp tên tệp; v2 đóng gói theo ngân sách 3.000 token (trước: tới 5 × 4.000 ký tự); v2 lưu trạng thái tài liệu nên câu hỏi tiếp dùng được; trường <code>documentQuery</code> trong <code>plan_query</code>.</td><td>Chạy nhóm câu tài liệu trên mô hình thật khi người dùng quyết định.</td></tr>
+      <tr><td><b>R3</b> <span class="pill p-warn">phần lớn</span></td><td>GraphRAG mặc định tắt; BM25 giữ chữ số đơn ("phase 4"); bỏ đoạn chỉ có tiêu đề và đoạn trùng; mở rộng đoạn ngắn với đoạn kề cùng mục khi đóng gói; bộ cắt đoạn v2 gộp tiêu đề rỗng vào đoạn sau.</td><td>Thử reranker khi có dịch vụ. (Đã lập chỉ mục lại 4 tài liệu với bộ cắt đoạn v2.)</td></tr>
+      <tr><td><b>R4</b> <span class="pill p-warn">ghi nhận</span></td><td>Kiểm tra câu ↔ đoạn tất định (số, ngày, mã, liên kết) ghi vào <code>citationValidation.unsupportedClaims</code> và bước <code>RAG_CLAIMS_CHECKED</code>; lời nhắc yêu cầu nói rõ khi tài liệu không đề cập.</td><td>Sau khi có số liệu thật: chuyển từ ghi nhận sang sửa/bỏ trích dẫn.</td></tr>
+      <tr><td><b>R5</b> <span class="pill p-warn">một phần</span></td><td>Thay chỉ mục theo thế hệ (ghi bản mới rồi xóa bản cũ, lỗi giữa chừng tự dọn); lỗi Qdrant/nhúng thành chế độ <code>lexical_degraded</code> trên vết và bảng chỉ số.</td><td>Sparse vector Qdrant khi kho &gt; ~2.000 đoạn; OCR.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</main>
+</div>
+</body>
+</html>

@@ -12,7 +12,7 @@ function fixture(t, text) {
 }
 
 test('harness pipeline is selectable, persists v1/v2 and rejects unsupported modes without changing runtime', t => {
-  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\nHARNESS_PIPELINE=v1\n');
+  const { service, file } = fixture(t, 'HARNESS_PIPELINE=v1\n');
   const runtime = process.env.HARNESS_PIPELINE;
   let before = service.get();
   const field = before.fields.find(field => field.key === 'HARNESS_PIPELINE');
@@ -36,49 +36,37 @@ test('harness pipeline is selectable, persists v1/v2 and rejects unsupported mod
 });
 
 test('an unset harness flag displays the v1 runtime fallback without enabling v2', t => {
-  const { service } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\n');
+  const { service } = fixture(t, '');
   const field = service.get().fields.find(field => field.key === 'HARNESS_PIPELINE');
   assert.equal(field.value, 'v1');
   assert.equal(field.source, 'Mặc định');
 });
 
-test('settings classify active local harness and legacy tool loop by their runtime consumers', t => {
-  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\n');
+test('settings no longer offer the removed legacy routing, tool loop and local harness switches', t => {
+  const removed = ['GOVERNED_CONTROLLER_MODE', 'AGENT_CORE_ENABLED', 'AI_MAX_TOOL_ITERATIONS', 'CHAT_ROUTING_MODE', 'CHAT_ROUTING_LOCAL_MODEL',
+    'CHAT_QUICK_GREETING_ENABLED', 'LOCAL_MODEL_HARNESS_ENABLED', 'LOCAL_MODEL_SCHEMA_SELECTOR_ENABLED', 'MODEL_DATA_INTENT_PLANNER_ENABLED'];
+  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=legacy\nCHAT_ROUTING_MODE=local_tev1\n');
   const fields = service.get().fields;
-  assert.ok(fields.some(field => field.key === 'LOCAL_MODEL_HARNESS_ENABLED'));
-  assert.ok(!fields.some(field => field.key === 'AI_MAX_TOOL_ITERATIONS'));
-  const planner = fields.find(field => field.key === 'MODEL_DATA_INTENT_PLANNER_ENABLED');
-  const harness = fields.find(field => field.key === 'LOCAL_MODEL_HARNESS_ENABLED');
-  assert.equal(planner.group, harness.group);
+  for (const key of removed) assert.ok(!fields.some(field => field.key === key), key);
+  assert.ok(!fields.some(field => field.group === 'Tương thích legacy'));
   for (const key of ['QDRANT_EXE', 'AI_MEMORY_RECENT_MESSAGES', 'AI_MEMORY_SUMMARY_CHARS', 'AI_DOCUMENT_CONTEXT_CHARS', 'AI_DOCUMENT_MIN_SCORE', 'AI_CONVERSATION_HISTORY', 'MEMORY_SEMANTIC_ROUTING_ENABLED']) {
     assert.ok(!fields.some(field => field.key === key), key);
   }
-  fs.writeFileSync(file, 'GOVERNED_CONTROLLER_MODE=legacy\n');
-  assert.ok(service.get().fields.some(field => field.key === 'AI_MAX_TOOL_ITERATIONS'));
+  // An old .env line is kept as written, but cannot be changed through settings.
+  for (const key of ['GOVERNED_CONTROLLER_MODE', 'CHAT_ROUTING_MODE']) {
+    assert.throws(() => service.save({ revision: service.get().revision, values: { [key]: 'agent' } }), error => error.statusCode === 400);
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), 'GOVERNED_CONTROLLER_MODE=legacy\nCHAT_ROUTING_MODE=local_tev1\n');
 });
 
-test('agent settings hide legacy and unused keys and expose the real embedding switch', t => {
-  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=agent\nEMBEDDING_ENABLED=true\nAI_MEMORY_SUMMARY_CHARS=4000\n');
-  let before = service.get();
+test('settings hide unused keys and expose the real embedding switch', t => {
+  const { service, file } = fixture(t, 'EMBEDDING_ENABLED=true\nAI_MEMORY_SUMMARY_CHARS=4000\n');
+  const before = service.get();
   assert.equal(before.fields.find(field => field.key === 'EMBEDDING_ENABLED').type, 'boolean');
-  assert.ok(!before.fields.some(field => field.key.startsWith('CHAT_ROUTING_') || field.key === 'AI_MEMORY_SUMMARY_CHARS'));
-  service.save({ revision: before.revision, values: { EMBEDDING_ENABLED: 'false', GOVERNED_CONTROLLER_MODE: 'legacy' } });
+  assert.ok(!before.fields.some(field => field.key === 'AI_MEMORY_SUMMARY_CHARS'));
+  service.save({ revision: before.revision, values: { EMBEDDING_ENABLED: 'false' } });
   assert.match(fs.readFileSync(file, 'utf8'), /EMBEDDING_ENABLED=false/);
-  before = service.get();
-  assert.equal(before.fields.find(field => field.key === 'CHAT_ROUTING_MODE').group, 'Tương thích legacy');
-  assert.throws(() => service.save({ revision: before.revision, values: { AI_MEMORY_SUMMARY_CHARS: '5000' } }));
-});
-test('routing settings persist valid mode and reject invalid selection and endpoint', t => {
-  const { service, file } = fixture(t, 'GOVERNED_CONTROLLER_MODE=legacy\nCHAT_ROUTING_MODE=local_tev1\n');
-  const field = service.get().fields.find(item => item.key === 'CHAT_ROUTING_MODE');
-  assert.equal(field.type, 'select');
-  assert.deepEqual(field.options, ['local_tev1', 'chat_model', 'auto']);
-  for (const values of [{ CHAT_ROUTING_MODE: 'guess' }, { CHAT_ROUTING_TIMEOUT_MS: '0' },
-    { CHAT_ROUTING_LOCAL_BASE_URL: 'http://user:secret@localhost' }]) {
-    assert.throws(() => service.save({ revision: service.get().revision, values }));
-  }
-  service.save({ revision: service.get().revision, values: { CHAT_ROUTING_MODE: 'chat_model', CHAT_ROUTING_LOCAL_MODEL: 'tev1:4b' } });
-  assert.match(fs.readFileSync(file, 'utf8'), /CHAT_ROUTING_MODE=chat_model/);
+  assert.throws(() => service.save({ revision: service.get().revision, values: { AI_MEMORY_SUMMARY_CHARS: '5000' } }));
 });
 test('settings expose and persist the workflow feature switch', t => {
   const { service, file } = fixture(t, 'WORKFLOW_PLUGINS_ENABLED=false\n');

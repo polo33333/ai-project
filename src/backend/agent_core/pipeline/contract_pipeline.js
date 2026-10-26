@@ -7,7 +7,7 @@
 // documents, unsupported shapes) return { fallback } to the agent loop.
 const Ajv = require('ajv');
 const catalogApi = require('./query_catalog');
-const { compile } = require('./query_compiler');
+const { compile, metricRoot } = require('./query_compiler');
 const { normalizeAssistantResponse } = require('../harness/tool_call_normalizer');
 
 const ref = { type: 'string', minLength: 1, maxLength: 200 };
@@ -23,12 +23,15 @@ const contractSchema = { type: 'object', additionalProperties: false, required: 
   output: { type: 'object', additionalProperties: false, properties: {
     chart: { enum: ['none', 'bar', 'line', 'pie'] }, export: { enum: ['none', 'xlsx', 'csv', 'pdf'] }, splitBy: ref } },
   clarification: { type: 'string', maxLength: 300 },
+  documentQuery: { type: 'string', maxLength: 300 },
   followup: { type: 'boolean' },
   root: { type: 'string', maxLength: 128 },
   operation: { enum: ['list', 'aggregate'] },
   fields: { type: 'array', maxItems: 20, items: ref },
-  measures: { type: 'array', maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['ref', 'aggregation'], properties: {
-    ref, aggregation: { enum: ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'] }, distinct: { type: 'boolean' }, label: { type: 'string', maxLength: 80 } } } },
+  // Either an approved metric id, or ref + aggregation (checked by the compiler).
+  measures: { type: 'array', maxItems: 6, items: { type: 'object', additionalProperties: false, properties: {
+    metric: { type: 'string', maxLength: 128 }, ref, aggregation: { enum: ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'] },
+    distinct: { type: 'boolean' }, label: { type: 'string', maxLength: 80 } } } },
   groupBy: { type: 'array', maxItems: 4, items: { type: 'object', additionalProperties: false, required: ['ref'], properties: {
     ref, grain: { enum: ['day', 'month', 'year'] } } } },
   filters: { type: 'array', maxItems: 12, items: { type: 'object', additionalProperties: false, required: ['ref', 'operator', 'evidence'], properties: {
@@ -45,11 +48,12 @@ const definition = { type: 'function', function: { name: 'plan_query',
   description: 'Return the query contract for the current question over the supplied catalog.', parameters: contractSchema } };
 
 const RULES = `You translate the user's business question into a query contract over CATALOG. Call plan_query only; never write SQL or answer.
-- kind=document for questions answered by company documents (user guides, policies, plans, procedures) rather than database records.
+- kind=document for questions answered by company documents (user guides, policies, plans, procedures) rather than database records. Set documentQuery to a standalone search query in the question's language: resolve references to PREVIOUS turns ("phần đó", "tài liệu trên") into what they name and drop words addressed to the system ("kho tri thức", "tìm giúp").
 - kind=data for questions answered by catalog records; kind=chat for greetings, explanations, documents or anything not in the catalog; kind=clarify only when a required value is truly ambiguous (Vietnamese question in clarification).
 - root: the table whose rows are listed, counted or summed (the table holding the measure).
 - Reference columns as "Table.Column". To use a lookup (code, name, status, period name, group) go through the foreign key: "Root.FKColumn->LookupColumn", e.g. "Orders.StatusID->StatusName", "Orders.CustomerID->CustomerCode". Never compare a code or name with a numeric ID column.
 - operation=list returns records: choose the fields the question implies (for transactions include the business date and the main amount; for people include code and name); empty fields = the table's default list. "theo X" / "by X" means groupBy X. operation=aggregate returns measures, optionally grouped (groupBy). Foreign keys in fields/groupBy are shown by their display column automatically.
+- When METRICS has an approved metric for the requested amount, quantity or count, use measures [{metric:"<id>"}] and root = the metric's table; period filters go on its date. A metric fits only when QUESTION states its distinguishing words (its name or an "also" wording, e.g. "sau thuế", "trước thuế", "sản lượng"); a column whose label matches QUESTION more closely (e.g. "Tiền điện" vs "Tiền hóa đơn sau thuế") is used with ref/aggregation instead.
 - Measures use root columns only; COUNT of records uses ref "*". Rankings ("cao nhất", "top 5") use sort {by:"measure:0"} and limit.
 - Exclusions ("trừ", "ngoại trừ", "không phải", "không bao gồm") use operator ne (one value) or notIn (values).
 - If a word of the question looks like a code or a stored value but is not a criterion (e.g. part of a name), list it in ignoredTerms.
@@ -158,13 +162,20 @@ function keepMeasures(contract, previous, question, catalog) {
   const before = previous?.contract;
   if (!contract.followup || contract.operation !== 'aggregate' || before?.operation !== 'aggregate'
     || catalogApi.key(before.root) !== catalogApi.key(contract.root) || !before.measures?.length || !contract.measures?.length) return null;
-  const signature = measures => measures.map(item => `${item.aggregation}:${catalogApi.key(String(item.ref).split('.').pop())}`).join('|');
+  // A metric measure is compared by what it computes, so naming the metric
+  // instead of its column is not a change of measure.
+  const basis = item => {
+    const metric = item.metric && catalogApi.metric(catalog, item.metric);
+    if (metric) return { aggregation: metric.aggregation, name: metric.column, words: `${metric.label} ${metric.aliases.join(' ')}`,
+      condition: metric.conditions.length ? `#${catalogApi.key(metric.id)}` : '' };
+    return { aggregation: item.aggregation, name: String(item.metric || item.ref).split('->').pop().split('.').pop(), words: item.label || '', condition: '' };
+  };
+  const signature = measures => measures.map(basis).map(item => `${item.aggregation}:${catalogApi.key(item.name)}${item.condition}`).join('|');
   if (signature(before.measures) === signature(contract.measures)) return null;
   const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi');
-  const words = measures => new Set(measures.flatMap(item => {
-    const name = String(item.ref).split('->').pop().split('.').pop();
+  const words = measures => new Set(measures.map(basis).flatMap(({ name, words }) => {
     const column = catalogApi.column(catalog, contract.root, name);
-    return fold(`${column?.label || ''} ${name} ${item.label || ''}`).split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1);
+    return fold(`${column?.label || ''} ${name} ${words}`).split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1);
   }));
   const previousWords = words(before.measures);
   const distinguishing = [...words(contract.measures)].filter(word => !previousWords.has(word));
@@ -172,7 +183,7 @@ function keepMeasures(contract, previous, question, catalog) {
   if (distinguishing.some(word => asked.includes(word))) return null;
   const replaced = contract.measures;
   contract.measures = structuredClone(before.measures);
-  return { from: replaced.map(item => item.ref), to: contract.measures.map(item => item.ref) };
+  return { from: replaced.map(item => item.metric || item.ref), to: contract.measures.map(item => item.metric || item.ref) };
 }
 
 // Safety net for follow-ups: an equality filter of the previous contract that
@@ -235,9 +246,15 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     result: turn.result ? { columns: turn.result.columns, rowCount: turn.result.rowCount,
       rows: turn.result.preview.slice(0, 10).map((row, index) => [index + 1, ...row]) } : undefined }));
   const preferences = require('./preferences').preferences(context);
+  // Reviewed contracts of similar questions (feedback learning loop).
+  const learning = require('../../training_core/feedback_loop');
+  const examples = learning.selectExamples(learning.sourceExamples(catalog.dbSourceId), question, catalog);
+  if (examples.length) step('V2_EXAMPLES', { ids: examples.map(item => item.id), scores: examples.map(item => item.score) });
   const messages = [{ role: 'system', content: RULES },
     { role: 'user', content: `TODAY: ${requestTime.today}\nCATALOG:\n${catalogApi.describe(catalog)}\n`
       + `OTHER TABLES (columns supplied on request): ${otherTables(search.result, catalog)}\n`
+      + (examples.length ? `EXAMPLES (reviewed contracts of similar questions; reuse a choice of table, measure or column only where QUESTION uses the same words for it; values come only from QUESTION):\n${examples
+        .map(item => `  ${JSON.stringify(item.question)} -> ${JSON.stringify(item.contract)}`).join('\n')}\n` : '')
       + (workflows.length ? `WORKFLOWS: ${describeWorkflows(workflows)}\n` : '')
       + (preferences ? `${preferences}\n` : '')
       + (pendingInput ? `PENDING: ${JSON.stringify({ workflow: pendingInput.name, missingInputs: Object.entries(pendingInput.inputs || {})
@@ -259,7 +276,7 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       if (contract.kind === 'chat') return { ...(await conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step })), contract };
       if (contract.kind === 'document') {
         if (!toolContext.allowedToolNames?.includes('search_knowledge_base')) return { ...(await conversationReply({ question, conversation, dispatch, plan, context, toolContext, previousTurns, step })), contract };
-        return { ...(await require('./conversation_answer').searchDocuments({ question, conversation, dispatch, plan, context, toolManager, toolContext, toolCalls, step })), contract };
+        return { ...(await require('./conversation_answer').searchDocuments({ question, contract, conversation, dispatch, plan, context, toolManager, toolContext, toolCalls, step })), contract };
       }
       // Checked before the quotes: a repair round spent on quotes for a run that
       // cannot be resumed is wasted.
@@ -309,6 +326,9 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       if (dropped.length) throw Object.assign(new Error(`V2_CRITERION_DROPPED: the question states ${dropped.map(item => `"${item}"`).join(', ')} but no filter uses it`), { code: 'V2_CRITERION_DROPPED' });
       const filled = completeFollowup(contract, previous, question);
       if (filled.length) step('V2_FOLLOWUP_COMPLETED', { fields: filled });
+      // Set before the checks below, which all start from the root table.
+      const inferredRoot = metricRoot(contract, catalog);
+      if (inferredRoot) { contract.root = inferredRoot; step('V2_ROOT_FROM_METRIC', { root: inferredRoot }); }
       const splitBy = contract.output?.splitBy;
       if (splitBy && contract.operation !== 'aggregate' && !(contract.fields || []).includes(splitBy)) {
         const rootEntry = catalogApi.table(catalog, contract.root);
@@ -351,7 +371,8 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     }
   }
   if (!compiled) return { fallback: lastError?.code || 'V2_CONTRACT_INVALID', contract };
-  step('V2_COMPILED', { root: compiled.root, operation: compiled.operation, joins: compiled.joinPlan.edges.length, filters: compiled.requestFilters.length });
+  step('V2_COMPILED', { root: compiled.root, operation: compiled.operation, joins: compiled.joinPlan.edges.length, filters: compiled.requestFilters.length,
+    metrics: compiled.metrics });
 
   // An exclusion on a column that does not hold the value removes nothing yet
   // looks applied ("trừ Demo3" on the code column). Move it to the column of
@@ -700,9 +721,12 @@ function render(compiled, call, question) {
   const blank = measures.filter(item => ['SUM', 'AVG'].includes(item.aggregation)
     && rows.every(row => row[item.alias] === 0 || row[item.alias] === '0'));
   const note = blank.length ? `\n\nLưu ý: ${blank.map(item => `**${item.alias}**`).join(', ')} bằng 0 ở mọi bản ghi khớp điều kiện; cột này có thể chưa được nhập dữ liệu.` : '';
-  const basis = measures.filter(item => item.column).map(item => `${item.alias} = ${item.aggregation}(${item.column})`);
+  const basis = measures.filter(item => item.column).map(item => item.metric
+    ? `${item.alias} theo chỉ tiêu đã duyệt (${item.aggregation}(${item.column})${item.unit ? `, đơn vị ${item.unit}` : ''})`
+    : `${item.alias} = ${item.aggregation}(${item.column})`);
   const method = basis.length ? `Cách tính: ${basis.join('; ')}.\n\n` : '';
   return `${scope ? `${scope}\n` : ''}${scope && !method ? '\n' : ''}${method}${body}${more}${note}`;
 }
 
-module.exports = { run, render, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema };
+module.exports = { run, render, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema,
+  validateContract: validate };

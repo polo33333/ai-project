@@ -70,17 +70,6 @@ test('upload, lexical search and reindex work without embedding or Qdrant', asyn
   assert.equal(vector.mock.callCount(), 0);
 });
 
-test('legacy workflow retrieval uses lexical candidates when embedding is disabled', async t => {
-  mode(t, 'false');
-  const { WorkflowRetrieval, configuration } = require('../src/backend/automation/workflow_retrieval');
-  assert.equal(configuration().method, 'lexical');
-  const service = new WorkflowRetrieval({ fetchImpl: async () => { throw Error('Vector network forbidden'); } });
-  const result = await service.search('employee address', [{ id: 'hr/employee', name: 'employee address', description: 'Find employee address', inputs: {} }], null, { routingMode: 'chat_model' });
-  assert.equal(result.definitions[0].id, 'hr/employee');
-  assert.equal(result.trace.method, 'bm25');
-  assert.equal((await service.sync([], configuration())).mode, 'lexical');
-});
-
 test('enabled mode restores vector searches rather than leaving lexical-only mode latched', async t => {
   mode(t, 'true');
   assert.equal(policy.enabled(), true);

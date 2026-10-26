@@ -24,12 +24,6 @@ test('provider execution lookup retains credentials without exposing them in pub
   assert.equal(manager.getProviders().find(item => item.id === provider.id)?.apiKey, undefined);
 });
 
-test('web grounding detects an incorrect enterprise-scope refusal', () => {
-  const { isWebScopeRefusal } = require('../src/backend/agent_core/harness/agent_harness');
-  assert.equal(isWebScopeRefusal('Hệ thống dữ liệu nội bộ không được kết nối với thông tin thị trường theo thời gian thực.'), true);
-  assert.equal(isWebScopeRefusal('Theo kết quả web, giá được cập nhật tại nguồn sau.'), false);
-});
-
 test('storage writes valid JSON atomically and leaves no temporary file', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kh-storage-'));
   const script = "const S=require('./src/backend/utils/storage_helper'); S.saveJson('sample.json',{ok:true});";

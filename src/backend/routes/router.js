@@ -2496,37 +2496,6 @@ async function handleGovernedRequest(req, res) {
     return;
   }
 
-  // Legacy demo workflow endpoint
-  if (pathname === '/api/agent/workflow/run' && req.method === 'POST') {
-    try {
-      const { workflowId, input } = await readJsonBody(req);
-      const agentCore = require('../agent_core');
-
-      let workflow;
-      if (workflowId === 'data_export_pipeline' || !workflowId) {
-        workflow = agentCore.builtinWorkflows.createDataExportPipeline();
-      } else {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
-        res.end(JSON.stringify({ status: 'error', message: `Workflow "${workflowId}" không nằm trong allowlist.` }));
-        return;
-      }
-
-      const execution = await workflow.run(input || {}, { permissions: ['*'] });
-      
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({
-        status: execution.success ? 'success' : 'error',
-        success: execution.success,
-        state: execution.state,
-        trace: execution.trace
-      }));
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({ status: 'error', message: err.message }));
-    }
-    return;
-  }
-
   // 9. Static File Server
   if (pathname.startsWith('/api/exports/') && req.method === 'GET') {
     const requestedName = decodeURIComponent(pathname.slice('/api/exports/'.length));

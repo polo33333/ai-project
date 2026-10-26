@@ -43,12 +43,32 @@ function countBy(items, key) {
 const share = (part, total) => total ? +(part / total).toFixed(3) : null;
 const dayKey = time => `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
 
+// Document (RAG) turns: core.js knowledge mode or a v2 document contract.
+function ragRow(payload, diagnostics, usage) {
+  const steps = diagnostics.steps || [];
+  const v2 = steps.filter(step => step.type === 'V2_DOCUMENTS').at(-1);
+  const selection = payload.contextSelection || {};
+  // A data question whose agent loop also searched documents is not a document turn.
+  const document = selection.mode === 'knowledge' || diagnostics.v2Contract?.kind === 'document' || Boolean(v2);
+  if (!document) return null;
+  const retrieval = selection.rag || v2?.retrieval || {};
+  const mode = retrieval.mode || selection.knowledgeMode || null;
+  const claims = steps.filter(step => step.type === 'RAG_CLAIMS_CHECKED').at(-1);
+  return { mode, method: retrieval.method || null,
+    degraded: Boolean(retrieval.degraded || /degraded/.test(mode || '')),
+    empty: (v2 ? v2.found : retrieval.found ?? selection.citationEvidence?.length) === 0,
+    citationRepair: usage.some(step => step.stage === 'v2_document_repair') || Number(diagnostics.executionBudget?.repairAttempts) > 0,
+    unsupportedClaims: claims ? Number(claims.unsupported) || 0 : (payload.citationValidation?.unsupportedClaims || []).length,
+    claimsChecked: Boolean(claims || payload.citationValidation?.unsupportedClaims) };
+}
+
 // One normalized row per answered request.
 function toRow(record) {
   const payload = record.requestPayload || {};
   const diagnostics = payload.diagnostics || {};
   const usage = (diagnostics.steps || []).filter(step => step.type === 'MODEL_USAGE');
   const failures = diagnostics.responseEvaluation?.failures || [];
+  const compiled = (diagnostics.steps || []).filter(step => step.type === 'V2_COMPILED').at(-1);
   return {
     id: record.id, time: parseTime(record.timestamp), route: route(record), status: record.status || 'UNKNOWN',
     endpoint: payload.endpoint || 'unknown', provider: record.providerName || payload.providerName || null,
@@ -63,6 +83,9 @@ function toRow(record) {
     fallbackCode: diagnostics.v2Attempt ? diagnostics.v2Attempt.fallbackCode || 'UNKNOWN' : null,
     contractKind: diagnostics.v2Contract?.kind || null,
     operation: diagnostics.v2Contract?.operation || diagnostics.plan?.operation || diagnostics.plan?.intent || null,
+    // A v2 aggregate answered through approved metrics (null: not a v2 aggregate).
+    metrics: compiled?.operation === 'aggregate' ? compiled.metrics || [] : null,
+    rag: ragRow(payload, diagnostics, usage),
     failures, stages: usage.map(step => ({ stage: step.stage || 'unknown', inputTokens: Number(step.inputTokens) || 0, calls: Number(step.calls) || 1 }))
   };
 }
@@ -76,6 +99,19 @@ function aggregate(rows) {
     modelCalls: summary(rows.map(row => row.modelCalls)), latencyMs: summary(rows.map(row => row.latencyMs)),
     inputTokens: summary(rows.map(row => row.inputTokens)), outputTokens: summary(rows.map(row => row.outputTokens)),
     cache: { inputTokens: input, cachedInputTokens: cached, cachedShare: share(cached, input) } };
+}
+
+function ragMetrics(rows) {
+  const turns = rows.filter(row => row.rag);
+  const checked = turns.filter(row => row.rag.claimsChecked);
+  return { ...aggregate(turns),
+    partialRate: share(turns.filter(row => row.status === 'PARTIAL').length, turns.length),
+    citationRepairRate: share(turns.filter(row => row.rag.citationRepair).length, turns.length),
+    emptyRetrievalRate: share(turns.filter(row => row.rag.empty).length, turns.length),
+    degradedRate: share(turns.filter(row => row.rag.degraded).length, turns.length),
+    // Share of checked answers with a cited number, date, code or link missing from its passage.
+    unsupportedClaimRate: share(checked.filter(row => row.rag.unsupportedClaims > 0).length, checked.length), claimsChecked: checked.length,
+    modes: countBy(turns, row => row.rag.mode || '(chưa ghi)'), methods: countBy(turns.filter(row => row.rag.method), row => row.rag.method) };
 }
 
 // excludeSessions: prefixes of sessions that are not real use (evaluation runs).
@@ -94,7 +130,11 @@ function computeMetrics(records = [], { since = null, until = null, excludeSessi
     overall: aggregate(rows),
     v2Era: { ...aggregate(v2Era),
       deterministicShare: share(v2Handled.filter(row => row.route === 'v2').length, v2Handled.length),
-      fallbackShare: share(v2Handled.filter(row => row.route === 'v2_fallback').length, v2Handled.length) },
+      fallbackShare: share(v2Handled.filter(row => row.route === 'v2_fallback').length, v2Handled.length),
+      // Share of v2 aggregates computed through approved business metrics.
+      metricShare: share(rows.filter(row => row.metrics?.length).length, rows.filter(row => row.metrics).length) },
+    rag: ragMetrics(rows),
+    metrics: countBy(rows.filter(row => row.metrics), row => row.metrics.length ? row.metrics : '(không qua chỉ tiêu)'),
     routes: countBy(rows, row => row.route).map(item => ({ ...item, ...aggregate(rows.filter(row => row.route === item.name)) })),
     fallbackCodes: countBy(rows.filter(row => row.fallbackCode), row => row.fallbackCode),
     contractKinds: countBy(rows.filter(row => row.contractKind), row => row.contractKind),
@@ -117,4 +157,4 @@ function computeMetrics(records = [], { since = null, until = null, excludeSessi
   };
 }
 
-module.exports = { computeMetrics, parseTime, route, toRow, quantile };
+module.exports = { computeMetrics, parseTime, route, toRow, quantile, ragMetrics };

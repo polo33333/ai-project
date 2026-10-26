@@ -1,0 +1,737 @@
+{
+  "schemaVersion": 2,
+  "status": "draft",
+  "reviewer": null,
+  "approvedAt": null,
+  "note": "Đáp án nháp soạn từ 4 tài liệu thư viện ngày 2026-10-26. Một đoạn được tính là đúng khi thuộc expect.documentId và chứa một cụm trong expect.evidence (so sánh bỏ dấu, bỏ khoảng trắng và ký tự đặc biệt). expect không có evidence: chỉ chấm đúng tài liệu. expect=null: câu không có trong tài liệu.",
+  "documents": {
+    "lib-1786363759472-471": "TPSOFT_HDSD_IPMS_APP__v1.0.docx",
+    "lib-1786362522169-816": "Phase1_SQLServer_Connector_Plan.docx",
+    "lib-1786286854658-147": "KnowledgeHub_Master_Plan_v3.docx",
+    "lib-1786285624502-831": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf"
+  },
+  "cases": [
+    {
+      "id": "ipms-01",
+      "category": "direct",
+      "query": "Tải ứng dụng IPMS trên điện thoại Android ở đâu?",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "details?id=com.tpsoft.ipms"
+        ]
+      }
+    },
+    {
+      "id": "ipms-02",
+      "category": "direct",
+      "query": "Link App Store của ứng dụng IPMS là gì",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "apps.apple.com/us/app/ipms"
+        ]
+      }
+    },
+    {
+      "id": "ipms-03",
+      "category": "direct",
+      "query": "Đăng nhập ứng dụng IPMS bằng tài khoản nào?",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "mật khẩu do quản trị hệ thống cung cấp"
+        ]
+      }
+    },
+    {
+      "id": "ipms-04",
+      "category": "paraphrase",
+      "query": "Trên trang chủ app IPMS xem được những thông tin gì?",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "Nợ trước chưa thanh toán"
+        ]
+      }
+    },
+    {
+      "id": "ipms-05",
+      "category": "direct",
+      "query": "Cách tra cứu thông tin điện trên app IPMS",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "thay đổi mốc thời gian để tìm kiếm"
+        ]
+      }
+    },
+    {
+      "id": "ipms-06",
+      "category": "direct",
+      "query": "Làm sao gửi phản ánh tới đơn vị quản lý trong IPMS?",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "Gửi phản ánh"
+        ]
+      }
+    },
+    {
+      "id": "ipms-07",
+      "category": "direct",
+      "query": "Đổi mật khẩu trên ứng dụng IPMS thế nào?",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "Hình 13.1-1"
+        ]
+      }
+    },
+    {
+      "id": "ipms-08",
+      "category": "paraphrase",
+      "query": "Xem giấy báo điện nước ở chức năng nào của IPMS?",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "giấy báo của điện nước"
+        ]
+      }
+    },
+    {
+      "id": "ipms-09",
+      "category": "direct",
+      "query": "Mục đích của ứng dụng IPMS là gì",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "Nhằm hỗ trợ Đơn vị quản lý khu công nghiệp"
+        ]
+      }
+    },
+    {
+      "id": "ipms-10",
+      "category": "paraphrase",
+      "query": "Chức năng nước thải trong app IPMS dùng làm gì",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "xem chi tiết Nước thải"
+        ]
+      }
+    },
+    {
+      "id": "ipms-11",
+      "category": "direct",
+      "query": "Trong IPMS tìm hợp đồng theo loại hợp đồng thế nào",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "tùy chọn loại hợp đồng"
+        ]
+      }
+    },
+    {
+      "id": "ipms-12",
+      "category": "prefix",
+      "query": "kho tri thức: cách đổi mật khẩu app IPMS",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "Hình 13.1-1"
+        ]
+      }
+    },
+    {
+      "id": "ipms-13",
+      "category": "prefix",
+      "query": "tìm trong kho tri thức hướng dẫn cài đặt IPMS trên iPhone",
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "apps.apple.com/us/app/ipms"
+        ]
+      }
+    },
+    {
+      "id": "ipms-14",
+      "category": "filename",
+      "query": "TPSOFT_HDSD_IPMS_APP__v1.0.docx",
+      "expect": {
+        "documentId": "lib-1786363759472-471"
+      }
+    },
+    {
+      "id": "ipms-15",
+      "category": "followup",
+      "query": "phần đường ống thì sao",
+      "previous": {
+        "question": "Hướng dẫn sử dụng app IPMS có những chức năng nào",
+        "documentIds": [
+          "lib-1786363759472-471"
+        ]
+      },
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "Đường ống dẫn khí"
+        ]
+      }
+    },
+    {
+      "id": "ipms-16",
+      "category": "followup",
+      "query": "còn chức năng rác?",
+      "previous": {
+        "question": "Hướng dẫn sử dụng app IPMS có những chức năng nào",
+        "documentIds": [
+          "lib-1786363759472-471"
+        ]
+      },
+      "expect": {
+        "documentId": "lib-1786363759472-471",
+        "evidence": [
+          "xem chi tiết Rác"
+        ]
+      }
+    },
+    {
+      "id": "ipms-17",
+      "category": "followup",
+      "query": "tài liệu trên có mấy trang",
+      "previous": {
+        "question": "Mục đích của ứng dụng IPMS là gì",
+        "documentIds": [
+          "lib-1786363759472-471"
+        ]
+      },
+      "expect": {
+        "documentId": "lib-1786363759472-471"
+      }
+    },
+    {
+      "id": "sql-01",
+      "category": "direct",
+      "query": "SQL Server connector dùng cổng nào?",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "port 1433"
+        ]
+      }
+    },
+    {
+      "id": "sql-02",
+      "category": "direct",
+      "query": "Driver Python để kết nối SQL Server trong Phase 1 là gì",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "pyodbc"
+        ]
+      }
+    },
+    {
+      "id": "sql-03",
+      "category": "direct",
+      "query": "SQL login cho connector được cấp quyền gì và không được cấp quyền gì",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "Không cấp `INSERT/UPDATE/DELETE/EXECUTE`"
+        ]
+      }
+    },
+    {
+      "id": "sql-04",
+      "category": "direct",
+      "query": "Phase 1 có embed dữ liệu dòng của bảng không",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "không embed dữ liệu dòng"
+        ]
+      }
+    },
+    {
+      "id": "sql-05",
+      "category": "table",
+      "query": "Ước tính tổng effort Phase 1 SQL Server connector bao nhiêu ngày",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "12–17 ngày"
+        ]
+      }
+    },
+    {
+      "id": "sql-06",
+      "category": "table",
+      "query": "Rủi ro AI sinh SQL sai được giảm thiểu thế nào",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "Whitelist cú pháp bằng SQL parser"
+        ]
+      }
+    },
+    {
+      "id": "sql-07",
+      "category": "direct",
+      "query": "Luồng xử lý câu hỏi tự nhiên trong Phase 1 gồm các bước nào",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "Semantic search trong Qdrant"
+        ]
+      }
+    },
+    {
+      "id": "sql-08",
+      "category": "direct",
+      "query": "Những gì không nằm trong phạm vi Phase 1",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "Không nằm trong phạm vi Phase 1"
+        ]
+      }
+    },
+    {
+      "id": "sql-09",
+      "category": "table",
+      "query": "Text-to-SQL agent mất bao lâu để làm",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "kiểm tra an toàn SQL | 4–5 ngày"
+        ]
+      }
+    },
+    {
+      "id": "sql-10",
+      "category": "prefix",
+      "query": "kho tri thức: checklist triển khai SQL Server connector",
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "Tạo SQL login read-only riêng cho connector"
+        ]
+      }
+    },
+    {
+      "id": "sql-11",
+      "category": "followup",
+      "query": "tài liệu trên nói rủi ro rò rỉ dữ liệu nhạy cảm xử lý sao",
+      "previous": {
+        "question": "Phase 1 SQL Server connector gồm những gì",
+        "documentIds": [
+          "lib-1786362522169-816"
+        ]
+      },
+      "expect": {
+        "documentId": "lib-1786362522169-816",
+        "evidence": [
+          "Gắn cờ sensitivity ở bảng nhạy cảm"
+        ]
+      }
+    },
+    {
+      "id": "sql-12",
+      "category": "filename",
+      "query": "Phase1_SQLServer_Connector_Plan.docx",
+      "expect": {
+        "documentId": "lib-1786362522169-816"
+      }
+    },
+    {
+      "id": "kh-01",
+      "category": "direct",
+      "query": "KnowledgeHub dùng công nghệ gì cho frontend",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Frontend: HTML + CSS thuần",
+          "Vì sao Frontend chuyển sang HTML"
+        ]
+      }
+    },
+    {
+      "id": "kh-02",
+      "category": "direct",
+      "query": "Vì sao hệ thống dùng cả PostgreSQL, Qdrant và Redis",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Vì sao dùng nhiều loại Database khác nhau"
+        ]
+      }
+    },
+    {
+      "id": "kh-03",
+      "category": "direct",
+      "query": "Những AI provider cloud nào được hỗ trợ",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Mistral, DeepSeek, Groq"
+        ]
+      }
+    },
+    {
+      "id": "kh-04",
+      "category": "table",
+      "query": "API key của provider được lưu trữ thế nào",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "AES-256"
+        ]
+      }
+    },
+    {
+      "id": "kh-05",
+      "category": "direct",
+      "query": "Cơ chế fallback khi provider chính bị lỗi",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Fallback tự động"
+        ]
+      }
+    },
+    {
+      "id": "kh-06",
+      "category": "paraphrase",
+      "query": "Dữ liệu nhạy cảm có được gửi lên AI cloud không",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "chỉ được route tới provider local"
+        ]
+      }
+    },
+    {
+      "id": "kh-07",
+      "category": "direct",
+      "query": "Yêu cầu thời gian phản hồi của hybrid search là bao nhiêu",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "< 1s cho hybrid search"
+        ]
+      }
+    },
+    {
+      "id": "kh-08",
+      "category": "direct",
+      "query": "Chunk size đề xuất cho văn bản dài là bao nhiêu token",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "300–500 token"
+        ]
+      }
+    },
+    {
+      "id": "kh-09",
+      "category": "direct",
+      "query": "Golden dataset đánh giá RAG cần bao nhiêu cặp câu hỏi",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "50–100 cặp"
+        ]
+      }
+    },
+    {
+      "id": "kh-10",
+      "category": "direct",
+      "query": "Phase 2 của roadmap KnowledgeHub gồm những gì",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Phase 2 — Chất lượng tìm kiếm"
+        ]
+      }
+    },
+    {
+      "id": "kh-11",
+      "category": "paraphrase",
+      "query": "Cần GPU bao nhiêu VRAM để tự chạy model",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "GPU 24GB"
+        ]
+      }
+    },
+    {
+      "id": "kh-12",
+      "category": "direct",
+      "query": "Sao lưu Qdrant như thế nào",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Snapshot định kỳ collection"
+        ]
+      }
+    },
+    {
+      "id": "kh-13",
+      "category": "direct",
+      "query": "Dead-letter queue dùng để làm gì",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "được đưa vào hàng chờ riêng để xem xét thủ công"
+        ]
+      }
+    },
+    {
+      "id": "kh-14",
+      "category": "table",
+      "query": "Module Watch Folder có vai trò gì",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Theo dõi thư mục hệ thống"
+        ]
+      }
+    },
+    {
+      "id": "kh-15",
+      "category": "table",
+      "query": "Rủi ro lộ API key của AI Provider được giảm thiểu ra sao",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Lộ API key của AI Provider"
+        ]
+      }
+    },
+    {
+      "id": "kh-16",
+      "category": "prefix",
+      "query": "tìm trong kho tri thức: OCR dùng công cụ nào",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "PaddleOCR"
+        ]
+      }
+    },
+    {
+      "id": "kh-17",
+      "category": "graph_trigger",
+      "query": "Quan hệ giữa AI Provider Manager và dữ liệu nhạy cảm",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Sensitivity-aware routing"
+        ]
+      }
+    },
+    {
+      "id": "kh-18",
+      "category": "graph_trigger",
+      "query": "Tổng hợp các chỉ số đánh giá chất lượng RAG",
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Recall@k, MRR"
+        ]
+      }
+    },
+    {
+      "id": "kh-19",
+      "category": "filename",
+      "query": "KnowledgeHub_Master_Plan_v3.docx",
+      "expect": {
+        "documentId": "lib-1786286854658-147"
+      }
+    },
+    {
+      "id": "kh-20",
+      "category": "followup",
+      "query": "vậy phase 4 trong tài liệu đó gồm những gì",
+      "previous": {
+        "question": "Kế hoạch KnowledgeHub dùng technology stack gì",
+        "documentIds": [
+          "lib-1786286854658-147"
+        ]
+      },
+      "expect": {
+        "documentId": "lib-1786286854658-147",
+        "evidence": [
+          "Phase 4 — Mở rộng"
+        ]
+      }
+    },
+    {
+      "id": "sca-01",
+      "category": "direct",
+      "query": "Địa chỉ service UAT của VNPT SmartCA",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "Địa chỉ service UAT"
+        ]
+      }
+    },
+    {
+      "id": "sca-02",
+      "category": "direct",
+      "query": "API nào dùng để lấy thông tin chứng thư số thuê bao",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "Lấy thông tin chứng thư số thuê bao"
+        ]
+      }
+    },
+    {
+      "id": "sca-03",
+      "category": "table",
+      "query": "Mã lỗi 401 của SmartCA nghĩa là gì",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "SP_CREDENTIAL_INVALI"
+        ]
+      }
+    },
+    {
+      "id": "sca-04",
+      "category": "direct",
+      "query": "Các bước tích hợp ký số với SmartCA",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "Bước 1: Khách hàng upload tài liệu lên và yêu cầu Ký"
+        ]
+      }
+    },
+    {
+      "id": "sca-05",
+      "category": "direct",
+      "query": "Kiểm tra trạng thái giao dịch ký số SmartCA bằng API nào",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "SP chủ động kiểm tra trạng thái giao dịch"
+        ]
+      }
+    },
+    {
+      "id": "sca-06",
+      "category": "direct",
+      "query": "Webhook nhận thông tin ký số SmartCA gồm tham số gì",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "CA gửi thông tin giao dịch tới SP sau khi ký số hoàn tất"
+        ]
+      }
+    },
+    {
+      "id": "sca-07",
+      "category": "paraphrase",
+      "query": "SmartCA TH khác gì SmartCA thường",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "ký mà không cần xác nhận trên APP điện thoại"
+        ]
+      }
+    },
+    {
+      "id": "sca-08",
+      "category": "direct",
+      "query": "Bên thứ ba cần cung cấp thông tin gì để đăng ký SmartCA",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "Email nhận thông tin cặp kết nối Client_ID"
+        ]
+      }
+    },
+    {
+      "id": "sca-09",
+      "category": "direct",
+      "query": "Link code mẫu SmartCA ở đâu",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "Link code mẫu SmartCA"
+        ]
+      }
+    },
+    {
+      "id": "sca-10",
+      "category": "direct",
+      "query": "SmartCA có hỗ trợ ký theo lô không",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "ký theo lô bằng cách add thêm item vào sign_files"
+        ]
+      }
+    },
+    {
+      "id": "sca-11",
+      "category": "filename",
+      "query": "Kich_ban_tich_hop_smartca_v4.1_thuong.pdf",
+      "expect": {
+        "documentId": "lib-1786285624502-831"
+      }
+    },
+    {
+      "id": "sca-12",
+      "category": "followup",
+      "query": "tài liệu đó phát hành ngày nào",
+      "previous": {
+        "question": "Địa chỉ service UAT của VNPT SmartCA",
+        "documentIds": [
+          "lib-1786285624502-831"
+        ]
+      },
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "Ngày phát hành 03 - 05 - 2024"
+        ]
+      }
+    },
+    {
+      "id": "sca-13",
+      "category": "prefix",
+      "query": "kho tri thức: người dùng cuối cần cung cấp gì để tạo tài khoản dùng thử SmartCA",
+      "expect": {
+        "documentId": "lib-1786285624502-831",
+        "evidence": [
+          "tạo tài khoản dùng thử SmartCA"
+        ]
+      }
+    },
+    {
+      "id": "none-01",
+      "category": "no_answer",
+      "query": "Chính sách nghỉ phép năm của công ty là bao nhiêu ngày",
+      "expect": null
+    },
+    {
+      "id": "none-02",
+      "category": "no_answer",
+      "query": "Giá điện bậc thang năm 2025 là bao nhiêu",
+      "expect": null
+    },
+    {
+      "id": "none-03",
+      "category": "no_answer",
+      "query": "Quy trình tuyển dụng nhân sự mới gồm mấy bước",
+      "expect": null
+    }
+  ]
+}

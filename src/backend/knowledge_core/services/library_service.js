@@ -123,11 +123,12 @@ class LibraryService {
     const parts = await structuredDocument.extract(buffer, document.fileType);
     const text = this.partsText(parts);
     if (!text.trim()) throw new Error(document.fileType === 'PDF' ? 'PDF không có lớp văn bản; cần OCR cho file scan.' : 'DOCUMENT_HAS_NO_TEXT');
-    const revision = crypto.createHash('sha256').update(buffer).update('structured-v1').digest('hex');
+    // v2: PDF pieces of one word are joined; heading-only chunks are merged into the next chunk.
+    const revision = crypto.createHash('sha256').update(buffer).update('structured-v2').digest('hex');
     const chunks = structuredDocument.chunks(parts, this.chunkText.bind(this))
       .map(chunk => ({ ...chunk, revision, chunkId: `${document.id}:${revision}:${chunk.chunkIndex}` }));
     const manifestPath = path.join(CONTENT_DIR, `${document.id}-${revision}.chunks.json`);
-    const manifest = { version: 1, chunkerVersion: 'structured-v1', documentId: document.id, revision, chunks };
+    const manifest = { version: 1, chunkerVersion: 'structured-v2', documentId: document.id, revision, chunks };
     const serialized = JSON.stringify(manifest);
     const checksum = crypto.createHash('sha256').update(serialized).digest('hex');
     const temporary = `${manifestPath}.${crypto.randomUUID()}.tmp`;
@@ -143,7 +144,7 @@ class LibraryService {
   activateChunks(document, prepared) {
     fs.writeFileSync(document.contentPath, prepared.text, 'utf8');
     Object.assign(document, { revision: prepared.revision, manifestPath: prepared.manifestPath,
-      manifestChecksum: prepared.manifestChecksum, chunkerVersion: 'structured-v1', pageCount: prepared.pageCount,
+      manifestChecksum: prepared.manifestChecksum, chunkerVersion: 'structured-v2', pageCount: prepared.pageCount,
       pageCountSource: prepared.pageCountSource });
     this.chunkCache.delete(document.id);
   }

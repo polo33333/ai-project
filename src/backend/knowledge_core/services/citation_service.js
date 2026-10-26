@@ -102,7 +102,10 @@ function buildVerifiedCitations(replyText, evidence = [], question = '') {
       usedDocumentContext: evidence.length > 0,
       validCitationCount: citations.length,
       invalidCitationIndexes: invalidMarkers,
-      missingCitation: evidence.length > 0 && markers.length === 0
+      missingCitation: evidence.length > 0 && markers.length === 0,
+      // Recorded, not enforced yet: numbers, dates, codes and links of a cited
+      // sentence that its cited passages do not contain.
+      ...(validMarkers.length ? { unsupportedClaims: require('../rag/verify').verifyClaims(replyText, evidence, question).unsupported } : {})
     }
   };
 }

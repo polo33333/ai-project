@@ -40,6 +40,21 @@ function barTable(title, items, columns = [], max = Math.max(1, ...items.map(ite
       columns.map(column => `<td class="num">${column.format(item)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
 }
 
+// Document questions (RAG): retrieval health and citation quality.
+function ragSection(rag) {
+  if (!rag?.total) return '<section><h2>Hỏi đáp tài liệu (RAG)</h2><p class="muted">Chưa có lượt hỏi tài liệu trong kỳ.</p></section>';
+  return `<section><h2>Hỏi đáp tài liệu (RAG)</h2><div class="tiles">
+${tile('Lượt hỏi tài liệu', number(rag.total))}
+${tile('PARTIAL', percent(rag.partialRate), 'mục tiêu ≤ 5%')}
+${tile('Phải sửa trích dẫn', percent(rag.citationRepairRate), 'thêm một lần gọi mô hình')}
+${tile('Truy hồi rỗng', percent(rag.emptyRetrievalRate))}
+${tile('Suy giảm (mất vector)', percent(rag.degradedRate), 'chỉ còn tìm từ khóa')}
+${tile('Trích dẫn sai nội dung', percent(rag.unsupportedClaimRate), `số, ngày, mã không có trong đoạn · ${number(rag.claimsChecked)} lượt đã kiểm`)}
+${tile('Thời gian p50 / p90', `${seconds(rag.latencyMs.p50)} / ${seconds(rag.latencyMs.p90)}`, 'mục tiêu p90 ≤ 6 s')}
+</div></section>
+<div class="grid">${barTable('Chế độ truy hồi', rag.modes)}${barTable('Cách hiểu câu hỏi tài liệu', rag.methods)}</div>`;
+}
+
 function render(metrics, { days }) {
   const v2 = metrics.v2Era;
   const routeColumns = [{ label: 'Thành công', format: item => percent(item.successRate) },
@@ -73,16 +88,19 @@ ${tile('Thành công (toàn kỳ)', percent(metrics.overall.successRate), `PARTI
 ${tile('v2 trả lời trọn', percent(v2.deterministicShare), 'trong các câu đi vào v2')}
 ${tile('v2 chuyển dự phòng', percent(v2.fallbackShare))}
 ${tile('Hỏi lại người dùng (từ v2)', percent(v2.clarifyRate))}
+${tile('Câu tổng hợp qua chỉ tiêu', percent(v2.metricShare), 'chỉ tiêu nghiệp vụ đã duyệt')}
 ${tile('Gọi mô hình p50 / p95', `${number(v2.modelCalls.p50)} / ${number(v2.modelCalls.p95)}`, 'từ khi có v2')}
 ${tile('Thời gian p50 / p95', `${seconds(v2.latencyMs.p50)} / ${seconds(v2.latencyMs.p95)}`, 'từ khi có v2')}
 ${tile('Token đọc từ bộ đệm', percent(metrics.overall.cache.cachedShare), `${number(metrics.overall.cache.cachedInputTokens)} / ${number(metrics.overall.cache.inputTokens)} token vào`)}
 </div>
+${ragSection(metrics.rag)}
 ${barTable('Theo đường xử lý', metrics.routes.map(item => ({ ...item, label: ROUTES[item.name] || item.name })), routeColumns)}
 <div class="grid">
 ${barTable('Lý do v2 chuyển sang vòng dự phòng', metrics.fallbackCodes)}
 ${barTable('Lỗi đánh giá câu trả lời hay gặp', metrics.failures)}
 ${barTable('Loại hợp đồng v2', metrics.contractKinds)}
 ${barTable('Thao tác', metrics.operations)}
+${barTable('Chỉ tiêu dùng trong câu tổng hợp v2', metrics.metrics)}
 ${barTable('Lần gọi mô hình theo bước', metrics.stages, [{ label: 'Token vào TB', format: item => number(item.inputTokens.mean) }])}
 ${barTable('Nhà cung cấp', metrics.providers)}
 </div>
@@ -105,7 +123,7 @@ if (require.main === module) (async () => {
   fs.writeFileSync(path.join(outDir, `pipeline-metrics-${stamp}.html`), render(metrics, { days }));
   console.log(JSON.stringify({ out: path.relative(root, path.join(outDir, `pipeline-metrics-${stamp}.html`)), total: metrics.overall.total,
     successRate: metrics.overall.successRate, v2: { deterministicShare: metrics.v2Era.deterministicShare, fallbackShare: metrics.v2Era.fallbackShare,
-      clarifyRate: metrics.v2Era.clarifyRate, modelCalls: metrics.v2Era.modelCalls, latencyMs: metrics.v2Era.latencyMs } }, null, 2));
+      clarifyRate: metrics.v2Era.clarifyRate, metricShare: metrics.v2Era.metricShare, modelCalls: metrics.v2Era.modelCalls, latencyMs: metrics.v2Era.latencyMs } }, null, 2));
 })().catch(error => { console.error('METRICS_FAILED', error.message); process.exitCode = 1; });
 
 module.exports = { render };

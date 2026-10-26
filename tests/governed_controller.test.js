@@ -1,7 +1,6 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-delete process.env.GOVERNED_CONTROLLER_MODE;
 const governance = require('../src/backend/governance/context');
 const core = require('../src/backend/intelligent_core/core');
 
@@ -194,9 +193,6 @@ test('default controller discovers and starts workflow through gateway without T
   const providers = require('../src/backend/services/ai_provider_manager'), automation = require('../src/backend/automation');
   const provider = { id: 'controller-model', name: 'Controller model', model: 'fixture', apiFormat: 'openai', baseUrl: 'http://127.0.0.1:9911', supportsToolCalling: true, contextWindow: 64000 };
   t.mock.method(providers, 'getProviderForExecution', () => provider); t.mock.method(providers, 'getActiveProvider', () => provider);
-  t.mock.method(require('../src/backend/automation/chat_router'), 'classifyFlow', () => { throw new Error('Legacy flow router must not run'); });
-  t.mock.method(require('../src/backend/automation/chat_router'), 'createRoutingContext', () => { throw new Error('Legacy router config must not be required'); });
-  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', () => { throw new Error('Legacy workflow dispatch must not run'); });
   t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'buildSchemaContext', async () => { throw new Error('Schema retrieval must be requested by the agent'); });
   t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));

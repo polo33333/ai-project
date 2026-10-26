@@ -19,8 +19,18 @@ const text = value => `N'${String(value).replaceAll("'", "''")}'`;
 const isoDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value)) && !Number.isNaN(Date.parse(value)) ? String(value) : null;
 const dmy = value => value.split('-').reverse().join('/');
 
+// A contract that measures only approved metrics of one table, and names no
+// root, is about that table. Metrics on several tables, a raw measure, or a
+// root the model did name are left as they are (null).
+function metricRoot(contract, catalog) {
+  if (contract.root || !contract.measures?.length) return null;
+  const tables = contract.measures.map(measure => measure.metric && catalogApi.metric(catalog, measure.metric)?.table);
+  if (tables.some(table => !table)) return null;
+  return new Set(tables.map(key)).size === 1 ? tables[0] : null;
+}
+
 function compile(contract, catalog, { question = '', previousQuestion = '', resultValues = new Set() } = {}) {
-  const root = catalogApi.table(catalog, contract.root);
+  const root = catalogApi.table(catalog, contract.root || metricRoot(contract, catalog));
   if (!root) throw fail('V2_ROOT_UNKNOWN', contract.root);
   const joins = [], joinAliases = new Map();
   const joinAlias = (parentAlias, relation) => {
@@ -182,23 +192,48 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
       select.push(`${expression} AS ${quote(alias)}`); groupBy.push(expression); outputs.push({ alias, kind: 'dimension', ...(group.grain ? { grain: group.grain } : {}) });
     }
     if (!contract.measures?.length) throw fail('V2_MEASURE_REQUIRED');
-    for (const measure of contract.measures) {
-      const aggregation = String(measure.aggregation || '').toUpperCase();
+    // An approved metric fixes the column, aggregation, name and conditions of
+    // a measure. A raw measure equal to an unconditioned metric is that metric.
+    const metrics = contract.measures.map(measure => {
+      if (!measure.metric) {
+        if (!measure.ref || !measure.aggregation) throw fail('V2_MEASURE_INVALID', 'a measure needs metric, or ref and aggregation');
+        const aggregation = String(measure.aggregation).toUpperCase(), column = measure.ref === '*' ? null : String(measure.ref).split('.').pop();
+        if (measure.distinct || String(measure.ref).includes('->') || (column && String(measure.ref).includes('.') && key(String(measure.ref).split('.')[0]) !== key(root.tableName))) return null;
+        return (catalog.metrics || []).find(item => !item.conditions.length && key(item.table) === key(root.tableName) && item.aggregation === aggregation
+          && (column ? key(item.column) === key(column) : aggregation === 'COUNT' && root.columns.get(key(item.column))?.pk)) || null;
+      }
+      const found = catalogApi.metric(catalog, measure.metric);
+      if (!found) throw fail('V2_METRIC_UNKNOWN', measure.metric);
+      if (key(found.table) !== key(root.tableName)) throw fail('V2_METRIC_ROOT', `${found.id} is on ${found.table}; use root=${found.table}`);
+      return found;
+    });
+    // Conditions shared by every measure filter the rows; otherwise each
+    // measure aggregates only its own rows (CASE inside the aggregate).
+    const conditionsOf = metric => require('../../governance/metrics').conditionSql({ conditions: metric?.conditions || [] }, 't0');
+    const shared = conditionsOf(metrics[0]).join(' AND ');
+    const inWhere = Boolean(shared) && metrics.every(metric => conditionsOf(metric).join(' AND ') === shared);
+    if (inWhere) where.push(...conditionsOf(metrics[0]));
+    for (const [index, measure] of contract.measures.entries()) {
+      const metric = metrics[index], conditions = inWhere ? [] : conditionsOf(metric);
+      const aggregation = String(metric?.aggregation || measure.aggregation || '').toUpperCase();
       if (!AGGREGATE_LABELS[aggregation]) throw fail('V2_AGGREGATION_INVALID', aggregation);
-      if (measure.ref === '*') {
+      if (metric?.conditions.length) scope.push(`${metric.label}: theo định nghĩa chỉ tiêu (${conditionsOf(metric).join(' AND ').replaceAll('t0.', '')})`);
+      const lineage = metric ? { metric: metric.id, metricVersion: metric.version, unit: metric.unit } : {};
+      if (!metric && measure.ref === '*') {
         if (aggregation !== 'COUNT') throw fail('V2_AGGREGATION_INVALID', `${aggregation}(*)`);
         const alias = label(measure.label && !/^[A-Za-z0-9_]+$/.test(measure.label) ? measure.label : 'Số bản ghi', root);
         select.push(`COUNT(*) AS ${quote(alias)}`); outputs.push({ alias, kind: 'measure', aggregation: 'COUNT' });
         continue;
       }
-      const ref = resolve(measure.ref);
+      const ref = resolve(metric ? `${root.tableName}.${metric.column}` : measure.ref);
       // Values of a lookup repeat for every root row: only MIN/MAX/COUNT DISTINCT are meaningful there.
       if (ref.viaLookup && !['MIN', 'MAX'].includes(aggregation) && !(aggregation === 'COUNT' && measure.distinct)) throw fail('V2_MEASURE_GRAIN', measure.ref);
       if (['SUM', 'AVG'].includes(aggregation) && !NUMERIC_TYPES.has(ref.column.type)) throw fail('V2_MEASURE_NOT_NUMERIC', measure.ref);
-      const named = measure.label && !/^[A-Za-z0-9_]+$/.test(measure.label) ? measure.label : null;
+      const named = metric ? metric.label : measure.label && !/^[A-Za-z0-9_]+$/.test(measure.label) ? measure.label : null;
       const alias = label(named || `${AGGREGATE_LABELS[aggregation]} ${ref.label}`, ref.entry);
-      select.push(`${aggregation}(${aggregation === 'COUNT' && measure.distinct ? 'DISTINCT ' : ''}${ref.expr}) AS ${quote(alias)}`);
-      outputs.push({ alias, kind: 'measure', aggregation, column: ref.column.name });
+      const value = conditions.length ? `CASE WHEN ${conditions.join(' AND ')} THEN ${ref.expr} END` : ref.expr;
+      select.push(`${aggregation}(${aggregation === 'COUNT' && measure.distinct ? 'DISTINCT ' : ''}${value}) AS ${quote(alias)}`);
+      outputs.push({ alias, kind: 'measure', aggregation, column: ref.column.name, ...lineage });
     }
   } else {
     // Default list: configured summary fields plus the business date and the
@@ -263,7 +298,8 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
   if (!joinCheck.valid) throw fail('V2_SELF_CHECK_JOIN', `${joinCheck.code} ${joinCheck.error}`);
   const singleUse = requestFilters.filter(item => joinPlan.tableRefs.filter(ref => key(ref.tableName) === key(item.table)).length === 1);
   if (!require('../harness/schema_scope').matchesScope(sql, singleUse)) throw fail('V2_SELF_CHECK_SCOPE');
-  return { sql, joinPlan, requestFilters, textFilters, exclusions, outputs, scope, operation, root: root.tableName, analysis: contract.analysis || 'none' };
+  const metrics = outputs.filter(item => item.metric).map(item => ({ id: item.metric, version: item.metricVersion }));
+  return { sql, joinPlan, requestFilters, textFilters, exclusions, outputs, scope, operation, root: root.tableName, analysis: contract.analysis || 'none', metrics };
 }
 
-module.exports = { compile };
+module.exports = { compile, metricRoot };

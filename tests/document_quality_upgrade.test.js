@@ -139,7 +139,7 @@ test('Qdrant structured payload embeds text and retains locators and source revi
   t.mock.method(qdrant, 'deleteDocumentChunks', async () => true);
   let inputs, points;
   t.mock.method(qdrant, 'embedTexts', async texts => { inputs = texts; return [[0.1, 0.2]]; });
-  t.mock.method(qdrant, 'request', async (_path, _method, body) => { points = body.points; return {}; });
+  t.mock.method(qdrant, 'request', async (_path, _method, body) => { if (body?.points) points = body.points; return {}; });
   const result = await qdrant.indexDocumentChunks({ id: 'doc', title: 'Policy' }, [{ text: 'Điều kiện', page: 2, section: 'Đăng ký', revision: 'r1', chunkId: 'doc:r1:0' }]);
   assert.equal(result.success, true);
   assert.deepEqual(inputs, ['Policy\nĐiều kiện']);

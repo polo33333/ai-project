@@ -121,7 +121,6 @@ class PluginRegistry {
     ensure(record.testedHash === hash(record.draft) && record.lastTest?.passed, 'Phải chạy fixture thành công trên draft hiện tại trước publish.');
     const placeholders = placeholderFixtures(record.draft);
     ensure(!placeholders.length, `Trường hợp chạy thử còn dùng giá trị giả: ${placeholders.join(', ')}. Hãy nhập dữ liệu thật đã đối chiếu trước khi phát hành.`);
-    await this.indexRoutingBundle(record.draft);
     return this.repository.put('catalog', { ...record, published: structuredClone(record.draft), publishedAt: new Date().toISOString(), publishedBy: context.accountId, versions: [...(record.versions || []), structuredClone(record.draft)] }, revision);
   }
   async enable(id, enabled, context, revision) {
@@ -161,7 +160,6 @@ class PluginRegistry {
     }
     await this.dependencies(bundle);
     const report = await this.testBundle(bundle); ensure(report.passed, 'Fixture overlay chưa đạt.');
-    await this.indexRoutingBundle(bundle);
     return this.repository.put('catalog', { ...record, overlays: { ...record.overlays, [scopeId]: { baseVersion: bundle.manifest.version, version: (record.overlays?.[scopeId]?.version || 0) + 1, published: structuredClone(bundle), publishedBy: context.accountId, test: report } } }, revision);
   }
   async match(question, context) {
@@ -180,17 +178,6 @@ class PluginRegistry {
     if (!candidates.length) return { status: 'no_match', candidates: [] };
     const close = candidates.filter(item => candidates[0].score - item.score < 0.15);
     return { status: close.length === 1 ? 'matched' : 'ambiguous', candidates: close.slice(0, 8), definition: close.length === 1 ? close[0].definition : null };
-  }
-  async indexRoutingBundle(bundle) {
-    const retrieval = require('./workflow_retrieval');
-    const config = retrieval.configuration();
-    if (config.mode === 'off') return;
-    ensure(bundle.templates.filter(item => item.enabled !== false).every(item => item.routingScope), 'Publish với retrieval cần routingScope cho mỗi nghiệp vụ đang bật.');
-    if (config.method === 'lexical') return;
-    const definitions = bundle.templates.filter(item => item.enabled !== false).map(item => ({ ...item,
-      id: `${bundle.manifest.id}/${item.id}`, packageVersion: bundle.manifest.version,
-      definitionHash: hash(item), domain: item.domain || bundle.manifest.domain || '' }));
-    await retrieval.service.sync(definitions, config, AbortSignal.timeout(config.timeoutMs));
   }
 }
 module.exports = { PluginRegistry, authorized, scope, normalize, requireAdmin };

@@ -53,9 +53,18 @@ function createState({ question, reply, evidence, scope, accountId = null, now =
     evidenceIds: citedEvidence.map(hit => hit.payload.chunkId || `${hit.payload.documentId}:${hit.payload.chunkIndex}`) };
 }
 
+const ORDINAL = /(?:(?:cai|muc|buoc|phan|dieu|tai lieu|tl|file|tep|van ban|vb)\s+thu\s+|cai\s+)(\d+|nhat|hai|ba|tu|nam)\b/;
+// The question leans on the previous document answer ("còn chức năng rác?", "phần đường ống thì sao").
+// Broader than resolve(): used only to keep retrieval inside the previous answer's documents.
+function isContextual(question) {
+  const normalized = normalize(question);
+  return Boolean(ORDINAL.test(normalized) || isPageCountQuestion(question) || hasContextReference(question)
+    || /^(?:con|the con|neu vay|vay thi|vay|tiep tuc)\b/.test(normalized) || /\bthi sao\s*\??\s*$/.test(normalized));
+}
+
 function resolve(question, { state, scope, documents, accountId = null, now = Date.now() }) {
   const normalized = normalize(question);
-  const ordinal = normalized.match(/(?:(?:cai|muc|buoc|phan|dieu|tai lieu|tl|file|tep|van ban|vb)\s+thu\s+|cai\s+)(\d+|nhat|hai|ba|tu|nam)\b/);
+  const ordinal = normalized.match(ORDINAL);
   const contextual = Boolean(ordinal || isPageCountQuestion(question) || hasContextReference(question)
     || /^(?:con|the con|neu vay|vay thi|tiep tuc)\b/.test(normalized));
   const result = { resolvedQuery: question, referencedEvidenceIds: [], ambiguities: [], resolutionMethod: 'original' };
@@ -97,4 +106,4 @@ function resolve(question, { state, scope, documents, accountId = null, now = Da
   return { ...result, resolvedQuery: `${question}\nNgữ cảnh tham chiếu: ${antecedent}`, resolutionMethod: 'deterministic' };
 }
 
-module.exports = { createState, resolve, scopeKey, isDocumentFollowup, isPageCountQuestion };
+module.exports = { createState, resolve, scopeKey, isContextual, isDocumentFollowup, isPageCountQuestion };

@@ -326,11 +326,12 @@ class QdrantService {
 
   async indexDocumentChunks(document, chunks) {
     if (!require('./embedding_policy').enabled()) return { success: true, skipped: true, mode: 'lexical', totalPoints: 0 };
+    // The new generation is written before the old one is removed, so a reindex
+    // never leaves the document without vectors; a failed write removes its own points.
+    const generation = require('crypto').randomUUID();
+    let collection = null;
     try {
-      const collection = await this.ensureDocumentCollection();
-      if (await this.deleteDocumentChunks(document.id) === false) {
-        throw new Error('Cannot replace document index: previous chunks could not be removed.');
-      }
+      collection = await this.ensureDocumentCollection();
       const vectors = [];
       for (let start = 0; start < chunks.length; start += 32) {
         vectors.push(...await this.embedTexts(chunks.slice(start, start + 32).map(chunk => `${document.title}\n${typeof chunk === 'string' ? chunk : chunk.text}`)));
@@ -338,13 +339,25 @@ class QdrantService {
       const points = chunks.map((chunk, index) => ({
         id: require('crypto').randomUUID(),
         vector: vectors[index],
-        payload: { ...(typeof chunk === 'string' ? {} : chunk), type: 'document_chunk', documentId: document.id, title: document.title, fileType: document.fileType, category: document.category, chunkIndex: index, fullText: typeof chunk === 'string' ? chunk : chunk.text }
+        payload: { ...(typeof chunk === 'string' ? {} : chunk), type: 'document_chunk', documentId: document.id, title: document.title, fileType: document.fileType, category: document.category, chunkIndex: index, fullText: typeof chunk === 'string' ? chunk : chunk.text, indexGeneration: generation }
       }));
       for (let start = 0; start < points.length; start += 100) {
         await this.request(`/collections/${collection}/points?wait=true`, 'PUT', { points: points.slice(start, start + 100) });
       }
+      try {
+        await this.request(`/collections/${collection}/points/delete?wait=true`, 'POST', { filter: {
+          must: [{ key: 'documentId', match: { value: document.id } }], must_not: [{ key: 'indexGeneration', match: { value: generation } }] } });
+      } catch (error) {
+        // Stale points of an older revision are filtered out at search time; same-revision repeats are deduplicated.
+        console.warn(`[Qdrant] Previous index of ${document.id} not removed: ${error.message}`);
+        return { success: true, totalPoints: points.length, staleCleanup: false };
+      }
       return { success: true, totalPoints: points.length };
     } catch (error) {
+      if (collection) {
+        await this.request(`/collections/${collection}/points/delete?wait=true`, 'POST', { filter: { must: [
+          { key: 'documentId', match: { value: document.id } }, { key: 'indexGeneration', match: { value: generation } }] } }).catch(() => {});
+      }
       return { success: false, error: error.message };
     }
   }
@@ -362,13 +375,16 @@ class QdrantService {
     }
   }
 
-  async searchDocuments(queryText, limit = 6, { documentIds = [] } = {}) {
-    if (!require('./embedding_policy').enabled()) return [];
+  // detailed: { results, status, errorCode } so callers can report a vector
+  // outage instead of silently answering from keywords alone.
+  async searchDocuments(queryText, limit = 6, { documentIds = [], detailed = false } = {}) {
+    const reply = (results, status = 'ok', errorCode = null) => detailed ? { results, status, errorCode } : results;
+    if (!require('./embedding_policy').enabled()) return reply([], 'disabled');
     try {
       const collection = process.env.QDRANT_DOCUMENT_COLLECTION || 'knowledge_documents';
       await this.request(`/collections/${collection}`);
       const [queryVector] = await this.embedTexts([queryText]);
-      if (!documentIds.length) return [];
+      if (!documentIds.length) return reply([]);
       const result = await this.request(`/collections/${collection}/points/search`, 'POST', {
         vector: queryVector, limit, with_payload: true,
         filter: { must: [
@@ -376,9 +392,10 @@ class QdrantService {
           { key: 'documentId', match: { any: [...new Set(documentIds.map(String))] } }
         ] }
       });
-      return result.result || [];
-    } catch (_) {
-      return [];
+      return reply(result.result || []);
+    } catch (error) {
+      console.warn(`[Qdrant] Document search degraded to keywords: ${error.message}`);
+      return reply([], 'degraded', error.code === 'EMBEDDING_UNAVAILABLE' ? error.code : 'DOCUMENT_SEARCH_FAILED');
     }
   }
 

@@ -11,7 +11,6 @@ test('explicit web search isolates internal resources, memory, history and tool 
   t.mock.method(require('../src/backend/services/ai_provider_manager'), 'getActiveProvider', () => provider);
   for (const method of ['getLegacyContext', 'getSession', 'getContext', 'getResolutionContext']) t.mock.method(memory, method, () => { throw new Error('Web must never read memory'); });
   t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'buildSchemaContext', () => { throw new Error('Web must never read schema'); });
-  t.mock.method(require('../src/backend/automation/orchestrator'), 'handle', () => { throw new Error('Web must never discover workflows'); });
   t.mock.method(require('../src/backend/services/web_search_service'), 'search', async query => {
     assert.equal(query, 'public question');
     assert.equal(governance.current().resources.size, 0);

@@ -116,7 +116,7 @@ async function finalizeAnswer(s) {
     // Same code with different flags guards JOINs differently; audits need both.
     trace.executionProfile = { governedController: Boolean(context.governedController),
       joinPlannerEnforced: process.env.SQL_JOIN_PLANNER_ENABLED === 'true',
-      controllerMode: process.env.GOVERNED_CONTROLLER_MODE || 'governed', maxRepairs: harness.maxRepairs };
+      controllerMode: 'governed', maxRepairs: harness.maxRepairs };
     emitProgress(onProgress, { type: 'request_completed', label: evaluation.valid ? 'Đã hoàn thành câu trả lời' : 'Yêu cầu chưa hoàn tất', status: evaluation.valid ? 'done' : 'warning', icon: 'check', durationMs: trace.durationMs });
     const citationEvidence = [...(context.citationEvidence || []), ...toolCalls.filter(call => call.success && call.toolName === 'search_knowledge_base')
       .flatMap(call => (call.result?.documents || []).map(document => ({ citationIndex: document.citationIndex, payload: {

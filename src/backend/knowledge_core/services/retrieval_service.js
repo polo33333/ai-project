@@ -5,7 +5,17 @@ const qdrantService = require('../../services/qdrant_service');
 const { estimateTokens } = require('../../agent_core/harness/context_budget');
 
 const normalize = require('../../utils/lexical_normalize');
-const tokenize = value => normalize(value).match(/[a-z0-9_]{2,}/g) || [];
+// Single digits stay searchable: "phase 4", "bước 2" and "mục 3" differ only by them.
+const tokenize = value => normalize(value).match(/[a-z0-9_]{2,}|[0-9]/g) || [];
+const textKey = value => normalize(value).replace(/[^a-z0-9]/g, '');
+
+// A chunk that only repeats its section heading carries nothing to answer from.
+function informative(payload = {}) {
+  const section = textKey(payload.section);
+  const body = String(payload.fullText || payload.text || '').split('\n')
+    .filter(line => !/^\s*#{1,6}\s/.test(line) && (!section || textKey(line) !== section)).join(' ');
+  return textKey(body).length >= 20;
+}
 
 function postJson(url, body, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
@@ -76,7 +86,8 @@ class RetrievalService {
   }
 
   graphRoute(query) {
-    return (process.env.GRAPHRAG_ENABLED || 'true') === 'true' && /(quan he|lien quan|phu thuoc|anh huong|ket noi|giua|chuoi|tong hop|toan canh|vi sao|nguyen nhan)/.test(normalize(query));
+    // Off unless enabled: on the golden set it lowered recall@1 and MRR (docs/RAG_REVIEW_261026.html).
+    return process.env.GRAPHRAG_ENABLED === 'true' && /(quan he|lien quan|phu thuoc|anh huong|ket noi|giua|chuoi|tong hop|toan canh|vi sao|nguyen nhan)/.test(normalize(query));
   }
 
   graphSearch(query, corpus, limit = 20) {
@@ -133,7 +144,7 @@ class RetrievalService {
       return ranked.slice(0, limit);
     } catch (error) {
       console.warn(`[Reranker] fallback to RRF: ${error.message}`);
-      return candidates.slice(0, limit);
+      return candidates.slice(0, limit).map(candidate => ({ ...candidate, rerankFallback: true }));
     }
   }
 
@@ -161,18 +172,33 @@ class RetrievalService {
     const candidateLimit = Math.max(limit, Number(process.env.RETRIEVAL_CANDIDATE_LIMIT || 30));
     const corpus = this.buildCorpus(scope.documentIds);
     const embeddingEnabled = require('../../services/embedding_policy').enabled();
-    const vectorResults = embeddingEnabled ? await qdrantService.searchDocuments(query, candidateLimit, { documentIds: scope.documentIds }) : [];
+    const vector = embeddingEnabled
+      ? await qdrantService.searchDocuments(query, candidateLimit, { documentIds: scope.documentIds, detailed: true })
+      : { results: [], status: 'disabled', errorCode: null };
     const allowed = new Set(scope.documentIds);
     const revisions = new Map(libraryService.getDocuments().map(document => [String(document.id), document.revision]));
-    const dense = vectorResults.filter(item => allowed.has(String(item.payload?.documentId))
+    const dense = (vector.results || []).filter(item => allowed.has(String(item.payload?.documentId))
       && (!revisions.get(String(item.payload?.documentId)) || revisions.get(String(item.payload?.documentId)) === item.payload?.revision))
       .map(item => ({ ...item, id: `${item.payload?.documentId}:${item.payload?.chunkIndex}`, source: 'dense' }));
     const graph = this.graphSearch(query, corpus, candidateLimit);
-    const fused = this.fuse([dense, this.bm25(query, corpus, candidateLimit), graph], candidateLimit);
+    // Heading-only chunks and verbatim repeats (the same API table on two pages) would take result slots.
+    const seen = new Set();
+    const fused = this.fuse([dense, this.bm25(query, corpus, candidateLimit), graph], candidateLimit).filter(item => {
+      const text = textKey(item.payload?.fullText || item.payload?.text);
+      if (!informative(item.payload) || seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    });
     const results = await this.rerank(query, fused, limit);
+    const degraded = vector.status === 'degraded';
     return { results, candidateIds: fused.map(item => String(item.id)),
-      mode: embeddingEnabled ? (graph.length ? 'hybrid_graph' : 'hybrid') : (graph.length ? 'lexical_graph' : 'lexical'), graphActivated: graph.length > 0, scope };
+      mode: embeddingEnabled && !degraded ? (graph.length ? 'hybrid_graph' : 'hybrid') : `lexical${graph.length ? '_graph' : ''}${degraded ? '_degraded' : ''}`,
+      graphActivated: graph.length > 0, scope,
+      vectorStatus: vector.status, ...(vector.errorCode ? { vectorErrorCode: vector.errorCode } : {}),
+      rerankFallback: results.some(hit => hit.rerankFallback === true) };
   }
 }
 
 module.exports = new RetrievalService();
+module.exports.informative = informative;
+module.exports.textKey = textKey;

@@ -37,11 +37,14 @@ async function extract(buffer, fileType) {
     const pages = [];
     const parsed = await pdfParse(buffer, { pagerender: async page => {
       const content = await page.getTextContent();
-      let lastY = null, text = '';
+      let lastY = null, lastEnd = null, text = '';
       for (const item of content.items) {
-        const y = item.transform[5];
-        text += (lastY === null || lastY === y ? ' ' : '\n') + item.str;
-        lastY = y;
+        const [a, b, , , x, y] = item.transform;
+        // Fonts split Vietnamese words around accented glyphs ("Tài li" + "ệ" + "u");
+        // pieces that touch on the same line belong to one word.
+        const touching = lastY === y && lastEnd !== null && x - lastEnd < 0.15 * (Math.hypot(a, b) || 10);
+        text += (lastY === null ? '' : lastY !== y ? '\n' : touching ? '' : ' ') + item.str;
+        lastY = y; lastEnd = x + (item.width || 0);
       }
       pages.push({ page: page.pageNumber, text: clean(text) });
       return text;
@@ -117,7 +120,20 @@ function chunks(parts, split, maxChars = 2200) {
     push();
     if (!result.some(chunk => chunk.parentIndex === parentIndex)) result.push({ text: prefix.trim(), ...locator, tableHeader: header });
   });
-  return result.map((chunk, chunkIndex) => ({ ...chunk, chunkIndex }));
+  // A heading with no body of its own ("3. Chuẩn bị hạ tầng" before "3.1 …") is read with what follows it.
+  const key = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+  const merged = [];
+  result.forEach((chunk, index) => {
+    const next = result[index + 1];
+    const body = chunk.text.split('\n').filter(line => !/^\s*#{1,6}\s/.test(line) && key(line) !== key(chunk.section)).join('');
+    if (!chunk.rowStart && !chunk.tableHeader && key(body).length < 20 && next && (next.page || null) === (chunk.page || null)
+      && chunk.text.length + next.text.length < maxChars) {
+      next.text = `${chunk.text}\n${next.text}`;
+      return;
+    }
+    merged.push(chunk);
+  });
+  return merged.map((chunk, chunkIndex) => ({ ...chunk, chunkIndex }));
 }
 
 module.exports = { extract, chunks, sections, wordPageInfo };
