@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [Trạng thái triển khai](#trạng-thái-triển-khai).
 
-README đối chiếu tổng thể với mã nguồn ngày **06/10/2026**; phần hiệu suất tải tab được cập nhật ngày **22/10/2026**. Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
+README đối chiếu tổng thể với mã nguồn ngày **26/10/2026** (phần hiệu suất tải tab đo ngày 22/10/2026). Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -20,41 +20,52 @@ README đối chiếu tổng thể với mã nguồn ngày **06/10/2026**; phầ
 
 ### AI và chat
 
-- Agentic loop: LLM có thể lựa chọn và gọi công cụ, nhận kết quả rồi tổng hợp câu trả lời.
+- Mọi provider (local và cloud) chạy qua một harness có quản trị (`guarded_agent_harness`): với `HARNESS_PIPELINE=v2`, câu hỏi đi qua luồng hợp đồng v2 trước (dữ liệu, quy trình, tài liệu, trò chuyện — xem [Harness dữ liệu v2](#harness-dữ-liệu-v2-và-khi-đổi-nguồn-sql)); câu v2 chưa xử lý được chuyển sang vòng agent gọi công cụ.
 - Adapter cho Ollama, OpenAI-compatible, Google Gemini và Anthropic.
 - Quản lý AI Provider: thêm, sửa, xóa, kích hoạt, lấy danh sách model và kiểm tra kết nối.
 - Persona, lịch sử hội thoại, audit log và model selector.
-- Công cụ tích hợp: kiểm tra/sửa/thực thi SQL, tìm schema/glossary/Qdrant, tính toán, biểu đồ và export.
-- Local Model Harness: kiểm tra tham số công cụ, phục hồi lỗi, tổng hợp kết quả và kiểm tra yêu cầu biểu đồ/export.
-- Provider bên thứ ba dùng guarded harness khi `AI_PROVIDER_GUARDS_ENABLED=true`: kiểm tra tool/SQL/kết quả, repair có giới hạn, context budget và deadline. Page chat, modal và embed dùng chung luồng backend.
+- Công cụ tích hợp: kiểm tra/sửa/thực thi SQL, tìm schema/glossary/tài liệu, tính toán, biểu đồ và export.
+- Guarded harness (`AI_PROVIDER_GUARDS_ENABLED=true`): kiểm tra tham số tool/SQL/kết quả, repair có giới hạn, context budget và deadline. Page chat, modal và embed dùng chung luồng backend. Local Model Harness và bộ định tuyến TEV1 riêng đã được gỡ.
 - Gate `SUCCESS/PARTIAL`: PARTIAL có thể hiển thị kèm trạng thái nhưng không vào memory thành công hoặc history SUCCESS gửi cho lượt tiếp theo. Memory do ứng dụng quản lý, không giao provider tự quyết định ghi nhớ.
 - Lịch sử giao diện page chat lưu riêng trong PostgreSQL theo account, có version chống ghi đè giữa thiết bị; localStorage chỉ giữ tùy chọn và ID phiên đang mở. Nhập lịch sử trình duyệt cũ cần xác nhận quyền sở hữu.
 - Che đường dẫn hệ thống trong câu trả lời của page/modal/embed; giữ link tải hợp lệ qua `/api/exports/...`.
-- `skill_core`: chọn contract `record_lookup` hoặc `aggregate_report` theo request plan; hỗ trợ few-shot tương thích với schema và được kiểm soát bằng feature flag.
+- `skill_core`: registry và editor skill (tab Skills), dùng trong catalog quy trình; luồng chat không còn gọi skill/few-shot từ đây sau khi gỡ Local Model Harness. Ví dụ hợp đồng đã duyệt cho v2 đến từ vòng học phản hồi (`npm run learn:build` / `learn:approve`).
 - Request budget dùng chung cho model call, SQL attempt và deadline; truyền abort signal xuống SQL connector.
 - Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
 - Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
 - Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
-- Workflow phase 1: catalog/plugin có phiên bản, template/slot, fixture/publish, run checkpoint/resume/cancel và file tải theo owner. Tab Quy trình tự động đã mở; tính năng mặc định tắt. Xem [hướng dẫn phase 1](docs/WORKFLOW_PHASE1_RUNBOOK.md).
+- Workflow phase 1: catalog/plugin có phiên bản, template/slot, fixture/publish, run checkpoint/resume/cancel và file tải theo owner. Tab Quy trình tự động đã mở; tính năng mặc định tắt.
+- Tệp đính kèm trong chat (PDF/DOCX/XLSX/CSV/TXT/MD và ảnh PNG/JPG/WEBP): ảnh và PDF quét được chép thành chữ bằng mô hình đọc được ảnh (Gemini hoặc Ollama có vision); nội dung chỉ dùng trong cuộc trò chuyện đó, không vào thư viện tài liệu. Bật bằng `CHAT_ATTACHMENT_PROCESSING_ENABLED`.
 - Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu PostgreSQL khi dùng backend `postgres`.
-- Memory Core v2 có pending turn, context budget, summary và semantic routing. Cấu hình mẫu bật pending turn, budget và summary; semantic routing vẫn mặc định tắt.
+- Memory Core v2 có pending turn, context budget và summary (cấu hình mẫu bật cả ba). Cờ `MEMORY_SEMANTIC_ROUTING_ENABLED` vẫn hiện trong Cài đặt nhưng không còn mã chạy dùng tới.
 
 ### Quy trình tự động và định tuyến chat
 
-- Chọn nhóm nghiệp vụ trước TEV1 bằng `hybrid` (Qdrant + BM25, gộp RRF) hoặc `lexical` (BM25 độc lập, không cần embedding/Qdrant cho routing). Chỉ tìm trong catalog được phép, giữ tác vụ chờ và nhóm cạnh tranh đã khai báo, kiểm tra ngân sách token/evaluation. Chat không tự lập chỉ mục workflow; dùng publish hoặc `npm run index:workflows`, kiểm tra sau restore bằng `npm run index:workflows -- --check`. Xem [hướng dẫn retrieval](docs/WORKFLOW_RETRIEVAL_RUNBOOK.md).
-
+- Không còn bộ định tuyến riêng: TEV1 và `CHAT_ROUTING_MODE` đã gỡ; chỉ mục `workflow_routing_v1` không còn được dùng (backup vẫn sao kèm collection này). Bộ điều phối có quản trị (`governance/controller.js`) đưa quy trình được phép vào cùng lần gọi lập hợp đồng v2 (mục `WORKFLOWS`); vòng agent dùng công cụ `list_workflows`/`run_workflow`. Backend vẫn kiểm tra quyền, input và trích dẫn từ câu hỏi trước khi chạy.
 - Tab **Quy trình tự động** quản lý catalog/plugin có phiên bản, mẫu câu hỏi và slot đầu vào; hỗ trợ sửa draft, validate, chạy fixture, publish, bật/tắt và rollback. Mẫu tham khảo tra cứu hợp đồng, nhân viên và báo cáo điện ở `docs/templates/` cần cấu hình nguồn thực tế.
 - Workflow đọc SQL có parameter, gọi API, đọc file Thư viện hoặc kế thừa kết quả bước trước; hỗ trợ mapping cột, transform/condition/assert/collect/delay, biểu đồ và export CSV/XLSX. API có thể ghi dữ liệu; tác vụ ghi bị gián đoạn chuyển `NEEDS_REVIEW`, không tự retry.
 - Run có owner, revision, checkpoint, thu thập input, resume/cancel và artifact có hạn tải. Chat chính và embed hỗ trợ form nghiệp vụ, bảng/biểu đồ và kết quả; embed không hiển thị Thinking/timeline xử lý.
-- `WORKFLOW_PLUGINS_ENABLED=false` trong cấu hình máy chủ chặn bật workflow từ UI. Để dùng, áp dụng migration 004, đổi flag thành `true`, khởi động lại, cấu hình nguồn rồi validate/test/publish mẫu. Xem [runbook](docs/WORKFLOW_PHASE1_RUNBOOK.md).
+- `WORKFLOW_PLUGINS_ENABLED=false` trong cấu hình máy chủ chặn bật workflow từ UI. Để dùng, áp dụng migration (`npm run db:migrate`), đổi flag thành `true`, khởi động lại, cấu hình nguồn rồi validate/test/publish mẫu. Soạn quy trình qua MCP: [WORKFLOW_AUTHORING_MCP.md](docs/WORKFLOW_AUTHORING_MCP.md), [WORKFLOW_HOSTED_MCP.md](docs/WORKFLOW_HOSTED_MCP.md).
 
-| `CHAT_ROUTING_MODE` | Hành vi |
-|---|---|
-| `auto` (cấu hình mẫu) | TEV1 quyết định trước; chuyển một lần sang model chat khi thiếu chắc chắn, lỗi hoặc vượt giới hạn |
-| `local_tev1` | Chỉ TEV1 quyết định routing; mơ hồ thì hỏi lại, lỗi thì báo lỗi, không tự đổi model |
-| `chat_model` | Model chat đã chọn quyết định; không gọi TEV1 |
+Model trả lời được ghim đầu request. Hỏi bổ sung khi thiếu input, giữ run đang chờ khi người dùng chuyển chủ đề; các bước dùng chung ngân sách lần gọi model và deadline.
 
-Model trả lời được ghim đầu request. TEV1 dùng API quyết định `/v1/systemone`, chỉ phân loại route/scope/input. Backend kiểm tra quyền, ID, evidence và input trước khi chạy; hỏi bổ sung khi thiếu slot, giữ run đang chờ khi người dùng chuyển chủ đề. Các stage dùng chung ngân sách call/deadline. Khi workflow tắt, thiếu session hoặc catalog rỗng, bỏ qua router nghiệp vụ. `CHAT_QUICK_GREETING_ENABLED=true` cho phép TEV1 trả lời nhanh lời chào ở `auto`/`local_tev1`. Xem [đặc tả routing](docs/CHAT_WORKFLOW_ROUTING_UX.md).
+### Hỏi đáp tài liệu (RAG) — cập nhật 26/10/2026
+
+Một dịch vụ RAG dùng chung (`src/backend/knowledge_core/rag/`) cho đường v2, công cụ `search_knowledge_base` của vòng agent và tài liệu nguồn chọn trong khung chat:
+
+1. **Hiểu câu hỏi** (`query.js`, không gọi model): bỏ tiền tố lệnh ("kho tri thức:", "tìm trong…"); tên tệp trong câu → chỉ tìm trong tài liệu đó; câu hỏi tiếp ("còn…", "phần … thì sao", "tài liệu trên…") → tìm trong tài liệu của câu trả lời trước. v2 còn nhận `documentQuery` do model viết lại trong cùng lần lập hợp đồng.
+2. **Truy hồi**: BGE-M3/Qdrant + BM25 (giữ cả chữ số đơn), gộp RRF; bỏ đoạn chỉ có tiêu đề và đoạn trùng; lọc theo quyền đọc và phiên bản. Mất Qdrant/embedding thì chuyển sang chỉ từ khóa và ghi chế độ `lexical_degraded`. GraphRAG (quy tắc từ khóa) **mặc định tắt** vì làm giảm thứ hạng trên bộ đo.
+3. **Đóng gói**: ngân sách `AI_DOCUMENT_CONTEXT_TOKENS` chung cho mọi đường; đoạn ngắn được ghép đoạn kề cùng mục.
+4. **Trả lời**: bắt buộc trích dẫn `[n]`; trích dẫn gộp kiểu `[1, 3]` được tách thành `[1][3]`.
+5. **Kiểm chứng** (`verify.js`): số, ngày, mã, liên kết trong câu có trích dẫn phải có trong đoạn được trích; hiện chỉ ghi nhận (`citationValidation.unsupportedClaims`), chưa chặn câu trả lời.
+
+**Định tuyến tài liệu / dữ liệu / trò chuyện** (`signal.js`): một tín hiệu tài liệu tất định (một lần nhúng trên máy) — mạnh khi câu có tên tệp, có cụm "theo tài liệu / kho tri thức", hoặc điểm khớp ≥ `RAG_ROUTING_MIN_SCORE` (mặc định 0,6). Bộ lọc từ khóa xếp câu vào trò chuyện mà tín hiệu mạnh → trả lời từ tài liệu, không qua bước lập hợp đồng; model chọn `chat` mà tín hiệu mạnh → trả lời từ tài liệu; model chọn `data` thì **không bao giờ** bị đổi. Lời nhắc lập hợp đồng có mục `LIBRARY` (tên và một dòng mô tả các tài liệu model được phép nhận).
+
+**Quyền gửi tài liệu cho model**: mỗi tài liệu có `governedPolicy` (độ nhạy, model được nhận). Tài liệu không được gửi cho model đang dùng thì nội dung không rời máy; nếu đó là tài liệu khớp nhất, người dùng nhận thông báo "tài liệu có nhưng chưa được phép gửi cho mô hình này" (không gọi model, trạng thái `DOCUMENT_NOT_PERMITTED`; tài liệu `restricted` không bị nêu tên).
+
+**Nạp tài liệu**: bộ cắt đoạn `structured-v2` — PDF ghép các mảnh chữ bị tách quanh ký tự có dấu, tiêu đề không có nội dung được gộp vào đoạn sau. Thay chỉ mục theo thế hệ: ghi bản mới rồi mới xóa bản cũ. Đổi bộ cắt đoạn cần lập chỉ mục lại (`library.reindexAll()` xếp hàng `document.ingest`, máy chủ đang chạy xử lý). PDF scan vẫn cần OCR; ảnh trong tệp Word chưa được đọc.
+
+Đo: `npm run eval:retrieval` (recall@k/MRR theo chế độ, `--rechunk` mô phỏng lập chỉ mục lại) và `npm run eval:routing` (đường đi của câu hỏi, quét ngưỡng). Số liệu và kế hoạch: [docs/RAG_REVIEW_261026.html](docs/RAG_REVIEW_261026.html).
 
 ### API và quản trị
 
@@ -66,7 +77,8 @@ Model trả lời được ghim đầu request. TEV1 dùng API quyết định `
 - Library hỗ trợ upload, parse PDF/DOCX/XLSX/CSV/TXT/SQL/Markdown, chunk, index, preview và xóa tài liệu.
 - Watch Folder theo dõi filesystem thật, quét file ban đầu, chống trùng bằng `sourcePath` + SHA-256 và cập nhật lại document khi file đổi.
 - UI Chat hiển thị mode retrieval, RRF/reranker, số chunk và nguồn tài liệu.
-- Câu trả lời theo tài liệu có marker `[1]`, `[2]` dùng chung cho local model và provider bên thứ ba. Khối “Đoạn nguồn theo trích dẫn” mặc định thu gọn và cho phép mở đoạn nguồn để đối chiếu; đây là kiểm tra marker với context, chưa phải xác minh ngữ nghĩa toàn bộ câu trả lời.
+- Câu trả lời theo tài liệu có marker `[1]`, `[2]` dùng chung cho mọi provider. Khối “Đoạn nguồn theo trích dẫn” mặc định thu gọn và cho phép mở đoạn nguồn để đối chiếu. Kiểm tra số/ngày/mã trong câu so với đoạn được trích đang ở chế độ ghi nhận, chưa phải xác minh ngữ nghĩa toàn bộ câu trả lời.
+- Quyền theo từng tài liệu (`governedPolicy`): ai được đọc, độ nhạy và model nào được nhận nội dung.
 - Dashboard và trang Analytics hiển thị trạng thái chờ trong khi tải dữ liệu biểu đồ, gồm tần suất gọi AI, đánh giá, bản đồ nhiệt và tỷ trọng provider.
 - MCP client kết nối server qua stdio, Streamable HTTP hoặc SSE; có handshake, discovery tools/resources và thực thi tool qua Agent Core/registry.
 - Embed Chat hiển thị bảng Markdown, biểu đồ, link xuất file; hỗ trợ `data-theme="auto|light|dark"` và preview theo Embed ID từ trang quản trị.
@@ -105,29 +117,31 @@ Script ghi thời gian, kích thước và kết quả đối chiếu vào `arti
 | Data Dictionary/Glossary | Khả dụng | Có lưu trữ và đồng bộ Qdrant |
 | Text-to-SQL | Khả dụng có giới hạn | Cần dùng SQL account read-only ở môi trường thật |
 | AI Provider adapters | Khả dụng | Luồng chat ghim provider/model đầu request; không tự chuyển provider khi lỗi |
-| Intelligent Core/tools | Khả dụng | Single-agent tool-calling loop |
+| Intelligent Core/tools | Khả dụng | Guarded harness cho mọi provider; luồng hợp đồng v2 trước, vòng agent gọi công cụ làm dự phòng |
+| Harness dữ liệu v2 | Đã triển khai (`HARNESS_PIPELINE=v2`) | Một lần gọi model lập hợp đồng; SQL do code biên dịch; chỉ tiêu nghiệp vụ đã duyệt (`npm run metrics:seed`) và ví dụ hợp đồng học từ phản hồi |
 | Qdrant schema search | Khả dụng khi có Qdrant/BGE-M3 | Collection schema v2 dùng embedding thật 1024 chiều; fallback deterministic mặc định tắt |
 | Dictionary identity | Đã triển khai | Phân biệt nguồn kết nối, database, schema, table và column; backup migration nằm trong `data/backup/` |
-| Local skill/few-shot | Đã triển khai, có feature flag | Hai skill nền đã nối vào Local Harness; cần semantic eval trước khi chọn cấu hình mặc định cho môi trường khác |
+| Skill registry | Còn trong tab Skills/catalog quy trình | Local Model Harness đã gỡ nên luồng chat không còn dùng skill/few-shot |
 | Semantic SQL eval | Runner offline khả dụng | Logic chấm điểm ở `scripts/eval/`; corpus hiện có 12 case, live baseline phụ thuộc data source eval phù hợp |
-| Library | Khả dụng ở mức MVP | Upload/parse/chunk/index thật; chống upload trùng nội dung bằng SHA-256 |
+| Library | Khả dụng ở mức MVP | Upload/parse/chunk/index thật; bộ cắt đoạn `structured-v2`; chống upload trùng nội dung bằng SHA-256; quyền đọc/gửi model theo từng tài liệu; chưa có OCR |
 | Watch Folder | Khả dụng ở mức MVP | Theo dõi filesystem, debounce, retry và cập nhật idempotent theo file nguồn |
 | MCP Sources | Đã triển khai kết nối thật | SDK MCP, handshake/discovery/execution; cần khai báo server riêng, test stdio không chứng minh mọi server bên ngoài tương thích |
 | Embed Chat | Đã triển khai | Endpoint JSON, domain allowlist, giới hạn theo cấu hình; admin preview bỏ kiểm tra domain |
 | Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
-| Memory Core v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary; semantic routing mặc định tắt |
+| Memory Core v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary |
 | Workflow Automation | Đã triển khai, mặc định tắt | Editor mẫu, SQL/API/file/bước trước, mapping, biểu đồ/export và checkpoint; cần cấu hình nguồn và publish |
-| Chat/workflow routing | Đã triển khai | Ba mode auto/local_tev1/chat_model; kiểm tra scope/evidence/input trước khi chạy |
+| Chat/workflow routing | Đã triển khai | Bộ điều phối có quản trị; quy trình chọn trong hợp đồng v2 hoặc qua công cụ; TEV1 đã gỡ |
+| Định tuyến tài liệu/dữ liệu/trò chuyện | Đã triển khai | Tín hiệu tài liệu + mục `LIBRARY`; đo bằng `npm run eval:routing` (bộ câu nháp) |
 | Web search | Đã triển khai | Endpoint cấu hình qua `WEB_SEARCH_ENDPOINT`; phụ thuộc mạng và chất lượng nguồn |
 | HTTPS/PWA | Đã triển khai | Certificate PEM, manifest và service worker frontend |
-| PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–004; hỗ trợ nhập/đối soát JSON khi cutover, runtime không tự fallback về JSON |
+| PostgreSQL app storage | Đã cutover | Schema `app`, migration 001–009; hỗ trợ nhập/đối soát JSON khi cutover, runtime không tự fallback về JSON |
 | Document outbox | Đã triển khai | PostgreSQL jobs, retry, lease và recovery; tác động file/Qdrant vẫn cần reconciliation |
 | Redis/BullMQ | Chưa triển khai | Outbox hiện chạy trong Node.js, chưa có worker service riêng |
 | Page chat history | Đã triển khai | Bảng `app.ui_chat_sessions`, owner account, mã hóa và kiểm tra version |
 | Tải dữ liệu theo tab | Đã tối ưu | View được tải lười theo tab; request đang chạy được dùng chung; dữ liệu tab có cache ngắn hạn và tự tải lại khi hết hạn; thao tác thay đổi dữ liệu cập nhật trực tiếp |
-| Document Hybrid Search | Đã triển khai, phụ thuộc dịch vụ | BGE-M3 dense + BM25 + RRF; khi BGE-M3 lỗi vẫn tra cứu BM25 nhưng chất lượng semantic giảm |
-| BGE Reranker | Sẵn sàng tích hợp | Bật bằng `RERANKER_ENABLED=true` khi reranker HTTP hoạt động |
-| GraphRAG | Bản router/graph retrieval nền tảng | Chỉ kích hoạt cho câu hỏi quan hệ; chưa có persistent knowledge graph/community summary |
+| Document RAG | Đã triển khai, phụ thuộc dịch vụ | Dịch vụ `knowledge_core/rag` dùng chung; BGE-M3 + BM25 + RRF; khi mất vector ghi `lexical_degraded`. Bộ đo nháp 26/10: recall@5 100%, MRR 94,6% |
+| BGE Reranker | Sẵn sàng tích hợp, chưa đo | Bật bằng `RERANKER_ENABLED=true` khi reranker HTTP hoạt động |
+| GraphRAG | Mặc định tắt | Quy tắc từ khóa; làm giảm thứ hạng trên bộ đo; chưa có knowledge graph lưu trữ |
 
 ## Yêu cầu hệ thống
 
@@ -181,7 +195,8 @@ QDRANT_VECTOR_SIZE=1024
 QDRANT_DOCUMENT_COLLECTION=knowledge_documents_bge_m3_v1
 QDRANT_DOCUMENT_VECTOR_SIZE=1024
 
-# Document embedding
+# Document embedding: mẫu để false (chỉ tìm từ khóa, không cần Qdrant/embedding); đặt true khi có Qdrant + BGE-M3
+EMBEDDING_ENABLED=false
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_BASE_URL=http://127.0.0.1:11434
 EMBEDDING_MODEL=bge-m3
@@ -196,24 +211,23 @@ AI_DOCUMENT_CONTEXT_TOKENS=3000
 RERANKER_ENABLED=false
 RERANKER_BASE_URL=http://127.0.0.1:8081
 RERANKER_MODEL=bge-reranker-v2-m3
-GRAPHRAG_ENABLED=true
+GRAPHRAG_ENABLED=false
+# Điểm khớp từ đó câu hỏi được coi là hỏi tài liệu (chọn bằng npm run eval:routing)
+RAG_ROUTING_MIN_SCORE=0.6
 
 # Bật đúng một lần sau khi đổi model/collection, rồi chuyển lại false
 KNOWLEDGE_REINDEX_ON_START=false
 
 # Intelligent Core
-AI_MAX_TOOL_ITERATIONS=5
 AI_DEFAULT_TIMEOUT_MS=30000
-LOCAL_MODEL_HARNESS_ENABLED=true
-LOCAL_MODEL_SKILL_CORE_ENABLED=true
-LOCAL_MODEL_FEW_SHOT_ENABLED=true
-LOCAL_MODEL_MAX_ITERATIONS=7
 LOCAL_MODEL_MAX_MODEL_CALLS=12
 LOCAL_MODEL_MAX_SQL_CALLS=3
 AI_PROVIDER_GUARDS_ENABLED=true
 AI_PROVIDER_MAX_REPAIRS=2
-# v2 = luồng dữ liệu hợp đồng trước (xem "Harness dữ liệu v2"); bỏ trống = vòng agent cũ
+# v2 = luồng hợp đồng trước (xem "Harness dữ liệu v2"); bỏ trống = chỉ vòng agent
 HARNESS_PIPELINE=v2
+CHAT_ANSWER_STREAMING_ENABLED=true
+CHAT_ATTACHMENT_PROCESSING_ENABLED=true
 
 # SQL relationship và join enrichment
 SQL_RELATIONSHIP_DISCOVERY_ENABLED=false
@@ -226,19 +240,13 @@ MAX_CHAT_HISTORY=5000
 MEMORY_PENDING_TURN_ENABLED=true
 MEMORY_CONTEXT_BUDGET_ENABLED=true
 MEMORY_SUMMARY_ENABLED=true
-MEMORY_SEMANTIC_ROUTING_ENABLED=false
 # Hạn mức phiên áp theo từng tài khoản trước, tổng hệ thống chỉ là chặn dự phòng
 AI_MEMORY_MAX_SESSIONS_PER_ACCOUNT=200
 AI_MEMORY_MAX_SESSIONS=5000
 # Nhật ký lượt (mọi lượt kể cả PARTIAL, hợp đồng v2, 20 dòng kết quả đầu) dùng cho hỏi nối tiếp/tham chiếu dòng
 AI_MEMORY_MAX_TURNS=20
 
-# Chat/workflow routing
-CHAT_ROUTING_MODE=auto
-CHAT_QUICK_GREETING_ENABLED=true
-CHAT_ROUTING_LOCAL_MODEL=tev1:4b
-CHAT_ROUTING_LOCAL_BASE_URL=http://127.0.0.1:11434
-CHAT_ROUTING_TIMEOUT_MS=60000
+# Workflow
 WORKFLOW_PLUGINS_ENABLED=false
 WORKFLOW_API_ALLOWED_ORIGINS=
 
@@ -383,13 +391,17 @@ Node.js HTTP Server
   |-- REST router
   |-- Intelligent Core
   |     |-- Provider adapters
+  |     |-- Governed harness
+  |     |     |-- Contract pipeline v2 (data / workflow / document / chat)
+  |     |     `-- Agent tool loop (fallback)
   |     |-- Tool registry
-  |     `-- Hybrid retrieval router
+  |     `-- Document RAG service (knowledge_core/rag)
+  |           |-- Question understanding + document signal
   |           |-- BGE-M3 dense search --> Qdrant
   |           |-- BM25 keyword search
-  |           |-- RRF fusion
-  |           |-- Optional BGE reranker
-  |           `-- Graph co-occurrence branch
+  |           |-- RRF fusion, optional BGE reranker
+  |           |-- Token-budget packing
+  |           `-- Citation + claim check
   |-- Library/Watch Folder ---------> Local files + extracted text
   |-- SQL Server Connector ------> Microsoft SQL Server
   |-- Qdrant Service ------------> Qdrant
@@ -407,7 +419,7 @@ Bật bằng `HARNESS_PIPELINE=v2` (cần restart). Mã nguồn ở `src/backend
 4. Bộ biên dịch sinh T-SQL: JOIN chỉ theo quan hệ nhiều-một đã xác minh (không thể nhân bản dòng), kỳ thời gian là khoảng nửa mở, khóa ngoại hiển thị bằng cột hiển thị theo vai trò. SQL phải qua JOIN validator và bộ kiểm tra bộ lọc dùng chung trước khi chạy.
 5. Câu trả lời, biểu đồ và file xuất dựng bằng code từ chính các dòng kết quả. Kết quả rỗng do sai chữ (ví dụ "Phòng Kỹ thuật" so với "Kỹ thuật") được dò lại trong cột; nhiều ứng viên thì hỏi lại người dùng.
 
-Câu hội thoại/tài liệu, workflow đang chờ input, xuất mỗi nhóm một file, hoặc hợp đồng vẫn sai sau một lần sửa sẽ chuyển sang vòng agent cũ (`guarded_agent_harness`).
+Cùng lần gọi lập hợp đồng còn phân loại câu hỏi: `data`, `workflow`/`resume`, `previous` (trả lời từ dòng đã hiển thị), `document` (qua dịch vụ RAG), `chat` hoặc `clarify`. Trước lần gọi này, bộ lọc từ khóa của `search_schema` đẩy câu không giống câu dữ liệu sang trò chuyện — trừ khi tín hiệu tài liệu mạnh thì trả lời từ tài liệu (xem [Hỏi đáp tài liệu](#hỏi-đáp-tài-liệu-rag--cập-nhật-26102026)). Xuất mỗi nhóm một file, hoặc hợp đồng vẫn sai sau một lần sửa sẽ chuyển sang vòng agent (`guarded_agent_harness`).
 
 **Không có tên bảng/cột của một database cụ thể trong code.** Mọi thứ lấy từ Từ điển dữ liệu của nguồn đang chọn; đổi nguồn giữa cuộc chat thì hợp đồng của câu trước không được dùng lại. Chất lượng câu trả lời phụ thuộc metadata. Khi thêm hoặc đổi nguồn SQL:
 
@@ -424,11 +436,17 @@ Giới hạn: chỉ hỗ trợ **SQL Server** (driver `tedious`, bộ biên dị
 Đo chất lượng trên model và dữ liệu thật (SQL chỉ đọc, mỗi ca một phiên chat `eval-…`):
 
 ```powershell
-$env:HARNESS_PIPELINE='v2'; node scripts/eval/live_harness_eval.js --label v2
-$env:HARNESS_PIPELINE='v1'; node scripts/eval/live_harness_eval.js --label v1
+$env:HARNESS_PIPELINE='v2'; npm run eval:live -- --label v2 --provider <providerId>
+$env:HARNESS_PIPELINE='v2'; npm run eval:live -- --label docs --provider <providerId> --only <id1,id2>
 ```
 
-Bộ câu hỏi và đáp án ở `tests/fixtures/live_eval_cases.json` viết cho dữ liệu IPMS; nguồn khác cần bộ ca và đáp án riêng (đáp án lấy bằng SQL viết tay, không lấy từ câu trả lời của model). Kết quả lưu ở `artifacts/live-eval/`. Script đọc `.env`, nên phải đặt `HARNESS_PIPELINE` rõ ràng khi so sánh hai luồng.
+Bộ câu hỏi và đáp án ở `tests/fixtures/live_eval_cases.json` (74 câu) viết cho dữ liệu IPMS và 4 tài liệu thư viện hiện có; gồm nhóm `document` (10 câu) và `routing` (8 câu). Nguồn khác cần bộ ca và đáp án riêng (đáp án lấy bằng SQL viết tay, không lấy từ câu trả lời của model). Kết quả lưu ở `artifacts/live-eval/`. Mỗi lần chạy gọi model thật và tốn chi phí: chỉ chạy nhóm cần đo. Câu tài liệu trả lời "tài liệu không đề cập" thường là do tài liệu chưa được phép gửi cho model đó — kiểm tra quyền tài liệu trước. Thêm câu từ hội thoại thật: `npm run eval:golden:build` rồi `eval:golden:promote`.
+
+Chỉ số vận hành từ nhật ký chat (đường xử lý, v2 trả lời trọn/dự phòng, chỉ tiêu, mục RAG và định tuyến) — chỉ đọc, ghi HTML/JSON vào `output/pipeline-metrics/`:
+
+```powershell
+npm run report:pipeline -- --days 30
+```
 
 Backend dùng `node:http` hoặc `node:https` khi cấu hình TLS, chưa dùng Fastify. Dữ liệu ứng dụng lưu PostgreSQL qua `storage.run/flush` bất đồng bộ; service thao tác view riêng từng operation. Commit hợp nhất thay đổi theo record trong transaction ngắn. HTTP success/cookie và SSE final chỉ gửi sau commit; progress SSE vẫn truyền khi xử lý. File tài liệu/export ở filesystem, dữ liệu nghiệp vụ ở SQL Server, vector ở Qdrant. Redis/BullMQ và parser/embedding Python service vẫn là định hướng.
 
@@ -447,13 +465,19 @@ Backend dùng `node:http` hoặc `node:https` khi cấu hình TLS, chưa dùng F
 |   |   `-- embed/                    # Embed chat widget
 |   `-- backend/
 |       |-- routes/router.js          # REST và static-file router
-|       |-- intelligent_core/         # Agent loop, tools, adapters, guardrails
-|       |-- agent_core/               # Local Harness, tools và workflow engine
-|       |-- automation/               # Catalog, template, routing TEV1, runtime và nguồn dữ liệu
-|       |-- skill_core/               # Skill registry, selector và few-shot theo schema
-|       |-- memory_core/              # Memory router, references và quality gate
-|       |-- training_core/            # Case collection, evaluation và đề xuất
-|       |-- knowledge_core/           # Library, Watch Folder và hybrid retrieval
+|       |-- intelligent_core/         # Điểm vào chat (core.js), tool registry, adapters, guardrails
+|       |-- agent_core/
+|       |   |-- harness/              # Guarded harness, completion policy, budget
+|       |   |-- pipeline/             # Luồng hợp đồng v2: catalog, compiler, câu trả lời tài liệu/trò chuyện
+|       |   |-- tools/                # Công cụ cho vòng agent
+|       |   `-- workflows/            # Workflow engine
+|       |-- governance/               # Bộ điều phối, quyền tài nguyên/gửi model, chỉ tiêu, SQL policy
+|       |-- automation/               # Catalog quy trình, template, runtime, nguồn dữ liệu, MCP soạn quy trình
+|       |-- skill_core/               # Skill registry cho tab Skills
+|       |-- memory_core/              # Memory, tham chiếu, trạng thái hội thoại tài liệu
+|       |-- training_core/            # Đánh giá, chỉ số đường xử lý, vòng học từ phản hồi
+|       |-- knowledge_core/           # Library, Watch Folder, cắt đoạn, truy hồi
+|       |   `-- rag/                  # Dịch vụ RAG: hiểu câu hỏi, tín hiệu, đóng gói, kiểm chứng
 |       |-- services/                 # SQL, Qdrant, provider, auth, logs...
 |       |-- storage/                  # Async operation scope, PostgreSQL repository/outbox
 |       `-- utils/storage_helper.js   # Chuyển loadJson/saveJson sang storage theo backend
@@ -462,7 +486,8 @@ Backend dùng `node:http` hoặc `node:https` khi cấu hình TLS, chưa dùng F
 |-- data/                             # File tài liệu/export và JSON legacy giữ làm bản sao
 |   `-- backup/                       # Backup migration cục bộ, không dùng ở runtime
 |-- scripts/
-|   `-- eval/                         # Semantic evaluator và logic benchmark
+|   `-- eval/                         # Live eval, golden candidates, chấm điểm truy hồi
+|-- tests/fixtures/                   # Bộ câu chuẩn: live eval, truy hồi, định tuyến, chọn schema
 |-- docs/                             # Master plan và implementation plans
 |-- .agents/                          # Quy tắc dành cho coding agents
 |-- package.json
@@ -536,16 +561,15 @@ node --require ./tests/helpers/setup_isolated_data.js --test tests/analytics.tes
 
 Các kiểm thử bao gồm phạm vi kho dữ liệu, quyền đọc audit, giải mã token đúng vị trí, tải JSON theo yêu cầu và tải song song các phần độc lập. Script đo trên dữ liệu thật ở mục hiệu suất phía trên là bước đối chiếu bổ sung; không thay thế toàn bộ bộ kiểm thử.
 
-Kết quả được ghi nhận trong [tài liệu routing](docs/CHAT_WORKFLOW_ROUTING_UX.md) ngày **04/10/2026**: **436 test đạt, 11 test bỏ qua, không có lỗi**; bộ thử routing với catalog PostgreSQL, TEV1 và Gemini đạt **8/8**. Đây là kết quả đã ghi nhận, chưa chạy lại trong lần cập nhật README này. Unit test sử dụng fixture/mock, không thay thế nghiệm thu SQL nghiệp vụ, retrieval hoặc provider thật. Test PostgreSQL cần credentials bootstrap và database test riêng.
+Lần chạy ngày **26/10/2026**: `npm test` **1.079 đạt, 14 bỏ qua, không có lỗi** (1.093 test). Nhóm `document` + `routing` của live eval trên Google Gemini đạt **18/18** sau khi cấp quyền tài liệu. Unit test sử dụng fixture/mock, không thay thế nghiệm thu SQL nghiệp vụ, retrieval hoặc provider thật. Test PostgreSQL cần credentials bootstrap và database test riêng:
 
 ```powershell
 npm run test:storage
-npm run eval:provider
 ```
 
 Đã đo thời gian snapshot từng tab trên dữ liệu hiện tại; số liệu này chưa phải thời gian tải trang end-to-end hoặc p95 tải lớn.
 
-Project có tests cho Local Harness, Memory Core, Training Core, `skill_core`, semantic evaluator, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context, export và retrieval. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
+Project có tests cho guarded harness, luồng v2, Memory Core, Training Core, RAG và định tuyến tài liệu, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context và export. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
 
 ```powershell
 npm test
@@ -556,10 +580,17 @@ Các script bổ sung:
 ```powershell
 npm run eval:local                    # smoke eval protocol/format
 npm run eval:workflows                # regression workflow/template/runtime
-npm run eval:routing                  # TEV1 thật, không thực thi SQL/workflow
+npm run eval:retrieval                # recall@k/MRR truy hồi tài liệu theo chế độ (chỉ đọc, chỉ gọi model nhúng)
+npm run eval:routing                  # câu hỏi tới tài liệu/dữ liệu/trò chuyện, quét ngưỡng (không gọi model trả lời)
+npm run eval:schema                   # chọn bảng đúng cho câu hỏi dữ liệu
+npm run eval:live                     # model + dữ liệu thật (tốn chi phí, dùng --only)
+npm run eval:governed:replay          # phát lại lượt đã ghi qua harness có quản trị
+npm run eval:golden:build             # ứng viên câu chuẩn từ hội thoại thật (rồi eval:golden:promote)
+npm run learn:build                   # bản nháp học từ phản hồi (rồi learn:approve)
+npm run metrics:seed                  # xem trước chỉ tiêu nghiệp vụ (--apply để ghi kho ứng dụng)
+npm run report:pipeline               # chỉ số đường xử lý từ nhật ký chat
 npm run eval:local:semantic           # validate corpus semantic offline
 npm run eval:local:semantic:live      # chạy model + SQL source eval riêng
-npm run eval:retrieval                # Recall@K/MRR retrieval
 npm run migrate:dictionary-identity   # migration identity + backup
 npm run sanitize:chat-data            # loại secret khỏi lịch sử chat đã lưu
 npm run training:collect
@@ -587,11 +618,16 @@ if ($failed.Count -gt 0) {
 }
 ```
 
-Retrieval mới chạy theo `BGE-M3/Qdrant + BM25 -> RRF -> BGE reranker (tùy chọn)`. Câu hỏi quan hệ được router bổ sung nhánh graph co-occurrence. Để chạy đánh giá Recall@K và MRR, sao chép/chỉnh `tests/fixtures/retrieval_golden.sample.json`, điền `documentId` thật rồi chạy:
+Truy hồi tài liệu chạy theo `hiểu câu hỏi -> BGE-M3/Qdrant + BM25 -> RRF -> BGE reranker (tùy chọn) -> đóng gói`. Bộ câu chuẩn `tests/fixtures/retrieval_golden.json` (65 câu, bản nháp chờ duyệt) xác định đoạn đúng bằng cụm bằng chứng, nên không vỡ khi cắt đoạn lại; `tests/fixtures/routing_golden.json` (64 câu) cho định tuyến. Báo cáo ghi vào `data/eval/`:
 
 ```powershell
-npm run eval:retrieval -- tests/fixtures/retrieval_golden.sample.json 5
+npm run eval:retrieval                                        # mọi chế độ: hybrid, lexical, v2_tool, pipeline...
+npm run eval:retrieval -- --baseline data/eval/retrieval/<cu>.json   # so với lần đo trước
+npm run eval:retrieval -- --rechunk                           # mô phỏng lập chỉ mục lại với bộ cắt đoạn hiện tại
+npm run eval:routing                                          # đường đi của câu hỏi + quét ngưỡng RAG_ROUTING_MIN_SCORE
 ```
+
+Chạy lại `eval:routing` mỗi khi thêm tài liệu vào thư viện, vì phân bố điểm khớp thay đổi.
 
 Sau khi đổi model hoặc collection, bật `KNOWLEDGE_REINDEX_ON_START=true` đúng một lần để tái lập chỉ mục, sau đó chuyển lại `false`. Không dùng fallback deterministic ở production; cấu hình mẫu mặc định `EMBEDDING_FALLBACK_MODE=error` để tránh âm thầm ghi pseudo-vector.
 
@@ -605,7 +641,7 @@ Phiên bản hiện tại là prototype và **không nên expose trực tiếp r
 - DTO provider không trả API key gốc; credential thực thi chỉ được đọc trong backend.
 - Password tài khoản mới dùng scrypt; hash SHA-256 cũ được nâng cấp sau lần đăng nhập hợp lệ.
 - Admin được bootstrap bằng `BOOTSTRAP_ADMIN_PASSWORD`; dữ liệu cũ có thể vẫn chứa tài khoản/mật khẩu từ bản trước.
-- Chưa có RBAC theo Library/folder/document.
+- Quyền theo từng tài liệu (đọc, độ nhạy, model được nhận nội dung) đã có; chưa có RBAC theo thư mục.
 - Chưa có CSRF protection hoàn chỉnh và cookie production hardening.
 - SQL Connector phải sử dụng database account read-only riêng.
 - Kết quả SQL loại các trường password/secret/token và các cột audit `CreateUser`, `CreateDate`, `UpdateUser`, `UpdateDate` trước khi gửi model hoặc UI.
@@ -653,21 +689,21 @@ Trước khi chia sẻ repo hoặc triển khai:
 
 ## Roadmap
 
-Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành. Công việc gần nhất được theo dõi trong [kế hoạch bước tiếp theo](docs/NEXT_STEPS_PLAN_180926.md).
+Thứ tự ưu tiên backend hiện tại: **bảo vệ secret/quyền và dữ liệu → ổn định vận hành/đo hiệu năng → chất lượng câu trả lời → mở rộng lưu trữ và worker**. Các Phase dưới đây là định hướng dài hạn, không phải chức năng đã hoàn thành. Việc gần nhất cho RAG nằm ở mục 8 của [docs/RAG_REVIEW_261026.html](docs/RAG_REVIEW_261026.html): duyệt hai bộ câu chuẩn nháp, hiệu chỉnh ngưỡng định tuyến theo dữ liệu thật, chuyển kiểm chứng trích dẫn từ ghi nhận sang sửa/bỏ trích dẫn, thử reranker, OCR.
 
 ### Phase 1 - Nền tảng MVP
 
 - PostgreSQL app store đã triển khai; tiếp tục query theo domain/cursor, phân trang audit, benchmark p95 và giám sát pool/dung lượng.
 - Redis/BullMQ ingestion queue và dead-letter queue.
 - Hoàn thiện versioning tài liệu và transaction/reconciliation giữa metadata, file và vector.
-- Nâng chunking hiện tại lên semantic/token-aware chunking có locator theo page/sheet/section.
-- Hoàn thiện citation validation và khả năng mở đúng vị trí nguồn.
-- Hoàn thiện sensitivity-aware routing và circuit breaker cho AI Provider.
+- Chunking đã có locator theo page/sheet/section và bộ cắt đoạn `structured-v2`; còn semantic/token-aware chunking.
+- Kiểm chứng trích dẫn: đã kiểm tra số/ngày/mã ở chế độ ghi nhận; còn chặn/sửa và mở đúng vị trí nguồn.
+- Sensitivity-aware routing theo tài liệu đã có (`governedPolicy`); còn circuit breaker cho AI Provider.
 - Docker Compose và mở rộng kiểm thử triển khai; script backup/restore và automated tests đã có trong repository.
 
 ### Phase 2 - Chất lượng tìm kiếm
 
-- Mở rộng golden dataset và đưa retrieval evaluation vào CI.
+- Duyệt và mở rộng golden dataset truy hồi/định tuyến (đã có bản nháp), đưa `eval:retrieval`/`eval:routing` vào CI.
 - Vận hành BGE Reranker service và benchmark so với RRF baseline.
 - Auto Summary và Related Documents.
 - Provider routing, circuit breaker và cost dashboard.
@@ -682,13 +718,14 @@ Phase 3-4 hiện mới ở mức roadmap; chưa có workflow/task manifest đủ
 
 ## Tài liệu
 
-- [Workflow phase 1: cấu hình, nguồn dữ liệu và vận hành](docs/WORKFLOW_PHASE1_RUNBOOK.md)
-- [Định tuyến chat/workflow và TEV1](docs/CHAT_WORKFLOW_ROUTING_UX.md)
-- [Đánh giá catalog định tuyến](docs/WORKFLOW_ROUTING_CATALOG_REVIEW.md)
-- [Backup/import PostgreSQL + Qdrant](docs/POSTGRES_QDRANT_BACKUP_IMPORT_PLAN_230926.md)
-- [Nâng cấp kiến trúc RAG và citation](docs/RAG_UPGRADE_ARCHITECTURE_PLAN_180926.md)
-- [Kế hoạch bước tiếp theo](docs/NEXT_STEPS_PLAN_180926.md)
-- [Kế hoạch hiểu hình ảnh trong chat](docs/CHAT_IMAGE_UNDERSTANDING_PLAN_180926.md)
+- [Đánh giá RAG tài liệu, kế hoạch và tiến độ (26/10/2026)](docs/RAG_REVIEW_261026.html)
+- [Rà soát trí tuệ backend AI (26/10/2026)](docs/BACKEND_AI_INTELLIGENCE_REVIEW_261026.html)
+- [Rà soát hệ thống harness và SQL (23/10/2026)](docs/HARNESS_SQL_SYSTEM_REVIEW_20261023.html), [audit harness](docs/HARNESS_FULL_AUDIT_20261023.md)
+- [Chế độ embedding: vector hoặc chỉ từ khóa](docs/EMBEDDING_MODES.md)
+- [Soạn quy trình qua MCP](docs/WORKFLOW_AUTHORING_MCP.md), [MCP quy trình chạy trên máy chủ](docs/WORKFLOW_HOSTED_MCP.md)
+- [Xử lý tệp đính kèm trong chat](docs/CHAT_ATTACHMENT_PROCESSING_PLAN_241026.md), [hiểu hình ảnh trong chat](docs/CHAT_IMAGE_UNDERSTANDING_PLAN_180926.md)
+- [Vai trò và quyền tài khoản](docs/ACCOUNT_ROLES_PERMISSIONS_171026.md), [quyền dữ liệu theo dòng](docs/ROW_LEVEL_DATA_ACCESS_PLAN_241026.md)
+- [Định danh Embed](docs/embed-identity.md)
 
 ## Quy ước đóng góp
 
@@ -717,4 +754,4 @@ Giới hạn phần hiển thị 32.000 ký tự mỗi lượt gọi model. Giao
 
 Kiểm thử: `node --require ./tests/helpers/setup_isolated_data.js --test tests/reasoning_stream.test.js tests/chat_pending_panel.test.js`.
 
-Gemini Flash-Lite có thể không gửi summary ở mức thinking mặc định. Chat streaming hiện yêu cầu thinking level `MEDIUM` cho Gemini 3 Flash/Lite (`HIGH` cho Pro), hoặc budget 1024 cho Gemini 2.5 Flash-Lite. Có thể ghi đè bằng `provider.thinkingLevel` / `AI_GEMINI_THINKING_LEVEL`, và `provider.thinkingBudget` / `AI_GEMINI_THINKING_BUDGET`. Điều này có thể tăng thời gian phản hồi và số token suy luận. Các lượt định tuyến TEV1 và gọi JSON không streaming giữ cấu hình cũ; không bảo đảm mỗi câu đều có summary. Ollama vẫn tôn trọng `LOCAL_MODEL_THINK=false`.
+Gemini Flash-Lite có thể không gửi summary ở mức thinking mặc định. Chat streaming hiện yêu cầu thinking level `MEDIUM` cho Gemini 3 Flash/Lite (`HIGH` cho Pro), hoặc budget 1024 cho Gemini 2.5 Flash-Lite. Có thể ghi đè bằng `provider.thinkingLevel` / `AI_GEMINI_THINKING_LEVEL`, và `provider.thinkingBudget` / `AI_GEMINI_THINKING_BUDGET`. Điều này có thể tăng thời gian phản hồi và số token suy luận. Các lượt gọi JSON không streaming (lập hợp đồng v2, kiểm tra) giữ cấu hình cũ; không bảo đảm mỗi câu đều có summary. Ollama vẫn tôn trọng `LOCAL_MODEL_THINK=false`.

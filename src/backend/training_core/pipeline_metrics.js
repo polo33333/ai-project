@@ -86,6 +86,7 @@ function toRow(record) {
     // A v2 aggregate answered through approved metrics (null: not a v2 aggregate).
     metrics: compiled?.operation === 'aggregate' ? compiled.metrics || [] : null,
     rag: ragRow(payload, diagnostics, usage),
+    routing: (diagnostics.steps || []).filter(step => step.type === 'ROUTING_DECISION').at(-1) || null,
     failures, stages: usage.map(step => ({ stage: step.stage || 'unknown', inputTokens: Number(step.inputTokens) || 0, calls: Number(step.calls) || 1 }))
   };
 }
@@ -114,6 +115,25 @@ function ragMetrics(rows) {
     modes: countBy(turns, row => row.rag.mode || '(chưa ghi)'), methods: countBy(turns.filter(row => row.rag.method), row => row.rag.method) };
 }
 
+// Routing of v2 questions between documents, data and conversation (ROUTING_DECISION steps).
+function routingMetrics(rows) {
+  const decided = rows.filter(row => row.routing);
+  const label = routing => routing.override === 'gate_to_document' ? 'tín hiệu tài liệu (không qua mô hình)'
+    : routing.override === 'chat_to_document' ? 'mô hình chọn trò chuyện, tín hiệu chuyển sang tài liệu'
+      : /blocked_notice$/.test(routing.override || '') ? 'tài liệu khớp nhưng chưa được phép gửi cho mô hình'
+      : routing.modelKind ? `mô hình chọn ${routing.modelKind}` : 'bộ lọc từ khóa: trò chuyện';
+  return { total: decided.length,
+    finals: countBy(decided, row => row.routing.final || '(chưa ghi)'),
+    paths: countBy(decided, row => label(row.routing)),
+    overrides: decided.filter(row => row.routing.override).length,
+    overrideRate: share(decided.filter(row => row.routing.override).length, decided.length),
+    // The model chose data while the document signal was strong: kept as data, watched for threshold tuning.
+    conflicts: decided.filter(row => row.routing.conflict).length,
+    // Questions whose best documents may not be sent to the model in use (answered with a notice).
+    blocked: decided.filter(row => row.routing.final === 'document_blocked' || row.routing.signal?.blocked).length,
+    strongSignalRate: share(decided.filter(row => row.routing.signal?.strength === 'strong').length, decided.length) };
+}
+
 // excludeSessions: prefixes of sessions that are not real use (evaluation runs).
 function computeMetrics(records = [], { since = null, until = null, excludeSessionPrefixes = ['eval-'] } = {}) {
   const rows = records.map(toRow).filter(row => row.time
@@ -134,6 +154,7 @@ function computeMetrics(records = [], { since = null, until = null, excludeSessi
       // Share of v2 aggregates computed through approved business metrics.
       metricShare: share(rows.filter(row => row.metrics?.length).length, rows.filter(row => row.metrics).length) },
     rag: ragMetrics(rows),
+    routing: routingMetrics(rows),
     metrics: countBy(rows.filter(row => row.metrics), row => row.metrics.length ? row.metrics : '(không qua chỉ tiêu)'),
     routes: countBy(rows, row => row.route).map(item => ({ ...item, ...aggregate(rows.filter(row => row.route === item.name)) })),
     fallbackCodes: countBy(rows.filter(row => row.fallbackCode), row => row.fallbackCode),
@@ -157,4 +178,4 @@ function computeMetrics(records = [], { since = null, until = null, excludeSessi
   };
 }
 
-module.exports = { computeMetrics, parseTime, route, toRow, quantile, ragMetrics };
+module.exports = { computeMetrics, parseTime, route, toRow, quantile, ragMetrics, routingMetrics };

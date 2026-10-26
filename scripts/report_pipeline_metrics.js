@@ -55,6 +55,19 @@ ${tile('Thời gian p50 / p90', `${seconds(rag.latencyMs.p50)} / ${seconds(rag.l
 <div class="grid">${barTable('Chế độ truy hồi', rag.modes)}${barTable('Cách hiểu câu hỏi tài liệu', rag.methods)}</div>`;
 }
 
+// Where v2 sent each question: documents, data or conversation, and how often the document signal changed it.
+function routingSection(routing) {
+  if (!routing?.total) return '<section><h2>Định tuyến tài liệu / dữ liệu / trò chuyện</h2><p class="muted">Chưa có lượt nào ghi quyết định định tuyến.</p></section>';
+  return `<section><h2>Định tuyến tài liệu / dữ liệu / trò chuyện</h2><div class="tiles">
+${tile('Lượt có ghi định tuyến', number(routing.total))}
+${tile('Tín hiệu tài liệu đổi đường', percent(routing.overrideRate), `${number(routing.overrides)} lượt chuyển sang tài liệu`)}
+${tile('Bất đồng với mô hình', number(routing.conflicts), 'mô hình chọn dữ liệu, tín hiệu tài liệu mạnh; giữ dữ liệu')}
+${tile('Tín hiệu tài liệu mạnh', percent(routing.strongSignalRate))}
+${tile('Khớp tài liệu chưa được phép gửi', number(routing.blocked), 'người dùng nhận thông báo cấp quyền')}
+</div></section>
+<div class="grid">${barTable('Đường cuối cùng', routing.finals)}${barTable('Cách quyết định', routing.paths)}</div>`;
+}
+
 function render(metrics, { days }) {
   const v2 = metrics.v2Era;
   const routeColumns = [{ label: 'Thành công', format: item => percent(item.successRate) },
@@ -94,6 +107,7 @@ ${tile('Thời gian p50 / p95', `${seconds(v2.latencyMs.p50)} / ${seconds(v2.lat
 ${tile('Token đọc từ bộ đệm', percent(metrics.overall.cache.cachedShare), `${number(metrics.overall.cache.cachedInputTokens)} / ${number(metrics.overall.cache.inputTokens)} token vào`)}
 </div>
 ${ragSection(metrics.rag)}
+${routingSection(metrics.routing)}
 ${barTable('Theo đường xử lý', metrics.routes.map(item => ({ ...item, label: ROUTES[item.name] || item.name })), routeColumns)}
 <div class="grid">
 ${barTable('Lý do v2 chuyển sang vòng dự phòng', metrics.fallbackCodes)}

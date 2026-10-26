@@ -1,8 +1,15 @@
 (function () {
   'use strict';
   let resources = [];
+  let savingPolicy = false;
   const fields = ['subjects', 'roles', 'embedIds', 'modelDestinations', 'allowedTables', 'blockedColumns'];
   const el = id => document.getElementById(id);
+  function policyStatus(state, text) {
+    const message = el('governance-message');
+    message.dataset.state = state;
+    message.setAttribute('role', state === 'error' ? 'alert' : 'status');
+    message.textContent = text;
+  }
   function initializeGovernancePanels() {
     document.querySelectorAll('#view-data-governance > .settings-governance-card').forEach((card, index) => {
       const heading = card.querySelector('.settings-governance-heading');
@@ -51,20 +58,42 @@
     el('governance-sensitivity').value = resource.policy.sensitivity;
     fields.forEach(field => { el(`governance-${field}`).value = (resource.policy[field] || []).join(', '); });
     for (const field of ['allowedTables', 'blockedColumns']) el(`governance-${field}`).closest('label').hidden = resource.type !== 'sql';
-    el('governance-message').textContent = `Phiên bản chính sách: ${resource.policy.revision}`;
+    policyStatus('idle', `Phiên bản chính sách: ${resource.policy.revision}`);
   };
   window.saveGovernanceResource = async function (event) {
     event.preventDefault();
+    if (savingPolicy) return;
     const resource = resources[Number(el('governance-resource').value)]; if (!resource) return;
-    const button = event.currentTarget.querySelector('button[type="submit"]'); button.disabled = true;
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    const originalLabel = button.innerHTML;
+    const controls = [el('governance-resource'), ...form.querySelectorAll('input, select, textarea, button')];
+    const disabledStates = controls.map(control => control.disabled);
+    savingPolicy = true;
+    controls.forEach(control => { control.disabled = true; });
+    form.setAttribute('aria-busy', 'true');
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Đang lưu…';
+    policyStatus('saving', `Đang lưu chính sách cho “${resource.name}”… Vui lòng chờ xác nhận.`);
+    const slowTimer = setTimeout(() => {
+      policyStatus('saving', `Đang chờ máy chủ xác nhận chính sách cho “${resource.name}”. Thao tác lâu hơn bình thường, vui lòng chờ…`);
+    }, 10000);
     try {
       const policy = { visibility: el('governance-visibility').value, sensitivity: el('governance-sensitivity').value };
       fields.forEach(field => { policy[field] = [...new Set(el(`governance-${field}`).value.split(',').map(value => value.trim()).filter(Boolean))]; });
       const response = await fetch('/api/governance/resources', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: resource.type, id: resource.id, expectedRevision: resource.policy.revision, policy }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Không lưu được chính sách.');
-      Object.assign(resource, data.resource); el('governance-message').textContent = `Đã lưu phiên bản ${resource.policy.revision}. Chính sách có hiệu lực cho yêu cầu tiếp theo.`;
-    } catch (error) { el('governance-message').textContent = error.message; }
-    finally { button.disabled = false; }
+      if (!data.resource?.policy) throw new Error('Máy chủ chưa trả về xác nhận chính sách. Hãy tải lại để kiểm tra trước khi lưu lại.');
+      Object.assign(resource, data.resource);
+      policyStatus('success', `Đã lưu thành công “${resource.name}” · Phiên bản ${resource.policy.revision} · ${new Date().toLocaleTimeString('vi-VN')}. Có hiệu lực cho yêu cầu tiếp theo.`);
+    } catch (error) {
+      policyStatus('error', `Chưa xác nhận lưu thành công. ${error.message || 'Không kết nối được máy chủ.'} Nội dung bạn nhập vẫn được giữ lại.`);
+    } finally {
+      clearTimeout(slowTimer);
+      savingPolicy = false;
+      controls.forEach((control, index) => { control.disabled = disabledStates[index]; });
+      form.removeAttribute('aria-busy');
+      button.innerHTML = originalLabel;
+    }
   };
   let metrics = [];
   window.loadGovernedMetrics = async function () {

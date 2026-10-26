@@ -977,6 +977,135 @@
           "re": "(?:^|\\D)1[2-5] ngày"
         }
       ]
+    },
+    {
+      "id": "route-doc-error-code",
+      "group": "routing",
+      "turns": [
+        "Mã lỗi 401 của SmartCA nghĩa là gì"
+      ],
+      "must": [
+        {
+          "re": "SP_CREDENTIAL_INVALI\\s*D|không hợp lệ"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ],
+      "mustTools": [
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "route-doc-purpose",
+      "group": "routing",
+      "turns": [
+        "Mục đích của ứng dụng IPMS là gì"
+      ],
+      "must": [
+        {
+          "re": "khu công nghiệp|KCN"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ],
+      "mustTools": [
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "route-doc-roadmap",
+      "group": "routing",
+      "turns": [
+        "Roadmap phase 2 gồm những gì"
+      ],
+      "must": [
+        {
+          "re": "Hybrid Search|Reranker"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ],
+      "mustTools": [
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "route-doc-data-words",
+      "group": "routing",
+      "turns": [
+        "Làm sao gửi phản ánh tới đơn vị quản lý trên app?"
+      ],
+      "must": [
+        {
+          "re": "Gửi phản ánh"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ],
+      "mustTools": [
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "route-doc-history-app",
+      "group": "routing",
+      "turns": [
+        "có cách nào tải app ko"
+      ],
+      "must": [
+        {
+          "re": "Google Play|App Store"
+        },
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ],
+      "mustTools": [
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "route-data-contracts",
+      "group": "routing",
+      "turns": [
+        "Danh sách hợp đồng sắp hết hạn"
+      ],
+      "mustNot": [
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ],
+      "mustTools": [
+        "execute_sql_query"
+      ]
+    },
+    {
+      "id": "route-chat-explain",
+      "group": "routing",
+      "turns": [
+        "Giải thích HTTP streaming cho người không chuyên bằng 3 đoạn ngắn, không dùng công cụ hay dữ liệu nghiệp vụ."
+      ],
+      "mustNot": [
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
+    },
+    {
+      "id": "route-chat-email",
+      "group": "routing",
+      "turns": [
+        "Viết giúp email xin nghỉ phép ngắn gọn"
+      ],
+      "mustNot": [
+        {
+          "re": "\\[\\d+\\]"
+        }
+      ]
     }
   ],
   "note": "PowerMoney is labelled \"Tiền điện\" (empty in this IPMS copy); amount questions use \"tiền hóa đơn điện sau thuế\" (FinalTotalAmount)."

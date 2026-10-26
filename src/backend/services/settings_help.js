@@ -107,6 +107,7 @@ module.exports = {
   RERANKER_MAX_DOCUMENT_CHARS: ['Độ dài mỗi đoạn reranker', 'Số ký tự tối đa của mỗi đoạn gửi tới reranker.'],
   RERANKER_MAX_TOTAL_CHARS: ['Tổng dữ liệu reranker', 'Tổng số ký tự tối đa gửi trong một lần rerank.'],
   AI_DOCUMENT_CONTEXT_TOKENS: ['Token ngữ cảnh tài liệu', 'Ngân sách token tài liệu được đóng gói và gửi tới model.'],
+  RAG_ROUTING_MIN_SCORE: ['Ngưỡng nhận câu hỏi tài liệu', 'Điểm khớp vector (0–1) từ đó câu hỏi được coi là hỏi về tài liệu: câu đang rơi vào trò chuyện sẽ được trả lời từ thư viện. Không đổi câu hỏi dữ liệu. Chọn bằng npm run eval:routing.'],
   APP_STORAGE_BACKEND: ['Backend lưu trữ', 'Chọn PostgreSQL cho vận hành chính hoặc JSON file cho môi trường phù hợp.'],
   APP_PG_HOST: ['Máy chủ PostgreSQL', 'Hostname hoặc địa chỉ IP của PostgreSQL.'],
   APP_PG_PORT: ['Cổng PostgreSQL', 'Cổng kết nối PostgreSQL, mặc định 5432.'],

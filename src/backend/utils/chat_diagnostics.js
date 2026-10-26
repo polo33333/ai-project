@@ -72,6 +72,8 @@ function buildChatDiagnostics(trace) {
       ...(step.type==='V2_EXAMPLES'?{ids:step.ids}:{}),
       ...(step.type==='V2_DOCUMENTS'?{found:step.found,retrieval:step.retrieval||null}:{}),
       ...(step.type==='RAG_CLAIMS_CHECKED'?{checkedFacts:step.checkedFacts,unsupported:step.unsupported}:{}),
+      ...(step.type==='RAG_DOCUMENT_BLOCKED'?{documentIds:step.documentIds,score:step.score,answered:step.answered}:{}),
+      ...(step.type==='ROUTING_DECISION'?{gate:step.gate,signal:step.signal,modelKind:step.modelKind,final:step.final,override:step.override,conflict:step.conflict}:{}),
       ...(step.type==='V2_ROOT_FROM_METRIC'?{root:step.root}:{}),
       ...(step.type==='TEMPORAL_SQL_ASSESSED'?{accepted:step.accepted}:{}),
       ...(step.type==='FOLLOWUP_SCOPE_PROJECTED'?{count:step.count}:{}),

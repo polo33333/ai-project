@@ -481,7 +481,7 @@ ${strictSelectedKnowledge
       ['calculate_stats', 'calculate_expression'].includes(t.toolName) && t.success
     ) : null;
 
-    let cleanReplyText = String(replyText || '')
+    let cleanReplyText = citationService.splitGroupedMarkers(replyText)
       .replace(/\{\s*(?:render[_-]?)?chart\s*\}/gi, '')
       .replace(/\{\s*(?:sql|table)\s*\}/gi, '')
       .replace(/\n{3,}/g, '\n\n')

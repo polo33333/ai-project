@@ -28,7 +28,8 @@ async function runContractStage(s) {
         const v2 = context.knowledgeGrounding?.required
           ? await require('../../pipeline/conversation_answer').documents({ conversation, dispatch, plan, context })
           : !dataTools ? (toolContext.allowedToolNames.some(name => name.startsWith('mcp_')) ? { fallback: 'V2_EXTERNAL_TOOLS' }
-            : await require('../../pipeline/conversation_answer').chat({ question, conversation, dispatch, plan, context }))
+            : await require('../../pipeline/contract_pipeline').answerWithoutCatalog({ question, conversation, dispatch, plan, context, toolContext,
+              toolManager: withToolProgress(harness.toolManager, onProgress), toolCalls, trace, gate: 'no_catalog' }))
           : await require('../../pipeline/contract_pipeline').run({ question, plan, context, toolContext, dispatch,
             toolManager: withToolProgress(harness.toolManager, onProgress), trace, toolCalls, requestTime, conversation, pendingInput });
         if (v2.handoff) {

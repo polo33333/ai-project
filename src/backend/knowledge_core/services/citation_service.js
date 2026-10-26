@@ -55,11 +55,18 @@ function relevantExcerpt(fullText, query, claim = '', maxChars = MAX_EXCERPT_CHA
   return `${start > 0 ? '… ' : ''}${normalizeExcerpt(excerpt, maxChars - (start > 0 ? 2 : 0))}`;
 }
 
+// Models sometimes group sources as "[1, 3, 4]"; the checks and the UI expect one marker per source.
+function splitGroupedMarkers(replyText) {
+  return String(replyText || '').replace(/\[(\d+(?:\s*[,;]\s*\d+)+)\](?!\s*\()/g,
+    (_, list) => list.split(/\s*[,;]\s*/).map(marker => `[${marker}]`).join(''));
+}
+
 function findMarkers(replyText) {
   const markers = [];
   const pattern = /\[(\d+)\](?!\s*\()/g;
   let match;
-  while ((match = pattern.exec(String(replyText || ''))) !== null) {
+  const text = splitGroupedMarkers(replyText);
+  while ((match = pattern.exec(text)) !== null) {
     markers.push(Number(match[1]));
   }
   return markers;
@@ -116,4 +123,4 @@ function removeInvalidMarkers(replyText, invalidMarkers = []) {
   return String(replyText || '').replace(/\[(\d+)\](?!\s*\()/g, (marker, index) => invalid.has(Number(index)) ? '' : marker);
 }
 
-module.exports = { buildVerifiedCitations, findMarkers, markerContext, normalizeExcerpt, relevantExcerpt, removeInvalidMarkers };
+module.exports = { buildVerifiedCitations, findMarkers, splitGroupedMarkers, markerContext, normalizeExcerpt, relevantExcerpt, removeInvalidMarkers };
