@@ -65,7 +65,7 @@
     sidebar.insertAdjacentHTML('afterbegin', `
       <div class="kh-nav-brand">
         <a class="kh-nav-logo" href="${HOME_URL}" aria-label="KnowledgeHub Chat"><img src="/favicon.svg?v=20260908-brand-sync" alt="" aria-hidden="true"><span>KnowledgeHub Chat</span></a>
-        <button type="button" class="kh-icon-btn kh-nav-collapse" data-kh-action="toggle-nav" title="Đóng thanh bên" aria-label="Đóng thanh bên" aria-controls="kh-chat-nav"><i class="fa-solid fa-table-columns" aria-hidden="true"></i></button>
+        <button type="button" class="kh-icon-btn kh-nav-collapse" data-kh-action="toggle-nav" title="Đóng thanh bên" aria-label="Đóng thanh bên" aria-controls="kh-chat-nav"><svg class="kh-sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M9 4v16M5.8 8h.4M5.8 11h.4"></path></svg></button>
       </div>
       <nav class="kh-nav-actions" aria-label="Chức năng">
         ${navItem('fa-regular fa-pen-to-square', 'Trò chuyện mới', 'new-chat')}
@@ -100,8 +100,7 @@
 
     view.querySelector('.chat-main')?.insertAdjacentHTML('afterbegin', `
       <header class="kh-chat-topbar">
-        <button type="button" class="kh-icon-btn kh-nav-open-btn" data-kh-action="toggle-nav" title="Mở thanh bên" aria-label="Mở thanh bên" aria-controls="kh-chat-nav" aria-expanded="false"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
-        <button type="button" class="kh-icon-btn kh-topbar-search" data-kh-action="search" title="Tìm cuộc trò chuyện" aria-label="Tìm cuộc trò chuyện" aria-controls="kh-chat-nav"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button>
+        <button type="button" class="kh-icon-btn kh-nav-open-btn" data-kh-action="toggle-nav" title="Mở thanh bên" aria-label="Mở thanh bên" aria-controls="kh-chat-nav" aria-expanded="false"><svg class="kh-sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M9 4v16M5.8 8h.4M5.8 11h.4"></path></svg></button>
         <span class="kh-chat-topbar-title"></span>
         <button type="button" class="kh-usage-chip" data-kh-action="usage" hidden aria-haspopup="dialog"></button>
         <button type="button" class="kh-icon-btn kh-topbar-new" data-kh-action="new-chat" title="Trò chuyện mới" aria-label="Trò chuyện mới"><i class="fa-regular fa-pen-to-square" aria-hidden="true"></i></button>
@@ -258,6 +257,57 @@
   }
 
   function bindEvents() {
+    const closeHistoryMenus = () => {
+      document.querySelectorAll('.kh-history-submenu:popover-open,.kh-history-options-panel:popover-open').forEach(menu => menu.hidePopover());
+      document.querySelectorAll('[data-kh-submenu],.kh-history-filter').forEach(button => button.setAttribute('aria-expanded', 'false'));
+    };
+    const positionMenu = (menu, anchor, side = false) => {
+      menu.showPopover();
+      const rect = anchor.getBoundingClientRect();
+      const width = menu.offsetWidth, height = menu.offsetHeight;
+      let left = side ? rect.right + 8 : rect.left;
+      if (left + width > innerWidth - 8) left = side ? rect.left - width - 8 : innerWidth - width - 8;
+      menu.style.left = Math.max(8, left) + 'px';
+      menu.style.top = Math.max(8, Math.min(side ? rect.top : rect.bottom + 6, innerHeight - height - 8)) + 'px';
+      anchor.setAttribute('aria-expanded', 'true');
+      menu.querySelector('button')?.focus();
+    };
+    document.addEventListener('click', event => {
+      const choice = event.target.closest('[data-kh-history]');
+      if (choice) {
+        const key = choice.dataset.khHistory;
+        window.khChatHistoryPreferences = { status:'all', activity:'all', group:'none', sort:'updated', ...window.khChatHistoryPreferences, [key]:choice.dataset.value };
+        closeHistoryMenus(); window.renderChatSessionsList?.();
+        document.querySelector('.kh-history-filter')?.focus(); return;
+      }
+      const submenuButton = event.target.closest('[data-kh-submenu]');
+      if (submenuButton) {
+        document.querySelectorAll('.kh-history-submenu:popover-open').forEach(menu => menu.hidePopover());
+        document.querySelectorAll('[data-kh-submenu]').forEach(button => button.setAttribute('aria-expanded', 'false'));
+        positionMenu(submenuButton.parentElement.querySelector('.kh-history-submenu'), submenuButton, true); return;
+      }
+      if (event.target.closest('[data-kh-action="history-toggle"]')) {
+        closeHistoryMenus(); window.khChatHistoryCollapsed = !window.khChatHistoryCollapsed;
+        window.renderChatSessionsList?.(); document.querySelector('.kh-history-toggle')?.focus(); return;
+      }
+      const filter = event.target.closest('[data-kh-action="history-filter"]');
+      if (filter) {
+        const panel = document.getElementById('kh-history-options-panel');
+        if (panel.matches(':popover-open')) closeHistoryMenus();
+        else positionMenu(panel, filter);
+        return;
+      }
+      if (!event.target.closest('.kh-history-options-panel,.kh-history-submenu')) closeHistoryMenus();
+    });
+    window.addEventListener('resize', closeHistoryMenus);
+    document.addEventListener('scroll', closeHistoryMenus, true);
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && document.querySelector('.kh-history-options-panel:popover-open')) {
+        closeHistoryMenus(); document.querySelector('.kh-history-filter')?.focus();
+        event.stopImmediatePropagation();
+      }
+    });
+
     window.addEventListener('account-profile-updated', event => {
       account = event.detail;
       const copy = document.querySelector('.kh-account-copy');
@@ -275,6 +325,8 @@
     });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
+      const historyOptions = document.querySelector('.kh-history-options[open]');
+      if (historyOptions) { historyOptions.open = false; historyOptions.querySelector('summary')?.focus(); return; }
       if (!document.getElementById('kh-usage-dialog').hidden) { closeUsage(); return; }
       if (!document.getElementById('kh-account-menu')?.hidden) { toggleAccountMenu(false); document.querySelector('.kh-account-button')?.focus(); return; }
       if (document.body.classList.contains(NAV_OPEN)) closeNav();

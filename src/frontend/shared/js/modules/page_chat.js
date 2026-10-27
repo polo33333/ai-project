@@ -2302,10 +2302,37 @@ function renderChatSessionsList() {
     container.appendChild(div);
   };
   if (document.documentElement?.dataset.page === 'chat') {
-    container.insertAdjacentHTML('beforeend', '<div class="kh-history-heading">Gần đây</div>');
-    const visible = window.khChatShowAllHistory || query ? filtered : filtered.slice(0, 20);
-    visible.forEach(renderSession);
-    if (!query && filtered.length > 20) {
+    const preferences = window.khChatHistoryPreferences || { status:'all', activity:'all', group:'none', sort:'updated' };
+    const menuRow = (key, label, items) => `<div class="kh-history-menu-row">
+      <button type="button" data-kh-submenu="${key}" aria-haspopup="menu" aria-expanded="false"><span>${label}</span><small>${items.find(([value]) => value === preferences[key])?.[1] || items[0][1]}</small><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+      <div class="kh-history-submenu" popover="manual" role="menu" aria-label="${label}" data-history-submenu="${key}">${items.map(([value, text]) => `<button type="button" role="menuitemradio" aria-checked="${preferences[key] === value}" data-kh-history="${key}" data-value="${value}"><span>${text}</span><i class="fa-solid fa-check" aria-hidden="true"></i></button>`).join('')}</div></div>`;
+    container.classList.toggle('kh-history-collapsed', Boolean(window.khChatHistoryCollapsed));
+    container.insertAdjacentHTML('beforeend', `<div class="kh-history-heading">
+      <button type="button" class="kh-history-toggle" data-kh-action="history-toggle" aria-expanded="${!window.khChatHistoryCollapsed}">Gần đây <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+      <button type="button" class="kh-history-filter" data-kh-action="history-filter" aria-label="Lọc và sắp xếp hội thoại" aria-haspopup="menu" aria-expanded="false"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button>
+      <div class="kh-history-options-panel" id="kh-history-options-panel" popover="manual" role="menu" aria-label="Lọc và sắp xếp">
+        ${menuRow('status','Trạng thái',[['all','Tất cả'],['pinned','Đã ghim']])}
+        ${menuRow('activity','Hoạt động gần nhất',[['all','Tất cả'],['7','7 ngày qua'],['30','30 ngày qua']])}
+        <div class="kh-menu-separator"></div>
+        ${menuRow('group','Nhóm theo',[['none','Không'],['date','Thời gian']])}
+        ${menuRow('sort','Sắp xếp theo',[['updated','Hoạt động gần nhất'],['created','Ngày tạo'],['title','Tên hội thoại']])}
+      </div></div>`);
+    const historyItems = filtered.filter(session => (preferences.status !== 'pinned' || session.pinned)
+      && (preferences.activity === 'all' || chatSessionAge(session.updatedAt) < Number(preferences.activity)))
+      .sort((a, b) => preferences.sort === 'title' ? String(a.title).localeCompare(String(b.title), 'vi')
+        : preferences.sort === 'created' ? Number(b.createdAt || b.updatedAt || 0) - Number(a.createdAt || a.updatedAt || 0) : Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    const visible = window.khChatShowAllHistory || query ? historyItems : historyItems.slice(0, 20);
+    if (preferences.group === 'date') {
+      for (const [label, matches] of [['Hôm nay', age => age === 0], ['7 ngày qua', age => age > 0 && age < 7], ['Trước đó', age => age >= 7]]) {
+        const items = visible.filter(session => matches(chatSessionAge(session.updatedAt)));
+        if (!items.length) continue;
+        const heading = document.createElement('div');
+        heading.className = 'chat-session-group-title'; heading.textContent = label;
+        container.appendChild(heading); items.forEach(renderSession);
+      }
+    } else visible.forEach(renderSession);
+    if (!historyItems.length && filtered.length) container.insertAdjacentHTML('beforeend', '<div class="chat-sessions-empty" role="status">Không có hội thoại phù hợp.</div>');
+    if (!query && historyItems.length > 20) {
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'kh-history-more';

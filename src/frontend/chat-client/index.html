@@ -29,14 +29,20 @@
   <link rel="stylesheet" href="css/chat-conversation.css?v=20261025-usage-dismiss">
   <link rel="stylesheet" href="css/answer_status.css?v=20261012-hide-partial">
   <link rel="stylesheet" href="css/workflow_plugins.css?v=20261025-workflow-pending">
-  <link rel="stylesheet" href="css/chat.css?v=20261025-help-theme">
+  <link rel="stylesheet" href="css/chat.css?v=20261027-nav-visible">
 </head>
 
 <body class="kh-chat-standalone">
   <div class="app-layout">
     <main class="main-content chat-workspace-page" id="main-content">
       <div id="main-view-container" aria-busy="true">
-        <div class="kh-chat-loading" role="status"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Đang tải trò chuyện…</div>
+        <div class="kh-chat-loading kh-chat-boot" role="status" aria-live="polite">
+          <div class="kh-chat-boot-content">
+            <div class="kh-chat-boot-logo" aria-hidden="true"><img src="/favicon.svg?v=20260908-brand-sync" alt="" width="44" height="44"></div>
+            <strong>KnowledgeHub Chat</strong>
+            <span class="kh-chat-boot-caption">Đang chuẩn bị cuộc trò chuyện<span class="kh-chat-boot-dots" aria-hidden="true"><b></b><b></b><b></b></span></span>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -128,10 +134,10 @@
   <script defer src="embed/chat-stream.js?v=20261024-readable-pace"></script>
   <script defer src="js/modules/voice_input.js?v=20261025-full-transcript"></script>
   <script defer src="js/modules/answer_speech.js?v=20261025-tts-tables-2"></script>
-  <script defer src="js/modules/page_chat.js?v=20261025-history-sync"></script>
+  <script defer src="js/modules/page_chat.js?v=20261027-history-cascade"></script>
   <script defer src="js/modules/usage_banner.js?v=20261025-usage-countdown"></script>
   <script defer src="js/modules/workflow_plugins.js?v=20261025-ai-replaced"></script>
   <script defer src="js/app.js?v=20261025-account-settings"></script>
-  <script defer src="js/chat_app.js?v=20261025-help-theme"></script>
+  <script defer src="js/chat_app.js?v=20261027-sidebar-icon"></script>
 </body>
 </html>
