@@ -97,6 +97,22 @@
           <option value="on">Dùng đọc tài liệu và ảnh đính kèm</option>
         </select>
       </div>
+      <div class="provider-ollama-only" style="display: none;">
+        <label class="form-label" for="page-new-prov-temperature">Độ ngẫu nhiên (Ollama)</label>
+        <input type="number" class="form-control" id="page-new-prov-temperature" min="0" max="2" step="0.05" placeholder="Theo cài đặt chung" title="Từ 0 đến 2. Để trống để dùng cài đặt chung LOCAL_MODEL_TEMPERATURE.">
+      </div>
+      <div class="provider-ollama-only" style="display: none;">
+        <label class="form-label" for="page-new-prov-think">Chế độ suy luận (Ollama)</label>
+        <select class="form-control" id="page-new-prov-think" title="Bật cho phép model suy nghĩ trước khi trả lời: có thể chính xác hơn nhưng chậm hơn.">
+          <option value="">Theo cài đặt chung</option>
+          <option value="false">Tắt</option>
+          <option value="true">Bật</option>
+        </select>
+      </div>
+      <div class="provider-ollama-only" style="display: none;">
+        <label class="form-label" for="page-new-prov-keepalive">Thời gian giữ model (Ollama)</label>
+        <input type="text" class="form-control" id="page-new-prov-keepalive" placeholder="Theo cài đặt chung, ví dụ 10m" title="Ví dụ 10m, 1h; -1m giữ model trong bộ nhớ mãi. Để trống để dùng LOCAL_MODEL_KEEP_ALIVE.">
+      </div>
       <div class="provider-form-actions">
         <button class="btn-primary" id="page-provider-save-btn" onclick="savePageNewAiProvider()">
           <i class="fa-solid fa-floppy-disk"></i> <span id="page-provider-save-label">Lưu provider</span>

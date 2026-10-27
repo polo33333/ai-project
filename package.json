@@ -23,6 +23,7 @@
     "eval:local": "node scripts/evaluate_local_harness.js",
     "eval:memory": "node scripts/evaluate_memory.js",
     "eval:live": "node scripts/eval/live_harness_eval.js",
+    "eval:live:local": "node scripts/eval/live_harness_eval.js --set local --provider local --label local",
     "eval:golden:build": "node scripts/eval/golden_candidates.js build",
     "eval:golden:promote": "node scripts/eval/golden_candidates.js promote",
     "learn:build": "node scripts/learn_from_feedback.js build",

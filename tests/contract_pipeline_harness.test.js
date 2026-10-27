@@ -226,3 +226,13 @@ test('a resume with nothing waiting points the repair at the finished workflow r
   assert.doesNotMatch(repair, /V2_WORKFLOW_EVIDENCE_MISSING/);
   assert.match(repair, /kind=previous with previous\.turn=1/);
 });
+
+test('a rejected contract gets a repair hint with the refs that exist', async t => {
+  const { result, seen } = await runForm(t, { question: 'tổng sản lượng', rows: [{ 'Tổng Sản lượng': 22 }], contracts: [
+    { kind: 'data', root: 'TestRows', operation: 'aggregate', measures: [{ ref: 'TestRows.Quantity', aggregation: 'SUM' }] },
+    { kind: 'data', root: 'TestRows', operation: 'aggregate', measures: [{ ref: 'TestRows.Qty', aggregation: 'SUM' }] }] });
+  const repair = seen.prompts.filter(prompt => prompt.tool === 'plan_query')[1].messages.at(-1).content;
+  assert.match(repair, /^The contract was rejected: V2_COLUMN_UNKNOWN: TestRows\.Quantity\. Use refs that exist, e\.g\. (?:TestRows\.\w+, )*TestRows\.Qty,/);
+  assert.ok(result.trace.steps.some(step => step.type === 'V2_CONTRACT_REJECTED' && step.hinted));
+  assert.equal(result.trace.pipeline, 'v2');
+});

@@ -18,6 +18,16 @@ const quote = name => `[${String(name).replaceAll(']', ']]')}]`;
 const text = value => `N'${String(value).replaceAll("'", "''")}'`;
 const isoDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value)) && !Number.isNaN(Date.parse(value)) ? String(value) : null;
 const dmy = value => value.split('-').reverse().join('/');
+// A filter value is grounded only as whole words of its quote: "1" is not in
+// "KA0021", so an invented ID never passes as the quoted code.
+const WORD = /[\p{L}\p{M}\p{N}]/u;
+function mentions(quote, value) {
+  const needle = fold(value);
+  if (!needle) return false;
+  for (let at = quote.indexOf(needle); at >= 0; at = quote.indexOf(needle, at + 1))
+    if (!WORD.test(quote[at - 1] || '') && !WORD.test(quote[at + needle.length] || '')) return true;
+  return false;
+}
 
 // A contract that measures only approved metrics of one table, and names no
 // root, is about that table. Metrics on several tables, a raw measure, or a
@@ -29,8 +39,21 @@ function metricRoot(contract, catalog) {
   return new Set(tables.map(key)).size === 1 ? tables[0] : null;
 }
 
+// A metric named after an aggregation ("COUNT") that is not an approved
+// metric id is a raw measure: that aggregation over its ref (COUNT defaults
+// to records). A different explicit aggregation leaves it ambiguous.
+function rawAggregationMeasure(measure, catalog) {
+  const named = String(measure?.metric || '').toUpperCase();
+  if (!AGGREGATE_LABELS[named] || catalogApi.metric(catalog, measure.metric)) return measure;
+  if (measure.aggregation && String(measure.aggregation).toUpperCase() !== named)
+    throw fail('V2_MEASURE_INVALID', `metric ${measure.metric} is an aggregation, not an approved metric id, and differs from aggregation ${measure.aggregation}`);
+  const { metric, ...raw } = measure;
+  return { ...raw, aggregation: named, ref: raw.ref || (named === 'COUNT' ? '*' : raw.ref) };
+}
+
 function compile(contract, catalog, { question = '', previousQuestion = '', resultValues = new Set() } = {}) {
-  const root = catalogApi.table(catalog, contract.root || metricRoot(contract, catalog));
+  if (contract.measures?.length) contract = { ...contract, measures: contract.measures.map(measure => rawAggregationMeasure(measure, catalog)) };
+  const root =catalogApi.table(catalog, contract.root || metricRoot(contract, catalog));
   if (!root) throw fail('V2_ROOT_UNKNOWN', contract.root);
   const joins = [], joinAliases = new Map();
   const joinAlias = (parentAlias, relation) => {
@@ -68,7 +91,10 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
     for (const next of rest) {
       const fk = catalogApi.foreignKey(catalog, entry.tableName, name);
       if (!fk) throw fail('V2_LOOKUP_UNKNOWN', `${entry.tableName}.${name}`);
-      alias = joinAlias(alias, fk); entry = catalogApi.table(catalog, fk.toTable); name = next; lastHop = fk;
+      // "FK->LookupTable.Column" names the table the key already points to.
+      const nextDot = next.lastIndexOf('.');
+      const column = nextDot > 0 && key(next.slice(0, nextDot)) === key(fk.toTable) ? next.slice(nextDot + 1) : next;
+      alias = joinAlias(alias, fk); entry = catalogApi.table(catalog, fk.toTable); name = column; lastHop = fk;
     }
     let column = entry.columns.get(key(name));
     if (!column) throw fail('V2_COLUMN_UNKNOWN', ref);
@@ -153,7 +179,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
     // A row reference ("người thứ 2 ở trên") is grounded by its quote in the
     // question plus a value the user actually saw in a previous result.
     const grounded = filter.fromResult ? asked.every(item => resultValues.has(fold(item)))
-      : asked.every(item => source.includes(fold(item)) || evidence.includes(fold(item)));
+      : asked.every(item => mentions(evidence, item));
     if (!grounded) throw fail('V2_FILTER_UNGROUNDED', `${filter.ref} = ${values.join(',')}${filter.fromResult ? ' (not in the previous result)' : ''}`);
     if (operator === 'eq' && !NUMERIC_TYPES.has(type)) textFilters.push({ index: filterIndex, ...identity });
     if (['ne', 'notIn'].includes(operator) && !NUMERIC_TYPES.has(type)) exclusions.push({ index: filterIndex, ...identity, values });
@@ -265,7 +291,7 @@ function compile(contract, catalog, { question = '', previousQuestion = '', resu
   let orderBy = '';
   if (contract.sort?.by) {
     const direction = String(contract.sort.direction).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    const measureIndex = /^measure:(\d+)$/.exec(contract.sort.by)?.[1];
+    const measureIndex = /^measures?:(\d+)$/.exec(contract.sort.by)?.[1];
     if (measureIndex !== undefined) {
       const target = outputs.filter(item => item.kind === 'measure')[Number(measureIndex)];
       if (!target) throw fail('V2_SORT_INVALID', contract.sort.by);

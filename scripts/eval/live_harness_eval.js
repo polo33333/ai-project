@@ -6,7 +6,10 @@
 // persistence). SQL sources are only read. Each case uses its own "eval-"
 // chat session, so cases never share memory.
 //
-//   node scripts/eval/live_harness_eval.js --label v1 [--only id1,id2] [--repeat 1] [--provider <providerId>]
+//   node scripts/eval/live_harness_eval.js --label v1 [--only id1,id2 | --set local] [--repeat 1] [--provider <providerId> | --provider local]
+//
+// --set names a case list in the fixture's "sets"; --provider local picks the
+// active local (Ollama) provider, else the first configured one.
 //
 // The harness pipeline is chosen by HARNESS_PIPELINE (unset = current loop).
 const fs = require('node:fs');
@@ -17,8 +20,9 @@ const root = path.resolve(__dirname, '../..');
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, list) =>
   value.startsWith('--') ? [...pairs, [value.slice(2), list[index + 1]?.startsWith('--') ? true : list[index + 1] ?? true]] : pairs, []));
 const label = String(args.label || process.env.HARNESS_PIPELINE || 'v1');
-const only = args.only ? new Set(String(args.only).split(',')) : null;
 const fixture = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/live_eval_cases.json'), 'utf8'));
+if (args.set && !fixture.sets?.[args.set]) throw new Error(`Unknown case set: ${args.set}`);
+const only = args.only ? new Set(String(args.only).split(',')) : args.set ? new Set(fixture.sets[args.set]) : null;
 const cases = fixture.cases.filter(item => !only || only.has(item.id));
 
 const digits = text => String(text).replace(/(\d)[.,\s](?=\d)/g, '$1');
@@ -70,7 +74,9 @@ async function ask(storage, account, sessionId, question, history) {
       inputTokens: usage.reduce((sum, step) => sum + (step.inputTokens || step.inputTokensEstimated || 0), 0),
       stages: usage.map(step => step.stage), sql: (result.toolCalls || []).filter(call => call.toolName === 'execute_sql_query').map(call => ({ ok: call.success, sql: call.args?.sql, error: call.error })),
       failures: result.trace?.training?.responseEvaluation?.failures || [],
-      pipeline: result.trace?.pipeline || 'v1', tools: (result.toolCalls || []).filter(call => call.success).map(call => call.toolName), steps: steps.filter(step => /^V2_/.test(step.type)) };
+      structuredCalls: usage.filter(step => step.structuredOutput).length,
+      pipeline: result.trace?.pipeline || 'v1', tools: (result.toolCalls || []).filter(call => call.success).map(call => call.toolName),
+      steps: steps.filter(step => /^V2_|^LOCAL_STRUCTURED_OUTPUT_FAILED$/.test(step.type)) };
   }), { independent: true });
 }
 
@@ -123,6 +129,14 @@ const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).
   await storage.bootstrapStorage();
   const account = await storage.run(() => structuredClone(storage.read('accounts.json', []).find(item => item.role === 'admin' && item.isActive !== false)), { files: ['accounts.json'] });
   if (!account) throw new Error('No active admin account for evaluation.');
+  if (args.provider === 'local') {
+    const { isLocalProvider } = require(path.join(root, 'src/backend/agent_core/harness/provider_classifier'));
+    const local = (await storage.run(() => storage.read('ai_providers.json', []), { files: ['ai_providers.json'] }))
+      .filter(item => isLocalProvider(item) && item.status !== 'unconfigured').sort((a, b) => Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)))[0];
+    if (!local) throw new Error('No local provider configured.');
+    args.provider = local.id;
+    console.log(`Local provider: ${local.name} (${local.model})`);
+  }
   const runId = `${label}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const results = [];
   for (const testCase of cases) {

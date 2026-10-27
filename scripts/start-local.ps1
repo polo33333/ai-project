@@ -301,6 +301,16 @@ $ollamaExe
     } else {
 
         Write-Host '[OK] Ollama is already running.'
+
+        # OLLAMA_* server settings from .env reach only an Ollama started above.
+        $ollamaSettings = @('OLLAMA_FLASH_ATTENTION', 'OLLAMA_KV_CACHE_TYPE') | Where-Object {
+            [Environment]::GetEnvironmentVariable($_, 'Process') -and
+            [Environment]::GetEnvironmentVariable($_, 'Process') -ne [Environment]::GetEnvironmentVariable($_, 'User')
+        }
+        if ($ollamaSettings) {
+            Write-Warning ("Ollama was already running, so .env settings $($ollamaSettings -join ', ') may not apply. " +
+                'Quit Ollama and run this script again, or set them as Windows user environment variables and restart Ollama.')
+        }
     }
 
 

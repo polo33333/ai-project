@@ -42,13 +42,15 @@ const { readJsonStream, reasoningEmitter } = require('./stream_reader');
 
 async function callOllama(provider, messages, tools, signal, options = {}) {
   const emit = reasoningEmitter(options.onReasoning);
+  // The harness trims prompts to this same window (steps/dispatch.js).
+  const numCtx = Number(provider.numCtx || provider.contextWindow || process.env.LOCAL_MODEL_NUM_CTX);
   const body = {
     model: provider.model || 'qwen2.5-coder',
     messages: convertMessagesToOllama(messages),
     stream: (typeof options.onReasoning === 'function'||typeof options.onAnswer === 'function')&&provider.supportsStreaming!==false,
     options: {
       temperature: Number(provider.temperature ?? process.env.LOCAL_MODEL_TEMPERATURE ?? 0.1),
-      ...(Number(provider.numCtx || process.env.LOCAL_MODEL_NUM_CTX) > 0 ? { num_ctx: Number(provider.numCtx || process.env.LOCAL_MODEL_NUM_CTX) } : {}),
+      ...(numCtx > 0 ? { num_ctx: numCtx } : {}),
       ...(Number(provider.numPredict || process.env.LOCAL_MODEL_NUM_PREDICT) > 0 ? { num_predict: Number(provider.numPredict || process.env.LOCAL_MODEL_NUM_PREDICT) } : {})
     },
     // Thinking-capable models can spend their whole generation budget in

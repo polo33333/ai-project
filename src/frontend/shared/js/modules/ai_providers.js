@@ -193,13 +193,17 @@ function editAiProvider(id) {
     'page-new-prov-tools': provider.supportsToolCalling ? 'native' : provider.supportsJsonToolCalling ? 'json' : 'none',
     'page-new-prov-context': String(provider.contextWindow || provider.numCtx || 16384),
     'page-new-prov-reserve': String(provider.outputReserve || 2048),
-    'page-new-prov-attachments': provider.useForAttachments ? 'on' : 'off'
+    'page-new-prov-attachments': provider.useForAttachments ? 'on' : 'off',
+    'page-new-prov-temperature': String(provider.temperature ?? ''),
+    'page-new-prov-think': provider.think === undefined || provider.think === null ? '' : String(provider.think),
+    'page-new-prov-keepalive': provider.keepAlive || ''
   };
   Object.entries(values).forEach(([fieldId, value]) => {
     const field = document.getElementById(fieldId);
     if (field) field.value = value;
   });
   setProviderFormModel(provider.model);
+  syncProviderOllamaFields();
 
   const keyInput = document.getElementById('page-new-prov-key');
   if (keyInput) keyInput.placeholder = 'Để trống để giữ nguyên API Key';
@@ -282,6 +286,12 @@ async function deleteAiProvider(id) {
   }
 }
 
+// Ollama request options are shown only for an Ollama provider.
+function syncProviderOllamaFields() {
+  const ollama = getProviderFormat(document.getElementById('page-new-prov-type')?.value || '') === 'ollama';
+  document.querySelectorAll('.provider-ollama-only').forEach(field => { field.style.display = ollama ? '' : 'none'; });
+}
+
 function onProvTypeChange() {
   const typeSelect = document.getElementById('page-new-prov-type');
   const urlInput = document.getElementById('page-new-prov-url');
@@ -305,6 +315,7 @@ function onProvTypeChange() {
     if (urlInput) urlInput.value = 'http://127.0.0.1:1234/v1';
     if (modelSelect) modelSelect.innerHTML = '<option value="meta-llama-3-8b-instruct">meta-llama-3-8b-instruct</option>';
   }
+  syncProviderOllamaFields();
 }
 
 async function savePageNewAiProvider() {
@@ -333,6 +344,11 @@ async function savePageNewAiProvider() {
       supportsToolCalling: capability === 'native' || (capability === 'auto' && apiFormat !== 'ollama'),
       supportsJsonToolCalling: capability === 'json', contextWindow, outputReserve, priority, tokenCost,
       useForAttachments: document.getElementById('page-new-prov-attachments')?.value === 'on' };
+    // Empty Ollama options fall back to the shared LOCAL_MODEL_* settings.
+    if (apiFormat === 'ollama') Object.assign(payload, {
+      temperature: document.getElementById('page-new-prov-temperature')?.value.trim() ?? '',
+      think: document.getElementById('page-new-prov-think')?.value ?? '',
+      keepAlive: document.getElementById('page-new-prov-keepalive')?.value.trim() ?? '' });
     if (apiKey) payload.apiKey = apiKey;
     if (editingId) payload.providerId = editingId;
     const res = await fetch(editingId ? '/api/ai-providers/update' : '/api/ai-providers/add', {

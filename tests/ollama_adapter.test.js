@@ -18,6 +18,18 @@ test('Ollama routing requests use JSON mode without changing ordinary chat reque
   assert.equal(bodies[1].format, undefined);
 });
 
+test('Ollama receives the provider context window the harness budgets against', async t => {
+  const bodies = [];
+  t.mock.method(global, 'fetch', async (_, options) => {
+    bodies.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({ message: { content: 'ok' } }) };
+  });
+  await callOllama({ baseUrl: 'http://localhost:11434', model: 'qwen3.5:9b', contextWindow: 32768 }, [], [], null);
+  await callOllama({ baseUrl: 'http://localhost:11434', model: 'qwen3.5:9b', contextWindow: 32768, numCtx: 8192 }, [], [], null);
+  assert.equal(bodies[0].options.num_ctx, 32768);
+  assert.equal(bodies[1].options.num_ctx, 8192);
+});
+
 test('Ollama adapter disables thinking by default', async t => {
   const originalFetch = global.fetch;
   t.after(() => { global.fetch = originalFetch; });

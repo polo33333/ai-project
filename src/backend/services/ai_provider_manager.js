@@ -14,6 +14,32 @@ function validateContextLimits(provider) {
   }
 }
 
+// Ollama request options a provider may set. An empty value removes the
+// option, so the LOCAL_MODEL_* default applies again.
+function applyLocalOptions(target, data) {
+  if (data.temperature !== undefined) {
+    if (data.temperature === null || data.temperature === '') delete target.temperature;
+    else {
+      const value = Number(data.temperature);
+      if (!Number.isFinite(value) || value < 0 || value > 2) throw new Error('Độ ngẫu nhiên phải từ 0 đến 2.');
+      target.temperature = value;
+    }
+  }
+  if (data.think !== undefined) {
+    if (data.think === null || data.think === '') delete target.think;
+    else if (data.think === true || data.think === 'true') target.think = true;
+    else if (data.think === false || data.think === 'false') target.think = false;
+    else throw new Error('Chế độ suy luận chỉ nhận bật, tắt hoặc theo cài đặt chung.');
+  }
+  if (data.keepAlive !== undefined) {
+    const value = String(data.keepAlive ?? '').trim();
+    // Ollama parses a string as a Go duration, which needs a unit.
+    if (!value) delete target.keepAlive;
+    else if (!/^-?\d+(?:\.\d+)?(?:ms|s|m|h)$/.test(value)) throw new Error('Thời gian giữ model không hợp lệ, ví dụ 10m, 1h hoặc -1m (giữ mãi).');
+    else target.keepAlive = value;
+  }
+}
+
 class AiProviderManager {
   constructor() {
     const defaultProviders = [
@@ -74,7 +100,8 @@ class AiProviderManager {
   publicProvider(provider) {
     if (!provider) return null;
     const allowed = ['id', 'name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'model',
-      'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'isActive', 'status', 'tokenCost'];
+      'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'isActive', 'status', 'tokenCost',
+      'temperature', 'think', 'keepAlive'];
     const result = {};
     for (const key of allowed) result[key] = provider[key];
     result.hasApiKey = Boolean(provider.apiKey);
@@ -148,6 +175,7 @@ class AiProviderManager {
       tokenCost: parseFloat(data.tokenCost) || 0
     };
 
+    applyLocalOptions(newProvider, data);
     validateContextLimits(newProvider);
     this.providers.push(newProvider);
     this.persist();
@@ -169,8 +197,10 @@ class AiProviderManager {
             : (key === 'priority' ? parseInt(data[key]) : (key === 'tokenCost' ? parseFloat(data[key]) : data[key])));
       }
     }
+    applyLocalOptions(pending, data);
     if (data.contextWindow !== undefined || data.outputReserve !== undefined) validateContextLimits(pending);
     Object.assign(target, pending);
+    for (const key of ['temperature', 'think', 'keepAlive']) if (!(key in pending)) delete target[key];
     this.persist();
     return this.publicProvider(target);
   }

@@ -385,10 +385,16 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
           error.message += `\nAdditional catalog:\n${catalogApi.describe({ ...catalog, tables: new Map(added.map(item => [catalogApi.key(item.tableName), item])) })}`;
         }
       }
-      step('V2_CONTRACT_REJECTED', { attempt, code: error.code || 'V2_CONTRACT_INVALID', detail: String(error.message).slice(0, 300), ...(error.details ? { details: error.details } : {}) });
+      // The reason is bounded; added catalog lines are kept whole.
+      const [reason, ...addedCatalog] = String(error.message).split('\nAdditional catalog:\n');
+      const advice = require('./repair_hints').hint(error, contract, catalog, { followup: Boolean(turns.length || previous) });
+      step('V2_CONTRACT_REJECTED', { attempt, code: error.code || 'V2_CONTRACT_INVALID', detail: String(error.message).slice(0, 300), ...(error.details ? { details: error.details } : {}),
+        ...(advice ? { hinted: true } : {}) });
       messages.push({ role: 'assistant', content: JSON.stringify(contract || {}) },
-        { role: 'user', content: `The contract was rejected: ${String(error.message).slice(0, 400)}${error.details ? ` ${error.details.join('; ')}` : ''}. `
-          + 'Fix only that problem using exact catalog names and quotes from the question, then call plan_query again.' });
+        { role: 'user', content: `The contract was rejected: ${reason.slice(0, 400)}${error.details ? ` ${error.details.join('; ')}` : ''}. `
+          + (advice ? `${advice} ` : '')
+          + 'Fix only that problem using exact catalog names and quotes from the question, then call plan_query again.'
+          + (addedCatalog.length ? `\nAdditional catalog:\n${addedCatalog.join('\n')}` : '') });
     }
   }
   if (!compiled) return { fallback: lastError?.code || 'V2_CONTRACT_INVALID', contract };

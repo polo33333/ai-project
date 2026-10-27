@@ -63,6 +63,10 @@ test('a raw measure equal to an unconditioned metric is that metric; other measu
   assert.match(count.sql, /COUNT\(t0\.\[ElectricityOutputID\]\) AS \[Số hóa đơn\]/);
   const other = compile({ root: 'T_ElectricityOutput', operation: 'aggregate', measures: [{ ref: 'T_ElectricityOutput.PreTotalAmount', aggregation: 'SUM' }], filters }, catalog, { question });
   assert.deepEqual(other.metrics, []);
+  // "metric": "COUNT" is a record count, and as such the approved count metric.
+  const named = compile({ root: 'T_ElectricityOutput', operation: 'aggregate', measures: [{ metric: 'COUNT', ref: '*' }], filters }, catalog, { question });
+  assert.deepEqual(named.metrics, [{ id: 'bill_count', version: 1 }]);
+  assert.equal(named.sql, count.sql);
 });
 
 test('fixed conditions filter the rows of a single metric, and only their own measure otherwise', () => {

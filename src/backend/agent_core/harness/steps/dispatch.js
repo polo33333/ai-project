@@ -9,6 +9,7 @@ const {
   assessRequestContract, createMetricContract, decodeIntent, buildEnrichedListSql, contextualLookupQuestion,
   isSimpleEntityListRequest, positive, aborted, withToolProgress, createProviderBudget, recoverable, boundedCall, wireMessages
 } = require('./common');
+const localStage = require('../local_stage_prompt');
 
 function createDispatch(s) {
   const { harness, userMessage, provider, enabledToolNames, resourceSnapshot, question, messages, context, onProgress, budget, candidates, plan, requestTime, resultStore, toolContext, toolDefs,
@@ -17,7 +18,9 @@ function createDispatch(s) {
     if (['v2_contract', 'v2_contract_repair'].includes(stage)) emitProgress(onProgress, { type: 'model_started', label: stage === 'v2_contract'
       ? 'Đang phân tích câu hỏi và lập kế hoạch truy vấn' : 'Đang điều chỉnh kế hoạch truy vấn', status: 'running', icon: 'brain' });
     let lastError;
-    for (const candidate of [s.activeProvider, ...candidates.filter(item => item.id !== s.activeProvider?.id)]) {
+    const queue = [s.activeProvider, ...candidates.filter(item => item.id !== s.activeProvider?.id)];
+    for (let index = 0; index < queue.length; index++) {
+      const candidate = queue[index];
       check();
       const toolsRequired = Boolean(plan.outputs?.data || plan.outputs?.chart || plan.outputs?.export);
       if (definitions.length && toolsRequired && !candidate.supportsToolCalling && !candidate.supportsJsonToolCalling) {
@@ -25,30 +28,44 @@ function createDispatch(s) {
         trace.steps.push({ type: 'TOOL_CAPABILITY_UNAVAILABLE', providerId: candidate.id });
         continue;
       }
-      const providerTimeout = positive(isLocalProvider(candidate) ? process.env.AI_LOCAL_TIMEOUT_MS : process.env.AI_DEFAULT_TIMEOUT_MS, 30000);
-      const contextWindow = positive(candidate.contextWindow || candidate.numCtx, positive(process.env.AI_PROVIDER_CONTEXT_WINDOW, 16384));
-      const reserve = positive(candidate.outputReserve, positive(process.env.AI_PROVIDER_OUTPUT_RESERVE, 2048));
+      const local = isLocalProvider(candidate);
+      const providerTimeout = positive(local ? process.env.AI_LOCAL_TIMEOUT_MS : process.env.AI_DEFAULT_TIMEOUT_MS, 30000);
+      // Local: the same window and output limit the Ollama adapter sends.
+      const contextWindow = local ? positive(candidate.numCtx || candidate.contextWindow, positive(process.env.LOCAL_MODEL_NUM_CTX, 16384))
+        : positive(candidate.contextWindow || candidate.numCtx, positive(process.env.AI_PROVIDER_CONTEXT_WINDOW, 16384));
+      const reserve = local ? positive(candidate.outputReserve || candidate.numPredict, positive(process.env.LOCAL_MODEL_NUM_PREDICT, 2048))
+        : positive(candidate.outputReserve, positive(process.env.AI_PROVIDER_OUTPUT_RESERVE, 2048));
+      const structured = local && !s.structuredOutputFailed?.has(candidate.id)
+        ? localStage.structuredRequest(candidate, inputMessages, definitions, stage) : null;
+      const stageMessages = structured ? structured.messages : inputMessages;
+      const stageDefinitions = structured ? [] : definitions;
       // Remote providers cache the unchanged beginning of a prompt, so the
       // per-request clock is a separate system message after the stage
       // rules. Local chat templates may require a single leading system
       // message, so it joins that message there.
       const clock = require('../../../services/request_time').instruction(requestTime);
-      const groundedMessages = inputMessages === conversation ? inputMessages
-        : inputMessages[0]?.role !== 'system' ? [{ role: 'system', content: clock }, ...inputMessages]
-        : isLocalProvider(candidate)
-          ? inputMessages.map((message, index) => index ? message : { ...message, content: `${message.content}\n${clock}` })
-          : [inputMessages[0], { role: 'system', content: clock }, ...inputMessages.slice(1)];
+      let groundedMessages = stageMessages === conversation ? stageMessages
+        : stageMessages[0]?.role !== 'system' ? [{ role: 'system', content: clock }, ...stageMessages]
+        : local
+          ? stageMessages.map((message, index) => index ? message : { ...message, content: `${message.content}\n${clock}` })
+          : [stageMessages[0], { role: 'system', content: clock }, ...stageMessages.slice(1)];
+      if (local && stage === 'agent' && definitions.length) {
+        s.localGuidance ||= localStage.selectGuidance(plan, question);
+        trace.skill = s.localGuidance.trace;
+        trace.skill.injected ||= Boolean(s.localGuidance.skill);
+        groundedMessages = localStage.agentMessages(groundedMessages, definitions, policy, s.localGuidance);
+      }
       const lifecycle = require('../context_lifecycle').compact(groundedMessages, {
-        targetTokens: Math.max(0, (contextWindow - reserve - estimateTokens(definitions) - 256) * 0.75)
+        targetTokens: Math.max(0, (contextWindow - reserve - estimateTokens(stageDefinitions) - 256) * 0.75)
       });
       let outgoing = wireMessages(lifecycle.messages, candidate);
       if (lifecycle.changes.length) trace.steps.push({ type: 'CONTEXT_COMPACTED', stage,
         beforeTokensEstimated: lifecycle.beforeTokens, afterTokensEstimated: lifecycle.afterTokens,
         changes: lifecycle.changes });
-      if (definitions.length && candidate.supportsJsonToolCalling && !candidate.supportsToolCalling) {
-        outgoing = outgoing.map((item, index) => index ? item : { ...item, content: `${item.content}\nFor a tool action return only JSON {"tool":"name","arguments":{...}}. Available tools: ${JSON.stringify(definitions)}` });
+      if (stageDefinitions.length && candidate.supportsJsonToolCalling && !candidate.supportsToolCalling) {
+        outgoing = outgoing.map((item, index) => index ? item : { ...item, content: `${item.content}\nFor a tool action return only JSON {"tool":"name","arguments":{...}}. Available tools: ${JSON.stringify(stageDefinitions)}` });
       }
-      if (estimateTokens(outgoing) + estimateTokens(definitions) + reserve + 256 > contextWindow) {
+      if (estimateTokens(outgoing) + estimateTokens(stageDefinitions) + reserve + 256 > contextWindow) {
         lastError = Object.assign(new Error('Provider context budget exceeded.'), { code: 'CONTEXT_BUDGET_EXCEEDED' });
         trace.steps.push({ type: lastError.code, providerId: candidate.id });
         continue;
@@ -63,7 +80,7 @@ function createDispatch(s) {
         const answerPreview=context.answerStream?.begin(previewEligible);
         if(context.answerStream?.metrics.enabled&&stage==='agent')trace.steps.push({type:'ANSWER_STREAM_POLICY',eligible:previewEligible,toolCount:definitions.length,
           reason:previewEligible?'general_answer':definitions.length&&!resolvedGeneral?'tools_without_general_resolution':'verified_result_required'});
-        const response = await boundedCall(signal => harness.dispatch(candidate, outgoing, definitions, signal, { executionBudget: budget,
+        const response = await boundedCall(signal => harness.dispatch(structured ? structured.provider : candidate, outgoing, stageDefinitions, signal, { executionBudget: budget,
           onAnswer:answerPreview?.push,
           onToolCall:()=>answerPreview?.cancel(),
           onReasoning: delta => emitProgress(onProgress, { type: 'reasoning_delta', delta, iteration: trace.iterations, label: 'Reasoning', icon: 'brain' }) }), context.signal, Math.min(providerTimeout, budget.remainingMs()));
@@ -75,15 +92,16 @@ function createDispatch(s) {
           outputTokens: usage ? Number(usage.outputTokens) || 0 : null,
           cachedInputTokens: usage ? Number(usage.cachedInputTokens) || 0 : null,
           totalTokens: usage ? Number(usage.totalTokens) || (Number(usage.inputTokens) || 0) + (Number(usage.outputTokens) || 0) : null,
-          inputTokensEstimated: estimateTokens(outgoing) + estimateTokens(definitions), usageAvailable: Boolean(usage),
-          messageTokensEstimated: estimateTokens(outgoing), toolDefinitionsTokensEstimated: estimateTokens(definitions),
-          toolResultTokensEstimated: estimateTokens(outgoing.filter(message => message.role === 'tool')) });
+          inputTokensEstimated: estimateTokens(outgoing) + estimateTokens(stageDefinitions), usageAvailable: Boolean(usage),
+          messageTokensEstimated: estimateTokens(outgoing), toolDefinitionsTokensEstimated: estimateTokens(stageDefinitions),
+          toolResultTokensEstimated: estimateTokens(outgoing.filter(message => message.role === 'tool')),
+          ...(structured ? { structuredOutput: true } : {}) });
         trace.steps.at(-1).contextFootprint = {
-          breakdown: require('../context_lifecycle').footprint(outgoing, definitions),
+          breakdown: require('../context_lifecycle').footprint(outgoing, stageDefinitions),
           systemTokensEstimated: estimateTokens(outgoing.filter(message => message.role === 'system')),
           toolMessageCount: outgoing.filter(message => message.role === 'tool').length,
           messageCount: outgoing.length,
-          definitionCount: definitions.length,
+          definitionCount: stageDefinitions.length,
           instructionChars: stage === 'agent' ? instruction.length : 0,
           cachedCatalogChars: stage === 'agent' && cachedCatalog ? JSON.stringify(cachedCatalog).length : 0
         };
@@ -103,6 +121,14 @@ function createDispatch(s) {
       } catch (error) {
         if (context.signal?.aborted) throw aborted();
         lastError = error;
+        if (structured && error.code !== 'OPERATION_TIMEOUT') {
+          // The schema-constrained call failed: the same provider retries
+          // with its native tool call for the rest of the request.
+          (s.structuredOutputFailed ||= new Set()).add(candidate.id);
+          trace.steps.push({ type: 'LOCAL_STRUCTURED_OUTPUT_FAILED', stage, providerId: candidate.id, error: String(error.message).slice(0, 200) });
+          queue.splice(index + 1, 0, candidate);
+          continue;
+        }
         if (!recoverable(error)) throw error;
       }
     }

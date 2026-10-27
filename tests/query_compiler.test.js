@@ -141,3 +141,54 @@ test('measures make an aggregate when the operation is omitted; a list with meas
   // A plain list without measures stays a list.
   assert.equal(compile({ root: 'M_Employee' }, catalog, { question: 'ds nv' }).operation, 'list');
 });
+
+test('a lookup ref that repeats the lookup table compiles like the plain one', () => {
+  const plain = compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ ref: '*', aggregation: 'COUNT' }],
+    filters: [{ ref: 'M_Employee.GenderID->ConstantName', operator: 'eq', value: 'Nữ', evidence: 'nữ' }] }, catalog, { question: 'Có bao nhiêu nhân viên nữ?' });
+  const repeated = compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ ref: '*', aggregation: 'COUNT' }],
+    filters: [{ ref: 'M_Employee.GenderID->M_Constant.ConstantName', operator: 'eq', value: 'Nữ', evidence: 'nữ' }] }, catalog, { question: 'Có bao nhiêu nhân viên nữ?' });
+  assert.equal(repeated.sql, plain.sql);
+  assert.match(repeated.sql, /LEFT JOIN \[dbo\]\.\[M_Constant\] t1 ON t1\.\[ConstantID\] = t0\.\[GenderID\]/);
+  // A table the key does not point to is still an unknown column.
+  assert.throws(() => compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ ref: '*', aggregation: 'COUNT' }],
+    filters: [{ ref: 'M_Employee.GenderID->M_Master.Name', operator: 'eq', value: 'Nữ', evidence: 'nữ' }] }, catalog, { question: 'Có bao nhiêu nhân viên nữ?' }), /V2_COLUMN_UNKNOWN/);
+});
+
+test('a filter value must appear as whole words of its quote', () => {
+  const base = { root: 'T_ElectricityOutput', operation: 'aggregate', measures: [{ ref: 'T_ElectricityOutput.FinalTotalAmount', aggregation: 'SUM' }] };
+  // An invented ID for a quoted code: "1" is only part of "KA0021".
+  assert.throws(() => compile({ ...base, filters: [{ ref: 'T_ElectricityOutput.CustomerID', operator: 'eq', value: 1, evidence: 'KA0021' }] }, catalog, { question }),
+    /V2_FILTER_UNGROUNDED: T_ElectricityOutput\.CustomerID = 1/);
+  // A value elsewhere in the question but not in the quote is not grounded either.
+  assert.throws(() => compile({ ...base, filters: [{ ref: 'M_Customer.CustomerCode', operator: 'eq', value: 'KA0021', evidence: '2024-02' }] }, catalog, { question }),
+    /V2_FILTER_UNGROUNDED/);
+  const grounded = compile({ ...base, filters: [{ ref: 'T_ElectricityOutput.CustomerID', operator: 'eq', value: 21, evidence: 'khách hàng số 21' }] },
+    catalog, { question: 'Tiền điện của khách hàng số 21 là bao nhiêu?' });
+  assert.match(grounded.sql, /t0\.\[CustomerID\] = 21/);
+  const accented = compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ ref: '*', aggregation: 'COUNT' }],
+    filters: [{ ref: 'M_Employee.DepartmentID->Name', operator: 'ne', value: 'Kỹ thuật', evidence: 'không phải phòng Kỹ thuật' }] },
+    catalog, { question: 'Bao nhiêu nhân viên không phải phòng Kỹ thuật?' });
+  assert.match(accented.sql, /t1\.\[Name\] <> N'Kỹ thuật'/);
+});
+
+test('a metric named after an aggregation is that aggregation over its ref', () => {
+  const female = { question: 'Có bao nhiêu nhân viên nữ?' };
+  const filters = [{ ref: 'M_Employee.GenderID->ConstantName', operator: 'eq', value: 'Nữ', evidence: 'nữ' }];
+  const plain = compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ ref: '*', aggregation: 'COUNT', label: 'Số lượng nhân viên' }], filters }, catalog, female);
+  const named = compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ metric: 'COUNT', ref: '*', aggregation: 'COUNT', label: 'Số lượng nhân viên' }], filters }, catalog, female);
+  assert.equal(named.sql, plain.sql);
+  assert.match(named.sql, /COUNT\(\*\) AS \[Số lượng nhân viên\]/);
+  // COUNT without a ref counts records; the aggregation may come from the metric name alone.
+  assert.equal(compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ metric: 'count', label: 'Số lượng nhân viên' }], filters }, catalog, female).sql, plain.sql);
+  const column = compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ metric: 'COUNT', ref: 'EmployeeID' }], filters }, catalog, female);
+  assert.match(column.sql, /COUNT\(t0\.\[EmployeeID\]\)/);
+  const total = compile({ root: 'T_ElectricityOutput', operation: 'aggregate', measures: [{ metric: 'SUM', ref: 'T_ElectricityOutput.FinalTotalAmount' }],
+    filters: [{ ref: 'T_ElectricityOutput.ElectricityOutputDate', operator: 'period', value: '2024-02', evidence: '2024-02' }] }, catalog, { question });
+  assert.match(total.sql, /SUM\(t0\.\[FinalTotalAmount\]\)/);
+  assert.deepEqual(total.metrics, []);
+  // Conflicting aggregations, a SUM without a column and unknown metric ids are still rejected.
+  assert.throws(() => compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ metric: 'COUNT', ref: 'EmployeeID', aggregation: 'MAX' }], filters }, catalog, female),
+    /V2_MEASURE_INVALID: metric COUNT is an aggregation/);
+  assert.throws(() => compile({ root: 'T_ElectricityOutput', operation: 'aggregate', measures: [{ metric: 'SUM' }] }, catalog, { question }), /V2_MEASURE_INVALID/);
+  assert.throws(() => compile({ root: 'M_Employee', operation: 'aggregate', measures: [{ metric: 'headcount' }], filters }, catalog, female), /V2_METRIC_UNKNOWN/);
+});

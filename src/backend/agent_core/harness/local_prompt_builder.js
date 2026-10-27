@@ -8,11 +8,10 @@ function toolSummary(definitions) {
   }).join('\n');
 }
 
+// The SQL relationship rules are not repeated here: the shared conversation
+// system message already carries them.
 function buildLocalMessages(messages = [], definitions = [], requestPolicy = {}, guidance = {}) {
   const protocol = definitions.length ? `
-
-# SQL relationship rules
-${require('../tools/join_path').instruction}
 
 # Local tool protocol
 Use a tool only when it is needed. Prefer the native function-calling interface.
