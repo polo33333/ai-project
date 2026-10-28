@@ -52,12 +52,34 @@
     return true;
   }
 
+  window.filterAiUsageAccounts = function filterAiUsageAccounts() {
+    const page = window.paginationState.ai_usage_accounts;
+    if (page) page.currentPage = 1;
+    window.renderAiUsageAccounts();
+  };
+
+  window.renderAiUsageAccounts = function renderAiUsageAccounts() {
+    const body = document.getElementById('ai-usage-account-rows');
+    if (!body) return;
+    const visible = state.accounts.filter(matches);
+    const page = window.getAdminListPage(visible, 'ai_usage_accounts');
+    body.innerHTML = visible.length ? page.items.map(item => row(item, 'account')).join('') : '<tr><td colspan="7" class="ai-usage-empty">Không có tài khoản phù hợp.</td></tr>';
+    window.renderPaginationControls('ai-usage-account-pagination', 'ai_usage_accounts', visible.length, window.renderAiUsageAccounts);
+  };
+
+  window.renderAiUsageProviders = function renderAiUsageProviders() {
+    const body = document.getElementById('ai-usage-provider-rows');
+    if (!body) return;
+    const page = window.getAdminListPage(state.providers, 'ai_usage_providers');
+    body.innerHTML = state.providers.length ? page.items.map(item => row(item, 'provider')).join('') : '<tr><td colspan="7" class="ai-usage-empty">Chưa cấu hình mô hình AI.</td></tr>';
+    window.renderPaginationControls('ai-usage-provider-pagination', 'ai_usage_providers', state.providers.length, window.renderAiUsageProviders);
+  };
+
   window.renderAiUsage = function renderAiUsage() {
     const accounts = document.getElementById('ai-usage-account-rows'), providers = document.getElementById('ai-usage-provider-rows');
     if (!accounts || !providers) return;
-    const visible = state.accounts.filter(matches);
-    accounts.innerHTML = visible.length ? visible.map(item => row(item, 'account')).join('') : '<tr><td colspan="7" class="ai-usage-empty">Không có tài khoản phù hợp.</td></tr>';
-    providers.innerHTML = state.providers.length ? state.providers.map(item => row(item, 'provider')).join('') : '<tr><td colspan="7" class="ai-usage-empty">Chưa cấu hình mô hình AI.</td></tr>';
+    window.renderAiUsageAccounts();
+    window.renderAiUsageProviders();
     const all = [...state.accounts, ...state.providers];
     const summary = document.getElementById('ai-usage-summary');
     if (summary) {
