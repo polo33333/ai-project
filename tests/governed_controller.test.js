@@ -149,7 +149,7 @@ test('knowledge tool searches only documents allowed for the selected model befo
   const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
   t.mock.method(library, 'getDocuments', () => [
     { id: 'app', title: 'App guide', governedPolicy: { modelDestinations: ['gemini'] } },
-    { id: 'private', title: 'Private guide' }
+    { id: 'private', title: 'Private guide', governedPolicy: { schemaVersion: 2, aiSharing: { level: 'local' } } }
   ]);
   t.mock.method(library, 'getContent', id => { assert.equal(id, 'app'); return { content: 'Install app' }; });
   t.mock.method(retrieval, 'search', async (query, options) => {

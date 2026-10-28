@@ -794,8 +794,9 @@ class ToolRegistry {
           if(refined)selection={...selection,...refined,retrieval:selection.retrieval};
         }
       }
-      const allowedTables = (source.governedPolicy?.allowedTables || []).map(name=>name.toLowerCase());
-      const blockedColumns = new Set((source.governedPolicy?.blockedColumns || []).map(name=>name.toLowerCase()));
+      const sqlPolicy = require('../governance/policy').normalize(source.governedPolicy).sql;
+      const allowedTables = sqlPolicy.allowedTables.map(name=>name.toLowerCase());
+      const blockedColumns = new Set(sqlPolicy.blockedColumns.map(name=>name.toLowerCase()));
       const tableDirectory=dictionaryService.getGroupedTables().filter(t=>t.isActive&&t.dbSourceId===source.id
         &&(!allowedTables.length||allowedTables.includes(t.tableName.toLowerCase())||allowedTables.includes(`${t.schemaName||'dbo'}.${t.tableName}`.toLowerCase())))
         .map(t=>({tableName:t.tableName,entity:t.semanticModel?.entity,domain:t.domain,description:String(t.tableDescription||'').slice(0,320)}));

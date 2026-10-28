@@ -101,7 +101,7 @@ class AiProviderManager {
     if (!provider) return null;
     const allowed = ['id', 'name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'model',
       'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'isActive', 'status', 'tokenCost',
-      'temperature', 'think', 'keepAlive'];
+      'temperature', 'think', 'keepAlive', 'rejectInternalData'];
     const result = {};
     for (const key of allowed) result[key] = provider[key];
     result.hasApiKey = Boolean(provider.apiKey);
@@ -172,7 +172,8 @@ class AiProviderManager {
       priority: parseInt(data.priority) || (this.providers.length + 1),
       isActive: false,
       status: "connected",
-      tokenCost: parseFloat(data.tokenCost) || 0
+      tokenCost: parseFloat(data.tokenCost) || 0,
+      rejectInternalData: data.rejectInternalData === true || data.rejectInternalData === 'true'
     };
 
     applyLocalOptions(newProvider, data);
@@ -188,10 +189,10 @@ class AiProviderManager {
 
     const pending = { ...target };
 
-    const allowed = ['name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'apiKey', 'model', 'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'tokenCost'];
+    const allowed = ['name', 'type', 'apiFormat', 'executionClass', 'baseUrl', 'apiKey', 'model', 'supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'contextWindow', 'outputReserve', 'priority', 'tokenCost', 'rejectInternalData'];
     for (const key of allowed) {
       if (data[key] !== undefined) {
-        pending[key] = ['supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments'].includes(key)
+        pending[key] = ['supportsToolCalling', 'supportsJsonToolCalling', 'useForAttachments', 'rejectInternalData'].includes(key)
           ? (data[key] === true || data[key] === 'true')
           : (['contextWindow', 'outputReserve'].includes(key) ? Math.max(key === 'contextWindow' ? 1024 : 256, parseInt(data[key]) || (key === 'contextWindow' ? 16384 : 2048))
             : (key === 'priority' ? parseInt(data[key]) : (key === 'tokenCost' ? parseFloat(data[key]) : data[key])));

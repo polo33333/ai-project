@@ -1030,6 +1030,11 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+// Who can query the table now that it is on (from table packages in Quản trị dữ liệu).
+function showDictionaryAccessNotice(notice) {
+  if (notice?.message && typeof showToast === 'function') showToast(notice.message, notice.level === 'warning' ? 'warning' : 'info', 'Phân quyền dữ liệu');
+}
+
 async function toggleSelectedDictionaryTableActive(isActive) {
   const tableName = window.selectedDictionaryTableName;
   const tableId = window.selectedDictionaryTableId;
@@ -1048,6 +1053,7 @@ async function toggleSelectedDictionaryTableActive(isActive) {
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     renderDictionaryDrawer(table);
     if (typeof showToast === 'function') showToast(isActive ? 'Đã bật bảng cho AI.' : 'Đã tắt bảng khỏi ngữ cảnh AI.', 'success');
+    showDictionaryAccessNotice(data.governance);
   } catch (err) {
     const activeEl = document.getElementById('dict-drawer-active-toggle');
     if (activeEl) activeEl.checked = !isActive;
@@ -1073,6 +1079,7 @@ async function toggleDictionaryTableActiveFromList(encodedTableName, checkbox) {
     renderDataDictionary();
     if (window.dictionaryView === 'graph' && typeof renderDictionaryGraph === 'function') renderDictionaryGraph();
     if (typeof showToast === 'function') showToast(isActive ? `Đã bật bảng ${tableName} cho AI.` : `Đã tắt bảng ${tableName}.`, 'success');
+    showDictionaryAccessNotice(data.governance);
   } catch (err) {
     checkbox.checked = !isActive;
     checkbox.disabled = false;

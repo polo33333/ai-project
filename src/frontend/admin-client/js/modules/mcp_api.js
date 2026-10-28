@@ -342,9 +342,22 @@ function openEmbedConfigModal(id = '') {
   document.getElementById('embed-config-rate').value = String(config?.rateLimit || 30);
   document.getElementById('embed-config-rows').value = String(config?.maxRows || 20);
   document.getElementById('embed-config-mode').value = config?.mode === 'page' ? 'page' : 'widget';
+  loadEmbedRoleOptions(config?.role || 'khach_widget');
   document.getElementById('embed-config-modal-title').textContent = config ? 'Sửa Embed Chat' : 'Tạo Embed Chat';
   if (typeof openModal === 'function') openModal('embed-config-modal');
   setTimeout(() => document.getElementById('embed-config-name')?.focus(), 80);
+}
+
+// Roles a widget may read through (admin is never offered).
+async function loadEmbedRoleOptions(selected) {
+  const select = document.getElementById('embed-config-role');
+  if (!select) return;
+  try {
+    const res = await fetch('/api/accounts/roles', { cache: 'no-store' }), data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+    select.innerHTML = (data.roles || []).filter(role => role.id !== 'admin').map(role => `<option value="${escapeMcpApiHtml(role.id)}">${escapeMcpApiHtml(role.name)}</option>`).join('');
+  } catch (_) { /* keep the default option */ }
+  select.value = [...select.options].some(option => option.value === selected) ? selected : 'khach_widget';
 }
 
 function closeEmbedConfigModal() {
@@ -360,7 +373,8 @@ async function saveEmbedConfig(event) {
     allowedOrigins: document.getElementById('embed-config-origins')?.value,
     rateLimit: Number(document.getElementById('embed-config-rate')?.value || 30),
     maxRows: Number(document.getElementById('embed-config-rows')?.value || 20),
-    mode: document.getElementById('embed-config-mode')?.value === 'page' ? 'page' : 'widget'
+    mode: document.getElementById('embed-config-mode')?.value === 'page' ? 'page' : 'widget',
+    role: document.getElementById('embed-config-role')?.value || 'khach_widget'
   };
   try {
     const endpoint = id ? '/api/embed/configs/update' : '/api/embed/configs/create';

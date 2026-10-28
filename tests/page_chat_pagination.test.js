@@ -185,7 +185,7 @@ test('continuation failure keeps the original chat and success saves the summary
   const original={id:'chat',title:'Original',messages:session(60).messages,history:[]};
   let fail=true,saves=0,selected=null;
   const notices=[];
-  const sandbox=vm.createContext({URLSearchParams,AbortSignal,crypto:{randomUUID:()=> 'new'},
+  const sandbox=vm.createContext({URLSearchParams,AbortSignal,crypto:{randomUUID:()=> 'new'},pageChatProviderId:()=>null,
     window:{chatSessions:[original]},
     document:{getElementById:()=>null},
     renderChatLimitNotice(){}, renderChatSessionsList(){},getCurrentChatSession:()=>original,
@@ -292,7 +292,7 @@ test('retry failure preserves the answer, input draft and message count without 
     getCurrentChatSession:()=>chat,chatSessionIsFull:()=>true,chatSessionUsage:()=>({count:80}),
     createThinkingBubble:()=>thinking,disposeThinkingBubble(){},
     setPageChatResponding(){},saveChatSessions:async()=>true,
-    getChatKnowledgeValues:()=>['none'],buildPageChatAttachmentContext:async()=>'',
+    getChatKnowledgeValues:()=>['none'],buildPageChatAttachmentContext:async()=>'',pageChatProviderId:()=>null,
     fetchStreamingChat:async data=>{payload=data;throw new Error('Model failed');},
     appendChatMessage:()=>assert.fail('Retry must not append a message on failure'),
     renderCurrentChatMessages:()=>{restored++;},showToast(){},

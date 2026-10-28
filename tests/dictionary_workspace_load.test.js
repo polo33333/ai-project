@@ -19,7 +19,7 @@ test('dictionary workspace coalesces tab loads and keeps existing data on failur
 });
 test('workspace snapshot is restricted to auth and dictionary dependencies', () => {
   assert.deepEqual(require('../src/backend/storage/request_stores').requestStores({ method: 'GET', url: '/api/dictionary/workspace' }),
-    ['accounts.json','sessions.json','account_roles.json','dictionary.json','domain_aliases.json','table_relationships.json','db_sources.json']);
+    ['accounts.json','sessions.json','account_roles.json','account_function_groups.json','dictionary.json','domain_aliases.json','table_relationships.json','db_sources.json']);
 });
 
 test('forced reload on source switch ignores an older in-flight workspace response', async () => {

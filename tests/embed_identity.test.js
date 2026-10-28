@@ -60,6 +60,14 @@ test('admin config and public heartbeat enforce authentication without running A
   assert.equal(result.status,200,JSON.stringify(result.data));
   assert.equal(audit.mock.calls[0].arguments[7].visitorIdentity.subject,'user-1');
   assert.ok(!JSON.stringify(audit.mock.calls[0].arguments).includes(identityToken));
+  // A failed question is kept in the chat history with the visitor and the reason.
+  require('../src/backend/intelligent_core/core').chat.mock.mockImplementationOnce(async()=>({success:false,error:'AI provider không phản hồi.',errorCode:'PROVIDER_DOWN',trace:{}}));
+  result=await call('/api/embed/chat','POST',{embedId:config.id,sessionId:'visitor-session',question:'ds nv',identityToken});
+  assert.equal(result.status,500);
+  const failed=audit.mock.calls[1].arguments;
+  assert.deepEqual([failed[0],failed[1],failed[5],failed[6]],['ds nv',null,'ERROR','AI provider không phản hồi.']);
+  assert.equal(failed[7].embedId,config.id);assert.equal(failed[7].visitorIdentity.subject,'user-1');assert.equal(failed[7].errorCode,'PROVIDER_DOWN');
+  assert.ok(!JSON.stringify(failed).includes(identityToken));
   const coreCalls=require('../src/backend/intelligent_core/core').chat.mock.callCount();
   const uploads=t.mock.method(require('../src/backend/services/chat_attachment_service'),'submit',async(owner,body)=>({status:'success',reply:'Tính năng xử lý tệp đang phát triển.',completionStatus:'SUCCESS'}));
   result=await call('/api/chat/attachments','POST',{files:[]},admin.token);

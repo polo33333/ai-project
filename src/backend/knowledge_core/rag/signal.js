@@ -37,7 +37,9 @@ function blockedDocuments(modelDestination = null) {
 }
 
 const describe = document => ({ documentId: String(document.id), title: document.title,
-  sensitivity: document.governedPolicy?.sensitivity || 'internal' });
+  // "Tắt AI" reads as restricted, so the notice never names the document.
+  sensitivity: document.governedPolicy?.sensitivity
+    || (require('../../governance/policy').normalize(document.governedPolicy).aiSharing.level === 'off' ? 'restricted' : 'internal') });
 
 async function documentSignal(question, { modelDestination = null, documents = null, blocked = null, threshold = minScore() } = {}) {
   const library = documents || routableDocuments(modelDestination);

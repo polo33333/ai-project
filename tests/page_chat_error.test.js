@@ -26,6 +26,7 @@ test('chat displays backend failure in an assistant bubble and releases composer
     createThinkingBubble: node, disposeThinkingBubble: noop,
     setPageChatResponding: value => { window.pageChatIsResponding = value; },
     getChatKnowledgeValues: () => ['none'], buildPageChatAttachmentContext: async () => '',
+    pageChatProviderId: () => null,
     fetchStreamingChat: async () => { throw new Error('ROUTING_TIMEOUT'); }
   };
   vm.createContext(sandbox);

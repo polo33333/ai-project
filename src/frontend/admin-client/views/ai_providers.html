@@ -97,6 +97,13 @@
           <option value="on">Dùng đọc tài liệu và ảnh đính kèm</option>
         </select>
       </div>
+      <div>
+        <label class="form-label" for="page-new-prov-internal">Dữ liệu nội bộ</label>
+        <select class="form-control" id="page-new-prov-internal" title="Nguồn đặt “Tất cả AI” trong Quản lý dữ liệu tự động gửi được tới provider này. Chọn “Không nhận” để chặn provider chưa tin cậy.">
+          <option value="accept">Nhận dữ liệu của nguồn đặt “Tất cả AI”</option>
+          <option value="reject">Không nhận dữ liệu nội bộ</option>
+        </select>
+      </div>
       <div class="provider-ollama-only" style="display: none;">
         <label class="form-label" for="page-new-prov-temperature">Độ ngẫu nhiên (Ollama)</label>
         <input type="number" class="form-control" id="page-new-prov-temperature" min="0" max="2" step="0.05" placeholder="Theo cài đặt chung" title="Từ 0 đến 2. Để trống để dùng cài đặt chung LOCAL_MODEL_TEMPERATURE.">

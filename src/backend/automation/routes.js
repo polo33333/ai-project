@@ -6,7 +6,7 @@ const { requireAdmin } = require('./registry');
 const metadata = template => ({ id: template.id, name: template.name, description: template.description, examples: template.examples, inputs: template.inputs, domain: template.domain, tags: template.tags, packageId: template.packageId, packageVersion: template.packageVersion, overlayVersion: template.overlayVersion });
 async function handle(req, res, pathname, account, readBody) {
   if (!/^\/api\/(workflow-plugins|question-templates|automation-runs)(\/|$)/.test(pathname)) return false;
-  const context = { accountId: account?.id, tenantId: account?.tenantId, permissions: account?.role === 'admin' ? ['admin'] : account?.permissions || ['sql:read', 'knowledge:read'] };
+  const context = { accountId: account?.id, tenantId: account?.tenantId, role: account?.role, workflowGrants: account?.grants?.workflows || [], permissions: account?.role === 'admin' ? ['admin'] : account?.permissions || ['sql:read', 'knowledge:read'] };
   const send = (value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
   try {
     if (!context.accountId) throw error('Cần đăng nhập.', 401);
@@ -44,7 +44,7 @@ async function handle(req, res, pathname, account, readBody) {
       else throw error('Phương thức không được hỗ trợ.', 405);
       return true;
     }
-    const plugin = pathname.match(/^\/api\/workflow-plugins\/([^/]+)(?:\/(validate|test|publish|enabled|overlay|rollback|export))?$/);
+    const plugin = pathname.match(/^\/api\/workflow-plugins\/([^/]+)(?:\/(validate|test|publish|enabled|access|overlay|rollback|export))?$/);
     if (plugin) {
       requireAdmin(context); const id = decodeURIComponent(plugin[1]), action = plugin[2];
       const record = await automation.repository.get('catalog', id);
@@ -56,6 +56,7 @@ async function handle(req, res, pathname, account, readBody) {
       else if (action === 'test') send(await automation.registry.test(id, context));
       else if (action === 'publish') send({ package: await automation.registry.publish(id, context, body.revision) });
       else if (action === 'enabled') send({ package: await automation.registry.enable(id, body.enabled, context, body.revision) });
+      else if (action === 'access') send({ package: await automation.registry.setAccess(id, body.mode, context, body.revision) });
       else if (action === 'overlay') send({ package: await automation.registry.overlay(id, body.scopeId, body.bundle, context, body.revision) });
       else if (action === 'rollback') send({ package: await automation.registry.rollback(id, body.version, context, body.revision) });
       else throw error('Thao tác không được hỗ trợ.', 405);
@@ -107,7 +108,7 @@ async function handle(req, res, pathname, account, readBody) {
       if (req.method === 'GET') {
         const owned = await automation.runtime.owned(id, context);
         const principal=require('../governance/context').current()&&require('../governance/context').principal();
-        if (principal?.role!=='admin' && principal?.dataAccess) {
+        if (principal && principal.role!=='admin') {
           for (const binding of Object.values(owned.definition.bindings||{})) {
             if (binding.dbSourceId) {
               const source=require('../services/sql_connector').dbSources.find(s=>s.id===binding.dbSourceId);

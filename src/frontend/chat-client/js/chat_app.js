@@ -6,7 +6,7 @@
   'use strict';
   // ?embed=<id> marks the page shown inside a customer site (embed "page" mode); keep it on every move.
   const embedId = new URLSearchParams(window.location.search).get('embed');
-  const EMBED_QUERY = embedId && /^[a-zA-Z0-9-]{1,64}$/.test(embedId) ? '?embed=' + embedId : '';
+  const EMBED_QUERY = embedId && /^[a-zA-Z0-9_-]{1,64}$/.test(embedId) ? '?embed=' + embedId : '';
   const HOME_URL = '/chat' + EMBED_QUERY, LOGIN_URL = '/chat/login' + EMBED_QUERY;
   const HEARTBEAT_MS = 4 * 60 * 1000;
   const NAV_OPEN = 'kh-nav-open', NAV_COLLAPSED = 'kh-nav-collapsed', COLLAPSED_KEY = 'knowledgehub.chatNavCollapsed';
@@ -27,8 +27,7 @@
     return data.account;
   }
 
-  async function loadView() {
-    const response = await fetch('/views/page_chat.html', { cache: 'no-store' });
+  async function loadView(response) {
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const template = document.createElement('template');
     template.innerHTML = await response.text();
@@ -105,6 +104,15 @@
         <button type="button" class="kh-usage-chip" data-kh-action="usage" hidden aria-haspopup="dialog"></button>
         <button type="button" class="kh-icon-btn kh-topbar-new" data-kh-action="new-chat" title="Trò chuyện mới" aria-label="Trò chuyện mới"><i class="fa-regular fa-pen-to-square" aria-hidden="true"></i></button>
       </header>`);
+  }
+
+  // The composer floats over the bottom of the conversation and grows with long input,
+  // reply suggestions and attachments; keep that much room below the last message.
+  function watchComposerHeight() {
+    const area = document.querySelector('#view-page_chat .page-chat-composer-area');
+    if (!area || typeof ResizeObserver !== 'function') return;
+    const update = () => document.body.style.setProperty('--kh-composer-h', Math.ceil(area.getBoundingClientRect().height) + 'px');
+    new ResizeObserver(update).observe(area); update();
   }
 
   function setNav(open) {
@@ -360,7 +368,11 @@
     if (EMBED_QUERY) document.body.classList.add('kh-chat-embedded');
     try { if (localStorage.getItem(COLLAPSED_KEY) === '1') document.body.classList.add(NAV_COLLAPSED); } catch (_) { /* default open */ }
     try {
-      account = await loadAccount();
+      const [loadedAccount, viewResponse] = await Promise.all([
+        loadAccount(),
+        fetch('/views/page_chat.html', { cache: 'no-store' })
+      ]);
+      account = loadedAccount;
       if (!account) return;
       if (account.role !== 'admin' && Array.isArray(account.permissions) && !account.permissions.includes('chat.use')) {
         document.getElementById('main-view-container').innerHTML = '<p class="kh-chat-loading" role="alert">Tài khoản chưa được cấp quyền trò chuyện. Vui lòng liên hệ quản trị viên.</p>';
@@ -369,11 +381,14 @@
       // The conversation is always on screen here, so page_chat.js treats this as its own tab
       // (no "go back to the conversation" mini panel).
       window.activeMainTab = 'page-chat';
-      const view = await loadView();
+      const view = await loadView(viewResponse);
       decorate(view);
+      watchComposerHeight();
       bindEvents();
       window.renderChatSessionsList?.();
       window.renderCurrentChatMessages?.();
+      // The parent widget need not wait for fonts and other nonessential resources.
+      if (EMBED_QUERY && window.parent !== window) window.parent.postMessage({ type: 'kh-chat-ready' }, '*');
       await Promise.allSettled([window.populateChatModelSelector?.(), window.populateChatKnowledgeSources?.(), window.fetchAndRenderQuickPrompts?.()]);
       startHeartbeat();
       loadUsage();

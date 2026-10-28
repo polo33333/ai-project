@@ -47,7 +47,7 @@ test('memory changes enforce revisions, expiration and explicit current-user pro
 
 test('task events retain references instead of rows, obey source ACL/revision and register egress', () => governance.run(() => {
   const m = memory(); actor('a');
-  const source = { id: 'memory-source', governedPolicy: { visibility: 'restricted', subjects: ['account:a'], revision: 2 } };
+  const source = { id: 'memory-source', governedPolicy: { visibility: 'restricted', subjects: ['account:a'], sensitivity: 'restricted', revision: 2 } };
   sql.dbSources.push(source);
   try {
     m.recordEvent({ accountId: 'a', sessionId: 's', question: 'List customers', currentPlan: { table: 'M_Customer', dbSourceId: source.id },

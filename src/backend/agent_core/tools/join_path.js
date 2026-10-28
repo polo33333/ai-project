@@ -20,7 +20,7 @@ function execute(args, context = {}) {
   require('../../governance/context').read(source, 'sql');
   const dictionary = require('../../services/dictionary_service');
   const key = value => String(value).normalize('NFC').toLowerCase();
-  const policy = source.governedPolicy || {};
+  const policy = require('../../governance/policy').normalize(source.governedPolicy).sql;
   const allowed = (policy.allowedTables || []).map(key);
   const blocked = new Set((policy.blockedColumns || []).map(key));
   const tables = dictionary.getGroupedTables().filter(t => t.dbSourceId === source.id && t.isActive !== false

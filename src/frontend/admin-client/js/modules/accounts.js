@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   let accounts = [], loading = null, editing = null, mode = 'create', trigger = null, saving = false;
-  let roles=[], capabilities=[], resources={sql:[],documents:[]}, roleEditing=null, roleSaving=false;
+  let roles=[], capabilities=[], functionGroups=[], roleEditing=null, roleSaving=false;
   const el = id => document.getElementById(id);
   const html = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   async function request(path, method = 'GET', body) {
@@ -39,7 +39,10 @@
     if(!el('embed-identity-config')) return;
     try {
       const data=await request('/api/accounts/embed-identity'), selected=el('embed-identity-config').value;
-      embedConfigs=data.configs;
+      embedConfigs=data.configs.filter(c=>c.mode!=='page'||c.identity?.enabled);
+      if(el('embed-auth-card')) el('embed-auth-card').hidden=!embedConfigs.length;
+      // Visitor sessions come from the chat-bubble widget; page-mode widgets sign in inside /chat instead.
+      if(el('embed-sessions-card')) el('embed-sessions-card').hidden=!data.configs.some(c=>c.mode!=='page');
       el('embed-identity-config').innerHTML=embedConfigs.map(c=>'<option value="'+html(c.id)+'">'+html(c.name)+'</option>').join('');
       if(embedConfigs.some(c=>c.id===selected)) el('embed-identity-config').value=selected;
       window.selectEmbedIdentity();
@@ -65,7 +68,7 @@
     window.loadEmbedIdentity();
     el('accounts-refresh').disabled = true; el('accounts-message').textContent = 'Đang tải tài khoản…';
     loading = Promise.all([request('/api/accounts'),request('/api/accounts/roles')]).then(([data,metadata]) => {
-      accounts = data.accounts; roles=metadata.roles; capabilities=metadata.capabilities; resources=metadata.resources;
+      accounts = data.accounts; roles=metadata.roles; capabilities=metadata.capabilities; functionGroups=metadata.functionGroups||[];
       renderRoleOptions(); window.renderAccountsTable(); el('accounts-message').textContent = `${accounts.length} tài khoản`;
     })
       .catch(error => { el('accounts-message').textContent = error.message; return false; })
@@ -77,7 +80,7 @@
     const keyword = el('accounts-search').value.trim().toLocaleLowerCase('vi'), role = el('accounts-role-filter').value, status = el('accounts-status-filter').value;
     const rows = accounts.filter(a => (!role || a.role === role) && (!status || a.isActive === (status === 'active')) && `${a.username} ${a.displayName} ${a.email}`.toLocaleLowerCase('vi').includes(keyword));
     const page = window.paginationState.accounts; page.currentPage = Math.max(1, Math.min(page.currentPage, Math.ceil(rows.length/page.itemsPerPage) || 1));
-    el('accounts-rows').innerHTML = rows.slice((page.currentPage-1)*page.itemsPerPage, page.currentPage*page.itemsPerPage).map((a, index) => `<tr><td class="row-index">${(page.currentPage - 1) * page.itemsPerPage + index + 1}</td><td class="accounts-identity-cell"><strong>${html(a.displayName || a.username)}</strong><span class="accounts-login-name"><span class="accounts-identity-label">Tên đăng nhập:</span> ${html(a.username)}</span>${a.email ? `<span class="accounts-email"><span class="accounts-identity-label">Email:</span> ${html(a.email)}</span>` : ''}</td><td><span class="accounts-badge ${a.role === 'admin' ? 'admin' : ''}">${html(a.roleLabel||a.role)}</span>${a.permissionOverrides!==null?'<small class="accounts-override-label">Quyền riêng</small>':''}</td><td><span class="accounts-badge">${CLIENT_ACCESS_LABELS[a.clientAccess] || CLIENT_ACCESS_LABELS.both}</span></td><td><span class="accounts-badge ${a.isActive ? 'active' : 'locked'}">${a.isActive ? 'Đang hoạt động' : 'Đã khóa'}</span></td><td>${a.lastLoginAt ? html(new Date(a.lastLoginAt).toLocaleString('vi-VN')) : 'Chưa đăng nhập'}</td><td><div class="accounts-row-actions"><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}')"><i class="fa-solid fa-pen"></i> Sửa</button><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}', 'password')"><i class="fa-solid fa-key"></i> Mật khẩu</button></div></td></tr>`).join('') || '<tr><td colspan="7" class="accounts-empty">Không có tài khoản phù hợp.</td></tr>';
+    el('accounts-rows').innerHTML = rows.slice((page.currentPage-1)*page.itemsPerPage, page.currentPage*page.itemsPerPage).map((a, index) => `<tr><td class="row-index">${(page.currentPage - 1) * page.itemsPerPage + index + 1}</td><td class="accounts-identity-cell"><strong>${html(a.displayName || a.username)}</strong><span class="accounts-login-name"><span class="accounts-identity-label">Tên đăng nhập:</span> ${html(a.username)}</span>${a.email ? `<span class="accounts-email"><span class="accounts-identity-label">Email:</span> ${html(a.email)}</span>` : ''}</td><td><span class="accounts-badge ${a.role === 'admin' ? 'admin' : ''}">${html(a.roleLabel||a.role)}</span>${a.permissionOverrides!==null?'<small class="accounts-override-label">Quyền riêng kiểu cũ</small>':''}${a.extraFunctionGroups?.length?`<small class="accounts-override-label">+${a.extraFunctionGroups.length} nhóm bổ sung</small>`:''}</td><td><span class="accounts-badge">${CLIENT_ACCESS_LABELS[a.clientAccess] || CLIENT_ACCESS_LABELS.both}</span></td><td><span class="accounts-badge ${a.isActive ? 'active' : 'locked'}">${a.isActive ? 'Đang hoạt động' : 'Đã khóa'}</span></td><td>${a.lastLoginAt ? html(new Date(a.lastLoginAt).toLocaleString('vi-VN')) : 'Chưa đăng nhập'}</td><td><div class="accounts-row-actions"><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}')"><i class="fa-solid fa-pen"></i> Sửa</button><button type="button" class="btn-secondary-sm" onclick="openAccountEditor('${html(a.id)}', 'password')"><i class="fa-solid fa-key"></i> Mật khẩu</button></div></td></tr>`).join('') || '<tr><td colspan="7" class="accounts-empty">Không có tài khoản phù hợp.</td></tr>';
     window.renderPaginationControls('accounts-pagination', 'accounts', rows.length, window.renderAccountsTable);
   };
   window.openAccountEditor = function (id, selectedMode) {
@@ -93,9 +96,8 @@
     el('accounts-password').disabled = mode === 'edit'; el('accounts-password').required = mode !== 'edit';
     if (editing) { el('accounts-username').value = editing.username; el('accounts-name').value = editing.displayName; el('accounts-email').value = editing.email; el('accounts-role').value = editing.role; el('accounts-active').value = editing.isActive ? 'active' : 'inactive'; el('accounts-client-access').value = editing.clientAccess || 'both'; }
     else { el('accounts-role').value='user'; el('accounts-client-access').value='both'; }
-    el('accounts-permission-mode').value=editing?.permissionOverrides==null?'inherit':'custom';
-    renderPermissionChecks('accounts-permissions',editing?.permissionOverrides||roles.find(r=>r.id===el('accounts-role').value)?.permissions||[]);
-    renderDataAccess('accounts-data-access',editing?.dataOverrides);
+    renderGroupChecks('accounts-extra-groups',editing?.extraFunctionGroups||[],'updateAccountPermissionPreview()');
+    el('accounts-legacy-label').hidden=!(editing&&(editing.permissionOverrides!=null||editing.dataOverrides!=null)); el('accounts-legacy-clear').checked=false;
     window.updateAccountPermissionPreview();
     el('accounts-editor').hidden = false; (mode === 'password' ? el('accounts-password') : mode === 'edit' ? el('accounts-name') : el('accounts-username')).focus();
   };
@@ -107,8 +109,8 @@
     try {
       const body = mode === 'password' ? { password:el('accounts-password').value, revision:editing.revision } : {
         displayName:el('accounts-name').value, email:el('accounts-email').value, role:el('accounts-role').value, isActive:el('accounts-active').value === 'active', clientAccess:el('accounts-client-access').value,
-        permissions:el('accounts-role').value==='admin'||el('accounts-permission-mode').value==='inherit'?null:readPermissions('accounts-permissions'),
-        dataAccess:el('accounts-role').value==='admin'?null:readDataAccess('accounts-data-access'),
+        extraFunctionGroups:el('accounts-role').value==='admin'?[]:readChecked('accounts-extra-groups'),
+        ...(el('accounts-role').value==='admin'||el('accounts-legacy-clear').checked?{permissions:null,dataAccess:null}:{}),
         ...(editing ? { revision:editing.revision } : { username:el('accounts-username').value, password:el('accounts-password').value }) };
       await request('/api/accounts' + (editing ? '/' + encodeURIComponent(editing.id) + (mode === 'password' ? '/password' : '') : ''), mode === 'edit' ? 'PUT' : 'POST', body);
       el('accounts-password').value = '';
@@ -123,47 +125,82 @@
       el(id).innerHTML=(id.endsWith('filter')?'<option value="">Tất cả vai trò</option>':'')+roles.map(r=>`<option value="${html(r.id)}">${html(r.name)}</option>`).join('');
       if(roles.some(r=>r.id===value)||id.endsWith('filter')) el(id).value=value;
     }
-    el('accounts-roles-list').innerHTML=roles.map(r=>`<article><div><strong>${html(r.name)}</strong><small>${html(r.id)} · ${r.builtin?'Vai trò hệ thống':`${r.permissions.length} quyền sử dụng`}</small><p>${html(r.description|| (r.id==='admin'?'Toàn quyền quản trị hệ thống.':'Quyền mặc định được áp dụng khi tài khoản chọn kế thừa.'))}</p></div><button type="button" class="btn-secondary-sm" onclick="openRoleEditor('${html(r.id)}')">${r.builtin?'Xem quyền':'Chỉnh sửa'}</button></article>`).join('');
+    window.renderRolesTable();
   }
-  function renderPermissionChecks(id,grants) {
-    el(id).innerHTML='<div class="accounts-permission-grid">'+capabilities.map(c=>`<label><input type="checkbox" value="${html(c.id)}" ${grants.includes(c.id)?'checked':''}>${html(c.label)}</label>`).join('')+'</div>';
+  // Roles as a paginated table: role, its function groups, accounts using it.
+  window.filterRolesTable=function(){window.paginationState.account_roles={...(window.paginationState.account_roles||{itemsPerPage:10}),currentPage:1};window.renderRolesTable();};
+  window.renderRolesTable=function renderRolesTable(){
+    const body=el('accounts-roles-list'); if(!body) return;
+    const keyword=(el('accounts-roles-search')?.value||'').trim().toLocaleLowerCase('vi');
+    const groupName=id=>functionGroups.find(g=>g.id===id)?.name||id;
+    const order=r=>r.id==='admin'?0:r.builtin?1:2;
+    const rows=roles.filter(r=>`${r.name} ${r.id} ${r.description||''} ${(r.functionGroups||[]).map(groupName).join(' ')}`.toLocaleLowerCase('vi').includes(keyword))
+      .sort((a,b)=>order(a)-order(b)||a.name.localeCompare(b.name,'vi'));
+    const page=window.getAdminListPage(rows,'account_roles');
+    body.innerHTML=page.items.map((r,index)=>{
+      const used=accounts.filter(a=>a.role===r.id).length;
+      const groups=r.id==='admin'?'<span class="accounts-role-muted">Toàn quyền, không cần nhóm</span>':Array.isArray(r.functionGroups)?(r.functionGroups.map(id=>`<span class="accounts-group-chip">${html(groupName(id))}</span>`).join('')||'<span class="accounts-role-muted">Chưa có nhóm</span>'):`<span class="accounts-role-muted">Kiểu cũ: ${(r.permissions||[]).length} quyền</span>`;
+      const tag=r.id==='admin'?'<span class="accounts-badge admin">Toàn quyền</span>':r.builtin?'<span class="accounts-badge">Hệ thống</span>':'';
+      return `<tr><td class="row-index">${page.start+index+1}</td><td class="accounts-identity-cell"><strong>${html(r.name)}</strong><span class="accounts-login-name">${html(r.id)}</span>${tag}</td><td><div class="accounts-group-chips">${groups}</div></td><td>${used}</td><td class="accounts-role-description">${html(r.description||'')}</td><td><button type="button" class="btn-secondary-sm" onclick="openRoleEditor('${html(r.id)}')">${r.id==='admin'?'<i class="fa-solid fa-eye"></i> Xem quyền':'<i class="fa-solid fa-pen"></i> Sửa'}</button></td></tr>`;
+    }).join('')||'<tr><td colspan="6" class="accounts-empty">Không có vai trò phù hợp.</td></tr>';
+    window.renderPaginationControls('accounts-roles-pagination','account_roles',rows.length,window.renderRolesTable);
+  };
+  function renderGroupChecks(id,selected,onchange) {
+    el(id).innerHTML=functionGroups.length?'<div class="accounts-permission-grid accounts-group-grid">'+functionGroups.map(g=>`<label title="${html(g.description||'')}"><input type="checkbox" value="${html(g.id)}" ${selected.includes(g.id)?'checked':''} onchange="${onchange}"><span><strong>${html(g.name)}</strong><small>${g.permissions.length} quyền${Object.keys(g.packages||{}).length?' · có gói bảng':''}${(g.workflows||[]).length?` · ${g.workflows.length} mẫu`:''}</small></span></label>`).join('')+'</div>':'<small>Chưa có nhóm chức năng. Tạo tại Quản lý dữ liệu → Nhóm chức năng.</small>';
   }
-  function readPermissions(id) {return [...el(id).querySelectorAll('input:checked')].map(n=>n.value);}
-  function renderDataAccess(id,access) {
-    el(id).innerHTML=['sql','documents'].map(type=>`<fieldset class="accounts-data-scope"><legend>${type==='sql'?'Nguồn SQL được phép':'Tài liệu được phép'}</legend><select class="form-control" data-scope="${type}" onchange="this.nextElementSibling.hidden=this.value==='inherit'"><option value="inherit">${id.startsWith('role')?'Tất cả nguồn theo chính sách':'Kế thừa phạm vi của vai trò'}</option><option value="selected" ${access?.[type]!=null?'selected':''}>Chỉ các nguồn được chọn</option></select><div class="accounts-source-options" ${access?.[type]==null?'hidden':''}>${(resources[type]||[]).map(r=>`<label><input type="checkbox" data-source="${type}" value="${html(r.id)}" ${access?.[type]?.includes(r.id)?'checked':''}><span>${html(r.name)}</span></label>`).join('')||'<small>Chưa có nguồn dữ liệu.</small>'}<small>Không chọn nguồn nào nghĩa là không được truy cập nhóm dữ liệu này.</small></div></fieldset>`).join('');
+  function readChecked(id) {return [...el(id).querySelectorAll('input:checked')].map(n=>n.value);}
+  // Union of the chosen groups, as the server computes it (account_roles.effective).
+  function preview(groupIds) {
+    const chosen=groupIds.map(id=>functionGroups.find(g=>g.id===id)).filter(Boolean);
+    const permissions=new Set(chosen.flatMap(g=>g.permissions)), packages=new Set(chosen.flatMap(g=>Object.entries(g.packages||{}).flatMap(([s,p])=>Object.keys(p).map(k=>s+'/'+k))));
+    const sources=new Set(chosen.flatMap(g=>[...(g.sources?.sql||[]),...(g.sources?.documents||[])])), workflows=new Set(chosen.flatMap(g=>g.workflows||[]));
+    return chosen.length?`Quyền tổng hợp: ${permissions.size} quyền chức năng (${capabilities.filter(c=>permissions.has(c.id)).map(c=>c.label).join(', ')||'không có'}) · ${packages.size} gói bảng · ${sources.size} nguồn hạn chế · ${workflows.size} mẫu nghiệp vụ.`:'Chưa chọn nhóm chức năng nào: vai trò không có quyền sử dụng.';
   }
-  function readDataAccess(id) {return Object.fromEntries(['sql','documents'].map(type=>[type,el(id).querySelector(`[data-scope="${type}"]`).value==='inherit'?null:[...el(id).querySelectorAll(`input[data-source="${type}"]:checked`)].map(n=>n.value)]));}
   window.updateAccountPermissionPreview=function() {
     el('accounts-permission-section').hidden=mode==='password'||el('accounts-role').value==='admin';
-    const inherit=el('accounts-permission-mode').value==='inherit';
-    if(inherit) renderPermissionChecks('accounts-permissions',roles.find(r=>r.id===el('accounts-role').value)?.permissions||[]);
-    el('accounts-permissions').querySelectorAll('input').forEach(n=>n.disabled=inherit);
+    const role=roles.find(r=>r.id===el('accounts-role').value);
+    el('accounts-effective-preview').textContent=Array.isArray(role?.functionGroups)?preview([...role.functionGroups,...readChecked('accounts-extra-groups')]):'Vai trò kiểu cũ: '+((role?.permissions||[]).length)+' quyền chức năng, cộng thêm các nhóm bổ sung.';
   };
+  window.updateRolePreview=function(){el('role-preview').textContent=preview(readChecked('role-function-groups'));};
   window.openRoleEditor=function(id) {
     roleEditing=id?roles.find(r=>r.id===id):null;
-    const readonly=!!roleEditing?.builtin;
-    el('accounts-role-form').reset(); el('account-role-message').textContent='';
+    const readonly=roleEditing?.id==='admin', system=!!roleEditing?.builtin;
+    el('accounts-role-form').reset(); el('account-role-message').textContent=''; el('account-role-message').dataset.kind='';
     el('accounts-role-title').textContent=readonly?'Chi tiết vai trò':id?'Chỉnh sửa vai trò':'Thêm vai trò';
     el('account-role-id').value=roleEditing?.id||''; el('account-role-id').disabled=!!id;
     el('account-role-name').value=roleEditing?.name||''; el('account-role-description').value=roleEditing?.description||'';
-    renderPermissionChecks('role-permissions',roleEditing?.permissions||[]);renderDataAccess('role-data-access',roleEditing?.dataAccess);
-    for(const key of ['account-role-name','account-role-description'])el(key).disabled=readonly;
-    for(const key of ['role-permissions','role-data-access'])el(key).querySelectorAll('input,select').forEach(node=>node.disabled=readonly);
+    renderGroupChecks('role-function-groups',roleEditing?.functionGroups||[],'updateRolePreview()');window.updateRolePreview();
+    for(const key of ['account-role-name','account-role-description'])el(key).disabled=readonly||system;
+    el('role-function-groups').querySelectorAll('input').forEach(node=>node.disabled=readonly);
     el('account-role-save').hidden=readonly;
-    if(readonly)el('account-role-message').textContent=roleEditing.id==='admin'?'Admin có toàn quyền sử dụng và quản trị, bao gồm các chức năng bên dưới. Đây là vai trò hệ thống, không sửa hoặc xóa.':'User có các quyền sử dụng mặc định bên dưới, không có quyền quản trị. Để thay đổi quyền, cấu hình riêng cho tài khoản hoặc tạo vai trò tùy chỉnh.';
+    el('account-role-delete').hidden=!roleEditing||system;
+    if(readonly){el('role-function-groups').innerHTML='';el('role-preview').textContent='';el('account-role-message').textContent='Admin có toàn quyền sử dụng và quản trị. Đây là vai trò hệ thống, không sửa hoặc xóa.';}
+    else if(system){el('account-role-message').dataset.kind='info';el('account-role-message').textContent='Vai trò hệ thống: chỉ đổi được các nhóm chức năng, không đổi mã, tên hay mô tả.';}
+    else if(roleEditing&&!Array.isArray(roleEditing.functionGroups)){el('account-role-message').dataset.kind='info';el('account-role-message').textContent=`Vai trò kiểu cũ (${(roleEditing.permissions||[]).length} quyền). Chọn nhóm chức năng rồi lưu để chuyển sang cách mới.`;}
     el('accounts-role-editor').hidden=false;
     if(readonly)el('accounts-role-form').querySelector('header button').focus();else el(id?'account-role-name':'account-role-id').focus();
   };
+  window.deleteRoleEditor=async function() {
+    if(!roleEditing||roleEditing.builtin||roleSaving)return;
+    const used=accounts.filter(a=>a.role===roleEditing.id).length;
+    if(used){el('account-role-message').textContent=`Vai trò đang được dùng bởi ${used} tài khoản. Hãy đổi vai trò cho các tài khoản này trước.`;return;}
+    const ok=window.showUiConfirm?await window.showUiConfirm(`Xóa vai trò “${roleEditing.name}”?`,{title:'Xóa vai trò',confirmText:'Xóa'}):window.confirm(`Xóa vai trò “${roleEditing.name}”?`);
+    if(!ok)return;
+    roleSaving=true;el('account-role-delete').disabled=true;
+    try{await request('/api/accounts/roles/'+encodeURIComponent(roleEditing.id)+'?revision='+roleEditing.revision,'DELETE');roleSaving=false;window.closeRoleEditor();if(loading)await loading;await window.loadAccounts();window.showToast?.('Đã xóa vai trò.','success');}
+    catch(error){el('account-role-message').dataset.kind='';el('account-role-message').textContent=error.message;}
+    finally{roleSaving=false;el('account-role-delete').disabled=false;}
+  };
   window.closeRoleEditor=function(){if(!roleSaving)el('accounts-role-editor').hidden=true;};
   window.saveRoleEditor=async function(event) {
-    event.preventDefault();if(roleSaving||roleEditing?.builtin)return;roleSaving=true;el('account-role-save').disabled=true;
+    event.preventDefault();if(roleSaving||roleEditing?.id==='admin')return;roleSaving=true;el('account-role-save').disabled=true;
     try {
-      const body={id:el('account-role-id').value,name:el('account-role-name').value,description:el('account-role-description').value,permissions:readPermissions('role-permissions'),dataAccess:readDataAccess('role-data-access'),revision:roleEditing?.revision};
+      const body={id:el('account-role-id').value,name:el('account-role-name').value,description:el('account-role-description').value,functionGroups:readChecked('role-function-groups'),revision:roleEditing?.revision};
       const result=await request('/api/accounts/roles'+(roleEditing?'/'+encodeURIComponent(roleEditing.id):''),roleEditing?'PUT':'POST',body);
       if(loading)await loading;await window.loadAccounts();roleSaving=false;window.closeRoleEditor();
       if(!el('accounts-editor').hidden){el('accounts-role').value=result.role.id;window.updateAccountPermissionPreview();}
       window.showToast?.('Đã lưu vai trò.','success');
-    } catch(error){el('account-role-message').textContent=error.message;} finally{roleSaving=false;el('account-role-save').disabled=false;}
+    } catch(error){el('account-role-message').dataset.kind='';el('account-role-message').textContent=error.message;} finally{roleSaving=false;el('account-role-save').disabled=false;}
   };
   document.addEventListener('keydown', event => {
     const roleOverlay=el('accounts-role-editor');

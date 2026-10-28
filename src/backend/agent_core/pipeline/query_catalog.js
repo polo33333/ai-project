@@ -20,17 +20,21 @@ function build(selection, { include = [], policy = null, dictionary = require('.
     ...(selection.intentCatalog || []).map(item => key(item.tableName))]);
   const all = dictionary.getGroupedTables().filter(table => table.isActive !== false && table.dbSourceId === dbSourceId
     && authorized.has(key(table.tableName)));
+  const isHidden = table => hiddenTables.has(key(table.tableName)) || hiddenTables.has(key(`${table.schemaName || 'dbo'}.${table.tableName}`)) || hiddenTables.has(key(table.tableId));
   // The source policy's blocked columns never reach the model, matching the
   // connector rule (blocked by column name in every table). The governed copy
   // of the source in this request wins over the cached one.
   const source = require('../../governance/context').current()?.resources.get(`sql:${dbSourceId}`)?.resource
     || require('../../services/sql_connector').dbSources.find(item => item.id === dbSourceId);
-  const blocked = new Set((policy || source?.governedPolicy?.blockedColumns || []).map(key));
+  const sourcePolicy = require('../../governance/policy').normalize(source?.governedPolicy).sql;
+  const blocked = new Set((policy || sourcePolicy.blockedColumns).map(key));
+  // Hidden tables never reach the model, whoever asks.
+  const hiddenTables = new Set(sourcePolicy.hiddenTables.map(key));
   const hidden = new Set((selection.intentCatalog || []).flatMap(table => (table.columns || [])
     .filter(column => column.isVisible === false).map(column => `${key(table.tableName)}.${key(column.name)}`)));
   const verified = relationships.verifiedRelationships({ dbSourceId })
     .filter(relation => relation.columnPairs?.length && ['many-to-one', 'one-to-one'].includes(relation.cardinality || relation.relationType));
-  const byName = new Map(all.map(table => [key(table.tableName), table]));
+  const byName = new Map(all.filter(table => !isHidden(table)).map(table => [key(table.tableName), table]));
   // `include` adds tables of the previous contract; they must still be authorized.
   const selected = [...new Set([...(selection.selectedTables || []), ...include].map(key))].filter(name => byName.has(name));
   const names = new Set(selected);

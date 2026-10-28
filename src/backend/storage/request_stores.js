@@ -1,7 +1,7 @@
 'use strict';
 // Unknown routes and mutations retain the full operation scope. Limit only
 // routes whose store dependencies are explicitly known; never cache auth.
-const auth=['accounts.json','sessions.json','account_roles.json'];
+const auth=['accounts.json','sessions.json','account_roles.json','account_function_groups.json'];
 const dictionaryFiles=['dictionary.json','table_relationships.json','db_sources.json','domain_aliases.json','glossary.json','logs.json'];
 const mutations=new Map([
   ['POST /api/auth/logout',[]],
@@ -40,15 +40,17 @@ const routes=new Map([
   ['/api/ai-usage',['ai_providers.json']], ['/api/ai-usage/me',[]],
   ['/api/chat/providers',['ai_providers.json']],
   ['/api/sql/sources',['db_sources.json']],
-  ['/api/dictionary',['dictionary.json','db_sources.json']],
+  ['/api/dictionary',['dictionary.json','db_sources.json','table_relationships.json']],
   ['/api/dictionary/workspace',['dictionary.json','domain_aliases.json','table_relationships.json','db_sources.json']],
   ['/api/dictionary/sync-status',[]],
   ['/api/dictionary/domains',['domain_aliases.json']],
   ['/api/qdrant/status',[]], ['/api/settings',[]],
-  ['/api/governance/resources',['db_sources.json','library.json','ai_providers.json']],
+  ['/api/governance/resources',['db_sources.json','library.json','ai_providers.json','watchfolders.json','embed_chat_configs.json','dictionary.json','table_relationships.json']],
+  ['/api/governance/effective',['db_sources.json','library.json','ai_providers.json','watchfolders.json','embed_chat_configs.json','dictionary.json','table_relationships.json']],
+  ['/api/governance/function-groups',['db_sources.json','library.json','watchfolders.json']],
   ['/api/governance/metrics',['db_sources.json']],
   ['/api/governance/operations',[]],
-  ['/api/library',['library.json']],
+  ['/api/library',['library.json','watchfolders.json']],
   ['/api/providers',['ai_providers.json']],
   ['/api/glossary',['glossary.json']],
   // Relationship normalization resolves source/target identities from the dictionary.

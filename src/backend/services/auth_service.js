@@ -102,7 +102,7 @@ class AuthService {
   }
 
   managedAccount(account) {
-    return { ...this.publicAccount(account), permissionOverrides:account.permissions??null, dataOverrides:account.dataAccess??null,
+    return { ...this.publicAccount(account), permissionOverrides:account.permissions??null, dataOverrides:account.dataAccess??null, extraFunctionGroups:account.extraFunctionGroups||[],
       isActive: account.isActive !== false, revision: account.managementRevision || 0 };
   }
 
@@ -121,7 +121,8 @@ class AuthService {
     return { displayName: input.displayName.trim(), email: input.email.trim(), role: input.role, isActive: input.isActive,
       ...(input.clientAccess !== undefined ? { clientAccess: input.clientAccess } : {}),
       ...(input.permissions!==undefined?{permissions:input.permissions===null?null:roles.validatePermissions(input.permissions)}:{}),
-      ...(input.dataAccess!==undefined?{dataAccess:roles.validateDataAccess(input.dataAccess)}:{}) };
+      ...(input.dataAccess!==undefined?{dataAccess:roles.validateDataAccess(input.dataAccess)}:{}),
+      ...(input.extraFunctionGroups!==undefined?{extraFunctionGroups:roles.validateFunctionGroups(input.extraFunctionGroups||[])}:{}) };
   }
 
   validateNewPassword(password) {
@@ -160,7 +161,8 @@ class AuthService {
       throw Object.assign(new Error('Phải giữ ít nhất một quản trị viên đang hoạt động được vào trang quản lý.'), { statusCode: 409 });
     const revoke = (account.role || 'user') !== fields.role || (account.isActive !== false) !== fields.isActive
       || (fields.permissions!==undefined&&JSON.stringify(fields.permissions)!==JSON.stringify(account.permissions??null))
-      || (fields.dataAccess!==undefined&&JSON.stringify(fields.dataAccess)!==JSON.stringify(account.dataAccess??null));
+      || (fields.dataAccess!==undefined&&JSON.stringify(fields.dataAccess)!==JSON.stringify(account.dataAccess??null))
+      || (fields.extraFunctionGroups!==undefined&&JSON.stringify(fields.extraFunctionGroups)!==JSON.stringify(account.extraFunctionGroups||[]));
     Object.assign(account, fields, { managementRevision: (account.managementRevision || 0) + 1 });
     if (revoke) account.securityVersion = (account.securityVersion || 0) + 1;
     this.persistAccounts();

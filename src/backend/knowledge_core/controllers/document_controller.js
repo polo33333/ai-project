@@ -22,7 +22,14 @@ class DocumentController {
     } finally { this.reindexRunning = false; }
   }
 
-  list(req, res) { sendJson(res, 200, libraryService.getDocuments()); }
+  // Each document carries its effective AI sharing level (own or from its watch folder) for the library badge.
+  list(req, res) {
+    const governance = require('../../governance/context');
+    sendJson(res, 200, libraryService.getDocuments().map(document => {
+      const { policy } = governance.policyFor(document, 'document');
+      return { ...document, aiSharing: policy.aiSharing.level, policyInherited: Boolean(policy.inheritFrom) };
+    }));
+  }
 
   async add(req, res, context) {
     try {

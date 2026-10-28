@@ -1,5 +1,7 @@
 'use strict';
+const path = require('node:path');
 const { AsyncLocalStorage } = require('node:async_hooks');
+const rules = require('./policy');
 const scopes = new AsyncLocalStorage();
 const denied = code => Object.assign(new Error('Không có quyền truy cập tài nguyên hoặc đích xử lý.'), { code, statusCode: 403 });
 // aiUsageAdmitted: account/model limits already passed in this request; the rest of the request is not cut off.
@@ -21,23 +23,43 @@ function principal() {
   if (!actor?.subject) throw denied('PRINCIPAL_REQUIRED');
   return actor;
 }
+const label = (resource, type) => resource.title || resource.name || resource.dbName || resource.database || resource.path || resource.id;
+const typeLabel = type => type === 'sql' ? 'SQL' : type === 'watchfolder' ? 'thư mục' : 'tài liệu';
+function folders() {
+  try { return require('../knowledge_core/services/watchfolder_service').folders || []; } catch { return []; }
+}
+function folderOf(document) {
+  if (!document?.sourcePath) return null;
+  const file = path.resolve(document.sourcePath).toLowerCase();
+  return folders().find(folder => folder.path && file.startsWith(path.resolve(folder.path).toLowerCase() + path.sep)) || null;
+}
+// Effective policy: a document without its own policy (or marked to inherit)
+// uses the policy of the watch folder it came from.
+function policyFor(resource, type) {
+  const kind = rules.kind(resource, type);
+  if (kind === 'documents') {
+    const own = resource.governedPolicy, folder = folderOf(resource);
+    if (folder && (!own || own.inheritFrom)) {
+      const inherited = rules.normalize(folder.governedPolicy);
+      return { policy: { ...inherited, inheritFrom: `watchfolder:${folder.id}`, revision: `${own?.revision || 0}.${inherited.revision}` }, folderId: folder.id, folder };
+    }
+    return { policy: rules.normalize(own), folderId: folder?.id || null, folder };
+  }
+  return { policy: rules.normalize(resource.governedPolicy), folderId: null };
+}
+function explain(resource, kind, actor = current() ? principal() : null) {
+  const { policy, folderId } = policyFor(resource, kind);
+  return { ...rules.explain(resource, actor, kind, { policy, folderId }), policy, folderId };
+}
 function canRead(resource, kind) {
   if (!current()) return true;
-  const actor = principal(), policy = resource.governedPolicy || {};
-  if (actor.channel === 'embed') return (policy.embedIds || []).includes(actor.embedId);
-  if (actor.role === 'admin') return true;
-  const type = kind==='sql'?'sql':kind==='document'?'documents':resource.dbName !== undefined || resource.database !== undefined || resource.host !== undefined ? 'sql' : 'documents';
-  if (actor.permissions && !actor.permissions.includes(type==='sql'?'sql:read':'knowledge:read')) return false;
-  if (actor.dataAccess?.[type] && !actor.dataAccess[type].includes(resource.id)) return false;
-  if (policy.visibility !== 'restricted') return true;
-  return (policy.subjects || []).includes(actor.subject) || (policy.roles || []).includes(actor.role);
+  return explain(resource, kind).allowed;
 }
 function read(resource, type) {
   if (!canRead(resource,type)) {
     const error = denied('RESOURCE_ACCESS_DENIED');
     if (principal()?.channel === 'embed') {
-      const name = resource.title || resource.name || resource.dbName || resource.database || resource.id;
-      error.message = `Widget chưa được cấp quyền đọc nguồn ${type === 'sql' ? 'SQL' : 'tài liệu'} “${name}”. Quản trị viên cần thêm Embed ID vào “Widget được đọc” tại Quản trị dữ liệu → Quyền truy cập và xử lý dữ liệu.`;
+      error.message = `Widget chưa được cấp quyền đọc nguồn ${typeLabel(type)} “${label(resource)}”. Quản trị viên cần gán cho widget một vai trò có quyền đọc nguồn này (Tài khoản → Vai trò và nhóm chức năng).`;
     }
     throw error;
   }
@@ -45,26 +67,32 @@ function read(resource, type) {
   if (scope) scope.resources.set(`${type}:${resource.id}`, { resource, type });
   return resource;
 }
+// Provider list: the egress check needs each provider's name and "Không nhận dữ liệu nội bộ" flag.
+function target(destinationId, local) {
+  return rules.destination(destinationId, local, require('../services/ai_provider_manager').providers || []);
+}
+const toolEgress = () => process.env.GOVERNED_TOOL_EGRESS !== 'off';
+// True when AI may use the resource at all (aiSharing is not "off").
+function aiUsable(resource, type) { return policyFor(resource, type).policy.aiSharing.level !== 'off'; }
 function canSend(resource, providerId, local = false) {
   if (!canRead(resource)) return false;
-  const policy = resource.governedPolicy || {};
-  const sensitivity = policy.sensitivity || 'internal';
-  const destinations = policy.modelDestinations || [];
-  return sensitivity === 'public' || destinations.includes(providerId) || destinations.includes('*') || (local && sensitivity !== 'restricted');
+  return rules.canSend(policyFor(resource).policy, target(providerId, local), { toolEgress: toolEgress() });
 }
+const LEVEL_LABEL = { all: 'Tất cả AI', local: 'Chỉ AI cục bộ', off: 'Tắt AI' };
 function assertEgress(providerId, local = false) {
   const scope = current();
   if (!scope) return;
   principal();
+  const destination = target(providerId, local);
+  if (destination.kind === 'web') return;
   for (const { resource, type } of scope.resources.values()) {
-    if (!canRead(resource)) throw denied('RESOURCE_ACCESS_REVOKED');
-    const policy = resource.governedPolicy || {};
-    const sensitivity = policy.sensitivity || 'internal';
-    const destinations = policy.modelDestinations || [];
-    if (sensitivity === 'public' || destinations.includes(providerId) || destinations.includes('*') || (local && sensitivity !== 'restricted')) continue;
-    const name = resource.title || resource.name || resource.dbName || resource.database || resource.id;
+    if (!canRead(resource, type)) throw denied('RESOURCE_ACCESS_REVOKED');
+    const { policy } = policyFor(resource, type);
+    if (rules.canSend(policy, destination, { toolEgress: toolEgress() })) continue;
     const error = denied('MODEL_DESTINATION_DENIED');
-    error.message = `Nguồn ${type === 'sql' ? 'SQL' : 'tài liệu'} “${name}” chưa cho phép gửi dữ liệu tới đích “${providerId}”. Quản trị viên cần cấp đích xử lý cho đúng nguồn trong Quản trị dữ liệu → Quyền truy cập và xử lý dữ liệu.`;
+    error.message = destination.rejectInternalData
+      ? `AI “${destination.name}” đang bật “Không nhận dữ liệu nội bộ”, nên không xử lý được nguồn ${typeLabel(type)} “${label(resource)}”. Hãy chọn AI khác hoặc đổi cấu hình tại AI Providers.`
+      : `Nguồn ${typeLabel(type)} “${label(resource)}” đang đặt “${LEVEL_LABEL[policy.aiSharing.level]}”, nên không gửi được tới “${destination.name}”. Quản trị viên đổi tại Quản trị dữ liệu → Nguồn dữ liệu.`;
     error.resourceId = resource.id; error.resourceType = type; error.destinationId = providerId;
     throw error;
   }
@@ -78,17 +106,18 @@ async function refresh(providerId, local = false) {
     for (const [key, { resource, type }] of current().resources) {
       const latest = type === 'sql' ? require('../services/sql_connector').dbSources.find(item => item.id === resource.id)
         : require('../knowledge_core/services/library_service').documents.find(item => item.id === resource.id);
-      if (!latest || !canRead(latest)) throw denied('RESOURCE_ACCESS_REVOKED');
+      if (!latest || !canRead(latest, type)) throw denied('RESOURCE_ACCESS_REVOKED');
       current().resources.set(key, { resource: latest, type });
     }
     if (providerId) assertEgress(providerId, local);
   };
-  if (storage.enabled()) await storage.run(check, { independent: true, files: ['accounts.json', 'sessions.json', 'account_roles.json', 'db_sources.json', 'library.json', 'embed_chat_configs.json'] });
+  if (storage.enabled()) await storage.run(check, { independent: true, files: ['accounts.json', 'sessions.json', 'account_roles.json', 'account_function_groups.json', 'db_sources.json', 'library.json', 'watchfolders.json', 'embed_chat_configs.json', 'ai_providers.json'] });
   else await check();
 }
 function summary() {
   const scope = current();
   return { scopeRef: scope?.principal?.subject || null,
-    policyRevision: scope ? [...scope.resources.values()].map(({ resource, type }) => `${type}:${resource.id}:${resource.governedPolicy?.revision || 0}`).sort().join('|') || 'baseline/1' : null };
+    policyRevision: scope ? [...scope.resources.values()].map(({ resource, type }) => `${type}:${resource.id}:${policyFor(resource, type).policy.revision || 0}`)
+      .concat(scope.principal?.accessRevision ? [`access:${scope.principal.accessRevision}`] : []).sort().join('|') || 'baseline/1' : null };
 }
-module.exports = { run, isolateResources, setPrincipal, current, principal, canRead, canSend, read, assertEgress, refresh, summary };
+module.exports = { run, isolateResources, setPrincipal, current, principal, canRead, canSend, aiUsable, explain, policyFor, read, assertEgress, refresh, summary };

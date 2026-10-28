@@ -43,11 +43,13 @@ class AutomationRuntime {
     this.withLease = lease || ((key, operation) => repository.lease(key, operation));
     this.executeSource = executeSource || require('./data_sources').executeSource;
     this.authorizeContext = authorizeContext || (async ownerId => {
-      if (ownerId.startsWith('embed:')) { const config=require('../services/embed_chat_service').configs.find(c=>c.id===ownerId.split(':')[1] && c.isActive); if(!config) throw error('Widget đã bị tắt.',403); return {accountId:ownerId,tenantId:`embed:${config.id}`,permissions:['sql:read','knowledge:read']}; }
+      if (ownerId.startsWith('embed:')) { const config=require('../services/embed_chat_service').configs.find(c=>c.id===ownerId.split(':')[1] && c.isActive); if(!config) throw error('Widget đã bị tắt.',403);
+        const widget=require('../services/account_roles').forEmbed(config);
+        return {accountId:ownerId,tenantId:`embed:${config.id}`,role:widget.role,permissions:widget.permissions,grants:widget.grants,accessRevision:widget.accessRevision}; }
       const account = require('../services/auth_service').accounts.find(item => item.id === ownerId && item.isActive !== false);
       if (!account) throw error('Tài khoản không còn hoạt động.', 403);
       const effective=require('../services/auth_service').publicAccount(account);
-      return { accountId: account.id, tenantId: account.tenantId, role:effective.role, dataAccess:effective.dataAccess,
+      return { accountId: account.id, tenantId: account.tenantId, role:effective.role, dataAccess:effective.dataAccess, grants:effective.grants, accessRevision:effective.accessRevision,
         permissions: account.role === 'admin' ? ['admin'] : effective.permissions };
     });
     this.enabled = enabled; this.leaseMs = leaseMs; this.controllers = new Map(); this.jobs = new Set(); this.stopping = false;
@@ -122,7 +124,7 @@ class AutomationRuntime {
   }
   async list(context, conversationId) {
     const governance=require('../governance/context'), principal=governance.current()&&governance.principal();
-    const visible=run=>!principal?.dataAccess||principal.role==='admin'||Object.values(run.definition.bindings||{}).every(binding=>{
+    const visible=run=>!principal||principal.role==='admin'||Object.values(run.definition.bindings||{}).every(binding=>{
       if(binding.dbSourceId){const source=require('../services/sql_connector').dbSources.find(s=>s.id===binding.dbSourceId);return source&&governance.canRead(source,'sql');}
       if(binding.documentId){const document=require('../knowledge_core/services/library_service').documents.find(d=>d.id===binding.documentId);return document&&governance.canRead(document,'document');}
       return true;
@@ -231,7 +233,7 @@ class AutomationRuntime {
         const context = await this.authorizeContext(run.ownerId);
         const governance = require('../governance/context');
         const establish = actor => governance.setPrincipal({ subject: actor.accountId.startsWith('embed:') ? actor.accountId : `account:${actor.accountId}`,
-          role: actor.role || (actor.permissions?.includes('admin') ? 'admin' : 'user'), permissions:actor.permissions, dataAccess:actor.dataAccess, tenantId: actor.tenantId, channel: actor.accountId.startsWith('embed:') ? 'embed' : 'workflow',
+          role: actor.role || (actor.permissions?.includes('admin') ? 'admin' : 'user'), permissions:actor.permissions, dataAccess:actor.dataAccess, grants:actor.grants, accessRevision:actor.accessRevision, tenantId: actor.tenantId, channel: actor.accountId.startsWith('embed:') ? 'embed' : 'workflow',
           embedId: actor.accountId.startsWith('embed:') ? actor.accountId.split(':')[1] : undefined });
         establish(context);
         governance.current().revalidateAsync = async () => establish(await this.authorizeContext(run.ownerId));

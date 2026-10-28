@@ -35,8 +35,19 @@ function conditionSql(metric, alias = '') {
   });
 }
 function sources() { return require('../services/sql_connector').dbSources; }
+// Q8: a metric is offered only when its table and columns are in the caller's table scope.
+function inScope(source, metric) {
+  if (!context.current()) return true;
+  const scope = require('./scope').forCurrent(source), key = require('./scope').key;
+  if (scope.open && !scope.policy.sql.hiddenTables.length) return true;
+  const [schemaName, tableName] = String(metric.table || '').includes('.') ? String(metric.table).split('.') : ['dbo', metric.table];
+  const entry = scope.lookup.get(key(`${schemaName}.${tableName}`)) || scope.lookup.get(key(tableName));
+  if (!entry || entry.level === 'bridge') return false;
+  return [metric.valueColumn, metric.timeColumn, ...(metric.dimensions || []), ...(metric.conditions || []).map(condition => condition.column)]
+    .filter(Boolean).every(column => entry.columns.has(key(column)));
+}
 function list() {
-  return sources().filter(source => context.canRead(source)).flatMap(source => (source.governedMetrics || []).filter(metric => metric.approved)
+  return sources().filter(source => context.canRead(source, 'sql')).flatMap(source => (source.governedMetrics || []).filter(metric => metric.approved && inScope(source, metric))
     .map(metric => ({ ...structuredClone(metric), sourceId: source.id })));
 }
 function save(sourceId, definition, expectedRevision) {

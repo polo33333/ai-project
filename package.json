@@ -49,7 +49,8 @@
     "backup:all": "node scripts/backup_all.js backup",
     "backup:verify": "node scripts/backup_all.js verify",
     "backup:import": "node scripts/backup_all.js import",
-    "data:pg:cutover": "node scripts/postgres/cutover.js"
+    "data:pg:cutover": "node scripts/postgres/cutover.js",
+    "migrate:governance-v2": "node scripts/migrate_governance_v2.js"
   },
   "author": "kingdom",
   "license": "ISC",

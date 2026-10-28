@@ -112,7 +112,7 @@ function resolveStaticFile(client, pathname) {
 // Keeps the embed id when the chat client moves between its page and its login page.
 function chatEmbedQuery(parsedUrl) {
   const id = parsedUrl.searchParams.get('embed');
-  return id && /^[a-zA-Z0-9-]{1,64}$/.test(id) ? '?embed=' + id : '';
+  return id && /^[a-zA-Z0-9_-]{1,64}$/.test(id) ? '?embed=' + id : '';
 }
 
 // The chat page may be framed only by the app itself, or by the domains of an active embed
@@ -189,6 +189,21 @@ function checkChatRateLimit(key) {
   }
   current.count += 1;
   return current.count <= max;
+}
+
+// Tells the admin who can query a table that was just switched on (table packages).
+function tableAccessNotice(tableId, tableName) {
+  try {
+    const table = dictionaryService.findTable(tableId, tableName);
+    const source = table && sqlConnector.dbSources.find(item => item.id === table.dbSourceId);
+    const access = source && require('../governance/scope').tableAccess(source, table.tableId);
+    if (!access || access.open) return null;
+    const LEVEL = { full: 'Đầy đủ', lookup: 'Tra cứu' };
+    if (access.hidden) return { level: 'warning', message: `Bảng “${access.table}” đang ẩn khỏi AI: không vai trò nào truy vấn được. Bỏ ẩn tại Quản trị dữ liệu → Nguồn dữ liệu → Gói bảng.` };
+    if (access.orphan) return { level: 'warning', message: `Bảng “${access.table}” chưa thuộc gói bảng nào nên chỉ admin truy vấn được. Gán gói tại Quản trị dữ liệu → Nguồn dữ liệu → Gói bảng.` };
+    if (!access.roles.length) return { level: 'warning', message: `Bảng thuộc gói “${access.packageName}” nhưng chưa vai trò nào được cấp gói này; hiện chỉ admin truy vấn được.` };
+    return { level: 'info', message: `Bảng thuộc gói “${access.packageName}”, mở cho: ${access.roles.map(role => `${role.name} (${LEVEL[role.level]})`).join(', ')}.` };
+  } catch { return null; }
 }
 
 function permissionsForAccount(account, isEmbed = false) {
@@ -384,10 +399,10 @@ async function handleGovernedRequest(req, res) {
   // An account limited to the other client counts as signed out here.
   const sessionAccount = authService.getAccountBySession(sessionToken);
   const currentAccount = sessionAccount && authService.canUseClient(sessionAccount, client) ? sessionAccount : null;
-  if (currentAccount) require('../governance/context').setPrincipal({ subject: `account:${currentAccount.id}`, role: currentAccount.role, permissions:currentAccount.permissions, dataAccess:currentAccount.dataAccess, tenantId: currentAccount.tenantId, channel: 'chat' }, () => {
+  if (currentAccount) require('../governance/context').setPrincipal({ subject: `account:${currentAccount.id}`, role: currentAccount.role, permissions:currentAccount.permissions, dataAccess:currentAccount.dataAccess, grants:currentAccount.grants, accessRevision:currentAccount.accessRevision, tenantId: currentAccount.tenantId, channel: 'chat' }, () => {
     const found = authService.getAccountBySession(sessionToken, { touch: false });
     const account = found && authService.canUseClient(found, client) ? found : null;
-    return account ? { subject: `account:${account.id}`, role: account.role, permissions:account.permissions, dataAccess:account.dataAccess, tenantId: account.tenantId, channel: 'chat' } : null;
+    return account ? { subject: `account:${account.id}`, role: account.role, permissions:account.permissions, dataAccess:account.dataAccess, grants:account.grants, accessRevision:account.accessRevision, tenantId: account.tenantId, channel: 'chat' } : null;
   });
   // Keep the browser cookie aligned with the server-side sliding session.
   // Without this refresh, the browser drops an otherwise active session eight
@@ -497,7 +512,7 @@ async function handleGovernedRequest(req, res) {
         authService.requireAccountAdmin(currentAccount.id);
         if (req.method === 'GET') {
           res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8'});
-          res.end(JSON.stringify({configs:embedChatService.configs.map(c=>({id:c.id,name:c.name,identity:c.identity || {enabled:false}})),sessions:embedChatService.listSessions()})); return;
+          res.end(JSON.stringify({configs:embedChatService.configs.map(c=>({id:c.id,name:c.name,mode:embedChatService.normalizeMode(c.mode),identity:c.identity || {enabled:false}})),sessions:embedChatService.listSessions()})); return;
         }
         if (req.method !== 'PUT') throw Object.assign(new Error('Method not allowed'),{statusCode:405});
         const body = await readJsonBody(req);
@@ -510,9 +525,16 @@ async function handleGovernedRequest(req, res) {
       if (pathname === '/api/accounts/roles' && req.method === 'GET') {
         const roles=require('../services/account_roles');
         res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
-        res.end(JSON.stringify({roles:roles.list(),capabilities:roles.capabilities,resources:{sql:sqlConnector.dbSources.map(s=>({id:s.id,name:s.name||s.dbName||s.id})),documents:require('../knowledge_core/services/library_service').documents.map(d=>({id:d.id,name:d.title||d.id}))}})); return;
+        res.end(JSON.stringify({roles:roles.list(),capabilities:roles.capabilities,functionGroups:require('../services/account_function_groups').list(),resources:{sql:sqlConnector.dbSources.map(s=>({id:s.id,name:s.name||s.dbName||s.id})),documents:require('../knowledge_core/services/library_service').documents.map(d=>({id:d.id,name:d.title||d.id}))}})); return;
       }
       const roleMatch=pathname.match(/^\/api\/accounts\/roles(?:\/([^/]+))?$/);
+      if (roleMatch && roleMatch[1] && req.method==='DELETE') {
+        authService.requireAccountAdmin(currentAccount.id);
+        const roleId=decodeURIComponent(roleMatch[1]);
+        require('../services/account_roles').remove(roleId,Number(new URL(req.url,'http://localhost').searchParams.get('revision')));
+        loggerService.addLog('INFO','Quản lý tài khoản','Quản trị viên xóa vai trò.',{actorId:currentAccount.id,roleId});
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({deleted:true}));return;
+      }
       if (roleMatch && (req.method==='POST'||req.method==='PUT')) {
         authService.requireAccountAdmin(currentAccount.id);
         const roleId=roleMatch[1]&&decodeURIComponent(roleMatch[1]), previous=roleId&&require('../services/account_roles').get(roleId);
@@ -650,7 +672,9 @@ async function handleGovernedRequest(req, res) {
   // 1. SQL Connectors & DB Sources APIs
   if (pathname === '/api/sql/sources' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-    res.end(JSON.stringify(sqlConnector.getDbSources().filter(source=>require('../governance/context').canRead(source,'sql'))));
+    // Sources set to "Tắt AI" are not offered for chat questions.
+    const governance=require('../governance/context');
+    res.end(JSON.stringify(sqlConnector.getDbSources().filter(source=>governance.canRead(source,'sql')&&governance.aiUsable(source,'sql'))));
     return;
   }
 
@@ -843,7 +867,7 @@ async function handleGovernedRequest(req, res) {
       if (!await dictionaryService.toggleTableActive(tableName, isActive, tableId)) throw new Error('Không tìm thấy bảng cần cập nhật.');
       loggerService.addLog('INFO', 'Data Dictionary', `Đã đổi trạng thái Bảng '${tableName}' sang ${isActive ? 'Active (Cho AI)' : 'Tắt'} & tự động đồng bộ Qdrant.`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-      res.end(JSON.stringify({ status: 'success' }));
+      res.end(JSON.stringify({ status: 'success', ...(isActive ? { governance: tableAccessNotice(tableId, tableName) } : {}) }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'error', message: err.message }));
@@ -1163,7 +1187,7 @@ async function handleGovernedRequest(req, res) {
   // Public embeddable chat endpoint. Provider selection always follows the active backend priority.
   if (pathname === '/api/embed/chat' && req.method === 'POST') {
     const startTime = Date.now();
-    let embedStreaming = false;
+    let embedStreaming = false, embedFailureAudit = null;
     const embedEvent = (name, value) => { if (!res.destroyed && !res.writableEnded) res.write(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`); };
     const embedAbortController = new AbortController();
     req.once('aborted', () => embedAbortController.abort());
@@ -1180,7 +1204,7 @@ async function handleGovernedRequest(req, res) {
         return;
       }
       req.storageOwner=`embed:${authorization.config.id}:${authorization.origin || 'admin-preview'}`;
-      require('../governance/context').setPrincipal({ subject: req.storageOwner, channel: 'embed', embedId: authorization.config.id });
+      require('../governance/context').setPrincipal({ subject: req.storageOwner, channel: 'embed', embedId: authorization.config.id, ...require('../services/account_roles').forEmbed(authorization.config) });
       if (authorization.origin) res.setHeader('Access-Control-Allow-Origin', authorization.origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Cache-Control', 'no-store');
@@ -1213,8 +1237,12 @@ async function handleGovernedRequest(req, res) {
         res.end(JSON.stringify({ status: 'error', message: `Câu hỏi vượt quá ${authorization.config.maxQuestionLength} ký tự.` }));
         return;
       }
+      // A failed question goes to the chat history too, as in the main chat.
+      if (!body.workflowAction) embedFailureAudit = { question: queryText, provider: null, payload: {
+        endpoint: '/api/embed/chat', embedId: authorization.config.id, origin: authorization.origin, preview: isAdminPreview,
+        sessionId: String(sessionId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100) || null, visitorIdentity } };
       const workflowIdentity = sessionId ? embedChatService.workflowSession(authorization.config, String(sessionId), body.workflowToken, visitorIdentity) : null;
-      require('../governance/context').setPrincipal({ subject: workflowIdentity?.accountId || `embed:${authorization.config.id}:${requestId}`, channel: 'embed', embedId: authorization.config.id });
+      require('../governance/context').setPrincipal({ subject: workflowIdentity?.accountId || `embed:${authorization.config.id}:${requestId}`, channel: 'embed', embedId: authorization.config.id, ...require('../services/account_roles').forEmbed(authorization.config) });
       if (body.workflowAction) {
         if (!body.workflowToken || !workflowIdentity) throw Object.assign(new Error('Cần phiên nghiệp vụ đã xác thực.'),{statusCode:403});
         if (body.workflowAction === 'export_artifact') {
@@ -1228,7 +1256,8 @@ async function handleGovernedRequest(req, res) {
           res.end(await fs.promises.readFile(filePath)); return;
         }
         const automation=require('../automation'); await automation.settings();
-        const context={accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,permissions:permissionsForAccount(null,true)};
+        const widget=require('../services/account_roles').forEmbed(authorization.config);
+        const context={accountId:workflowIdentity.accountId,tenantId:workflowIdentity.tenantId,role:widget.role,workflowGrants:widget.grants?.workflows||[],permissions:permissionsForAccount(null,true)};
         if(body.workflowAction==='artifact') {
           const artifact=await automation.runtime.artifact(body.runId,body.artifactId,context);
           const buffer=await fs.promises.readFile(artifact.path);
@@ -1275,6 +1304,9 @@ async function handleGovernedRequest(req, res) {
       const execMs = Date.now() - startTime;
       const activeProvider = coreResult.usedProvider || aiProviderManager.getActiveProvider();
       if (embedAbortController.signal.aborted) return;
+      embedFailureAudit.provider = activeProvider;
+      Object.assign(embedFailureAudit.payload, { historyCount: safeHistory.length, tokenUsage: coreResult.tokenUsage || null,
+        diagnostics: buildChatDiagnostics(coreResult.trace) });
       if (!coreResult.success) throw Object.assign(new Error(coreResult.error || 'AI provider không phản hồi.'), {
         code: coreResult.errorCode, routing: buildChatDiagnostics(coreResult.trace)?.workflowRouting || null
       });
@@ -1316,6 +1348,7 @@ async function handleGovernedRequest(req, res) {
         pendingTurnRecorded: pendingPersistence.recorded,
         diagnostics: buildChatDiagnostics(coreResult.trace)
       });
+      embedFailureAudit = null;
       const embedPayload = {
         status: payload.status,
         reply: payload.reply,
@@ -1338,6 +1371,12 @@ async function handleGovernedRequest(req, res) {
     } catch (err) {
       const execMs = Date.now() - startTime;
       loggerService.addLog('ERROR', 'Embed Chat', err.message);
+      if (embedFailureAudit && !embedAbortController.signal.aborted) {
+        try {
+          loggerService.addChatAudit(embedFailureAudit.question, null, null, embedFailureAudit.provider || aiProviderManager.getActiveProvider(), execMs, 'ERROR', err.message,
+            { ...embedFailureAudit.payload, errorCode: err.code || null });
+        } catch (auditError) { loggerService.addLog('ERROR', 'Embed Chat', `Không ghi được lượt lỗi: ${auditError.message}`); }
+      }
       if (embedAbortController.signal.aborted || res.destroyed) return;
       if (embedStreaming) { embedEvent('error', { status: 'error', message: err.message, errorCode: err.code }); res.end(); return; }
       res.writeHead(err.statusCode || 500, { 'Content-Type': 'application/json; charset=UTF-8' });

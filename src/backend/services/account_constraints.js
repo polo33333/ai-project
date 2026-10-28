@@ -20,7 +20,7 @@ function validateRevisions(baseline, proposed, fresh) {
   }
 }
 function validateRoles(accounts, roles) {
-  const ids=new Set(['admin','user',...roles.map(role=>role.id)]);
+  const ids=new Set(['admin','user','khach_widget',...roles.map(role=>role.id)]);
   if(accounts.some(account=>!ids.has(account.role||'user'))) throw Object.assign(new Error('Vai trò tài khoản không còn tồn tại.'),{statusCode:409,code:'ACCOUNT_CONFLICT'});
 }
 module.exports = { validateTransition, validateRevisions, validateRoles };

@@ -18,7 +18,8 @@ function commitFiles(dirty) {
   const files = new Set(dirty);
   const dependencies = new Map([
     ['accounts.json', ['account_roles.json']],
-    ['account_roles.json', ['accounts.json']],
+    ['account_roles.json', ['accounts.json', 'account_function_groups.json']],
+    ['account_function_groups.json', ['account_roles.json', 'accounts.json']],
     ['sessions.json', ['accounts.json']],
     ['dictionary.json', ['db_sources.json']],
     ['chat_feedback.json', ['chat_history.json']],

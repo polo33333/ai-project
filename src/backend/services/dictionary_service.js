@@ -157,7 +157,9 @@ class DictionaryService {
     const governance=require('../governance/context'), scope=governance.current();
     if(!scope?.principal?.permissions||scope.principal.role==='admin') return this.tablesStore;
     const sources=require('./sql_connector').dbSources.filter(source=>governance.canRead(source,'sql'));
-    return this.tablesStore.filter(table=>sources.some(source=>source.id===table.dbSourceId));
+    // Table packages: only tables in the actor's scope, with columns its level exposes.
+    const scopes=require('../governance/scope'), actor=governance.principal();
+    return sources.flatMap(source=>scopes.maskTables(this.tablesStore.filter(table=>table.dbSourceId===source.id),source,actor));
   }
 
   getWorkspaceForSource(source, sources = []) {

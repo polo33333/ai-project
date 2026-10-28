@@ -143,6 +143,9 @@ function renderAiProvidersTable() {
             ${prov.useForAttachments ? `<span class="metric-tag green provider-health-status" title="Dùng đọc tài liệu và ảnh đính kèm">
               <i class="fa-solid fa-paperclip"></i> Xử lý tệp đính kèm
             </span>` : ''}
+            ${prov.rejectInternalData ? `<span class="metric-tag yellow provider-health-status" title="Không nhận dữ liệu của nguồn SQL và tài liệu nội bộ">
+              <i class="fa-solid fa-ban"></i> Không nhận dữ liệu nội bộ
+            </span>` : ''}
           </div>
         </td>
         <td>
@@ -194,6 +197,7 @@ function editAiProvider(id) {
     'page-new-prov-context': String(provider.contextWindow || provider.numCtx || 16384),
     'page-new-prov-reserve': String(provider.outputReserve || 2048),
     'page-new-prov-attachments': provider.useForAttachments ? 'on' : 'off',
+    'page-new-prov-internal': provider.rejectInternalData ? 'reject' : 'accept',
     'page-new-prov-temperature': String(provider.temperature ?? ''),
     'page-new-prov-think': provider.think === undefined || provider.think === null ? '' : String(provider.think),
     'page-new-prov-keepalive': provider.keepAlive || ''
@@ -343,7 +347,8 @@ async function savePageNewAiProvider() {
     const payload = { name, type, apiFormat, baseUrl, model,
       supportsToolCalling: capability === 'native' || (capability === 'auto' && apiFormat !== 'ollama'),
       supportsJsonToolCalling: capability === 'json', contextWindow, outputReserve, priority, tokenCost,
-      useForAttachments: document.getElementById('page-new-prov-attachments')?.value === 'on' };
+      useForAttachments: document.getElementById('page-new-prov-attachments')?.value === 'on',
+      ...(document.getElementById('page-new-prov-internal') ? { rejectInternalData: document.getElementById('page-new-prov-internal').value === 'reject' } : {}) };
     // Empty Ollama options fall back to the shared LOCAL_MODEL_* settings.
     if (apiFormat === 'ollama') Object.assign(payload, {
       temperature: document.getElementById('page-new-prov-temperature')?.value.trim() ?? '',

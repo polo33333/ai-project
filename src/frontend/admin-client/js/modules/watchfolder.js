@@ -43,7 +43,7 @@ function renderWatchFolders() {
         <td><strong>${Number(folder.scannedFiles || 0).toLocaleString('vi-VN')}</strong> tệp</td>
         <td><span class="watchfolder-status ${active ? 'active' : 'paused'}" title="${escapeWatchFolderHtml(folder.error || '')}"><i class="fa-solid ${active ? 'fa-circle-play' : folder.runtimeStatus === 'Error' ? 'fa-circle-exclamation' : 'fa-circle-pause'}"></i> ${active ? 'Đang theo dõi' : folder.runtimeStatus === 'Error' ? 'Lỗi watcher' : 'Tạm dừng'}</span></td>
         <td>${escapeWatchFolderHtml(folder.lastScan || 'Chưa quét')}</td>
-        <td><div class="library-row-actions"><button class="library-action-btn" title="${active ? 'Tạm dừng' : 'Tiếp tục'}" onclick="toggleWatchFolder('${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid ${active ? 'fa-pause' : 'fa-play'}"></i></button><button class="library-action-btn danger" title="Xóa" onclick="deleteWatchFolder('${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid fa-trash"></i></button></div></td>
+        <td><div class="library-row-actions"><button class="library-action-btn" title="Chính sách dữ liệu cho tài liệu của thư mục" aria-label="Chính sách dữ liệu của thư mục" onclick="openGovernanceSource('watchfolder', '${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid fa-shield-halved"></i></button><button class="library-action-btn" title="${active ? 'Tạm dừng' : 'Tiếp tục'}" onclick="toggleWatchFolder('${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid ${active ? 'fa-pause' : 'fa-play'}"></i></button><button class="library-action-btn danger" title="Xóa" onclick="deleteWatchFolder('${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid fa-trash"></i></button></div></td>
       </tr>`;
     }).join('');
   }

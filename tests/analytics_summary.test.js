@@ -5,7 +5,7 @@ const summary=require('../src/backend/services/analytics_summary');
 test('summary requests load authentication without reconstructing chat/tool history',()=>{
  const {requestStores}=require('../src/backend/storage/request_stores');
  for(const route of ['chat-history','chat-feedback']) {
-  assert.deepEqual(requestStores({method:'GET',url:`/api/${route}?summary=1`}),['accounts.json','sessions.json','account_roles.json']);
+  assert.deepEqual(requestStores({method:'GET',url:`/api/${route}?summary=1`}),['accounts.json','sessions.json','account_roles.json','account_function_groups.json']);
   assert.ok(requestStores({method:'GET',url:`/api/${route}`}).includes('chat_history.json'));
  }
 });

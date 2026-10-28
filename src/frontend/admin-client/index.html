@@ -45,6 +45,7 @@
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
   <link rel="stylesheet" href="css/theme.css?v=20261024-surface-aliases">
   <link rel="stylesheet" href="css/settings.css?v=20261026-policy-save-status">
+  <link rel="stylesheet" href="css/data-governance.css?v=20261028-role-editor">
   <link rel="stylesheet" href="css/memory.css?v=20261012-agent-memory-ui">
   <link rel="stylesheet" href="css/ui-foundation.css?v=20261015-composer-focus">
   <link rel="stylesheet" href="css/chat-conversation.css?v=20261025-usage-dismiss">
@@ -218,8 +219,8 @@
               </a>
             </li>
             <li class="nav-item" id="nav-data-governance" hidden>
-              <a href="#" onclick="switchMainTab('data-governance'); return false;" title="Quản trị dữ liệu">
-                <span class="nav-icon"><i class="fa-solid fa-shield-halved"></i></span> <span class="nav-label">Quản trị dữ liệu</span>
+              <a href="#" onclick="switchMainTab('data-governance'); return false;" title="Quản lý dữ liệu">
+                <span class="nav-icon"><i class="fa-solid fa-shield-halved"></i></span> <span class="nav-label">Quản lý dữ liệu</span>
               </a>
             </li>
           </ul>
@@ -575,8 +576,8 @@
 
   <!-- Modular JavaScript Engine Files -->
   <script defer src="js/ui_dialogs.js?v=20260913"></script>
-  <script defer src="js/modules/ai_providers.js?v=20261024-attachment-model"></script>
-  <script defer src="js/modules/dictionary.js?v=20261023-column-alignment"></script>
+  <script defer src="js/modules/ai_providers.js?v=20261027-internal-data"></script>
+  <script defer src="js/modules/dictionary.js?v=20261028-access-notice"></script>
   <script defer src="js/modules/dictionary-graph.js?v=20261022-graph-cards"></script>
   <script defer src="js/modules/glossary.js?v=20261015-training-loading"></script>
   <link rel="stylesheet" href="css/answer_status.css?v=20261012-hide-partial">
@@ -587,22 +588,23 @@
   <script defer src="embed/chat-stream.js?v=20261024-readable-pace"></script>
   <script defer src="js/modules/voice_input.js?v=20261025-full-transcript"></script>
   <script defer src="js/modules/answer_speech.js?v=20261025-tts-tables-2"></script>
-  <script defer src="js/modules/page_chat.js?v=20261025-history-sync"></script>
+  <script defer src="js/modules/page_chat.js?v=20261028-embed-model"></script>
   <script defer src="js/modules/sql_connector.js?v=20261022-tab-performance"></script>
   <script defer src="js/modules/system_logs.js?v=20260906-summary-only"></script>
   <script defer src="js/modules/chat_history.js?v=20261022-on-demand-audit"></script>
   <script defer src="js/modules/chat_feedback.js?v=20261022-compact-list"></script>
   <script defer src="js/modules/training_core.js?v=20261015-training-loading"></script>
-  <script defer src="js/modules/mcp_api.js?v=20261025-embed-mode"></script>
+  <script defer src="js/modules/mcp_api.js?v=20261027-widget-role"></script>
   <script defer src="js/modules/analytics.js?v=20261024-real-dashboard-shell"></script>
-  <script defer src="js/modules/library.js?v=20261017-pagination-10"></script>
-  <script defer src="js/modules/watchfolder.js?v=20261015-training-loading"></script>
+  <script defer src="js/modules/library.js?v=20261028-ai-badge"></script>
+  <script defer src="js/modules/watchfolder.js?v=20261028-policy"></script>
   <script defer src="js/modules/system_tools.js?v=20261015-catalog-hero"></script>
-  <script defer src="js/modules/governance.js?v=20261026-policy-save-status"></script>
+  <script defer src="js/modules/governance.js?v=20261028-orphans"></script>
+  <script defer src="js/modules/governance_groups.js?v=20261028-flow-2"></script>
   <script defer src="js/modules/usage_banner.js?v=20261025-usage-countdown"></script>
   <script defer src="js/modules/ai_usage.js?v=20261025-usage-reset"></script>
   <link rel="stylesheet" href="css/ai_usage.css?v=20261025-usage-narrow">
-  <script defer src="js/modules/accounts.js?v=20261025-admin-path"></script>
+  <script defer src="js/modules/accounts.js?v=20261028-role-editor"></script>
   <script defer src="js/modules/memory.js?v=20261015-tab-data"></script>
   <script defer src="js/modules/settings.js?v=20261025-backup-progress"></script>
   <script defer src="js/modules/workflows.js?v=20260926-phase1"></script>

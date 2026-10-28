@@ -166,7 +166,13 @@ function toggleChatAddMenu(event) {
   if (open) { menu?.classList.add('is-open'); trigger?.setAttribute('aria-expanded', 'true'); }
 }
 
+// The chat embedded in a customer site (/chat?embed=) always uses the provider active in
+// the admin app, in "Nhanh" mode; visitors do not pick a model.
+const isPageChatEmbedded = () => document.body?.classList?.contains?.('kh-chat-embedded') === true;
+function pageChatProviderId() { return isPageChatEmbedded() ? null : document.getElementById('page-chat-model-selector')?.value || null; }
+
 function getPageChatReasoningMode() {
+  if (isPageChatEmbedded()) return 'fast';
   return localStorage.getItem('knowledgehub_chat_reasoning_mode') === 'fast' ? 'fast' : 'medium';
 }
 
@@ -567,7 +573,7 @@ async function continueChatSession(id) {
     if (!await saveChatSessions()) throw new Error('Hãy lưu lại lịch sử trước khi tiếp tục.');
     const response=await fetch('/api/page-chat/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'summarize',sessionId:id,version:persistedChatSessions.get(id).version,
-        providerId:document.getElementById('page-chat-model-selector')?.value || null}),signal:AbortSignal.timeout(18000)});
+        providerId:pageChatProviderId()}),signal:AbortSignal.timeout(18000)});
     if (!response.ok) {
       const error=await response.json().catch(()=>({}));
       const message=error.message==='CHAT_HISTORY_CONFLICT' ? 'Hội thoại đã thay đổi trên tab khác. Hãy tải lại trang trước khi tiếp tục.' :
@@ -1666,6 +1672,7 @@ function renderChatFeedback(data = {}, tokenUsage = null, options = {}) {
 }
 
 function renderChatTokenUsage(usage, routing = null) {
+  if (document.body?.classList?.contains?.('kh-chat-standalone') || isPageChatEmbedded()) return '';
   if (!usage || usage.available === false) return '';
   const input = Number(usage.inputTokens) || 0;
   const output = Number(usage.outputTokens) || 0;
@@ -1837,7 +1844,7 @@ async function sendPageChatMessage(retryQuestion, retryContext = null) {
 
   try {
     if (!await saveChatSessions()) throw new Error('Chưa lưu được câu hỏi. Hãy lưu lại lịch sử trước khi gửi tiếp.');
-    const selectedProviderId = document.getElementById('page-chat-model-selector')?.value || null;
+    const selectedProviderId = pageChatProviderId();
     const knowledgeSources = getChatKnowledgeValues();
     const requestMessage = msg || 'Đã gửi tệp đính kèm';
     if (!isRetry) userRecord.requestMessage=requestMessage;

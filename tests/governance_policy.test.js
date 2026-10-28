@@ -8,19 +8,42 @@ const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/re
 const { Admission } = require('../src/backend/governance/admission');
 
 test('request scope fails closed, isolates users/embed, and separates read from model send', () => {
-  const resource = { id: 's', governedPolicy: { visibility: 'restricted', subjects: ['account:a'], sensitivity: 'internal', modelDestinations: ['approved'] } };
+  const resource = { id: 's', governedPolicy: { schemaVersion: 2, access: { mode: 'grants', users: ['account:a'] }, aiSharing: { level: 'local' } } };
   policy.run(() => {
     assert.throws(() => policy.read(resource, 'sql'), { code: 'PRINCIPAL_REQUIRED' });
     policy.setPrincipal({ subject: 'account:b', role: 'user' }); assert.equal(policy.canRead(resource), false);
     policy.setPrincipal({ subject: 'account:a', role: 'user' }); policy.read(resource, 'sql');
     assert.throws(() => policy.assertEgress('external'), { code: 'MODEL_DESTINATION_DENIED' });
-    assert.doesNotThrow(() => policy.assertEgress('approved'));
-    resource.governedPolicy.subjects = [];
-    assert.throws(() => policy.assertEgress('approved'), { code: 'RESOURCE_ACCESS_REVOKED' });
+    assert.doesNotThrow(() => policy.assertEgress('local-model', true));
+    // "Tất cả AI" reaches every provider without naming it; web search is never tied to source policy.
+    resource.governedPolicy.aiSharing.level = 'all'; assert.doesNotThrow(() => policy.assertEgress('external'));
+    resource.governedPolicy.aiSharing.level = 'off'; assert.throws(() => policy.assertEgress('local-model', true), { code: 'MODEL_DESTINATION_DENIED' });
+    assert.doesNotThrow(() => policy.assertEgress('web:https://search.example'));
+    resource.governedPolicy.access.users = [];
+    assert.throws(() => policy.assertEgress('external'), { code: 'RESOURCE_ACCESS_REVOKED' });
     policy.setPrincipal({ subject: 'embed:w:session', embedId: 'w', channel: 'embed' }); assert.equal(policy.canRead(resource), false);
-    resource.governedPolicy.embedIds = ['w']; assert.equal(policy.canRead(resource), true);
+    resource.governedPolicy.legacyEmbeds = ['w']; assert.equal(policy.canRead(resource), true);
+    // A widget reads through the role it was given, like any account.
+    policy.setPrincipal({ subject: 'embed:x:session', embedId: 'x', channel: 'embed', role: 'widget_x', permissions: ['sql:read'], grants: { sql: ['s'] } });
+    assert.equal(policy.canRead(resource, 'sql'), true);
   });
   policy.run(() => assert.throws(() => policy.principal(), { code: 'PRINCIPAL_REQUIRED' }));
+});
+test('version 1 policies keep their read decisions and providers can refuse internal data', () => {
+  const rules = require('../src/backend/governance/policy');
+  const v1 = rules.normalize({ visibility: 'restricted', subjects: ['account:a'], roles: ['finance'], embedIds: ['w'], sensitivity: 'internal', modelDestinations: [] });
+  assert.equal(v1.access.mode, 'grants'); assert.equal(v1.aiSharing.level, 'all');
+  assert.equal(rules.canRead({ id: 's' }, { subject: 'account:a', role: 'user' }, 'sql', { policy: v1 }), true);
+  assert.equal(rules.canRead({ id: 's' }, { subject: 'account:b', role: 'finance' }, 'sql', { policy: v1 }), true);
+  assert.equal(rules.canRead({ id: 's' }, { subject: 'account:b', role: 'user' }, 'sql', { policy: v1 }), false);
+  assert.equal(rules.normalize({ sensitivity: 'restricted', modelDestinations: [] }).aiSharing.level, 'local');
+  const all = rules.normalize(null);
+  assert.equal(rules.canSend(all, rules.destination('p1', false, [{ id: 'p1', rejectInternalData: true }])), false);
+  assert.equal(rules.canSend({ ...all, aiSharing: { level: 'all', excludeDestinations: ['p2'] } }, rules.destination('p2')), false);
+  assert.equal(rules.canSend(all, rules.destination('embedding:model')), true);
+  assert.equal(rules.canSend({ ...all, aiSharing: { level: 'local', excludeDestinations: [] } }, rules.destination('mcp:server', true)), false);
+  const denied = rules.normalize({ schemaVersion: 2, access: { mode: 'all', denyUsers: ['account:a'] } });
+  assert.equal(rules.explain({ id: 's' }, { subject: 'account:a', role: 'user' }, 'sql', { policy: denied }).reason, 'DENIED_USER');
 });
 test('SQL policy rejects source table/column bypass and direct mutation', () => {
   const source = { governedPolicy: { allowedTables: ['dbo.Orders'], blockedColumns: ['secret'] } };

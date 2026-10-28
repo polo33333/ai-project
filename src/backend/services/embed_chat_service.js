@@ -30,6 +30,14 @@ class EmbedChatService {
     return this.configs;
   }
 
+  // The widget reads data through this role. Admin cannot be given to a public widget.
+  normalizeRole(value, current = 'khach_widget') {
+    if (value === undefined || value === null || value === '') return current;
+    const role = require('./account_roles').get(String(value));
+    if (!role || role.id === 'admin') throw new Error('Vai trò của widget không hợp lệ.');
+    return role.id;
+  }
+
   createConfig(data = {}) {
     const name = String(data.name || '').trim();
     const allowedOrigins = [...new Set((Array.isArray(data.allowedOrigins) ? data.allowedOrigins : String(data.allowedOrigins || '').split(/[\n,]+/))
@@ -45,6 +53,7 @@ class EmbedChatService {
       maxQuestionLength: Math.min(8000, Math.max(100, Number(data.maxQuestionLength) || 2000)),
       maxHistory: Math.min(20, Math.max(0, Number(data.maxHistory) || 10)),
       maxRows: Math.min(100, Math.max(1, Number(data.maxRows) || 20)),
+      role: this.normalizeRole(data.role),
       isActive: true,
       createdAt: new Date().toISOString(),
       lastUsedAt: null
@@ -76,6 +85,7 @@ class EmbedChatService {
       mode: this.normalizeMode(data.mode),
       rateLimit: Math.min(300, Math.max(1, Number(data.rateLimit) || 30)),
       maxRows: Math.min(100, Math.max(1, Number(data.maxRows) || 20)),
+      role: this.normalizeRole(data.role, config.role || 'khach_widget'),
       updatedAt: new Date().toISOString()
     });
     this.persist();

@@ -620,6 +620,15 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
   const canvas = document.getElementById('pageAnalyticsChart');
   if (!canvas || typeof Chart === 'undefined') return;
   const buckets = groupAnalyticsPeriod(history, providers, year, month);
+  // Round only the outside of the visible stack; keep the join between colors flat.
+  const pillRadius = context => {
+    const index = context.dataIndex, chart = context.chart;
+    const lower = chart.isDatasetVisible(0) && buckets[index]?.localQueries > 0;
+    const upper = chart.isDatasetVisible(1) && buckets[index]?.thirdPartyQueries > 0;
+    const top = context.datasetIndex === 1 || !upper;
+    const bottom = context.datasetIndex === 0 || !lower;
+    return { topLeft: top ? 999 : 0, topRight: top ? 999 : 0, bottomLeft: bottom ? 999 : 0, bottomRight: bottom ? 999 : 0 };
+  };
   destroyChart('pageAnalyticsChart');
   window.khCharts.pageAnalyticsChart = new Chart(canvas, {
     type: 'bar',
@@ -632,7 +641,12 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
           data: buckets.map(b => b.localQueries),
           backgroundColor: 'rgba(16, 185, 129, 0.78)',
           order: 1,
-          borderRadius: 6,
+          borderRadius: pillRadius,
+          borderSkipped: false,
+          barThickness: 'flex',
+          maxBarThickness: 28,
+          categoryPercentage: 0.65,
+          barPercentage: 0.75,
           stack: 'aiCalls',
           yAxisID: 'y'
         },
@@ -642,7 +656,12 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
           data: buckets.map(b => b.thirdPartyQueries),
           backgroundColor: 'rgba(79, 70, 229, 0.78)',
           order: 1,
-          borderRadius: 6,
+          borderRadius: pillRadius,
+          borderSkipped: false,
+          barThickness: 'flex',
+          maxBarThickness: 28,
+          categoryPercentage: 0.65,
+          barPercentage: 0.75,
           stack: 'aiCalls',
           yAxisID: 'y'
         },
@@ -652,12 +671,12 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
           data: buckets.map(b => Number(b.estimatedCost.toFixed(4))),
           borderColor: '#c2410c',
           backgroundColor: '#c2410c',
-          borderWidth: 4,
-          pointRadius: 5,
-          pointHoverRadius: 7,
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
           pointBackgroundColor: '#ffffff',
           pointBorderColor: '#c2410c',
-          pointBorderWidth: 3,
+          pointBorderWidth: 2,
           fill: false,
           order: 0,
           tension: 0.35,
@@ -669,7 +688,7 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'bottom' } },
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 16 } } },
       scales: {
         x: { stacked: true },
         y: { beginAtZero: true, stacked: true, ticks: { precision: 0 } },

@@ -1,60 +1,100 @@
-<section id="view-data-governance" class="system-tools-page" data-display="grid" style="display:none">
+<section id="view-data-governance" class="system-tools-page dg-page" data-display="grid" style="display:none">
   <header class="system-tools-hero">
     <div class="system-tools-hero-icon"><i class="fa-solid fa-shield-halved"></i></div>
-    <div><div class="card-title">Quản trị dữ liệu</div><p>Quản lý quyền truy cập, phạm vi xử lý và các chỉ tiêu SQL được phê duyệt.</p></div>
+    <div><div class="card-title">Quản lý dữ liệu</div><p>Nguồn nào mở cho ai, gửi tới AI nào, và vai trò được truy vấn bảng nào.</p></div>
     <span class="metric-tag purple">Chỉ dành cho admin</span>
   </header>
-  <section class="settings-governance-card agent-operations" aria-labelledby="operations-title">
-    <header class="settings-governance-heading">
-      <span class="settings-governance-icon"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i></span>
-      <div class="settings-governance-heading-copy"><h3 id="operations-title">Chất lượng và vận hành Agent</h3><p>Tổng hợp các lượt đã lưu; không hiển thị nội dung hội thoại.</p></div>
-      <button id="operations-refresh" class="btn-secondary-sm" type="button" onclick="loadAgentOperations()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button>
-    </header>
-    <div class="settings-governance-body"><dl id="operations-summary" class="operations-summary"></dl><ul id="operations-alerts" aria-live="polite"></ul><p id="operations-message" role="status"></p></div>
+  <section id="dg-panel-operations" class="settings-governance-card agent-operations dg-operations-overview" aria-labelledby="dg-operations-heading">
+    <h3 id="dg-operations-heading" class="dg-subtitle">Tổng hợp vận hành Agent</h3>
+      <div class="dg-toolbar"><p class="dg-intro">Tổng hợp các lượt đã lưu; không hiển thị nội dung hội thoại.</p><button id="operations-refresh" class="btn-secondary-sm" type="button" onclick="loadAgentOperations()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button></div>
+      <dl id="operations-summary" class="operations-summary"></dl><ul id="operations-alerts" aria-live="polite"></ul><p id="operations-message" role="status"></p>
   </section>
-  <section class="settings-governance-card" aria-labelledby="governance-title">
-    <header class="settings-governance-heading">
-      <span class="settings-governance-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
-      <div class="settings-governance-heading-copy"><span class="settings-governance-kicker">BẢO VỆ DỮ LIỆU</span><h3 id="governance-title">Quyền truy cập và xử lý dữ liệu</h3><p>Chọn nguồn để quản lý người được đọc và nơi được phép xử lý dữ liệu.</p></div>
-      <span id="governance-mode" class="settings-governance-badge" role="status">Đang tải chính sách…</span>
-    </header>
-    <div class="settings-governance-body">
-      <div class="settings-governance-source"><label for="governance-resource"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Nguồn dữ liệu</label><div><select class="form-control" id="governance-resource" onchange="selectGovernanceResource()" aria-describedby="governance-source-help"></select><p id="governance-source-help" class="settings-governance-hint">Chính sách chỉ áp dụng cho nguồn đang chọn. Câu hỏi dữ liệu nghiệp vụ cần cấp quyền cho nguồn SQL tương ứng.</p></div></div>
-      <form id="governance-form" onsubmit="saveGovernanceResource(event)">
-        <div class="settings-governance-grid">
-          <fieldset class="settings-governance-pane">
-            <legend><i class="fa-solid fa-users" aria-hidden="true"></i> Quyền đọc nguồn</legend>
-            <p class="settings-governance-hint">Xác định tài khoản và widget có thể sử dụng nguồn này.</p>
-            <label>Phạm vi truy cập<select class="form-control" id="governance-visibility"><option value="shared">Tài khoản đã đăng nhập</option><option value="restricted">Chỉ tài khoản / vai trò được chỉ định</option></select></label>
-            <label>Tài khoản được đọc<input class="form-control" id="governance-subjects" placeholder="account:ID, account:ID" aria-describedby="governance-subjects-help"><small id="governance-subjects-help">Nhập mã tài khoản, phân cách bằng dấu phẩy.</small></label>
-            <div class="settings-governance-pair">
-              <label>Vai trò được đọc<input class="form-control" id="governance-roles" placeholder="user, admin"></label>
-              <label>Widget được đọc<input class="form-control" id="governance-embedIds" placeholder="Embed ID"></label>
-            </div>
-          </fieldset>
-          <fieldset class="settings-governance-pane">
-            <legend><i class="fa-solid fa-lock" aria-hidden="true"></i> Phạm vi xử lý</legend>
-            <p class="settings-governance-hint">Quyền đọc không tự cấp quyền gửi dữ liệu ra ngoài.</p>
-            <label>Mức độ nhạy cảm<select class="form-control" id="governance-sensitivity"><option value="internal">Nội bộ</option><option value="restricted">Hạn chế</option><option value="public">Công khai</option></select></label>
-            <label>Đích xử lý được phép<input class="form-control" id="governance-modelDestinations" list="governance-providers" placeholder="Chọn hoặc nhập mã đích xử lý" aria-describedby="governance-destination-help"><small id="governance-destination-help">Để trống: nguồn nội bộ chỉ dùng model cục bộ; nguồn hạn chế cần cấp đích riêng.</small></label><datalist id="governance-providers"></datalist>
-            <details class="settings-governance-help"><summary>Hướng dẫn nhập đích xử lý</summary><p>Dùng Provider ID, <code>embedding:tên-model</code>, <code>reranker</code>, <code>mcp:ID</code>, <code>api:origin</code> hoặc <code>web:origin</code>. Nhiều đích phân cách bằng dấu phẩy.</p></details>
-            <div class="settings-governance-pair">
-              <label>Bảng SQL được phép<input class="form-control" id="governance-allowedTables" placeholder="dbo.Table"><small>Để trống để dùng phạm vi của nguồn.</small></label>
-              <label>Cột SQL bị chặn<input class="form-control" id="governance-blockedColumns" placeholder="Tên cột"><small>Chặn cả SELECT * khi có cột hạn chế.</small></label>
-            </div>
-          </fieldset>
-        </div>
-        <footer class="settings-governance-footer"><p id="governance-message" role="status" aria-live="polite"></p><button class="btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu chính sách</button></footer>
-      </form>
+  <section class="settings-governance-card dg-shell" aria-label="Quản lý dữ liệu">
+    <nav class="dg-tabs" role="tablist" aria-label="Các phần quản trị dữ liệu">
+      <button type="button" role="tab" id="dg-tab-sources" aria-controls="dg-panel-sources" aria-selected="true" onclick="openGovernanceTab('sources')"><i class="fa-solid fa-database" aria-hidden="true"></i> Nguồn dữ liệu</button>
+      <button type="button" role="tab" id="dg-tab-groups" aria-controls="dg-panel-groups" aria-selected="false" tabindex="-1" onclick="openGovernanceTab('groups')"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Nhóm chức năng</button>
+      <button type="button" role="tab" id="dg-tab-inspect" aria-controls="dg-panel-inspect" aria-selected="false" tabindex="-1" onclick="openGovernanceTab('inspect')"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Kiểm tra quyền</button>
+      <button type="button" role="tab" id="dg-tab-metrics" aria-controls="dg-panel-metrics" aria-selected="false" tabindex="-1" onclick="openGovernanceTab('metrics')"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Chỉ tiêu SQL</button>
+    </nav>
+
+    <div id="dg-panel-sources" class="dg-panel" role="tabpanel" aria-labelledby="dg-tab-sources">
+      <p class="dg-intro">Mặc định mọi nguồn <strong>mở cho mọi người</strong> có quyền tra cứu và <strong>chia sẻ cho tất cả AI</strong> đang bật. Chỉ sửa khi cần hạn chế.</p>
+      <div class="dg-toolbar">
+        <div class="search-input-wrapper"><i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i><input id="dg-search" class="search-input" placeholder="Tìm nguồn, tài liệu, thư mục…" aria-label="Tìm nguồn" oninput="renderGovernanceSources()"></div>
+        <select id="dg-filter-type" class="form-control" aria-label="Lọc loại" onchange="renderGovernanceSources()"><option value="">Mọi loại</option><option value="sql">Nguồn SQL</option><option value="document">Tài liệu</option><option value="watchfolder">Thư mục theo dõi</option></select>
+        <select id="dg-filter-ai" class="form-control" aria-label="Lọc chia sẻ AI" onchange="renderGovernanceSources()"><option value="">Mọi mức chia sẻ AI</option><option value="all">Tất cả AI</option><option value="local">Chỉ AI cục bộ</option><option value="off">Tắt AI</option></select>
+        <select id="dg-filter-mode" class="form-control" aria-label="Lọc chế độ mở" onchange="renderGovernanceSources()"><option value="">Mọi chế độ mở</option><option value="all">Mọi người</option><option value="grants">Theo nhóm chức năng</option><option value="admin">Chỉ admin</option></select>
+        <button type="button" id="dg-refresh" class="btn-secondary-sm" onclick="loadGovernanceResources()"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Làm mới</button>
+      </div>
+      <div id="dg-bulk" class="dg-bulk" hidden>
+        <strong id="dg-bulk-count">0 nguồn đã chọn</strong>
+        <select id="dg-bulk-ai" class="form-control" aria-label="Đặt chia sẻ AI"><option value="">Giữ chia sẻ AI</option><option value="all">Tất cả AI</option><option value="local">Chỉ AI cục bộ</option><option value="off">Tắt AI</option></select>
+        <select id="dg-bulk-mode" class="form-control" aria-label="Đặt chế độ mở"><option value="">Giữ chế độ mở</option><option value="all">Mọi người</option><option value="grants">Theo nhóm chức năng</option><option value="admin">Chỉ admin</option></select>
+        <button type="button" class="btn-primary" onclick="applyGovernanceBulk()"><i class="fa-solid fa-check" aria-hidden="true"></i> Áp dụng</button>
+        <button type="button" class="btn-secondary-sm" onclick="clearGovernanceSelection()">Bỏ chọn</button>
+      </div>
+      <p id="governance-mode" class="dg-status" role="status">Đang tải chính sách…</p>
+      <div class="dg-table-wrap">
+        <table class="dg-table">
+          <thead><tr><th scope="col" class="dg-check"><input type="checkbox" id="dg-select-all" aria-label="Chọn tất cả nguồn đang hiện" onchange="toggleGovernanceSelectAll(this.checked)"></th><th scope="col">Nguồn</th><th scope="col">Mở cho</th><th scope="col">Chia sẻ AI</th><th scope="col">Phạm vi bảng</th><th scope="col">Cập nhật</th><th scope="col"><span class="sr-only">Thao tác</span></th></tr></thead>
+          <tbody id="dg-sources-body"></tbody>
+        </table>
+      </div>
+      <nav id="dg-sources-pagination" class="dg-pagination" aria-label="Phân trang nguồn"></nav>
     </div>
-  </section>
-  <section class="settings-governance-card settings-metrics-card" aria-labelledby="metric-editor-title">
-    <header class="settings-governance-heading">
-      <span class="settings-governance-icon"><i class="fa-solid fa-chart-column" aria-hidden="true"></i></span>
-      <div class="settings-governance-heading-copy"><span class="settings-governance-kicker">CHỈ TIÊU NGHIỆP VỤ</span><h3 id="metric-editor-title">Chỉ tiêu SQL được phê duyệt</h3><p>Quản lý định nghĩa, đơn vị và thời gian tính chỉ tiêu theo từng nguồn SQL.</p></div>
-      <span class="settings-governance-badge">Chỉ dùng chỉ tiêu đã duyệt</span>
-    </header>
-    <div class="settings-governance-body">
+
+    <div id="dg-panel-groups" class="dg-panel" role="tabpanel" aria-labelledby="dg-tab-groups" hidden>
+      <figure id="dg-flow" class="dg-flow2" aria-label="Cách phân quyền"></figure>
+      <div class="dg-groups-toolbar">
+        <div class="dg-segment" role="group" aria-label="Chế độ xem">
+          <button type="button" id="dg-groups-view-list" aria-pressed="true" onclick="showGroupsView('list')"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Nhóm chức năng <span id="dg-groups-count" class="dg-count"></span></button>
+          <button type="button" id="dg-groups-view-roles" aria-pressed="false" onclick="showGroupsView('roles')"><i class="fa-solid fa-id-badge" aria-hidden="true"></i> Vai trò <span id="dg-roles-count" class="dg-count"></span></button>
+          <button type="button" id="dg-groups-view-matrix" aria-pressed="false" onclick="showGroupsView('matrix')"><i class="fa-solid fa-table-cells" aria-hidden="true"></i> Ma trận gói bảng</button>
+        </div>
+        <div class="dg-section-tools" id="dg-groups-tools">
+          <div class="search-input-wrapper"><i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i><input id="dg-groups-search" class="search-input" placeholder="Tìm nhóm chức năng…" aria-label="Tìm nhóm chức năng" oninput="renderFunctionGroups()"></div>
+          <select id="dg-groups-filter" class="form-control" aria-label="Lọc nhóm chức năng" onchange="renderFunctionGroups()"><option value="">Tất cả nhóm</option><option value="used">Đang gán cho vai trò</option><option value="unused">Chưa gán vai trò</option></select>
+          <button type="button" class="btn-primary" onclick="openFunctionGroupEditor()"><i class="fa-solid fa-plus" aria-hidden="true"></i> Thêm nhóm chức năng</button>
+        </div>
+        <div class="dg-section-tools" id="dg-roles-tools" hidden>
+          <span class="settings-governance-hint">Vai trò được thêm, sửa, xóa và gán cho tài khoản ở trang Tài khoản.</span>
+          <button type="button" class="btn-primary" onclick="switchMainTab('accounts')"><i class="fa-solid fa-id-badge" aria-hidden="true"></i> Quản lý vai trò</button>
+        </div>
+      </div>
+      <p id="dg-groups-message" class="dg-status" role="status"></p>
+      <div id="dg-groups-list">
+        <p class="settings-governance-hint dg-view-hint">Mỗi nhóm là một việc nghiệp vụ. Sửa một nhóm thì mọi vai trò dùng nhóm đó đổi theo.</p>
+        <div id="dg-groups-cards" class="dg-group-grid"></div>
+      </div>
+      <div id="dg-roles-view" hidden>
+        <p class="settings-governance-hint dg-view-hint">Quyền của vai trò bằng tổng các nhóm chức năng của nó. Bấm tên nhóm để sửa nhóm.</p>
+        <div class="dg-table-wrap"><table class="dg-table dg-roles-table"><thead><tr><th scope="col">Vai trò</th><th scope="col">Nhóm chức năng</th><th scope="col">Tài khoản</th><th scope="col">Quyền tổng hợp</th></tr></thead><tbody id="dg-roles-cards"></tbody></table></div>
+      </div>
+      <div id="dg-groups-matrix" hidden>
+        <div class="dg-toolbar"><label class="dg-inline-label">Nguồn SQL<select id="dg-matrix-source" class="form-control" onchange="renderGovernanceMatrix()"></select></label><button type="button" class="btn-primary" id="dg-matrix-save" onclick="saveGovernanceMatrix()" disabled><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu ma trận</button></div>
+        <div class="dg-table-wrap"><table class="dg-table dg-matrix" id="dg-matrix"></table></div>
+        <nav id="dg-matrix-pagination" class="dg-pagination" aria-label="Phân trang gói bảng"></nav>
+        <section class="dg-coverage" aria-labelledby="dg-coverage-title"><h4 id="dg-coverage-title" class="dg-subtitle">Kiểm tra độ phủ</h4><div id="dg-coverage" role="status"></div></section>
+      </div>
+    </div>
+
+    <div id="dg-panel-inspect" class="dg-panel" role="tabpanel" aria-labelledby="dg-tab-inspect" hidden>
+      <p class="dg-intro">Chọn tài khoản, vai trò hoặc widget để xem đọc được nguồn nào, vì sao, và AI nào nhận được dữ liệu.</p>
+      <div class="dg-toolbar"><label class="dg-inline-label">Xem quyền của<select id="dg-inspect-actor" class="form-control" onchange="inspectGovernanceActor()"></select></label></div>
+      <div id="dg-inspect-result" role="status"></div>
+      <details class="dg-try">
+        <summary>Thử câu SQL theo quyền của người này</summary>
+        <div class="dg-try-body">
+          <label>Nguồn SQL<select id="dg-try-source" class="form-control"></select></label>
+          <label>Câu SQL<textarea id="dg-try-sql" class="form-control" rows="4" spellcheck="false" placeholder="SELECT ..."></textarea></label>
+          <div><button type="button" class="btn-secondary-sm" onclick="tryGovernanceQuery()"><i class="fa-solid fa-vial" aria-hidden="true"></i> Kiểm tra (không chạy truy vấn)</button></div>
+          <p id="dg-try-result" role="status"></p>
+        </div>
+      </details>
+    </div>
+
+    <div id="dg-panel-metrics" class="dg-panel" role="tabpanel" aria-labelledby="dg-tab-metrics" hidden>
+      <p class="dg-intro">Định nghĩa, đơn vị và thời gian tính chỉ tiêu theo từng nguồn SQL. Chỉ tiêu chỉ hiện với vai trò được đọc bảng của chỉ tiêu.</p>
       <div class="settings-metrics-selectors">
         <label for="metric-source">Nguồn SQL<select id="metric-source" class="form-control" onchange="loadGovernedMetrics()"></select></label>
         <label for="metric-existing">Chỉ tiêu<select id="metric-existing" class="form-control" onchange="selectGovernedMetric()"><option value="">Tạo mới</option></select></label>
@@ -68,8 +108,24 @@
         <footer class="settings-governance-footer"><p id="metric-message" role="status" aria-live="polite"></p><button type="submit" class="btn-primary"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu phiên bản chỉ tiêu</button></footer>
       </form>
     </div>
+
+
   </section>
 
+  <div id="dg-drawer-backdrop" class="dg-drawer-backdrop" hidden onclick="closeGovernanceDrawer()"></div>
+  <aside id="dg-drawer" class="dg-drawer" role="dialog" aria-modal="true" aria-labelledby="dg-drawer-title" hidden>
+    <form id="governance-form" onsubmit="saveGovernanceResource(event)">
+      <header class="dg-drawer-head"><div><span id="dg-drawer-kind" class="settings-governance-kicker"></span><h3 id="dg-drawer-title">Chi tiết nguồn</h3></div><button type="button" class="modal-close-btn" onclick="closeGovernanceDrawer()" aria-label="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+      <div id="dg-drawer-body" class="dg-drawer-body"></div>
+      <footer class="settings-governance-footer dg-drawer-foot"><p id="governance-message" role="status" aria-live="polite"></p><button class="btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu chính sách</button></footer>
+    </form>
+  </aside>
 
-
+  <div id="dg-group-editor" class="dg-drawer-backdrop dg-modal-backdrop" hidden>
+    <form class="dg-modal" id="dg-group-form" role="dialog" aria-modal="true" aria-labelledby="dg-group-title" onsubmit="saveFunctionGroup(event)">
+      <header class="dg-drawer-head"><div><span class="settings-governance-kicker">NHÓM CHỨC NĂNG</span><h3 id="dg-group-title">Thêm nhóm chức năng</h3></div><button type="button" class="modal-close-btn" onclick="closeFunctionGroupEditor()" aria-label="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+      <div id="dg-group-body" class="dg-drawer-body"></div>
+      <footer class="settings-governance-footer dg-drawer-foot"><p id="dg-group-message" role="status" aria-live="polite"></p><div class="dg-foot-actions"><button type="button" class="btn-secondary-sm dg-danger" id="dg-group-delete" onclick="deleteFunctionGroup()" hidden><i class="fa-solid fa-trash" aria-hidden="true"></i> Xóa</button><button class="btn-primary" type="submit" id="dg-group-save"><i class="fa-solid fa-check" aria-hidden="true"></i> Lưu nhóm</button></div></footer>
+    </form>
+  </div>
 </section>

@@ -14,7 +14,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script defer src="vendor/chart.umd.min.js?v=4.5.1"></script>
   <link rel="stylesheet" type="text/css" href="vendor/toastify.min.css?v=1.12.0">
@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="css/chat-conversation.css?v=20261025-usage-dismiss">
   <link rel="stylesheet" href="css/answer_status.css?v=20261012-hide-partial">
   <link rel="stylesheet" href="css/workflow_plugins.css?v=20261025-workflow-pending">
-  <link rel="stylesheet" href="css/chat.css?v=20261027-nav-visible">
+  <link rel="stylesheet" href="css/chat.css?v=20261028-hide-token-usage">
 </head>
 
 <body class="kh-chat-standalone">
@@ -134,10 +134,10 @@
   <script defer src="embed/chat-stream.js?v=20261024-readable-pace"></script>
   <script defer src="js/modules/voice_input.js?v=20261025-full-transcript"></script>
   <script defer src="js/modules/answer_speech.js?v=20261025-tts-tables-2"></script>
-  <script defer src="js/modules/page_chat.js?v=20261027-history-cascade"></script>
+  <script defer src="js/modules/page_chat.js?v=20261028-embed-model"></script>
   <script defer src="js/modules/usage_banner.js?v=20261025-usage-countdown"></script>
   <script defer src="js/modules/workflow_plugins.js?v=20261025-ai-replaced"></script>
   <script defer src="js/app.js?v=20261025-account-settings"></script>
-  <script defer src="js/chat_app.js?v=20261027-sidebar-icon"></script>
+  <script defer src="js/chat_app.js?v=20261028-composer-room"></script>
 </body>
 </html>

@@ -392,3 +392,26 @@ html[data-page="chat"], .kh-chat-standalone { height:100%; }
   .kh-chat-standalone #view-page_chat .kh-history-heading:is(:hover,:has(:focus-visible),:has(.kh-history-filter[aria-expanded="true"])) { background:var(--conversation-hover); }
   .kh-chat-standalone #view-page_chat .kh-history-heading:is(:hover,:has(:focus-visible),:has(.kh-history-filter[aria-expanded="true"])) .kh-history-filter { opacity:1; pointer-events:auto; }
 }
+
+/* Embedded in a customer site: the admin's active model in "Nhanh" mode, no picker. */
+.kh-chat-embedded .page-chat-model-picker { display:none !important; }
+/* Room for the floating composer, measured in chat_app.js (watchComposerHeight). */
+.kh-chat-standalone #view-page_chat #page-chat-messages-container { padding-bottom:calc(var(--kh-composer-h, 138px) + 20px) !important; scroll-padding-bottom:calc(var(--kh-composer-h, 138px) + 20px); }
+.kh-chat-standalone #view-page_chat .chat-welcome { padding-bottom:calc(var(--kh-composer-h, 138px) + 12px) !important; }
+/* Embedded chat: the composer sits under the conversation (never over it) and is one row:
+   [+] [question] [mic][send]. The conversation scrolls above it. */
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-composer-area { position:relative !important; inset:auto !important; flex:0 0 auto; padding:8px 12px 12px !important; background:var(--bg-primary, #fff); border-top:1px solid var(--border-color, #e5e7eb); }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat #page-chat-messages-container { flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:16px !important; scroll-padding-bottom:16px; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .chat-welcome { flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:16px !important; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-composer { grid-template-columns:36px minmax(0,1fr) auto !important; grid-template-rows:auto !important; align-items:center; min-height:0; padding:6px 6px 6px 8px !important; border-radius:24px; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-input-line { grid-area:1 / 2 / 2 / 3 !important; align-self:center; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-add-wrap { grid-area:1 / 1 / 2 / 2 !important; align-self:center; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-composer-actions { grid-area:1 / 3 / 2 / 4 !important; align-self:center; gap:6px; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-attachment-preview { grid-area:2 / 1 / 3 / -1 !important; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-knowledge-inline { grid-area:3 / 1 / 4 / -1 !important; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat #page-chat-user-input { min-height:24px; max-height:120px; padding-top:8px; padding-bottom:8px; }
+/* End users (/chat and the embedded chat) do not see the query/SQL details; admins still do in the admin app. */
+.kh-chat-standalone :is(.chat-technical-details, .copilot-technical-details) { display:none !important; }
+
+/* Token accounting stays in administration, outside the visitor conversation. */
+.kh-chat-standalone .chat-token-usage, .kh-chat-embedded .chat-token-usage { display:none !important; }

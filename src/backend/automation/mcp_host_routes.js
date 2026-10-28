@@ -82,7 +82,7 @@ async function handle(req, res, pathname, account, readJsonBody) {
       res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp/workflows", scope="${access.scope}"`);
       throw error('MCP_TOKEN_REQUIRED', 401);
     }
-    require('../governance/context').setPrincipal({ subject: `account:${owner.id}`, role: owner.role, permissions: owner.permissions, dataAccess: owner.dataAccess, tenantId: owner.tenantId, channel: 'mcp' });
+    require('../governance/context').setPrincipal({ subject: `account:${owner.id}`, role: owner.role, permissions: owner.permissions, dataAccess: owner.dataAccess, grants: owner.grants, accessRevision: owner.accessRevision, tenantId: owner.tenantId, channel: 'mcp' });
     req.storageOwner = `account:${owner.id}`;
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); throw error('Stateless MCP uses POST.', 405); }
     const body = await readJsonBody(req);

@@ -37,7 +37,7 @@
     if (!reducedMotion.matches) timer = setTimeout(tick, 2600);
   }
   const embed = new URLSearchParams(window.location.search).get('embed');
-  const chatUrl = '/chat' + (embed && /^[a-zA-Z0-9-]{1,64}$/.test(embed) ? '?embed=' + embed : '');
+  const chatUrl = '/chat' + (embed && /^[a-zA-Z0-9_-]{1,64}$/.test(embed) ? '?embed=' + embed : '');
   const form = document.getElementById('kh-login-form');
   const error = document.getElementById('kh-login-error');
   const submit = document.getElementById('kh-login-submit');

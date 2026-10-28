@@ -4,6 +4,7 @@
 const sources = [
   ['accounts.json', 'accounts', 'array', 'id'],
   ['account_roles.json', 'account_roles', 'array', 'id'],
+  ['account_function_groups.json', 'account_function_groups', 'array', 'id'],
   ['sessions.json', 'auth_sessions', 'map'],
   ['api_keys.json', 'api_keys', 'array', 'id'],
   ['db_sources.json', 'data_sources', 'array', 'id'],

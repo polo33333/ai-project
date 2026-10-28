@@ -7,6 +7,11 @@ function authorized(definition, context) {
   const audience = definition.audience;
   return (!audience?.accountIds?.length || audience.accountIds.includes(context.accountId)) && (!audience?.tenantIds?.length || audience.tenantIds.includes(scope(context)));
 }
+// Packages set to "Theo nhóm chức năng" are offered only to roles whose function groups list them.
+function packageAllowed(record, context) {
+  if (record?.access?.mode !== 'grants' || context.permissions?.includes('admin') || context.role === 'admin') return true;
+  return (context.workflowGrants || context.grants?.workflows || []).includes(record.id);
+}
 function requireAdmin(context) { if (!context.permissions?.includes('admin')) throw error('Cần quyền quản trị definition.', 403); }
 // Generated drafts mark unfilled fixture inputs as __NAME__; such cases cannot prove the template works.
 const FIXTURE_PLACEHOLDER = /^__[A-Z0-9_]+__$/;
@@ -33,7 +38,7 @@ class PluginRegistry {
     if (admin) return records.filter(record => record.draft).map(record => ({ ...record, draft: { ...record.draft, templates: record.draft.templates.filter(template => !record.deletedTemplates?.[template.id]) } })).filter(record => record.draft.templates.length);
     const definitions = [];
     for (const record of records) {
-      if (!record.enabled || !record.published) continue;
+      if (!record.enabled || !record.published || !packageAllowed(record, context)) continue;
       try { await this.dependencies(record.published); } catch (_) { continue; }
       const overlay = record.overlays?.[scope(context)];
       const bundle = overlay?.published && overlay.baseVersion === record.published.manifest.version ? overlay.published : record.published;
@@ -49,7 +54,7 @@ class PluginRegistry {
   async canContinue(definition, context) {
     if (!authorized(definition, context) || !authorized({ audience: definition.packageAudience }, context)) return false;
     const current = await this.repository.get('catalog', definition.packageId);
-    if (!current?.published || !authorized(current.published.manifest, context)) return false;
+    if (!current?.published || !authorized(current.published.manifest, context) || !packageAllowed(current, context)) return false;
     const currentTemplate = current.published.templates.find(item => item.id === definition.localId);
     return !currentTemplate || authorized(currentTemplate, context);
   }
@@ -129,6 +134,12 @@ class PluginRegistry {
     ensure(typeof enabled === 'boolean', 'enabled phải là boolean.');
     return this.repository.put('catalog', { ...record, enabled }, revision);
   }
+  async setAccess(id, mode, context, revision) {
+    requireAdmin(context); const record = await this.repository.get('catalog', id);
+    if (!record) throw error('Gói không tồn tại.', 404);
+    ensure(['all', 'grants'].includes(mode), 'Chế độ sử dụng không hợp lệ.');
+    return this.repository.put('catalog', { ...record, access: { mode } }, revision);
+  }
   async rollback(id, version, context, revision) {
     requireAdmin(context); const record = await this.repository.get('catalog', id);
     if (!record || record.revision !== revision) throw error('Revision gói đã thay đổi.', 409);
@@ -180,4 +191,4 @@ class PluginRegistry {
     return { status: close.length === 1 ? 'matched' : 'ambiguous', candidates: close.slice(0, 8), definition: close.length === 1 ? close[0].definition : null };
   }
 }
-module.exports = { PluginRegistry, authorized, scope, normalize, requireAdmin };
+module.exports = { PluginRegistry, authorized, packageAllowed, scope, normalize, requireAdmin };

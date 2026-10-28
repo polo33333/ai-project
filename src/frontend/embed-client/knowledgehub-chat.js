@@ -252,6 +252,8 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     return `<details class="kh-embed-citations"><summary>${label} (${displayed.length})</summary>${note}${items}</details>`;
   };
   const chatIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5 3.8 21l.8-4.1A8 8 0 1 1 7 18.5Z"/><path d="M8 10h8M8 14h5"/></svg>';
+  // Header avatar: the app logo, served by the KnowledgeHub host.
+  const appIcon = `<img class="kh-embed-logo" src="${escapeHtml(apiBase + '/favicon.svg')}" alt="" width="26" height="26" decoding="async">`;
   const botIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M9 3h6"/><rect x="4" y="7" width="16" height="12" rx="4"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 16h6"/></svg>';
   const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>';
   const sendIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/></svg>';
@@ -281,7 +283,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     .kh-embed-expand{display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:9px;color:#fff;background:rgba(255,255,255,.1);cursor:pointer}.kh-embed-expand:hover{background:rgba(255,255,255,.2)}.kh-embed-expand:focus-visible{outline:2px solid #fff;outline-offset:2px}.kh-embed-expand svg{width:18px;height:18px}
     @media(max-width:520px){.kh-embed-root.expanded .kh-embed-panel{width:calc(100vw - 24px);height:calc(100vh - 24px);height:calc(100dvh - 24px);max-height:calc(100dvh - 24px)}}
     .kh-embed-head{position:relative;display:flex;align-items:center;gap:11px;padding:15px 17px;color:#fff;background:linear-gradient(135deg,#3730a3,var(--kh-primary) 62%,#6d28d9)}.kh-embed-head::after{content:"";position:absolute;inset:auto 0 0;height:1px;background:rgba(15,23,42,.12)}
-    .kh-embed-avatar{display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(255,255,255,.3);border-radius:12px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px rgba(255,255,255,.18)}.kh-embed-avatar svg{width:21px;height:21px}
+    .kh-embed-avatar{display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(255,255,255,.3);border-radius:12px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px rgba(255,255,255,.18)}.kh-embed-avatar svg{width:21px;height:21px}.kh-embed-avatar:has(.kh-embed-logo){border:0;background:transparent;box-shadow:none;padding:0}.kh-embed-logo{display:block;width:30px;height:30px;border-radius:9px}
     .kh-embed-identity{flex:1;min-width:0}.kh-embed-identity strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:800}.kh-embed-status{display:flex;align-items:center;gap:5px;margin-top:3px;color:rgba(255,255,255,.78);font-size:10.5px}.kh-embed-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,.16)}
     .kh-embed-head-actions{display:flex;align-items:center;gap:5px}.kh-embed-close,.kh-embed-reset{display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:9px;color:#fff;background:rgba(255,255,255,.1);cursor:pointer}.kh-embed-close:hover,.kh-embed-reset:hover{background:rgba(255,255,255,.2)}.kh-embed-close svg,.kh-embed-reset svg{width:18px;height:18px}
     .kh-embed-messages{flex:1;padding:18px 17px;overflow-y:auto;scroll-behavior:smooth;background:#f7f8fc}.kh-embed-messages,.kh-embed-table-wrap,.kh-embed-data{scrollbar-width:thin;scrollbar-color:#a8b0bd transparent}.kh-embed-messages::-webkit-scrollbar,.kh-embed-table-wrap::-webkit-scrollbar,.kh-embed-data::-webkit-scrollbar{width:4px;height:4px}.kh-embed-messages::-webkit-scrollbar-track,.kh-embed-table-wrap::-webkit-scrollbar-track,.kh-embed-data::-webkit-scrollbar-track{background:transparent}.kh-embed-messages::-webkit-scrollbar-thumb,.kh-embed-table-wrap::-webkit-scrollbar-thumb,.kh-embed-data::-webkit-scrollbar-thumb{border:0;border-radius:999px;background:#a8b0bd;background-clip:padding-box}.kh-embed-messages::-webkit-scrollbar-thumb:horizontal,.kh-embed-table-wrap::-webkit-scrollbar-thumb:horizontal,.kh-embed-data::-webkit-scrollbar-thumb:horizontal{border-right:18px solid transparent;border-left:18px solid transparent}.kh-embed-messages::-webkit-scrollbar-thumb:vertical,.kh-embed-table-wrap::-webkit-scrollbar-thumb:vertical,.kh-embed-data::-webkit-scrollbar-thumb:vertical{border-top:12px solid transparent;border-bottom:12px solid transparent}.kh-embed-messages::-webkit-scrollbar-button,.kh-embed-table-wrap::-webkit-scrollbar-button,.kh-embed-data::-webkit-scrollbar-button{display:none;width:0;height:0}
@@ -356,7 +358,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     host.remove();
     window.KnowledgeHubEmbedLoaded = false;
   };
-  root.innerHTML = `<section class="kh-embed-panel" role="dialog" aria-label="${escapeHtml(title)}"><header class="kh-embed-head"><span class="kh-embed-avatar">${botIcon}</span><div class="kh-embed-identity"><strong>${escapeHtml(title)}</strong><span class="kh-embed-status">Đang trực tuyến</span></div><div class="kh-embed-head-actions"><a class="kh-embed-newtab" href="${escapeHtml(apiBase + '/chat')}" target="_blank" rel="noopener" aria-label="Mở trang trò chuyện trong tab mới" title="Mở trong tab mới">${newTabIcon}</a><button class="kh-embed-expand" type="button" aria-pressed="false">${expandIcon}</button><button class="kh-embed-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới">${resetIcon}</button><button class="kh-embed-close" aria-label="Đóng">${closeIcon}</button></div></header><div class="kh-embed-messages"></div><footer class="kh-embed-footer"><form class="kh-embed-form"><input class="kh-embed-input" placeholder="Nhập câu hỏi..." autocomplete="off" aria-label="Câu hỏi"><button class="kh-embed-send" aria-label="Gửi">${sendIcon}</button></form><div class="kh-embed-brand">Powered by <b>KnowledgeHub AI</b></div></footer></section><button class="kh-embed-toggle" aria-label="Mở trợ lý AI"><span class="kh-icon-chat">${chatIcon}</span><span class="kh-icon-close">${closeIcon}</span></button>`;
+  root.innerHTML = `<section class="kh-embed-panel" role="dialog" aria-label="${escapeHtml(title)}"><header class="kh-embed-head"><span class="kh-embed-avatar">${appIcon}</span><div class="kh-embed-identity"><strong>${escapeHtml(title)}</strong><span class="kh-embed-status">Đang trực tuyến</span></div><div class="kh-embed-head-actions"><a class="kh-embed-newtab" href="${escapeHtml(apiBase + '/chat')}" target="_blank" rel="noopener" aria-label="Mở trang trò chuyện trong tab mới" title="Mở trong tab mới">${newTabIcon}</a><button class="kh-embed-expand" type="button" aria-pressed="false">${expandIcon}</button><button class="kh-embed-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới">${resetIcon}</button><button class="kh-embed-close" aria-label="Đóng">${closeIcon}</button></div></header><div class="kh-embed-messages"></div><footer class="kh-embed-footer"><form class="kh-embed-form"><input class="kh-embed-input" placeholder="Nhập câu hỏi..." autocomplete="off" aria-label="Câu hỏi"><button class="kh-embed-send" aria-label="Gửi">${sendIcon}</button></form><div class="kh-embed-brand">Powered by <b>KnowledgeHub AI</b></div></footer></section><button class="kh-embed-toggle" aria-label="Mở trợ lý AI"><span class="kh-icon-chat">${chatIcon}</span><span class="kh-icon-close">${closeIcon}</span></button>`;
   shadow.append(style, root);
   document.body.appendChild(host);
 
@@ -676,9 +678,10 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
   style.textContent += `
     .kh-embed-frame{display:none;flex:1;width:100%;min-height:0;border:0;background:#fff}.kh-embed-root.dark .kh-embed-frame{background:#111827}
     .kh-embed-root.page-mode .kh-embed-frame{display:block}
+    .kh-embed-frame-loading{display:none}.kh-embed-root.page-mode .kh-embed-frame-loading{position:absolute;inset:64px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:inherit;color:#64748b;font:500 13px/1.4 system-ui,sans-serif;z-index:1}.kh-embed-frame-loading span{width:28px;height:28px;border:3px solid rgba(99,102,241,.2);border-top-color:var(--kh-color,#4f46e5);border-radius:50%;animation:kh-frame-spin .8s linear infinite}@keyframes kh-frame-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.kh-embed-frame-loading span{animation:none}}
     .kh-embed-newtab{display:none;place-items:center;width:32px;height:32px;border-radius:9px;color:#fff;background:rgba(255,255,255,.1)}.kh-embed-newtab:hover{background:rgba(255,255,255,.2)}.kh-embed-newtab svg{width:17px;height:17px}.kh-embed-root.page-mode .kh-embed-newtab{display:grid}
     .kh-embed-root.page-mode :is(.kh-embed-messages,.kh-embed-footer,.kh-embed-reset,.kh-scroll-activity){display:none!important}
-    .kh-embed-root.page-mode .kh-embed-panel{width:min(980px,calc(100vw - 32px));height:min(720px,calc(100vh - 105px));height:min(720px,calc(100dvh - 105px))}
+    .kh-embed-root.page-mode .kh-embed-panel{width:min(440px,calc(100vw - 32px));height:min(680px,calc(100vh - 105px));height:min(680px,calc(100dvh - 105px))}
     .kh-embed-root.page-mode.expanded .kh-embed-panel{width:min(1240px,calc(100vw - 32px));height:min(880px,calc(100dvh - 32px))}
     @media(max-width:520px){.kh-embed-root.page-mode .kh-embed-panel{width:calc(100vw - 24px);height:calc(100dvh - 94px)}.kh-embed-root.page-mode.expanded .kh-embed-panel{height:calc(100dvh - 24px)}}
   `;
@@ -688,17 +691,31 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     frame.className = 'kh-embed-frame';
     frame.title = title;
     frame.allow = 'microphone; clipboard-write';
+    const loading = document.createElement('div');
+    loading.className = 'kh-embed-frame-loading'; loading.setAttribute('role', 'status');
+    loading.innerHTML = '<span aria-hidden="true"></span>Đang mở trò chuyện…';
+    const ready = event => {
+      if (event.source !== frame.contentWindow || event.origin !== new URL(apiBase || location.origin, location.href).origin || event.data?.type !== 'kh-chat-ready') return;
+      loading.remove();
+      window.removeEventListener('message', ready);
+    };
+    window.addEventListener('message', ready);
+    frame.addEventListener('load', () => { loading.remove(); window.removeEventListener('message', ready); }, { once: true });
     frame.src = apiBase + '/chat?embed=' + encodeURIComponent(embedId);
     messages.before(frame);
+    frame.before(loading);
   }
   function applyEmbedMode(mode) {
     try { sessionStorage.setItem(embedModeKey, mode); } catch (_) {}
     if ((mode === 'page') === pageMode) return;
     pageMode = mode === 'page';
     root.classList.toggle('page-mode', pageMode);
-    if (pageMode && root.classList.contains('open')) mountChatFrame();
+    if (pageMode) mountChatFrame();
   }
   try { if (sessionStorage.getItem(embedModeKey) === 'page') applyEmbedMode('page'); } catch (_) {}
+  // Start loading the chat page as soon as the visitor reaches for the button.
+  const preloadChatFrame = () => { if (pageMode) mountChatFrame(); };
+  for (const type of ['pointerenter', 'focus', 'touchstart']) toggleButton.addEventListener(type, preloadChatFrame, { passive: true });
   toggleButton.onclick = () => {
     root.classList.toggle('open');
     const isOpen = root.classList.contains('open');

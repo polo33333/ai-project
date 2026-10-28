@@ -152,7 +152,7 @@ test('pipeline metrics show where questions were routed and how often the signal
   assert.deepEqual(metrics.routing.finals.map(item => [item.name, item.count]), [['document', 2], ['chat', 1], ['data', 1]]);
 });
 
-const smartca = { id: 'smartca', title: 'Kich_ban_tich_hop_smartca_v4.1_thuong.pdf', governedPolicy: { sensitivity: 'internal' } };
+const smartca = { id: 'smartca', title: 'Kich_ban_tich_hop_smartca_v4.1_thuong.pdf', governedPolicy: { schemaVersion: 2, aiSharing: { level: 'local' } } };
 const withheld = { reason: 'score', score: 0.71, documents: [{ documentId: 'smartca', title: smartca.title, sensitivity: 'internal' }] };
 
 test('the signal reports a better match in a document the model may not receive', async t => {
