@@ -1781,6 +1781,15 @@ async function handleGovernedRequest(req, res) {
     }
     return;
   }
+  if (pathname === '/api/chat-history/export' && req.method === 'GET') {
+    try {
+      const params=new URL(req.url,'http://localhost').searchParams;
+      const file=await require('../services/chat_export').build(currentAccount,{channel:params.get('channel')||'all',format:params.get('format')||'json',issuesOnly:params.get('issues')==='1',limit:params.get('limit'),from:params.get('from')||'',to:params.get('to')||''});
+      res.writeHead(200,{'Content-Type':file.contentType,'Content-Disposition':`attachment; filename="${file.name}"`,'Cache-Control':'private, no-store'});res.end(file.body);
+    }catch(error){res.writeHead(error.statusCode||500,{'Content-Type':'application/json; charset=UTF-8'});res.end(JSON.stringify({message:error.statusCode?error.message:'Không xuất được lịch sử chat.'}));}
+    return;
+  }
+
   if (pathname === '/api/chat-history' && req.method === 'GET') {
     const params=new URL(req.url,'http://localhost').searchParams;
     if(params.has('id')||params.get('list')==='1') {

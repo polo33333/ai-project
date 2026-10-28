@@ -261,6 +261,74 @@ async function copyAuditJson(button, json) {
   }
 }
 
+async function exportChatHistory(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const status = form.querySelector('.chat-export-status');
+  const data = new FormData(form);
+  const params = new URLSearchParams({ channel: data.get('channel') || 'all', format: data.get('format') || 'json' });
+  for (const key of ['limit', 'from', 'to']) if (data.get(key)) params.set(key, data.get(key));
+  if (data.get('issues')) params.set('issues', '1');
+  status.classList.remove('is-error');
+  if (params.has('from') && params.has('to') && params.get('from') > params.get('to')) {
+    status.classList.add('is-error');
+    status.textContent = '"Từ ngày" phải trước hoặc bằng "Đến ngày".';
+    return;
+  }
+  button.disabled = true;
+  status.textContent = 'Đang chuẩn bị tệp…';
+  try {
+    const response = await fetch('/api/chat-history/export?' + params, { cache: 'no-store' });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Không xuất được lịch sử chat.');
+    const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '')?.[1] || `chat-export.${params.get('format')}`;
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = `Đã xuất ${name}`;
+  } catch (error) {
+    status.classList.add('is-error');
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function chatExportDay(offset = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() - offset);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// Presets fill the date inputs; "Hôm nay" is one day, "7 ngày" includes today and the six days before.
+function setChatExportRange(button) {
+  const form = button.form;
+  const days = Number(button.dataset.days);
+  form.elements.from.value = days ? chatExportDay(days - 1) : '';
+  form.elements.to.value = days ? chatExportDay() : '';
+  syncChatExportDates(form, button);
+}
+
+function syncChatExportDates(form, activePreset = null) {
+  const { from, to } = form.elements;
+  from.max = to.value || chatExportDay();
+  to.min = from.value;
+  to.max = chatExportDay();
+  form.querySelectorAll('.chat-export-presets button').forEach(button => {
+    const active = activePreset ? button === activePreset : (!from.value && !to.value && button.dataset.days === '0');
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+window.exportChatHistory = exportChatHistory;
+window.setChatExportRange = setChatExportRange;
+window.syncChatExportDates = syncChatExportDates;
 window.loadChatAuditDetails = loadChatAuditDetails;
 window.fetchChatHistory = fetchChatHistory;
 window.renderChatHistoryTable = renderChatHistoryTable;

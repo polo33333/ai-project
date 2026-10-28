@@ -79,6 +79,7 @@ function requestStores(req) {
   // Hosted MCP executes the same authoring operations as the workflow UI.
   if (pathname.startsWith('/mcp/') || pathname.startsWith('/.well-known/')) return undefined;
   if (!pathname.startsWith('/api/')) return auth;
+  if(req.method==='GET'&&pathname==='/api/chat-history/export')return auth;
   if(req.method==='GET'&&pathname==='/api/chat-history'&&(new URL(req.url,'http://localhost').searchParams.get('list')==='1'||new URL(req.url,'http://localhost').searchParams.has('id')))return auth;
   if(req.method==='GET'&&pathname==='/api/chat-feedback'&&new URL(req.url,'http://localhost').searchParams.get('list')==='1')return auth;
   if(req.method==='GET'&&new URL(req.url,'http://localhost').searchParams.get('summary')==='1'

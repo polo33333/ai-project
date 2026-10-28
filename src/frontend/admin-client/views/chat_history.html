@@ -45,6 +45,63 @@
   <!-- Chat History Table -->
   <section class="audit-data-panel" aria-label="Lịch sử yêu cầu AI">
   <div class="module-section-heading"><div><h3>Lịch sử yêu cầu AI</h3><p>Đối chiếu nội dung, model xử lý và kết quả của từng yêu cầu.</p></div></div>
+  <form class="chat-export" id="chat-export-form" onsubmit="exportChatHistory(event)" aria-labelledby="chat-export-title">
+    <div class="chat-export-head">
+      <span class="chat-export-icon" aria-hidden="true"><i class="fa-solid fa-file-export"></i></span>
+      <div>
+        <strong id="chat-export-title">Xuất dữ liệu để dò lỗi</strong>
+        <p>Tải các lượt chat kèm SQL, công cụ đã gọi và chẩn đoán để phân tích.</p>
+      </div>
+    </div>
+    <div class="chat-export-fields">
+      <fieldset class="chat-export-field">
+        <legend>Kênh</legend>
+        <div class="chat-export-segment">
+          <label><input type="radio" name="channel" value="all" checked><span>Tất cả</span></label>
+          <label><input type="radio" name="channel" value="embed"><span>Embed Chat</span></label>
+          <label><input type="radio" name="channel" value="page"><span>Page Chat</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="chat-export-field">
+        <legend>Định dạng</legend>
+        <div class="chat-export-segment">
+          <label title="Đầy đủ chi tiết, hợp để phân tích bằng AI hoặc script"><input type="radio" name="format" value="json" checked><span><i class="fa-solid fa-code" aria-hidden="true"></i> JSON</span></label>
+          <label title="Bảng tóm tắt, mở bằng Excel"><input type="radio" name="format" value="csv"><span><i class="fa-solid fa-table" aria-hidden="true"></i> CSV</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="chat-export-field chat-export-period">
+        <legend>Thời gian</legend>
+        <div class="chat-export-dates">
+          <label><input type="date" class="form-control" name="from" aria-label="Từ ngày" oninput="syncChatExportDates(this.form)"></label>
+          <span class="chat-export-dash" aria-hidden="true">→</span>
+          <label><input type="date" class="form-control" name="to" aria-label="Đến ngày" oninput="syncChatExportDates(this.form)"></label>
+        </div>
+        <div class="chat-export-presets" role="group" aria-label="Chọn nhanh khoảng thời gian">
+          <button type="button" data-days="1" onclick="setChatExportRange(this)">Hôm nay</button>
+          <button type="button" data-days="7" onclick="setChatExportRange(this)">7 ngày</button>
+          <button type="button" data-days="30" onclick="setChatExportRange(this)">30 ngày</button>
+          <button type="button" data-days="0" class="is-active" onclick="setChatExportRange(this)">Mọi lúc</button>
+        </div>
+      </fieldset>
+      <label class="chat-export-field chat-export-limit">
+        <span class="chat-export-label">Số lượt</span>
+        <select class="form-control" name="limit">
+          <option value="100">100 mới nhất</option>
+          <option value="500">500 mới nhất</option>
+          <option value="">Tất cả</option>
+        </select>
+      </label>
+    </div>
+    <div class="chat-export-foot">
+      <label class="chat-export-toggle">
+        <input type="checkbox" name="issues" value="1">
+        <span class="chat-export-switch" aria-hidden="true"></span>
+        <span>Chỉ lượt lỗi hoặc bị chê</span>
+      </label>
+      <span class="chat-export-status" role="status" aria-live="polite"></span>
+      <button type="submit" class="btn-primary chat-export-submit"><i class="fa-solid fa-download" aria-hidden="true"></i> Xuất tệp</button>
+    </div>
+  </form>
   <label class="chat-history-search" for="chat-history-search">
     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
     <input type="search" id="chat-history-search" placeholder="Tìm câu hỏi, model, nguồn chat, trạng thái…" aria-label="Tìm kiếm lịch sử trò chuyện" oninput="searchChatHistory()">
