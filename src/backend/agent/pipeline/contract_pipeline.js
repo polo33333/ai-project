@@ -53,7 +53,7 @@ const RULES = `You translate the user's business question into a query contract 
 - kind=data for questions answered by catalog records; kind=chat for greetings, general explanations or anything in neither the catalog nor LIBRARY; kind=clarify only when a required value is truly ambiguous (Vietnamese question in clarification).
 - root: the table whose rows are listed, counted or summed (the table holding the measure).
 - Reference columns as "Table.Column". To use a lookup (code, name, status, period name, group) go through the foreign key: "Root.FKColumn->LookupColumn", e.g. "Orders.StatusID->StatusName", "Orders.CustomerID->CustomerCode". Never compare a code or name with a numeric ID column.
-- operation=list returns records: choose the fields the question implies (for transactions include the business date and the main amount; for people include code and name); empty fields = the table's default list. "theo X" / "by X" means groupBy X. operation=aggregate returns measures, optionally grouped (groupBy). Foreign keys in fields/groupBy are shown by their display column automatically.
+- operation=list returns records: choose the fields the question implies (for transactions include the business date and the main amount; for people include code and name); empty fields = the table's default list. "theo X" / "by X" means groupBy X; a list grouped by X ("chia/phân loại/nhóm theo X") shows the records group by group, while counting per group ("bao nhiêu", "số lượng") is an aggregate. operation=aggregate returns measures, optionally grouped (groupBy). Foreign keys in fields/groupBy are shown by their display column automatically.
 - When METRICS has an approved metric for the requested amount, quantity or count, use measures [{metric:"<id>"}] and root = the metric's table; period filters go on its date. A metric fits only when QUESTION states its distinguishing words (its name or an "also" wording, e.g. "sau thuế", "trước thuế", "sản lượng"); a column whose label matches QUESTION more closely (e.g. "Tiền điện" vs "Tiền hóa đơn sau thuế") is used with ref/aggregation instead.
 - Measures use root columns only; COUNT of records uses ref "*". Rankings ("cao nhất", "top 5") use sort {by:"measure:0"} and limit.
 - Exclusions ("trừ", "ngoại trừ", "không phải", "không bao gồm") use operator ne (one value) or notIn (values).
@@ -117,9 +117,15 @@ function applyRoles(contract, question, catalog) {
     return catalogApi.key(head.includes('.') ? head.split('.').pop() : head) === catalogApi.key(fk);
   });
   const added = [];
+  // "Phân loại / chia / nhóm ... theo X" asks for the records group by group; "sắp xếp theo X" does not.
+  const groupsList = /(^|[^\p{L}])(phân loại|phân nhóm|chia|nhóm|tách|gom)($|[^\p{L}])/u.test(text);
   for (const relation of catalog.relations.filter(item => catalogApi.key(item.fromTable) === catalogApi.key(root.tableName) && item.role && item.display)) {
     const fk = relation.pairs[0].source, role = fold(relation.role), ref = `${root.tableName}.${fk}`;
     if (contract.operation === 'aggregate' && mentions(text, `theo ${role}`) && !usesKey((contract.groupBy || []).map(item => item.ref), fk)) {
+      contract.groupBy = [...(contract.groupBy || []), { ref }]; added.push(`groupBy:${ref}`);
+    }
+    if (contract.operation === 'list' && groupsList && mentions(text, `theo ${role}`)
+      && !usesKey([...(contract.groupBy || []).map(item => item.ref), contract.output?.splitBy].filter(Boolean), fk)) {
       contract.groupBy = [...(contract.groupBy || []), { ref }]; added.push(`groupBy:${ref}`);
     }
     if (contract.operation === 'list' && contract.fields?.length && mentions(text, role) && !usesKey(contract.fields, fk)) {
@@ -354,13 +360,14 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       // Set before the checks below, which all start from the root table.
       const inferredRoot = metricRoot(contract, catalog);
       if (inferredRoot) { contract.root = inferredRoot; step('V2_ROOT_FROM_METRIC', { root: inferredRoot }); }
-      const splitBy = contract.output?.splitBy;
-      if (splitBy && contract.operation !== 'aggregate' && !(contract.fields || []).includes(splitBy)) {
-        const rootEntry = catalogApi.table(catalog, contract.root);
-        contract.fields = [...(contract.fields?.length ? contract.fields : (rootEntry?.defaults || []).map(name => `${rootEntry.tableName}.${name}`)), splitBy];
-      }
       const roles = applyRoles(contract, question, catalog);
       if (roles.length) step('V2_ROLES_APPLIED', { refs: roles });
+      // A list is shown (and split into files) by its group columns, so they must be selected.
+      for (const ref of listGroupRefs(contract)) {
+        if ((contract.fields || []).includes(ref)) continue;
+        const rootEntry = catalogApi.table(catalog, contract.root);
+        contract.fields = [...(contract.fields?.length ? contract.fields : (rootEntry?.defaults || []).map(name => `${rootEntry.tableName}.${name}`)), ref];
+      }
       if (contract.root && catalogApi.table(catalog, contract.root)) {
         const terms = await require('./coverage').lookupTerms(catalogApi.table(catalog, contract.root).tableName, catalog, lookupRows);
         const problems = require('./coverage').check(contract, question, terms);
@@ -441,7 +448,10 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
 
   // 5. Deterministic answer from the verified rows, then requested outputs
   // built from the same rows (a chart or file can never drift from the data).
-  let reply = render(compiled, call, question), status = 'SUCCESS';
+  const split = contract.output?.splitBy && groupOutput(compiled, contract.output.splitBy);
+  // A grouped list ("theo X", or files split by X) is listed group by group, matching the files.
+  const groups = listGroupRefs(contract).map(ref => groupOutput(compiled, ref)?.alias).filter(Boolean);
+  let reply = render(compiled, call, question, [...new Set(groups)]), status = 'SUCCESS';
   if (excluded.missing.length) reply += `\n\nKhông tìm thấy ${excluded.missing.map(value => `“${value}”`).join(', ')} trong dữ liệu nên không có bản ghi nào bị loại trừ.`;
   // A checked commentary on a summary result; dropped if it cites an unseen number.
   const commentary = await require('./narration').narrate({ compiled, call, question, dispatch, step });
@@ -458,7 +468,6 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     }
   }
   const format = exportFormat(contract, plan);
-  const split = contract.output?.splitBy && compiled.outputs.find(item => item.ref === contract.output.splitBy);
   if (plan.exportRequest?.separate && !split) { reply += '\n\nChưa xác định được cột để tách file theo nhóm; hãy nói rõ tách theo cột nào.'; status = 'PARTIAL'; }
   else if (format && rows.length && split) {
     const exported = await exportGroups(rows, split.alias, format, toolManager, toolContext, toolCalls);
@@ -593,11 +602,26 @@ function datasetChart(rows, type, title) {
     datasets: series.map(column => ({ label: column, data: rows.map(row => Number(row[column]) || 0) })) };
 }
 
+// Columns a list is grouped by: the file split and "theo X". A date with a
+// grain groups only an aggregate.
+function listGroupRefs(contract) {
+  if (!contract || contract.operation === 'aggregate' || contract.measures?.length) return [];
+  const refs = [contract.output?.splitBy, ...(contract.groupBy || []).filter(item => !item.grain).map(item => item.ref)];
+  return [...new Set(refs.filter(Boolean))].slice(0, 3);
+}
+
+// The list column a group ref became. "T.GenderID" and "T.GenderID->Name" are
+// the same column, which the compiler selects once.
+function groupOutput(compiled, ref) {
+  const fields = compiled.outputs.filter(item => item.kind === 'field' && item.ref);
+  return fields.find(item => item.ref === ref) || fields.find(item => item.ref.startsWith(`${ref}->`) || ref.startsWith(`${item.ref}->`));
+}
+
 // One file per value of the split column, each written from its own rows.
 async function exportGroups(rows, alias, format, toolManager, toolContext, toolCalls) {
   const groups = new Map();
   for (const row of rows) {
-    const name = row[alias] === null || row[alias] === undefined || row[alias] === '' ? 'Không xác định' : String(row[alias]);
+    const name = row[alias] === null || row[alias] === undefined || row[alias] === '' ? 'Chưa xác định' : String(row[alias]);
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(row);
   }
@@ -760,7 +784,7 @@ async function resolveValues(textFilters, contract, toolManager, toolContext, st
   return { changes };
 }
 
-function render(compiled, call, question) {
+function render(compiled, call, question, groupBy) {
   const rows = call.result.rows || [];
   const analysis = require('../harness/analysis_response');
   const scope = compiled.scope.length ? `Phạm vi: ${compiled.scope.join('; ')}.` : '';
@@ -779,7 +803,10 @@ function render(compiled, call, question) {
     if (rows.length === 1 && measures.length === compiled.outputs.length) {
       const format = value => typeof value === 'number' ? new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value) : value ?? '—';
       body = measures.map(item => `**${item.alias}:** ${format(rows[0][item.alias])}`).join('\n');
-    } else body = require('../harness/grounded_reply').buildSqlRowsFallbackReply(call, {}, { forceTable: rows.length > 1 });
+    } else {
+      const grouped = groupBy?.length && rows.length > 1 && require('../harness/result_grouping').partition(call, groupBy);
+      body = require('../harness/grounded_reply').buildSqlRowsFallbackReply(call, {}, grouped ? { resultGroupBy: groupBy } : { forceTable: rows.length > 1 });
+    }
   }
   const more = call.result.hasMore ? `\n\nĐang hiển thị ${rows.length} dòng đầu; dữ liệu có thể còn thêm.` : '';
   // Matching records exist (SUM is 0, not NULL) yet every value is 0: the
@@ -794,5 +821,5 @@ function render(compiled, call, question) {
   return `${scope ? `${scope}\n` : ''}${scope && !method ? '\n' : ''}${method}${body}${more}${note}`;
 }
 
-module.exports = { run, answerWithoutCatalog, libraryPrompt, render, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema,
+module.exports = { run, answerWithoutCatalog, libraryPrompt, render, listGroupRefs, groupOutput, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema,
   validateContract: validate };

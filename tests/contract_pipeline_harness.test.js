@@ -153,6 +153,18 @@ test('a waiting workflow resumes with question-grounded inputs only', async t =>
   assert.ok(result.trace.steps.some(step => step.type === 'WORKFLOW_TOOL_HANDOFF'));
 });
 
+test('a list "theo X" without a file selects X and shows the records group by group', async t => {
+  const rows = [{ ID: 1, Phòng: 'CSKH' }, { ID: 2, Phòng: 'Kỹ thuật' }, { ID: 3, Phòng: 'CSKH' }];
+  const { result, seen } = await runForm(t, { question: 'Danh sách theo phòng', rows,
+    contracts: [{ kind: 'data', root: 'TestRows', operation: 'list', fields: ['TestRows.ID'], groupBy: [{ ref: 'TestRows.Dept' }] }] });
+  const sql = result.toolCalls.find(item => item.toolName === 'execute_sql_query')?.args.sql;
+  assert.match(sql, /\[Dept\]/, 'the group column is selected even when fields omit it');
+  assert.equal(seen.exports.length, 0);
+  assert.match(result.replyText, /Chia theo \*\*Phòng\*\* thành \*\*2\*\* nhóm\./);
+  assert.match(result.replyText, /\*\*CSKH \(2\)\*\*\n\n\|[^\n]+\n\| --- [^\n]+\n\| 1 \| CSKH \|\n\| 3 \| CSKH \|/);
+  assert.match(result.replyText, /\*\*Kỹ thuật \(1\)\*\*/);
+});
+
 test('one file per group is exported from the verified rows of each group', async t => {
   const rows = [{ ID: 1, Phòng: 'CSKH' }, { ID: 2, Phòng: 'Kỹ thuật' }, { ID: 3, Phòng: 'CSKH' }];
   const { result, seen } = await runForm(t, { question: 'Xuất danh sách mỗi phòng một file excel', rows,
@@ -160,6 +172,11 @@ test('one file per group is exported from the verified rows of each group', asyn
     contracts: [{ kind: 'data', root: 'TestRows', operation: 'list', output: { export: 'xlsx', splitBy: 'TestRows.Dept' } }] });
   assert.deepEqual(seen.exports.map(item => [item.filename, item.data.length]), [['Bao_cao_CSKH', 2], ['Bao_cao_Ky_thuat', 1]]);
   assert.match(result.replyText, /\[CSKH\]\(\/api\/exports\/Bao_cao_CSKH\.xlsx\) — 2 bản ghi/);
+  // The listed rows are split the same way as the files.
+  assert.match(result.replyText, /thành \*\*2\*\* nhóm\./);
+  assert.match(result.replyText, /\*\*CSKH \(2\)\*\*\n\n\|[^\n]+\n\| --- [^\n]+\n\| 1 \| CSKH \|\n\| 3 \| CSKH \|/);
+  assert.match(result.replyText, /\*\*Kỹ thuật \(1\)\*\*\n\n\|[^\n]+\n\| --- [^\n]+\n\| 2 \| Kỹ thuật \|/);
+  assert.equal((result.replyText.match(/Đã tra cứu được/g) || []).length, 1, 'one introduction for all groups');
 });
 
 // Counts how many calls of the wrapped tools are in flight at once.

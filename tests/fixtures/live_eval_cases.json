@@ -801,6 +801,70 @@
       ]
     },
     {
+      "id": "group-split-gender-file",
+      "group": "group-list",
+      "turns": [
+        "Phân loại nhân viên theo giới tính, gửi tôi file và danh sách kết quả"
+      ],
+      "must": [
+        {
+          "re": "Chia theo \\*\\*Giới tính\\*\\*"
+        },
+        {
+          "re": "\\*\\*Nam \\(\\d+\\)\\*\\*"
+        },
+        {
+          "re": "\\*\\*Nữ \\(\\d+\\)\\*\\*"
+        },
+        {
+          "re": "/api/exports/"
+        }
+      ],
+      "mustTools": [
+        "export_data"
+      ]
+    },
+    {
+      "id": "group-list-dept",
+      "group": "group-list",
+      "turns": [
+        "Danh sách nhân viên chia theo phòng ban"
+      ],
+      "must": [
+        {
+          "re": "Chia theo \\*\\*[^*]+\\*\\* thành \\*\\*\\d+\\*\\* nhóm"
+        },
+        {
+          "re": "\\*\\*CSKH \\(\\d+\\)\\*\\*"
+        },
+        {
+          "re": "\\*\\*Kỹ thuật \\(\\d+\\)\\*\\*"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "/api/exports/"
+        }
+      ]
+    },
+    {
+      "id": "group-count-gender",
+      "group": "group-list",
+      "turns": [
+        "Có bao nhiêu nhân viên mỗi giới tính?"
+      ],
+      "must": [
+        "Nam",
+        "Nữ"
+      ],
+      "mustNot": [
+        {
+          "re": "Chia theo \\*\\*"
+        },
+        "NV001"
+      ]
+    },
+    {
       "id": "wf-followup-export",
       "group": "workflow-followup",
       "turns": [

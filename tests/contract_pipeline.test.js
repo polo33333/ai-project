@@ -42,6 +42,34 @@ test('empty sums are reported as no data while a zero count is an answer', () =>
   assert.match(pipeline.render(compiled('Tổng tiền'), call([{ 'Tổng tiền': 6652704 }]), 'q'), /^Phạm vi: Mã khách hàng = KA0021\.\n\n\*\*Tổng tiền:\*\* 6\.652\.704$/);
 });
 
+test('a split list is rendered group by group, and an unknown split column falls back to one table', () => {
+  const compiled = { scope: [], operation: 'list', analysis: 'none', outputs: [{ alias: 'Tên', kind: 'field' }, { alias: 'Giới tính', kind: 'field' }] };
+  const rows = [{ Tên: 'An', 'Giới tính': 'Nam' }, { Tên: 'Bình', 'Giới tính': 'Nữ' }, { Tên: 'Cường', 'Giới tính': 'Nam' }, { Tên: 'Dũng', 'Giới tính': null }];
+  const call = { result: { rows, columns: ['Tên', 'Giới tính'] } };
+  const grouped = pipeline.render(compiled, call, 'q', ['Giới tính']);
+  assert.match(grouped, /Chia theo \*\*Giới tính\*\* thành \*\*3\*\* nhóm\./);
+  assert.match(grouped, /\*\*Nam \(2\)\*\*\n\n\| Tên \| Giới tính \|\n\| --- \| --- \|\n\| An \| Nam \|\n\| Cường \| Nam \|/);
+  assert.match(grouped, /\*\*Nữ \(1\)\*\*\n\n[^*]+\| Bình \| Nữ \|/);
+  assert.match(grouped, /\*\*Chưa xác định \(1\)\*\*/);
+  assert.match(grouped, /dữ liệu còn thiếu ở \*\*Giới tính\*\* \(1\/4 dòng\)\.$/);
+  const flat = pipeline.render(compiled, call, 'q', ['Phòng ban']);
+  assert.doesNotMatch(flat, /nhóm|\(2\)\*\*/);
+  assert.match(flat, /\| An \| Nam \|\n\| Bình \| Nữ \|/);
+});
+
+test('a list groups by its file split and by "theo X", never an aggregate or a time grain', () => {
+  const list = { operation: 'list', groupBy: [{ ref: 'E.GenderID' }, { ref: 'E.Date', grain: 'month' }], output: { splitBy: 'E.DeptID' } };
+  assert.deepEqual(pipeline.listGroupRefs(list), ['E.DeptID', 'E.GenderID']);
+  assert.deepEqual(pipeline.listGroupRefs({ operation: 'list', groupBy: [{ ref: 'E.DeptID' }], output: { splitBy: 'E.DeptID' } }), ['E.DeptID']);
+  assert.deepEqual(pipeline.listGroupRefs({ operation: 'aggregate', groupBy: [{ ref: 'E.GenderID' }], measures: [{ ref: '*', aggregation: 'COUNT' }] }), []);
+  assert.deepEqual(pipeline.listGroupRefs({ groupBy: [{ ref: 'E.GenderID' }], measures: [{ ref: '*', aggregation: 'COUNT' }] }), []);
+  // A ref with or without its display column names the same selected column.
+  const compiled = { outputs: [{ alias: 'Tên', kind: 'field', ref: 'E.Name' }, { alias: 'Giới tính', kind: 'field', ref: 'E.GenderID->ConstantName' }] };
+  assert.equal(pipeline.groupOutput(compiled, 'E.GenderID')?.alias, 'Giới tính');
+  assert.equal(pipeline.groupOutput(compiled, 'E.GenderID->ConstantName')?.alias, 'Giới tính');
+  assert.equal(pipeline.groupOutput(compiled, 'E.Gender'), undefined, 'a prefix of another column name is not that column');
+});
+
 test('contracts infer an omitted kind and accept numeric or boolean workflow inputs', () => {
   const call = args => ({ tool_calls: [{ id: '1', type: 'function', function: { name: 'plan_query', arguments: JSON.stringify(args) } }] });
   const workflow = pipeline.decode(call({ workflow: { templateId: 'w', inputs: { months: 3, drawChart: true }, evidence: { months: '3 tháng' } } }));

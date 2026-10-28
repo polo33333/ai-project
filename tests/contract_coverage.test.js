@@ -52,6 +52,15 @@ test('roles named in the question add the list column or the grouping', () => {
   assert.deepEqual(applyRoles(grouped, 'Thống kê số hóa đơn theo trạng thái', catalog), ['groupBy:T_Invoice.StatusID']);
   // Already grouped through the lookup: nothing added.
   assert.deepEqual(applyRoles({ ...grouped, groupBy: [{ ref: 'T_Invoice.StatusID->ConstantName' }] }, 'Thống kê theo trạng thái', catalog), []);
+  // A list asked "phân loại/chia theo X" is grouped by X; "sắp xếp theo X" only sorts.
+  const classified = { root: 'T_Invoice', operation: 'list', fields: ['T_Invoice.InvoiceID'], sort: { by: 'T_Invoice.StatusID->ConstantName' } };
+  assert.deepEqual(applyRoles(classified, 'Phân loại hóa đơn theo trạng thái và gửi tôi file', catalog), ['groupBy:T_Invoice.StatusID', 'field:T_Invoice.StatusID']);
+  assert.deepEqual(classified.groupBy, [{ ref: 'T_Invoice.StatusID' }]);
+  const sorted = { root: 'T_Invoice', operation: 'list', fields: ['T_Invoice.InvoiceID'] };
+  assert.deepEqual(applyRoles(sorted, 'Danh sách hóa đơn sắp xếp theo trạng thái', catalog), ['field:T_Invoice.StatusID']);
+  assert.equal(sorted.groupBy, undefined);
+  const split = { root: 'T_Invoice', operation: 'list', fields: ['T_Invoice.InvoiceID', 'T_Invoice.StatusID'], output: { splitBy: 'T_Invoice.StatusID' } };
+  assert.deepEqual(applyRoles(split, 'Tách file theo trạng thái', catalog), [], 'already split by X');
 });
 
 test('several periods compile to a union of half-open ranges', () => {

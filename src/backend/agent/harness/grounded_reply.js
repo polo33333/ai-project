@@ -64,15 +64,14 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
   const rows = Array.isArray(sqlCall?.result?.rows) ? sqlCall.result.rows : [];
   if (!rows.length) return 'Không tìm thấy dữ liệu phù hợp.';
 
+  let groups = null;
   if (options.resultGroupBy?.length) {
-    const groups = require('./result_grouping').partition(sqlCall, options.resultGroupBy, displayNames);
+    groups = require('./result_grouping').partition(sqlCall, options.resultGroupBy, displayNames);
     if (!groups) return 'Đã lấy được dữ liệu nhưng chưa xác định được cột để tách nhóm theo yêu cầu; chưa thể trình bày các nhóm riêng biệt.';
-    return groups.map(group => `**${group.values.map(value=>markdownCell(value == null || value === '' ? 'Chưa xác định' : value)).join(' · ')} (${group.rows.length})**\n\n`
-      + buildSqlRowsFallbackReply({...sqlCall,result:{...sqlCall.result,rows:group.rows}},displayNames,{...options,resultGroupBy:[],forceTable:true})).join('\n\n');
   }
 
   const allColumns = [...new Set(rows.flatMap(row => Object.keys(row || {})))];
-  const columns = allColumns.slice(0, options.forceTable ? 100 : 10);
+  const columns = allColumns.slice(0, options.forceTable || groups ? 100 : 10);
   const columnNotice = allColumns.length > columns.length
     ? `\n\nHiển thị ${columns.length}/${allColumns.length} trường kết quả.` : '';
   const scopeNotice = sqlCall?.result?.hasMore || sqlCall?.result?.truncated
@@ -106,6 +105,20 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
   const missing=columns.map((column,index)=>({label:uniqueLabels[index],count:rows.filter(row=>row[column]===null || row[column]==='').length}))
     .filter(item=>item.count>0).slice(0,2);
   const missingNotice=missing.length ? '\n\nTrong các dòng trả về, dữ liệu còn thiếu ở '+missing.map(item=>`**${markdownCell(item.label)}** (${item.count}/${rows.length} dòng)`).join(', ')+'.' : '';
+  const table = tableRows => {
+    const shown = tableRows.slice(0, 10);
+    const header = `| ${uniqueLabels.map(markdownCell).join(' | ')} |`;
+    const separator = `| ${columns.map(() => '---').join(' | ')} |`;
+    const body = shown.map(row => `| ${columns.map(column => valueCell(column, row?.[column])).join(' | ')} |`).join('\n');
+    const remainder = tableRows.length > shown.length ? `\n\nHiển thị ${shown.length}/${tableRows.length} kết quả.` : '';
+    return `${header}\n${separator}\n${body}${remainder}`;
+  };
+  // One introduction for all rows, then a heading and a table per group.
+  if (groups) {
+    const groupLabel = options.resultGroupBy.map(field => `**${markdownCell(displayNames[field] || field)}**`).join(', ');
+    const sections = groups.map(group => `**${group.values.map(value => markdownCell(value == null || value === '' ? 'Chưa xác định' : value)).join(' · ')} (${group.rows.length})**\n\n${table(group.rows)}`);
+    return `${introduction} Chia theo ${groupLabel} thành **${groups.length}** nhóm.${orderingNotice}\n\n${sections.join('\n\n')}${missingNotice}${columnNotice}${scopeNotice}`;
+  }
   if (rows.length === 1 && !options.forceTable) {
     const details = columns.map((column, index) => `- **${markdownCell(uniqueLabels[index])}:** ${valueCell(column, rows[0]?.[column])}`).join('\n');
     return `${introduction}${orderingNotice}\n\n${details}${missingNotice}${columnNotice}${scopeNotice}`;
@@ -131,11 +144,7 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
     const remainder = rows.length > visibleRows.length ? `\n\nHiển thị ${visibleRows.length}/${rows.length} đối tượng.` : '';
     return `${header}\n${separator}\n${body}${remainder}${columnNotice}${scopeNotice}`;
   }
-  const header = `| ${uniqueLabels.map(markdownCell).join(' | ')} |`;
-  const separator = `| ${columns.map(() => '---').join(' | ')} |`;
-  const body = visibleRows.map(row => `| ${columns.map(column => valueCell(column, row?.[column])).join(' | ')} |`).join('\n');
-  const remainder = rows.length > visibleRows.length ? `\n\nHiển thị ${visibleRows.length}/${rows.length} kết quả.` : '';
-  return `${introduction}${orderingNotice}\n\n${header}\n${separator}\n${body}${remainder}${missingNotice}${columnNotice}${scopeNotice}`;
+  return `${introduction}${orderingNotice}\n\n${table(rows)}${missingNotice}${columnNotice}${scopeNotice}`;
 }
 
 function isUngroundedKnowledgeAnswer(text = '') {
