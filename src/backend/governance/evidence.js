@@ -9,7 +9,7 @@ function assemble(result, context) {
   for (const [index, call] of (result.toolCalls || []).entries()) {
     if (!call.success || !call.result || !['execute_sql_query', 'query_sql_metric', 'search_knowledge_base', 'get_workflow_dataset'].includes(call.toolName)) continue;
     const payload = structuredClone(call.result);
-    if (Array.isArray(payload.rows)) payload.rows = require('../intelligent_core/security_guard').sanitizeTabularRows(payload.rows);
+    if (Array.isArray(payload.rows)) payload.rows = require('../assistant/security_guard').sanitizeTabularRows(payload.rows);
     const size = Buffer.byteLength(JSON.stringify(payload));
     if (bytes + size > 2 * 1024 * 1024) continue;
     bytes += size;

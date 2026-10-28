@@ -99,7 +99,7 @@ async function draftRecognition(body) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await require('../intelligent_core/adapters').dispatchToProvider({ ...selected, temperature: 0.2 }, messages, [], controller.signal);
+    const response = await require('../assistant/adapters').dispatchToProvider({ ...selected, temperature: 0.2 }, messages, [], controller.signal);
     const raw = String(response.content || '').trim().replace(/^```(?:json)?\s*|\s*```$/gi, '');
     let parsed;
     try { parsed = JSON.parse(raw); } catch (_) { throw error('AI trả về nội dung không hợp lệ, hãy thử lại.', 502); }
@@ -108,7 +108,7 @@ async function draftRecognition(body) {
 }
 
 async function ask(selected, messages, signal) {
-  const response = await require('../intelligent_core/adapters').dispatchToProvider({ ...selected, temperature: 0.1 }, messages, [], signal);
+  const response = await require('../assistant/adapters').dispatchToProvider({ ...selected, temperature: 0.1 }, messages, [], signal);
   try { return JSON.parse(String(response.content || '').trim().replace(/^```(?:json)?\s*|\s*```$/gi, '')); }
   catch (_) { throw error('AI trả về nội dung không hợp lệ, hãy thử lại.', 502); }
 }

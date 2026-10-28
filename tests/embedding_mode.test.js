@@ -3,10 +3,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const policy = require('../src/backend/services/embedding_policy');
 const qdrant = require('../src/backend/services/qdrant_service');
-const library = require('../src/backend/knowledge_core/services/library_service');
-const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+const library = require('../src/backend/knowledge/services/library_service');
+const retrieval = require('../src/backend/knowledge/services/retrieval_service');
 const dictionary = require('../src/backend/services/dictionary_service');
-const { buildSchemaContext } = require('../src/backend/intelligent_core/schema_context_service');
+const { buildSchemaContext } = require('../src/backend/assistant/schema_context_service');
 const { withIdentity } = require('../src/backend/services/schema_identity');
 
 function mode(t, value) {

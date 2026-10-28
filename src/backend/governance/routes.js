@@ -22,8 +22,8 @@ const validateV2 = ajv.compile({ type: 'object', additionalProperties: false, re
 const fail = (message, statusCode = 400, extra = {}) => { throw Object.assign(new Error(message), { statusCode, ...extra }); };
 const TYPE_KIND = { sql: 'sql', document: 'documents', watchfolder: 'watchfolders' };
 // Loaded on first use: some services need configuration that a route may not touch.
-const services = () => ({ get library() { return require('../knowledge_core/services/library_service'); }, get sql() { return require('../services/sql_connector'); },
-  get folders() { return require('../knowledge_core/services/watchfolder_service'); }, get dictionary() { return require('../services/dictionary_service'); },
+const services = () => ({ get library() { return require('../knowledge/services/library_service'); }, get sql() { return require('../services/sql_connector'); },
+  get folders() { return require('../knowledge/services/watchfolder_service'); }, get dictionary() { return require('../services/dictionary_service'); },
   get groups() { return require('../services/account_function_groups'); }, get roles() { return require('../services/account_roles'); },
   get auth() { return require('../services/auth_service'); }, get providers() { return require('../services/ai_provider_manager'); },
   get embeds() { return require('../services/embed_chat_service'); } });

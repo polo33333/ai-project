@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {packExecution,compactAgentToolResult}=require('../src/backend/agent_core/harness/agent_context');
+const {packExecution,compactAgentToolResult}=require('../src/backend/agent/harness/agent_context');
 test('schema packing preserves business mappings, labels, joins, scope and every exposed column',()=>{
  const columns=Array.from({length:35},(_,i)=>({name:'Field'+i,description:'C\u1ed9t Field'+i+' trong b\u1ea3ng SQL Server Records'}));
  columns[34].description='Operational maintenance maps to category = 21';columns[34].label='Business category';

@@ -6,8 +6,8 @@
 
 const dictionaryService = require('./dictionary_service');
 const aiProviderManager = require('./ai_provider_manager');
-const schemaContextService = require('../intelligent_core/schema_context_service');
-const securityGuard = require('../intelligent_core/security_guard');
+const schemaContextService = require('../assistant/schema_context_service');
+const securityGuard = require('../assistant/security_guard');
 const { validateSqlAgainstJoinPlan } = require('./sql_join_validator');
 
 class Text2SqlAgent {

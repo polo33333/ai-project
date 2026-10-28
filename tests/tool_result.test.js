@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createToolResult } = require('../src/backend/agent_core/tools/tool_result');
-const BaseTool = require('../src/backend/agent_core/tools/base_tool');
-const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
+const { createToolResult } = require('../src/backend/agent/tools/tool_result');
+const BaseTool = require('../src/backend/agent/tools/base_tool');
+const ToolManager = require('../src/backend/agent/tools/tool_manager');
 
 test('SQL, document and API adapters retain data without inventing completeness', async () => {
   const manager = new ToolManager();
@@ -78,7 +78,7 @@ test('empty and source-truncated results are distinct from complete results', ()
 });
 
 test('model context preserves failure metadata when payload is compacted', () => {
-  const { compactToolResult } = require('../src/backend/agent_core/harness/local_result_compactor');
+  const { compactToolResult } = require('../src/backend/agent/harness/local_result_compactor');
   const execution = { success: false, tool: 'api', outcome: 'timeout', code: 'TOOL_TIMEOUT',
     error: 'timeout', effectState: 'unknown', details: { content: 'x'.repeat(10000) } };
   execution.envelope = createToolResult(execution);

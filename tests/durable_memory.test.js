@@ -2,8 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const governance = require('../src/backend/governance/context');
-const { DurableMemory } = require('../src/backend/memory_core/durable_memory');
-const { MemoryService } = require('../src/backend/memory_core/memory_service');
+const { DurableMemory } = require('../src/backend/memory/durable_memory');
+const { MemoryService } = require('../src/backend/memory/memory_service');
 const sql = require('../src/backend/services/sql_connector');
 function memory() { return new DurableMemory({ records: [], events: [], saveRecords() {}, saveEvents() {} }); }
 function actor(id, role = 'user', tenantId = 'org') { governance.setPrincipal({ subject: `account:${id}`, role, tenantId, channel: 'chat' }); }

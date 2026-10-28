@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {format}=require('../src/backend/agent_core/harness/money_display');
-const {buildSqlRowsFallbackReply}=require('../src/backend/agent_core/harness/grounded_reply');
+const {format}=require('../src/backend/agent/harness/money_display');
+const {buildSqlRowsFallbackReply}=require('../src/backend/agent/harness/grounded_reply');
 test('money values use Vietnamese separators and only a known currency',()=>{
   assert.equal(format(6652704,'Tiền hóa đơn (VNĐ)'), '6.652.704 ₫');
   assert.equal(format('-1234.56','Amount','USD'), '-1.234,56 US$');

@@ -3,7 +3,7 @@
 // what every reader of conversation state sees after each step, with times and
 // generated IDs replaced, so a change in how state is stored can be checked
 // against the previous behaviour.
-const { MemoryService } = require('../../src/backend/memory_core/memory_service');
+const { MemoryService } = require('../../src/backend/memory/memory_service');
 
 const sql = (rows, sqlText = 'SELECT CustomerCode, CustomerName FROM M_Customer') => ({ toolName: 'execute_sql_query', success: true,
   args: { sql: sqlText }, result: { sql: sqlText, rows, rowCount: rows.length } });

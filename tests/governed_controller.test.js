@@ -2,10 +2,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const governance = require('../src/backend/governance/context');
-const core = require('../src/backend/intelligent_core/core');
+const core = require('../src/backend/assistant/core');
 
 test('age-ranking execution retains scoped ties and the grounded conclusion through final rendering',async t=>{
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness'),manager=require('../src/backend/agent_core').defaultToolManager;
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness'),manager=require('../src/backend/agent').defaultToolManager;
  const ranking={kind:'youngest',subject:'employee',column:'BirthDate',identityColumns:['Name','Code']};
  const dataQuery={table:'People',operation:'list',fields:['Name','Code','BirthDate'],ranking};
  const table={tableName:'People',dbSourceId:'age-fixture',isActive:true,columns:[{columnName:'ID',dataType:'INT',isPrimaryKey:true},{columnName:'Name',dataType:'NVARCHAR'},{columnName:'Code',dataType:'NVARCHAR'},{columnName:'BirthDate',dataType:'DATE'}]};
@@ -22,7 +22,7 @@ test('age-ranking execution retains scoped ties and the grounded conclusion thro
 });
 
 test('the verified join path is carried into the next SQL tool context',async()=>{
- const Base=require('../src/backend/agent_core/tools/base_tool'),Manager=require('../src/backend/agent_core/tools/tool_manager'),Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
+ const Base=require('../src/backend/agent/tools/base_tool'),Manager=require('../src/backend/agent/tools/tool_manager'),Harness=require('../src/backend/agent/harness/guarded_agent_harness');
  const manager=new Manager();const register=(name,run)=>{const t=new Base({name,description:name,parameters:{type:'object',properties:{sql:{type:'string'},query:{type:'string'},fromTable:{type:'string'},toTable:{type:'string'}}}});t.run=run;manager.registerTool(t);};
  register('list_workflows',async()=>({workflows:[]}));
  register('search_schema',async()=>({mode:'data',dbSourceId:'fixture',selectedTables:['Orders'],tables:[{tableName:'Orders',columns:[{name:'Amount',dataType:'float'}]}]}));
@@ -36,7 +36,7 @@ test('the verified join path is carried into the next SQL tool context',async()=
 });
 
 test('reused schema cannot erase a verified three-table JOIN path acquired later',async()=>{
- const Base=require('../src/backend/agent_core/tools/base_tool'),Manager=require('../src/backend/agent_core/tools/tool_manager'),Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
+ const Base=require('../src/backend/agent/tools/base_tool'),Manager=require('../src/backend/agent/tools/tool_manager'),Harness=require('../src/backend/agent/harness/guarded_agent_harness');
  const manager=new Manager();
  const register=(name,run)=>{const tool=new Base({name,description:name,parameters:{type:'object',properties:{sql:{type:'string'},query:{type:'string'},fromTable:{type:'string'},toTable:{type:'string'}}}});tool.run=run;manager.registerTool(tool);};
  const refs=[{tableId:'o',tableName:'Orders'},{tableId:'h',tableName:'Headers'},{tableId:'c',tableName:'Customers'}];
@@ -67,18 +67,18 @@ test('an exact authorized schema lookup replaces a stale root and narrows aggreg
  connector.dbSources.push({id:'root-fixture',database:'FixtureDb',governedPolicy:{allowedTables:['Invoices']}});
  t.after(()=>{connector.dbSources=connector.dbSources.filter(s=>s.id!=='root-fixture');});
  t.mock.method(dictionary,'getGroupedTables',()=>['Invoices','Balances','Private'].map(name=>({tableName:name,tableId:name,dbSourceId:'root-fixture',isActive:true,columns:[{columnName:'ID',dataType:'int'}]})));
- const schema=require('../src/backend/intelligent_core/schema_context_service');
+ const schema=require('../src/backend/assistant/schema_context_service');
  t.mock.method(schema,'buildSchemaContext',async(q,o)=>{assert.equal(o.primaryTable,'Invoices');return {mode:'data',selectedTables:['Invoices','Private'],retrieval:{}};});
  const refined=t.mock.method(schema,'refineSchemaContext',(q,names)=>{assert.deepEqual(names,['Invoices']);return {mode:'data',selectedTables:names};});
- const r=await require('../src/backend/intelligent_core/tool_registry').executeTool('search_schema',{query:'Invoices',request:{operation:'aggregate',attributes:[],presentation:'text'}},{governedController:true,dbSourceId:'root-fixture',permissions:['sql:read'],requestPlan:{table:'Balances',conversationState:{operation:'aggregate'}}});
+ const r=await require('../src/backend/assistant/tool_registry').executeTool('search_schema',{query:'Invoices',request:{operation:'aggregate',attributes:[],presentation:'text'}},{governedController:true,dbSourceId:'root-fixture',permissions:['sql:read'],requestPlan:{table:'Balances',conversationState:{operation:'aggregate'}}});
  assert.equal(r.success,true);assert.equal(refined.mock.callCount(),1);
  assert.equal(r.result.requestedPrimaryTable,'Invoices');assert.deepEqual(r.result.tables.map(t=>t.tableName),['Invoices']);
  assert.deepEqual(r.result.tableDirectory.map(t=>t.tableName),['Invoices']);
 }));
 
 test('schema-backed missing field answers stop without SQL or repair loops', async t => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager;
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager;
   t.mock.method(manager.getTool('search_schema'), 'run', async () => ({ mode: 'data', selectedTables: ['M_Employee'],
     tables: [{ tableName: 'M_Employee', columns: [{ name: 'EmployeeCode' }, { name: 'EmployeeName' }] }] }));
   let calls = 0;
@@ -91,7 +91,7 @@ test('schema-backed missing field answers stop without SQL or repair loops', asy
 });
 
 test('entity memory derives canonical keys from configured result aliases', () => {
-  const { deriveReferences } = require('../src/backend/memory_core/reference_store');
+  const { deriveReferences } = require('../src/backend/memory/reference_store');
   const references = deriveReferences({ currentPlan: { table: 'M_Employee', columnDisplayNames: { EmployeeCode: 'Mã nhân viên', EmployeeName: 'Tên nhân viên' } },
     toolCalls: [{ toolName: 'execute_sql_query', success: true, result: { rows: [{ 'Mã nhân viên': 'NV007', 'Tên nhân viên': 'Nguyễn Văn B' }] } }] });
   assert.equal(references.lastEntity.filters.EmployeeCode, 'NV007'); assert.equal(references.lastEntity.table, 'M_Employee');
@@ -103,8 +103,8 @@ test('general chat invokes no schema or document embedding before answering', as
   const providers = require('../src/backend/services/ai_provider_manager');
   t.mock.method(providers, 'getProviderForExecution', () => provider);
   t.mock.method(providers, 'getActiveProvider', () => provider);
-  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
-  const schema = t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'buildSchemaContext', () => { throw new Error('Unexpected schema retrieval'); });
+  t.mock.method(require('../src/backend/knowledge/services/library_service'), 'getDocuments', () => []);
+  const schema = t.mock.method(require('../src/backend/assistant/schema_context_service'), 'buildSchemaContext', () => { throw new Error('Unexpected schema retrieval'); });
   const embed = t.mock.method(require('../src/backend/services/qdrant_service'), 'embedTexts', () => { throw new Error('Unexpected embedding'); });
   t.mock.method(global, 'fetch', async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: 'Hello!' }, finish_reason: 'stop' }] }) }));
   const result = await core.chat('hello', { providerId: provider.id, permissions: ['sql:read'], session: { id: 'hello-session', accountId: 'owner' } });
@@ -117,11 +117,11 @@ test('schema retrieval is scoped to the chosen SQL source and runs only through 
   const connector = require('../src/backend/services/sql_connector');
   connector.dbSources.push({ id: 'lazy-source', database: 'FixtureDb' });
   t.after(() => { connector.dbSources = connector.dbSources.filter(source => source.id !== 'lazy-source'); });
-  const build = t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'buildSchemaContext', async (query, options) => {
+  const build = t.mock.method(require('../src/backend/assistant/schema_context_service'), 'buildSchemaContext', async (query, options) => {
     assert.equal(query, 'employee gender'); assert.equal(options.dbSourceId, 'lazy-source'); assert.equal(options.dbName, 'FixtureDb'); assert.equal(options.forceRetrieval, true);
     return { mode: 'data', selectedTables: ['M_Employee'], schemaContext: 'verified schema' };
   });
-  const { SearchSchemaTool } = require('../src/backend/agent_core/tools/builtins');
+  const { SearchSchemaTool } = require('../src/backend/agent/tools/builtins');
   const request = { operation: 'compare', attributes: ['gender'], presentation: 'table' };
   const result = await new SearchSchemaTool().run({ query: 'employee gender', request }, { governedController: true, dbSourceId: 'lazy-source' });
   assert.equal(build.mock.callCount(), 1); assert.equal(result.schemaContext, 'verified schema');
@@ -133,9 +133,9 @@ test('schema discovery retains configured business descriptions and aggregation 
   governance.setPrincipal({ subject: 'account:owner', role: 'admin' });
   const connector = require('../src/backend/services/sql_connector');
   t.mock.method(connector, 'getDefaultDbSource', () => ({ id: 'metadata-source', database: 'FixtureDb' }));
-  t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'buildSchemaContext', async () => ({ mode: 'data', selectedTables: ['Costs'], schemaContext: 'schema' }));
+  t.mock.method(require('../src/backend/assistant/schema_context_service'), 'buildSchemaContext', async () => ({ mode: 'data', selectedTables: ['Costs'], schemaContext: 'schema' }));
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [{ tableName: 'Costs', dbSourceId: 'metadata-source', tableDescription: 'Operating costs', defaultMetric: 'Amount', defaultAggregation: 'SUM', columns: [{ columnName: 'Category', dataType: 'INT', description: 'Maintenance has code 42' }] }]);
-  const { SearchSchemaTool } = require('../src/backend/agent_core/tools/builtins');
+  const { SearchSchemaTool } = require('../src/backend/agent/tools/builtins');
   const result = await new SearchSchemaTool().run({ query: 'operating costs', request: { operation: 'aggregate', attributes: [], presentation: 'table' } }, { governedController: true });
   assert.equal(result.tables[0].description, 'Operating costs');
   assert.equal(result.tables[0].defaultMetric, 'Amount');
@@ -145,8 +145,8 @@ test('schema discovery retains configured business descriptions and aggregation 
 
 test('knowledge tool searches only documents allowed for the selected model before reading corpus', async t => governance.run(async () => {
   governance.setPrincipal({ subject: 'account:owner', role: 'admin' });
-  const library = require('../src/backend/knowledge_core/services/library_service');
-  const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+  const library = require('../src/backend/knowledge/services/library_service');
+  const retrieval = require('../src/backend/knowledge/services/retrieval_service');
   t.mock.method(library, 'getDocuments', () => [
     { id: 'app', title: 'App guide', governedPolicy: { modelDestinations: ['gemini'] } },
     { id: 'private', title: 'Private guide', governedPolicy: { schemaVersion: 2, aiSharing: { level: 'local' } } }
@@ -156,14 +156,14 @@ test('knowledge tool searches only documents allowed for the selected model befo
     assert.deepEqual(options.documentIds, ['app']); assert.equal(options.scopeMode, 'selected');
     return { results: [{ payload: { documentId: 'app', fullText: 'Install app' }, score: 1 }] };
   });
-  const { SearchKnowledgeTool } = require('../src/backend/agent_core/tools/builtins');
+  const { SearchKnowledgeTool } = require('../src/backend/agent/tools/builtins');
   const result = await new SearchKnowledgeTool().run({ query: 'install' }, { modelDestination: { id: 'gemini', local: false } });
   assert.equal(result.documents.length, 1); assert.equal(result.documents[0].documentId, 'app');
 }));
 
 test('governed harness never runs deterministic or recovery SQL when provider fails', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager;
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager;
   const harness = new Harness({ toolManager: manager, dispatch: async () => { throw Object.assign(new Error('Gemini API: invalid schema'), { status: 400 }); } });
   const result = await harness.run({ userMessage: 'ds nv', provider: { id: 'fixture', supportsToolCalling: true },
     enabledToolNames: ['list_workflows', 'execute_sql_query'], context: { governedController: true, lockProvider: true, permissions: ['admin'],
@@ -176,8 +176,8 @@ test('governed harness never runs deterministic or recovery SQL when provider fa
 });
 
 test('governed harness rejects SQL before successful workflow discovery', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager;
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager;
   const harness = new Harness({ toolManager: manager, maxRepairs: 0, dispatch: async () => ({ tool_calls: [
     { id: 'sql-1', type: 'function', function: { name: 'execute_sql_query', arguments: JSON.stringify({ sql: 'SELECT EmployeeCode FROM M_Employee' }) } }
   ] }) });
@@ -193,8 +193,8 @@ test('default controller discovers and starts workflow through gateway without T
   const providers = require('../src/backend/services/ai_provider_manager'), automation = require('../src/backend/automation');
   const provider = { id: 'controller-model', name: 'Controller model', model: 'fixture', apiFormat: 'openai', baseUrl: 'http://127.0.0.1:9911', supportsToolCalling: true, contextWindow: 64000 };
   t.mock.method(providers, 'getProviderForExecution', () => provider); t.mock.method(providers, 'getActiveProvider', () => provider);
-  t.mock.method(require('../src/backend/intelligent_core/schema_context_service'), 'buildSchemaContext', async () => { throw new Error('Schema retrieval must be requested by the agent'); });
-  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
+  t.mock.method(require('../src/backend/assistant/schema_context_service'), 'buildSchemaContext', async () => { throw new Error('Schema retrieval must be requested by the agent'); });
+  t.mock.method(require('../src/backend/knowledge/services/library_service'), 'getDocuments', () => []);
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));
   t.mock.method(automation.registry, 'list', async actor => { assert.equal(actor.accountId, 'owner'); return [{ id: 'fixture/employee', name: 'Employee detail', inputs: { employeeId: { schema: { type: 'string' } } }, bindings: {}, packageVersion: 3 }]; });
   t.mock.method(automation.registry, 'getTemplate', async id => { assert.equal(id, 'fixture/employee'); return { bindings: {} }; });
@@ -237,8 +237,8 @@ test('workflow tools reject cross-conversation references and stale admin privil
 }));
 
 test('stored-information description uses verified schema without SQL or a chart contract', async t => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager;
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager;
   const question = "Hệ thống lưu những thông tin nào về doanh nghiệp trong khu công nghiệp?";
   t.mock.method(manager.getTool('search_schema'), 'run', async () => ({ mode: 'data', selectedTables: ['M_Customer'],
     requestIntent: { operation: 'describe', attributes: [], presentation: 'text' },
@@ -259,9 +259,9 @@ test('stored-information description uses verified schema without SQL or a chart
 
 
 test('schema discovery preserves a resolved explanation instead of requiring record SQL', async t => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager;
-  t.mock.method(require('../src/backend/memory_core/conversation_resolver'), 'resolve', async () => ({
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager;
+  t.mock.method(require('../src/backend/memory/conversation_resolver'), 'resolve', async () => ({
     relation: 'independent', operation: 'conversation', cardinality: 'none', attributes: [], selectedIds: [],
     selected: [], clarification: null, dataUse: 'none', sourceScope: 'enterprise'
   }));
@@ -282,7 +282,7 @@ test('schema discovery preserves a resolved explanation instead of requiring rec
 });
 
 test('configured detail segment anchors aggregate root and structured SQL passes existing guards',async t=>{
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness'),manager=require('../src/backend/agent_core').defaultToolManager;
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness'),manager=require('../src/backend/agent').defaultToolManager;
  const semanticModel={version:1,kind:'detail',entity:'Costs',grain:'One cost',identityFields:['ID'],summaryFields:['ID','Amount'],segments:[{id:'operations',label:'Operations',column:'Category',value:21}]};
  const tables=[{tableName:'Parent',dbSourceId:'fixture-source',isActive:true,domain:'electricity',columns:[{columnName:'ID',dataType:'INT',isPrimaryKey:true}]},
   {tableName:'Costs',dbSourceId:'fixture-source',isActive:true,semanticModel,columns:[{columnName:'ID',dataType:'INT',isPrimaryKey:true},{columnName:'Category',dataType:'INT',description:'operations Category = 21'},{columnName:'Amount',dataType:'INT'}]}];

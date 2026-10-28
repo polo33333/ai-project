@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const policy = require('../src/backend/governance/context');
 const { check } = require('../src/backend/governance/sql_policy');
 const { percentageChange, assemble } = require('../src/backend/governance/evidence');
-const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
+const { RequestExecutionBudget } = require('../src/backend/agent/harness/request_execution_budget');
 const { Admission } = require('../src/backend/governance/admission');
 
 test('request scope fails closed, isolates users/embed, and separates read from model send', () => {
@@ -105,7 +105,7 @@ test('workflow tools bind actor to authenticated conversation and deny write sem
 }));
 
 test('conversation resources are tainted for model egress and invalidated on policy revision change', () => policy.run(() => {
-  const { MemoryService } = require('../src/backend/memory_core/memory_service');
+  const { MemoryService } = require('../src/backend/memory/memory_service');
   const connector = require('../src/backend/services/sql_connector');
   const resource = { id: 'memory-fixture', governedPolicy: { visibility: 'shared', revision: 1, sensitivity: 'restricted' } };
   connector.dbSources.push(resource); policy.setPrincipal({ subject: 'account:a', role: 'user' }); policy.read(resource, 'sql');

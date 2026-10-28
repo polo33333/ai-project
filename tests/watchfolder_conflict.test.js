@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 test('watchfolder retries conflict with fresh independent scope and respects a paused folder', async t => {
   const storage = require('../src/backend/storage');
-  const service = require('../src/backend/knowledge_core/services/watchfolder_service');
+  const service = require('../src/backend/knowledge/services/watchfolder_service');
   t.mock.method(storage, 'enabled', () => true);
   t.mock.method(storage, 'lease', async (_, operation) => operation());
   let calls = 0, processed = 0;

@@ -5,9 +5,9 @@ function createContext(options = {}) {
   const selected = options.chatProviderSnapshot || (options.providerId ? providers.getProviderForExecution(options.providerId) : providers.getActiveProvider());
   if (!selected?.baseUrl || !selected?.model || selected.status === 'unconfigured') throw Object.assign(new Error('Model đã chọn không khả dụng. Hãy kiểm tra cấu hình model.'), { code: 'CHAT_PROVIDER_UNAVAILABLE' });
   const provider = Object.freeze(structuredClone(selected));
-  const executionBudget = options.executionBudget || (require('../agent_core/harness/provider_classifier').isLocalProvider(provider)
-    ? new (require('../agent_core/harness/request_execution_budget').RequestExecutionBudget)({ maxModelCalls: Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 12) })
-    : require('../agent_core/harness/guarded_agent_harness').createProviderBudget());
+  const executionBudget = options.executionBudget || (require('../agent/harness/provider_classifier').isLocalProvider(provider)
+    ? new (require('../agent/harness/request_execution_budget').RequestExecutionBudget)({ maxModelCalls: Number(process.env.LOCAL_MODEL_MAX_MODEL_CALLS || 12) })
+    : require('../agent/harness/guarded_agent_harness').createProviderBudget());
   return { config: { mode: 'agent' }, chatProviderSnapshot: provider, executionBudget,
     decision: { route: 'chat', purpose: 'none', workflowId: null },
     trace: { routingMode: 'governed_agent', decisionSource: 'agent_controller', route: 'agent', legacyRoutingSkipped: true,

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const WorkflowEngine = require('../src/backend/agent_core/workflows/workflow_engine');
-const { createStep } = require('../src/backend/agent_core/workflows/automation_steps');
+const WorkflowEngine = require('../src/backend/agent/workflows/workflow_engine');
+const { createStep } = require('../src/backend/agent/workflows/automation_steps');
 
 test('automation workflow transforms state and evaluates conditions', async () => {
   const workflow = new WorkflowEngine({ id: 'test', name: 'Test' });

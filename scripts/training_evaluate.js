@@ -1,8 +1,8 @@
 'use strict';
 
 const path = require('path');
-const { collectCases } = require('../src/backend/training_core/case_collector');
-const { evaluateCases } = require('../src/backend/training_core/regression_runner');
+const { collectCases } = require('../src/backend/training/case_collector');
+const { evaluateCases } = require('../src/backend/training/regression_runner');
 const storage = require('../src/backend/storage');
 storage.loadEnvironment();
 

@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const stages = require('../src/backend/agent_core/harness/staged_tools');
+const stages = require('../src/backend/agent/harness/staged_tools');
 const governance = require('../src/backend/governance/context');
 
 test('scoped aggregates finish with exact projected attributes, never WHERE-only or unresolved fields', () => {
- const {canFinalizeVerifiedRead}=require('../src/backend/agent_core/harness/completion_policy');
+ const {canFinalizeVerifiedRead}=require('../src/backend/agent/harness/completion_policy');
  const plan={outputs:{data:true},conversationState:{operation:'aggregate',requestedAttributes:['Amount']},schemaScope:{filters:[]}};
  // Validated empty scope permits whole-source aggregation; absent scope does not.
  const call={success:true,result:{rows:[{Total:12}],sql:'SELECT SUM(Amount) AS Total FROM Records WHERE Category = 21'}};
@@ -20,8 +20,8 @@ test('scoped aggregates finish with exact projected attributes, never WHERE-only
 });
 
 test('verified read finishes only with complete evidence and no pending additional outputs', () => {
-  const { canFinalizeVerifiedRead } = require('../src/backend/agent_core/harness/completion_policy');
-  const { createRequestContract } = require('../src/backend/agent_core/harness/request_contract');
+  const { canFinalizeVerifiedRead } = require('../src/backend/agent/harness/completion_policy');
+  const { createRequestContract } = require('../src/backend/agent/harness/request_contract');
   const plan = { table: 'records', outputs: { data: true }, conversationState: { operation: 'list' } };
   plan.requestContract = createRequestContract(plan, { tables: [{ tableName: 'records', columns: [{ name: 'code', description: 'Identity' }, { name: 'value', description: 'Value' }] }] });
   const call = { success: true, result: { rows: [{ code: 'A', value: null }] } };
@@ -35,7 +35,7 @@ test('verified read finishes only with complete evidence and no pending addition
 });
 
 test('superseded schema compaction preserves native tool-call pairing and latest metadata', () => {
-  const { compactSupersededSchemas } = require('../src/backend/agent_core/harness/local_result_compactor');
+  const { compactSupersededSchemas } = require('../src/backend/agent/harness/local_result_compactor');
   const messages = [{ role: 'assistant', tool_calls: [{ id: 'first' }] },
     { role: 'tool', name: 'search_schema', tool_call_id: 'first', content: JSON.stringify({ success: true, result: { selectedTables: ['records'], tables: ['old'] } }) },
     { role: 'assistant', tool_calls: [{ id: 'second' }] },
@@ -52,7 +52,7 @@ test('superseded schema compaction preserves native tool-call pairing and latest
 });
 
 test('tool stages omit SQL and output schemas until their prerequisites complete', () => {
-  const definitions = require('../src/backend/agent_core').defaultToolManager.getToolDefinitions({ permissions: ['admin'] });
+  const definitions = require('../src/backend/agent').defaultToolManager.getToolDefinitions({ permissions: ['admin'] });
   const names = defs => defs.map(tool => tool.function.name);
   const initial = stages.select(definitions);
   assert.ok(!names(initial).includes('execute_sql_query')); assert.ok(!names(initial).includes('export_data'));
@@ -90,7 +90,7 @@ test('workflow cache is conversation-scoped and invalidates on catalog version o
 }));
 
 test('basic lists require identity fields without forcing a full profile or display joins', () => {
-  const { createRequestContract } = require('../src/backend/agent_core/harness/request_contract');
+  const { createRequestContract } = require('../src/backend/agent/harness/request_contract');
   const plan = { table: 'Customers', identityColumns: ['ID','Code','Name'], displayIdentityColumns: ['Code','Name'],
     conversationState: { operation: 'list', requestedAttributes: [] } };
   const schema = { tables: [{ tableName: 'Customers', columns: [
@@ -115,7 +115,7 @@ test('scoped aggregates expose execution instead of repeated retrieval', () => {
 });
 
 test('entity identity does not force unrelated contact or tax fields into basic lists',()=>{
- const {createRequestPlan}=require('../src/backend/training_core');
+ const {createRequestPlan}=require('../src/backend/training');
  const plan=createRequestPlan({question:'ds kh',selectedTables:['M_Customer'],dictionaryTables:[{tableName:'M_Customer',columns:[
   {columnName:'CustomerID',dataType:'int',isPrimaryKey:true},{columnName:'CustomerCode',dataType:'varchar'},
   {columnName:'CustomerName',dataType:'nvarchar'},{columnName:'TaxCode',dataType:'varchar'},{columnName:'ContactName',dataType:'nvarchar'}]}]});

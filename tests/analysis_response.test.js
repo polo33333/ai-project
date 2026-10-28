@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const analysis=require('../src/backend/agent_core/harness/analysis_response');
-const {canFinalizeVerifiedRead}=require('../src/backend/agent_core/harness/completion_policy');
+const analysis=require('../src/backend/agent/harness/analysis_response');
+const {canFinalizeVerifiedRead}=require('../src/backend/agent/harness/completion_policy');
 const source={toolName:'execute_sql_query',success:true,args:{sql:'SELECT YEAR(DocDate) AS Nam, MONTH(DocDate) AS Thang, SUM(Qty) AS TongSanLuong FROM Usage GROUP BY YEAR(DocDate), MONTH(DocDate)'},result:{rows:[{Nam:2024,Thang:2,TongSanLuong:3287},{Nam:2024,Thang:1,TongSanLuong:60192}]}};
 
 test('an empty requested record group does not turn all multi-group results into insufficient analysis history',()=>{
@@ -47,7 +47,7 @@ test('zero baseline and nonadjacent months never produce a fabricated percentage
 });
 
 async function harnessCase(rows, finalText, requestIntent, searchFirst = false) {
- const Base=require('../src/backend/agent_core/tools/base_tool'),Manager=require('../src/backend/agent_core/tools/tool_manager'),Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
+ const Base=require('../src/backend/agent/tools/base_tool'),Manager=require('../src/backend/agent/tools/tool_manager'),Harness=require('../src/backend/agent/harness/guarded_agent_harness');
  const manager=new Manager();
  const register=(name,run)=>{const t=new Base({name,description:name,parameters:{type:'object',properties:{sql:{type:'string'},query:{type:'string'}}}});t.run=run;manager.registerTool(t);};
  register('list_workflows',async()=>({workflows:[]}));

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const pipeline = require('../src/backend/agent_core/pipeline/contract_pipeline');
+const pipeline = require('../src/backend/agent/pipeline/contract_pipeline');
 
 test('coverage check rejects contracts that drop a code, month or year from the question', () => {
   const question = 'Khách hàng nào có tiền điện cao nhất tháng 2024-02?';
@@ -50,7 +50,7 @@ test('contracts infer an omitted kind and accept numeric or boolean workflow inp
 });
 
 test('"biểu đồ" is not read as "đó": a chart request is not a follow-up by itself', () => {
-  const { dependsOnPrevious } = require('../src/backend/memory_core/followup_policy');
+  const { dependsOnPrevious } = require('../src/backend/memory/followup_policy');
   assert.equal(dependsOnPrevious('Báo cáo sản lượng điện 3 tháng gần nhất, vẽ biểu đồ'), false);
   assert.equal(dependsOnPrevious('xuất file ds đó'), true);
   assert.equal(dependsOnPrevious('vẽ biểu đồ cho danh sách trên'), true);

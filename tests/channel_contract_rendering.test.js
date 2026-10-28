@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { buildSqlRowsFallbackReply } = require('../src/backend/agent_core/harness/grounded_reply');
+const { buildSqlRowsFallbackReply } = require('../src/backend/agent/harness/grounded_reply');
 test('chat, popup and standalone embed retain escaped pipes, missing fields and safe HTML in result tables', () => {
   const reply = buildSqlRowsFallbackReply({ result: { rows: [{ code: 'A', value: 'a|b', empty: null },
     { code: 'B', value: '<script>unsafe</script>', later: 'present' }] } }, {}, { forceTable: true });

@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const coverage = require('../src/backend/agent_core/pipeline/coverage');
-const { compile } = require('../src/backend/agent_core/pipeline/query_compiler');
+const coverage = require('../src/backend/agent/pipeline/coverage');
+const { compile } = require('../src/backend/agent/pipeline/query_compiler');
 
 const terms = [
   { value: 'Đang xử lý', ref: 'T_Feedback.StatusID->ConstantName', role: 'Trạng thái' },
@@ -41,7 +41,7 @@ test('exclusions keep records whose lookup is empty', () => {
 });
 
 test('roles named in the question add the list column or the grouping', () => {
-  const { applyRoles } = require('../src/backend/agent_core/pipeline/contract_pipeline');
+  const { applyRoles } = require('../src/backend/agent/pipeline/contract_pipeline');
   const catalog = { relations: [{ fromTable: 'T_Invoice', toTable: 'M_Customer', pairs: [{ source: 'CustomerID', target: 'CustomerID' }], role: 'Khách hàng', display: 'CustomerName' },
     { fromTable: 'T_Invoice', toTable: 'M_Constant', pairs: [{ source: 'StatusID', target: 'ConstantID' }], role: 'Trạng thái', display: 'ConstantName' }],
     tables: new Map([['t_invoice', { tableName: 'T_Invoice', defaults: ['InvoiceID'], columns: new Map() }]]) };
@@ -63,7 +63,7 @@ test('several periods compile to a union of half-open ranges', () => {
 });
 
 test('the v2 catalog never shows columns blocked by the source policy', () => {
-  const { build, describe } = require('../src/backend/agent_core/pipeline/query_catalog');
+  const { build, describe } = require('../src/backend/agent/pipeline/query_catalog');
   const dictionary = { getGroupedTables: () => [{ tableId: 's::t', tableName: 'T_Staff', dbSourceId: 's', isActive: true, columns: [
     { columnName: 'StaffID', dataType: 'INT', isPrimaryKey: true }, { columnName: 'Salary', dataType: 'MONEY', displayName: 'Lương' },
     { columnName: 'Name', dataType: 'NVARCHAR' }, { columnName: 'Hidden', dataType: 'INT', isVisible: false }] }] };

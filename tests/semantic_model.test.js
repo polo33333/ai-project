@@ -15,7 +15,7 @@ test('age superlatives retain ties with the same mandatory and user scope in the
  assert.equal(result.sql.split("[Code] IN (N'A', N'B')").length,3);
  assert.ok(result.sql.includes('[BirthDate] IS NOT NULL'));
  assert.equal(result.ranking.sql,result.sql);
- assert.equal(require('../src/backend/intelligent_core/security_guard').validateSqlQuery(result.sql).safe,true);
+ assert.equal(require('../src/backend/assistant/security_guard').validateSqlQuery(result.sql).safe,true);
  assert.ok(query.compile({...input,ranking:{...input.ranking,kind:'oldest'}},[t]).sql.includes('SELECT MIN([BirthDate])'));
  assert.throws(()=>query.compile({...input,ranking:{...input.ranking,column:'Private'}},[t]),{code:'SEMANTIC_RANKING_INVALID'});
  assert.throws(()=>query.compile({...input,ranking:{...input.ranking,identityColumns:['Private']}},[t]),{code:'SEMANTIC_FIELD_UNAVAILABLE'});
@@ -27,7 +27,7 @@ test('ranked record queries preserve date sorting and exclude unknown dates',()=
   filters:[{column:'BirthDate',operator:'isNotNull'}],orderBy:[{column:'BirthDate',direction:'DESC'}]};
  const result=query.compile(input,[t]);
  assert.match(result.sql,/TOP 1/);assert.match(result.sql,/WHERE \[BirthDate\] IS NOT NULL ORDER BY \[BirthDate\] DESC$/);
- assert.equal(require('../src/backend/intelligent_core/security_guard').validateSqlQuery(result.sql).safe,true);
+ assert.equal(require('../src/backend/assistant/security_guard').validateSqlQuery(result.sql).safe,true);
  assert.match(query.compile({...input,orderBy:[{column:'BirthDate',direction:'ASC'}]},[t]).sql,/ORDER BY \[BirthDate\] ASC$/);
  assert.throws(()=>query.compile({...input,orderBy:[{column:'Private',direction:'DESC'}]},[t]),{code:'SEMANTIC_FIELD_UNAVAILABLE'});
  assert.throws(()=>query.compile({...input,orderBy:[{column:'BirthDate',direction:'DESC; DROP TABLE Records'}]},[t]),{code:'SEMANTIC_QUERY_INVALID'});
@@ -78,8 +78,8 @@ test('comparison filters support bounded IN values without expanding SQL scope',
  assert.throws(()=>query.compile({table:'Records',operation:'compare',fields:['Code'],filters:[{column:'Code',operator:'in',values:[]}]},[table()]));
 });
 test('SQL tool normalizes legacy query text and sql wrapper before strict plan validation',()=>{
- const manager=require('../src/backend/agent_core').defaultToolManager;
- const {validateToolCall}=require('../src/backend/agent_core/harness/tool_argument_validator');
+ const manager=require('../src/backend/agent').defaultToolManager;
+ const {validateToolCall}=require('../src/backend/agent/harness/tool_argument_validator');
  for(const query of ['SELECT ID FROM Records',{sql:'SELECT ID FROM Records'}]) {
   const r=validateToolCall(manager,{name:'execute_sql_query',arguments:{query}});
   assert.equal(r.valid,true);assert.equal(r.args.sql,'SELECT ID FROM Records');
@@ -92,9 +92,9 @@ test('SQL tool normalizes legacy query text and sql wrapper before strict plan v
  assert.equal(legacy.valid,true);assert.deepEqual(legacy.args.dataQuery,{table:'Records',operation:'list',filters:[{column:'Code',operator:'eq',value:'A'}]});
 });
 test('undeclared comparison/statistics workflow cannot hijack a SQL task',async()=>{
- const assess=require('../src/backend/memory_core/workflow_suitability').assess;
+ const assess=require('../src/backend/memory/workflow_suitability').assess;
  for(const operation of ['compare','aggregate','attribute'])await assert.rejects(assess(()=>{throw Error('Must not call model')},'request',{operation},{tags:[]}),{code:'WORKFLOW_OPERATION_MISMATCH'});
- const select=require('../src/backend/agent_core/harness/staged_tools').select;
+ const select=require('../src/backend/agent/harness/staged_tools').select;
  const definitions=[{function:{name:'run_workflow'}},{function:{name:'execute_sql_query'}}];
  assert.deepEqual(select(definitions,{completed:['list_workflows','search_schema'],operation:'compare'}).map(t=>t.function.name),['execute_sql_query']);
  assert.equal(select(definitions,{catalog:true,operation:'compare',workflowOperations:['compare']}).some(t=>t.function.name==='run_workflow'),true);
@@ -154,7 +154,7 @@ test('trend compiler groups calendar months at source, not from preview rows',()
  const r=query.compile({table:'Records',operation:'aggregate',time:{column:'RecordedAt',grain:'month'},measures:[{column:'Amount',aggregation:'SUM'}],filters:[{column:'RecordedAt',operator:'gte',value:'2026-01-01'},{column:'RecordedAt',operator:'lt',value:'2027-01-01'}]},[t]);
  assert.match(r.sql,/DATEFROMPARTS\(YEAR\(\[RecordedAt\]\), MONTH\(\[RecordedAt\]\), 1\)/);
  assert.match(r.sql,/ORDER BY \[period\]/);
- assert.equal(require('../src/backend/intelligent_core/security_guard').validateSqlQuery(r.sql).safe,true);
+ assert.equal(require('../src/backend/assistant/security_guard').validateSqlQuery(r.sql).safe,true);
 });
 test('contains filters treat wildcards and quote characters as literal user data',()=>{
  const r=query.compile({table:'Records',operation:'list',filters:[{column:'Name',operator:'contains',value:"%' OR 1=1 --"}]},[table()]);
@@ -169,13 +169,13 @@ test('currency is configurable, defaults to VNĐ for configured money fields, an
  t.semanticModel.defaultCurrency='USD';assert.deepEqual(query.compile(input,[t]).units,{SUM_Amount:'USD'});
  assert.deepEqual(query.inferUnits('SELECT SUM(Amount) AS Total, COUNT(ID) AS CountRows FROM dbo.Records',[t]),{Total:'USD'});
  assert.deepEqual(query.inferUnits('SELECT SUM(a.Amount) AS Total FROM Records a JOIN Other b ON a.ID=b.ID',[t]),{});
- assert.equal(require('../src/backend/agent_core/harness/grounded_reply').buildSqlRowsFallbackReply({result:{rows:[{SUM_Amount:12}],units:{SUM_Amount:'USD'}}}).includes('USD'),true);
+ assert.equal(require('../src/backend/agent/harness/grounded_reply').buildSqlRowsFallbackReply({result:{rows:[{SUM_Amount:12}],units:{SUM_Amount:'USD'}}}).includes('USD'),true);
 });
 test('structured tool flags default capped records while respecting an explicit requested row limit',async t=>{
  const inputTable={...table(),dbSourceId:'fixture'};
  t.mock.method(require('../src/backend/services/dictionary_service'),'getGroupedTables',()=>[inputTable]);
  t.mock.method(require('../src/backend/services/sql_connector'),'executeSqlQuery',async()=>Array.from({length:100},(_,i)=>({ID:i,Code:String(i),Name:'Record'})));
- const tool=new(require('../src/backend/agent_core/tools/builtins').ExecuteSqlTool)();
+ const tool=new(require('../src/backend/agent/tools/builtins').ExecuteSqlTool)();
  const a=await tool.run({query:{table:'Records',operation:'list'}},{dbSourceId:'fixture'});assert.equal(a.hasMore,true);
  const b=await tool.run({query:{table:'Records',operation:'list',limit:100}},{dbSourceId:'fixture',requestPlan:{requestedRowLimit:100}});assert.equal(b.hasMore,false);
 });

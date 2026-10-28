@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { callGemini } = require('../src/backend/intelligent_core/adapters/gemini');
-const { callAnthropic } = require('../src/backend/intelligent_core/adapters/anthropic');
-const { callOpenAI } = require('../src/backend/intelligent_core/adapters/openai');
+const { callGemini } = require('../src/backend/assistant/adapters/gemini');
+const { callAnthropic } = require('../src/backend/assistant/adapters/anthropic');
+const { callOpenAI } = require('../src/backend/assistant/adapters/openai');
 
 test('Gemini preserves every tool call and signed part, with all system context', async t => {
   const parts = [{ text: 'private thought', thought: true }, { functionCall: { name: 'first', args: {} }, thoughtSignature: 'signature' }, { functionCall: { name: 'second', args: {} } }];

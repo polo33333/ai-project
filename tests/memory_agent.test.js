@@ -2,9 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const governance = require('../src/backend/governance/context');
-const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-const { defaultToolManager } = require('../src/backend/agent_core');
-const { memory } = require('../src/backend/memory_core/durable_memory');
+const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+const { defaultToolManager } = require('../src/backend/agent');
+const { memory } = require('../src/backend/memory/durable_memory');
 const memoryNames = ['recall_memory', 'remember_preference', 'forget_memory'];
 
 test('agent saves an explicitly requested preference with server-owned identity and can recall it across sessions', () => governance.run(async () => {
@@ -21,8 +21,8 @@ test('agent saves an explicitly requested preference with server-owned identity 
   const saved = memory.list({ scope: 'personal' }).items[0];
   assert.equal(saved.owner, 'account:memory-agent-owner');
   assert.ok(memory.context()[0].content.includes('Prefer short answers.'));
-  assert.equal((await require('../src/backend/memory_core/tools').execute('recall_memory', { query: 'short' }, { session: { id: 'second-session' } })).items[0].id, saved.id);
-  await require('../src/backend/memory_core/tools').execute('forget_memory', { id: saved.id, revision: saved.revision, quote: 'forget this' }, { userMessage: 'Please forget this preference' });
+  assert.equal((await require('../src/backend/memory/tools').execute('recall_memory', { query: 'short' }, { session: { id: 'second-session' } })).items[0].id, saved.id);
+  await require('../src/backend/memory/tools').execute('forget_memory', { id: saved.id, revision: saved.revision, quote: 'forget this' }, { userMessage: 'Please forget this preference' });
   assert.equal(memory.list().items.length, 0);
 }));
 
@@ -30,6 +30,6 @@ test('embed never receives durable memory tools even in an admin preview', () =>
   governance.setPrincipal({ subject: 'embed:widget:origin', role: 'admin', channel: 'embed', embedId: 'widget' });
   const defs = defaultToolManager.getToolDefinitions({ permissions: ['admin'], allowedToolNames: memoryNames });
   assert.deepEqual(defs, []);
-  const legacyDefs = require('../src/backend/intelligent_core/tool_registry').listTools(memoryNames, { permissions: ['admin'] });
+  const legacyDefs = require('../src/backend/assistant/tool_registry').listTools(memoryNames, { permissions: ['admin'] });
   assert.deepEqual(legacyDefs, []);
 }));

@@ -21,7 +21,7 @@ async function start() {
   let router;
   await storage.run(async () => {
     router = require('./src/backend/routes/router');
-    knowledgeCore = require('./src/backend/knowledge_core');
+    knowledgeCore = require('./src/backend/knowledge');
     automation = require('./src/backend/automation');
     await automation.settings();
   });

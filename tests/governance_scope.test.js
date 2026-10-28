@@ -129,7 +129,7 @@ test('function groups combine into a role and widgets read through their role', 
 });
 
 test('documents inherit the policy of their watch folder until given their own', t => {
-  const folders = require('../src/backend/knowledge_core/services/watchfolder_service');
+  const folders = require('../src/backend/knowledge/services/watchfolder_service');
   const path = require('node:path');
   const previous = folders.folders;
   t.after(() => { folders.folders = previous; });

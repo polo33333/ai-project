@@ -5,8 +5,8 @@ const assert = require('node:assert/strict');
 const {
   getTemporalGrounding, groundTemporalQuery, rankResultsForTemporalGrounding
 } = require('../src/backend/services/web_search_service');
-const { isShortContextualFollowup } = require('../src/backend/memory_core/memory_policy');
-const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
+const { isShortContextualFollowup } = require('../src/backend/memory/memory_policy');
+const ToolManager = require('../src/backend/agent/tools/tool_manager');
 
 test('Vietnamese temporal web query resolves năm nay to the current Vietnam year', () => {
   const now = new Date('2026-09-10T07:00:00.000Z');

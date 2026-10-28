@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSqlRowsFallbackReply } = require('../src/backend/agent_core/harness/grounded_reply');
+const { buildSqlRowsFallbackReply } = require('../src/backend/agent/harness/grounded_reply');
 
 test('verified age superlatives answer directly, disclose missing-date scope and flag suspect employee dates',()=> {
  const sql='SELECT verified ranking';

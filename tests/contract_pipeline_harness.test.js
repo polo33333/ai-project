@@ -17,9 +17,9 @@ async function run(t, { contracts, workflowStatus = 'WAITING_INPUT', question = 
   t.after(() => { delete process.env.HARNESS_PIPELINE; });
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [table]);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => []);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), seen = { sql: [], runs: [], charts: [], exports: [] };
   const register = (name, run) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = run; manager.registerTool(tool); };
   register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['TestRows'], tableDirectory: [{ tableName: 'TestRows' }],
@@ -87,9 +87,9 @@ async function runForm(t, { contracts = [], answers = [], context = {}, enabledT
     columns: [...table.columns, { columnName: 'Dept', dataType: 'NVARCHAR', displayName: 'Phòng' }] }]);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => []);
   t.mock.method(require('../src/backend/governance/workflow_tools'), 'pendingInput', async () => pendingInput);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), seen = { resumes: [], exports: [], prompts: [] };
   const register = (name, run) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = run; manager.registerTool(tool); };
   register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['TestRows'], tableDirectory: [{ tableName: 'TestRows' }], intentCatalog: [], tables: [] }));
@@ -189,7 +189,7 @@ test('the request clock is a separate block for remote models and joins the sing
   const { seen } = await runForm(t, { question: 'Cảm ơn bạn nhé', contracts: [{ kind: 'chat' }], answers: ['Rất vui được hỗ trợ bạn!'],
     context: { lockProvider: true } });
   assert.deepEqual(seen.prompts[0].messages.map(message => message.role), ['system', 'system', 'user']);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
   const prompts = [];
   const harness = new Harness({ toolManager: { getToolDefinitions: () => [], executeTool: async () => ({ success: false }) },
     dispatch: async (_provider, messages) => { prompts.push(messages); return { content: 'Chào bạn.' }; } });

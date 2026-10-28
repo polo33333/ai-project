@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 test('scope evidence formatting is repaired once without accepting invented quotes', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definition = { id: 'report/sample', name: 'Report', description: 'Catalog report', examples: [], inputs: {} };
@@ -19,7 +19,7 @@ test('scope evidence formatting is repaired once without accepting invented quot
 
 test('negative routing is reviewed semantically for arbitrary catalog domains and still scope-checked', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   for (const [id, question] of [['inventory/monthly', 'Xem tồn kho'], ['service/summary', 'Tình hình bảo trì']]) {
@@ -42,7 +42,7 @@ test('negative routing is reviewed semantically for arbitrary catalog domains an
 
 test('routing reports invalid output and provider errors; cancellation never falls back to execution', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const events = [], options = { onWorkflowRouting: event => events.push(event) };

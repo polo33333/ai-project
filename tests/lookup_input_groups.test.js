@@ -1,9 +1,9 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {inputFields}=require('../src/backend/automation/sql_input_fields');
-const suitability=require('../src/backend/memory_core/workflow_suitability');
+const suitability=require('../src/backend/memory/workflow_suitability');
 const query=require('../src/backend/services/semantic_query');
-const groups=require('../src/backend/agent_core/harness/semantic_groups');
+const groups=require('../src/backend/agent/harness/semantic_groups');
 const lookup={inputs:{query:{schema:{type:'string'}}},bindings:{lookup:{sql:"SELECT c.ContractNo FROM dbo.Contracts c JOIN dbo.Customers u ON c.CustomerID=u.CustomerID WHERE c.ContractNo LIKE CONCAT('%',@query,'%') OR u.CustomerName LIKE CONCAT('%',@query,'%')",parameters:{query:{slot:'query'}}}}};
 test('lookup parameter fields come from WHERE predicates, not join keys or projected IDs',()=>{
  assert.deepEqual(inputFields(lookup),{query:[{table:'Contracts',column:'ContractNo'},{table:'Customers',column:'CustomerName'}]});
@@ -32,7 +32,7 @@ test('business codes cannot be compiled against numeric IDs and dates cannot use
 test('multi-group rendering preserves an empty upcoming set and nonempty expired set; missing queries are not empty',()=>{
  const planned=groups.prepare([{label:'Upcoming',query:request('gte',0)},{label:'Expired',query:request('lt',0)}]);
  const calls=[{semanticGroup:0,success:true,result:{rows:[]}},{semanticGroup:1,success:true,result:{rows:[{ID:7,Expiry:'2024-12-31'}]}}];
- const render=require('../src/backend/agent_core/harness/grounded_reply').buildSqlRowsFallbackReply;
+ const render=require('../src/backend/agent/harness/grounded_reply').buildSqlRowsFallbackReply;
  const reply=groups.render(planned,calls,render);
  assert(reply.includes('**Upcoming**'));assert(reply.includes('Không tìm thấy dữ liệu phù hợp.'));assert(reply.includes('**Expired**'));assert(reply.includes('31/12/2024'));
  const incomplete=groups.render(planned,calls.slice(0,1),render);

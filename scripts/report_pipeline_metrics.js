@@ -10,7 +10,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, list) =>
   value.startsWith('--') ? [...pairs, [value.slice(2), list[index + 1]?.startsWith('--') ? true : list[index + 1] ?? true]] : pairs, []));
-const { computeMetrics } = require(path.join(root, 'src/backend/training_core/pipeline_metrics'));
+const { computeMetrics } = require(path.join(root, 'src/backend/training/pipeline_metrics'));
 
 async function loadHistory() {
   if (args.input) return JSON.parse(fs.readFileSync(path.resolve(String(args.input)), 'utf8'));

@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createRequestContract, assessRequestContract } = require('../src/backend/agent_core/harness/request_contract');
+const { createRequestContract, assessRequestContract } = require('../src/backend/agent/harness/request_contract');
 test('supplementary aggregates cannot remove a verified category scope', () => {
-  const { dropsAggregateScope, qualifiedSql } = require('../src/backend/agent_core/harness/completion_policy');
+  const { dropsAggregateScope, qualifiedSql } = require('../src/backend/agent/harness/completion_policy');
   const scoped = { toolName: 'execute_sql_query', success: true, args: { sql: 'SELECT SUM(Amount) AS Total FROM Costs WHERE Category = 42' }, result: { rows: [{ Total: 123 }] } };
   const broad = { ...scoped, args: { sql: 'SELECT Category, SUM(Amount) AS Total FROM Costs GROUP BY Category' } };
   assert.equal(dropsAggregateScope(broad.args.sql, [scoped]), true);
@@ -41,7 +41,7 @@ test('cross-table criteria never guess hidden, ambiguous or other-source fields'
 
 
 test('a schema review cannot downgrade a live analytical task into description or guidance', () => {
-  const { resolveRequestIntent } = require('../src/backend/agent_core/harness/request_contract');
+  const { resolveRequestIntent } = require('../src/backend/agent/harness/request_contract');
   for (const operation of ['describe', 'guidance']) {
     const declared = { operation, attributes: [], presentation: 'text' };
     for (const original of ['analyze', 'forecast']) {
@@ -54,7 +54,7 @@ test('a schema review cannot downgrade a live analytical task into description o
 });
 
 test('schema-grounded review supersedes stale memory detail after root recovery', () => {
-  const { resolveRequestIntent } = require('../src/backend/agent_core/harness/request_contract');
+  const { resolveRequestIntent } = require('../src/backend/agent/harness/request_contract');
   const reviewed = { operation: 'aggregate', attributes: [], presentation: 'text' };
   for (const operation of ['detail', 'attribute', 'list']) {
     const stale = { ...plan, conversationState: { operation }, semanticIntent: reviewed };
@@ -97,7 +97,7 @@ test('detail and single-attribute contracts preserve requested breadth', () => {
 });
 
 test('approved metric contract retains unit/time/grain and checks every requested dimension', () => {
-  const { createMetricContract } = require('../src/backend/agent_core/harness/request_contract');
+  const { createMetricContract } = require('../src/backend/agent/harness/request_contract');
   const result = { metricId: 'approved', metricVersion: 2, sourceId: 'source', units: { value: 'unit' },
     timeRange: { start: '2026-01-01', end: '2026-02-01' }, grain: 'department', rows: [{ value: '1.00' }] };
   const contract = createMetricContract(result, { dimensions: ['department'] });
@@ -110,16 +110,16 @@ test('approved metric contract retains unit/time/grain and checks every requeste
 });
 
 test('structured intent rejects invented scope or permission fields', () => {
-  const { decodeIntent } = require('../src/backend/agent_core/harness/request_contract');
+  const { decodeIntent } = require('../src/backend/agent/harness/request_contract');
   assert.throws(() => decodeIntent({ operation: 'compare', attributes: [], presentation: 'table', permissions: ['admin'] }), /REQUEST_INTENT_INVALID/);
   assert.equal(decodeIntent({ operation: 'compare', attributes: [], presentation: 'table' }).operation, 'compare');
 });
 
 test('aggregate requests never inherit full-record completeness from schema discovery', () => {
-  const { decodeIntent } = require('../src/backend/agent_core/harness/request_contract');
+  const { decodeIntent } = require('../src/backend/agent/harness/request_contract');
   assert.equal(decodeIntent({ operation: 'aggregate', attributes: [], presentation: 'table' }).operation, 'aggregate');
   assert.equal(createRequestContract({ ...plan, conversationState: { operation: 'aggregate' } }, selection), null);
-  const { qualifiedSql } = require('../src/backend/agent_core/harness/completion_policy');
+  const { qualifiedSql } = require('../src/backend/agent/harness/completion_policy');
   const aggregatePlan = { table: 'records', conversationState: { operation: 'aggregate' } };
   const calls = [{ toolName: 'execute_sql_query', success: true, result: { sql: 'SELECT SUM(amount) AS total FROM records', rows: [{ total: 10 }] } },
     { toolName: 'execute_sql_query', success: true, result: { sql: 'SELECT amount FROM records', rows: [{ amount: 10 }] } }];
@@ -128,7 +128,7 @@ test('aggregate requests never inherit full-record completeness from schema disc
 });
 
 test('later partial SQL cannot replace an earlier result with more contract coverage', () => {
-  const { qualifiedSql } = require('../src/backend/agent_core/harness/completion_policy');
+  const { qualifiedSql } = require('../src/backend/agent/harness/completion_policy');
   const contract = createRequestContract({ ...plan, requiredColumns: ['code', 'Phòng ban'] }, selection);
   const calls = [{ toolName: 'execute_sql_query', success: true, result: { sql: 'SELECT code, team FROM records', rows: [{ code: 'A', team: 'T' }] } },
     { toolName: 'execute_sql_query', success: true, result: { sql: 'SELECT code FROM records', rows: [{ code: 'A' }] } }];
@@ -136,7 +136,7 @@ test('later partial SQL cannot replace an earlier result with more contract cove
 });
 
 test('incidental document discovery does not require a citation for a SQL-only result table', () => {
-  const { evaluateCompletion } = require('../src/backend/agent_core/harness/completion_policy');
+  const { evaluateCompletion } = require('../src/backend/agent/harness/completion_policy');
   const input = { reply: '| Total |\n| --- |\n| 10 |', plan: { table: 'records', outputs: { data: true } }, toolCalls: [
     { toolName: 'execute_sql_query', success: true, result: { sql: 'SELECT SUM(amount) AS total FROM records', rows: [{ total: 10 }] } },
     { toolName: 'search_knowledge_base', success: true, result: { documents: [{ citationIndex: 1 }] } }
@@ -146,7 +146,7 @@ test('incidental document discovery does not require a citation for a SQL-only r
 });
 
 test('schema discovery is bounded without hiding the SQL execution capability', () => {
-  const select = require('../src/backend/agent_core/harness/staged_tools').select;
+  const select = require('../src/backend/agent/harness/staged_tools').select;
   const definitions = ['search_schema', 'execute_sql_query'].map(name => ({ function: { name } }));
   assert.deepEqual(select(definitions, { completed: ['list_workflows', 'search_schema', 'search_schema'] }).map(tool => tool.function.name), ['execute_sql_query']);
   assert.equal(select(definitions, { completed: ['search_schema'], catalog: true }).length, 2);
@@ -154,7 +154,7 @@ test('schema discovery is bounded without hiding the SQL execution capability', 
 });
 
 test('compacted schema mappings retain source and target columns at tool-result depth', () => {
-  const { compactToolResult } = require('../src/backend/agent_core/harness/local_result_compactor');
+  const { compactToolResult } = require('../src/backend/agent/harness/local_result_compactor');
   const result = JSON.parse(compactToolResult({ success: true, result: { mappedRelationships: [{
     businessRole: 'Role', columnPairs: [{ sourceColumn: 'role_id', targetColumn: 'id' }]
   }] } }, 12000));
@@ -214,9 +214,9 @@ test('verified exposed relationship resolves display criteria even without an ex
 });
 
 test('governed harness repairs a missing criterion and keeps NULL as verified data', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const BaseTool = require('../src/backend/agent_core/tools/base_tool');
-  const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const BaseTool = require('../src/backend/agent/tools/base_tool');
+  const ToolManager = require('../src/backend/agent/tools/tool_manager');
   const manager = new ToolManager();
   const tool = (name, run) => {
     const instance = new BaseTool({ name, description: name, parameters: { type: 'object', properties: { sql: { type: 'string' }, query: { type: 'string' } } } });

@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
-const { compact, footprint } = require('../src/backend/agent_core/harness/context_lifecycle');
-const { ContextResultStore } = require('../src/backend/agent_core/harness/context_result_store');
-const { compactAgentToolResult } = require('../src/backend/agent_core/harness/agent_context');
+const { compact, footprint } = require('../src/backend/agent/harness/context_lifecycle');
+const { ContextResultStore } = require('../src/backend/agent/harness/context_result_store');
+const { compactAgentToolResult } = require('../src/backend/agent/harness/agent_context');
 const tool = (id, name, result) => ({ role: 'tool', name, tool_call_id: id, content: JSON.stringify({ success: true, result }) });
 test('exact duplicates shrink without losing tool IDs or distinct schema evidence', () => {
   const a = tool('a', 'search_schema', { dbSourceId: 'x', tables: [{ tableName: 'A', columns: ['Code', 'Name'], description: 'x'.repeat(900) }] });
@@ -69,7 +69,7 @@ test('50-turn context compaction preserves every question, distinct filter and p
   assert.ok(output.afterTokens < output.beforeTokens);
 });
 test('50 exchanges retain bounded exact business state and do not expose it to another source or owner', () => {
-  const { MemoryService } = require('../src/backend/memory_core/memory_service');
+  const { MemoryService } = require('../src/backend/memory/memory_service');
   const service = new MemoryService({ store: { sessions: {} }, save() {} });
   for (let i = 0; i < 50; i++) service.persistSuccessfulExchange({ sessionId: 'long', accountId: 'owner',
     question: `Tra cứu TEST${i}`, reply: 'Kết quả thử bộ nhớ', completionStatus: 'SUCCESS', responseEvaluation: { valid: true },
@@ -87,18 +87,18 @@ test('50 exchanges retain bounded exact business state and do not expose it to a
   assert.deepEqual(service.getResolutionContext({ sessionId: 'long', accountId: 'stranger' }).candidates, []);
 });
 test('structured summary never silently truncates an oversized filter', () => {
-  const { fromPlan } = require('../src/backend/memory_core/business_state');
+  const { fromPlan } = require('../src/backend/memory/business_state');
   assert.ok(fromPlan({ semanticQuery: { filters: [{ value: 'x'.repeat(9000) }] } }).unavailable);
 });
 test('result reader is staged after data and unavailable without a request-local reader', async () => {
-  const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
-  const { ReadContextResultTool } = require('../src/backend/agent_core/tools/builtins');
+  const ToolManager = require('../src/backend/agent/tools/tool_manager');
+  const { ReadContextResultTool } = require('../src/backend/agent/tools/builtins');
   const manager = new ToolManager();
   manager.registerTool(new ReadContextResultTool());
   assert.equal(manager.getToolDefinitions({}).length, 0);
   const store = new ContextResultStore(), id = store.put({ rows: [{ Code: 'TEST', Amount: 0 }] });
   const context = { allowedToolNames: ['read_context_result'], readContextResult: args => store.read(args) };
-  const definitions = manager.getToolDefinitions(context), select = require('../src/backend/agent_core/harness/staged_tools').select;
+  const definitions = manager.getToolDefinitions(context), select = require('../src/backend/agent/harness/staged_tools').select;
   assert.equal(select(definitions).length, 0);
   assert.equal(select(definitions, { completed: ['execute_sql_query'] }).length, 1);
   const result = await manager.executeTool('read_context_result', { resultId: id }, context);

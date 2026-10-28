@@ -53,7 +53,7 @@ test('admin config and public heartbeat enforce authentication without running A
   assert.equal(result.data.sessions[0].identity.name,'Test User');assert.equal(result.data.sessions[0].online,true);
   embed.activeSessions.values().next().value.lastSeen-=91000;
   result=await call('/api/accounts/embed-identity','GET',null,admin.token);assert.equal(result.data.sessions[0].online,false);
-  t.mock.method(require('../src/backend/intelligent_core/core'),'chat',async()=>({success:true,replyText:'Hello',toolCalls:[],trace:{completionStatus:'PARTIAL'}}));
+  t.mock.method(require('../src/backend/assistant/core'),'chat',async()=>({success:true,replyText:'Hello',toolCalls:[],trace:{completionStatus:'PARTIAL'}}));
   const audit=t.mock.method(require('../src/backend/services/logger_service'),'addChatAudit',()=>({id:'identity-audit'}));
   const identityToken=token();
   result=await call('/api/embed/chat','POST',{embedId:config.id,sessionId:'visitor-session',question:'Hello',identityToken});
@@ -61,14 +61,14 @@ test('admin config and public heartbeat enforce authentication without running A
   assert.equal(audit.mock.calls[0].arguments[7].visitorIdentity.subject,'user-1');
   assert.ok(!JSON.stringify(audit.mock.calls[0].arguments).includes(identityToken));
   // A failed question is kept in the chat history with the visitor and the reason.
-  require('../src/backend/intelligent_core/core').chat.mock.mockImplementationOnce(async()=>({success:false,error:'AI provider không phản hồi.',errorCode:'PROVIDER_DOWN',trace:{}}));
+  require('../src/backend/assistant/core').chat.mock.mockImplementationOnce(async()=>({success:false,error:'AI provider không phản hồi.',errorCode:'PROVIDER_DOWN',trace:{}}));
   result=await call('/api/embed/chat','POST',{embedId:config.id,sessionId:'visitor-session',question:'ds nv',identityToken});
   assert.equal(result.status,500);
   const failed=audit.mock.calls[1].arguments;
   assert.deepEqual([failed[0],failed[1],failed[5],failed[6]],['ds nv',null,'ERROR','AI provider không phản hồi.']);
   assert.equal(failed[7].embedId,config.id);assert.equal(failed[7].visitorIdentity.subject,'user-1');assert.equal(failed[7].errorCode,'PROVIDER_DOWN');
   assert.ok(!JSON.stringify(failed).includes(identityToken));
-  const coreCalls=require('../src/backend/intelligent_core/core').chat.mock.callCount();
+  const coreCalls=require('../src/backend/assistant/core').chat.mock.callCount();
   const uploads=t.mock.method(require('../src/backend/services/chat_attachment_service'),'submit',async(owner,body)=>({status:'success',reply:'Tính năng xử lý tệp đang phát triển.',completionStatus:'SUCCESS'}));
   result=await call('/api/chat/attachments','POST',{files:[]},admin.token);
   assert.equal(result.status,200);assert.equal(uploads.mock.calls[0].arguments[0],'owner');
@@ -80,7 +80,7 @@ test('admin config and public heartbeat enforce authentication without running A
   const count=uploads.mock.callCount();
   result=await call('/api/embed/chat','POST',{embedId:config.id,sessionId:'visitor-session',files:[]});
   assert.equal(result.status,401);assert.equal(uploads.mock.callCount(),count);
-  assert.equal(require('../src/backend/intelligent_core/core').chat.mock.callCount(),coreCalls);
+  assert.equal(require('../src/backend/assistant/core').chat.mock.callCount(),coreCalls);
   const read=t.mock.method(require('../src/backend/services/chat_attachment_service'),'read',async(owner,batchId,fileId)=>({name:'a.pdf',type:'application/pdf',size:3,bytes:Buffer.from('PDF')}));
   let download=await fetch(base+'/api/chat/attachments/file?batchId=batch&fileId=file',{headers:{Cookie:'kh_session='+admin.token}});
   assert.equal(download.status,200);assert.equal(await download.text(),'PDF');

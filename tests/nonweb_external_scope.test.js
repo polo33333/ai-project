@@ -2,8 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 test('independent external-current question discards stale SQL requirements and suggests web', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager;
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager;
   let calls = 0;
   const harness = new Harness({ toolManager: manager, dispatch: async () => {
     calls++;

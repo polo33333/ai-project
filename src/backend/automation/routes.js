@@ -115,7 +115,7 @@ async function handle(req, res, pathname, account, readBody) {
               if (!source) throw error('Nguồn dữ liệu không còn khả dụng.',403);
               require('../governance/context').read(source,'sql');
             } else if (binding.documentId) {
-              const document=require('../knowledge_core/services/library_service').documents.find(d=>d.id===binding.documentId);
+              const document=require('../knowledge/services/library_service').documents.find(d=>d.id===binding.documentId);
               if (!document) throw error('Tài liệu không còn khả dụng.',403);
               require('../governance/context').read(document,'document');
             }

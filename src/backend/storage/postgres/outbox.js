@@ -23,7 +23,7 @@ async function processOne() {
   try {
     const payload = protect(job.payload, `outbox/${job.id}`, true);
     const result = await storage.lease(`outbox-resource:${job.resource_id}`, () => storage.run(async () => {
-      const library = require('../../knowledge_core/services/library_service');
+      const library = require('../../knowledge/services/library_service');
       if (job.kind === 'document.ingest') await library.processQueuedDocument(job.resource_id, payload);
       else if (job.kind === 'document.delete') await library.removeQueuedFiles(job.resource_id, payload);
       else if (job.kind === 'dictionary.sync') {
@@ -48,7 +48,7 @@ async function processOne() {
     if (job.kind==='document.ingest') {
       const payload=protect(job.payload, `outbox/${job.id}`, true);
       await storage.run(() => {
-        const library=require('../../knowledge_core/services/library_service');
+        const library=require('../../knowledge/services/library_service');
         const document=library.findDocument(job.resource_id);
         if(document && (!payload.fingerprint || document.sourceFingerprint===payload.fingerprint)) {
           document.status=job.attempts>=10?'Lỗi xử lý':'Đang chờ thử lại';

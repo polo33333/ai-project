@@ -5,9 +5,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 function groupHarness(t, delays) {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), seen = { active: 0, peak: 0, executed: [] };
   const tool = new Base({ name: 'execute_sql_query', description: 'sql', parameters: { type: 'object', properties: { sql: { type: 'string' } } } });
   tool.run = async args => {

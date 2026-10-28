@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MemoryService } = require('../src/backend/memory_core');
+const { MemoryService } = require('../src/backend/memory');
 const bridge = require('../src/backend/automation/conversation_memory');
 
 test('a completed workflow is logged as a turn with its rows, so follow-ups read the same result', () => {

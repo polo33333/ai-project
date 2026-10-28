@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { callGemini } = require('../src/backend/intelligent_core/adapters/gemini');
+const { callGemini } = require('../src/backend/assistant/adapters/gemini');
 
 test('Gemini sends complete tool JSON schemas using parametersJsonSchema', async t => {
   const schema = { type: 'object', additionalProperties: false, properties: { inputs: { type: 'object', additionalProperties: { type: 'string' } } } };

@@ -3,10 +3,10 @@
 // text and code-computed anomaly analysis.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const router = require('../src/backend/agent_core/harness/repair_router');
-const { reconcile } = require('../src/backend/agent_core/harness/join_plan_lifecycle');
-const workflowReply = require('../src/backend/agent_core/harness/workflow_reply');
-const analysis = require('../src/backend/agent_core/harness/analysis_response');
+const router = require('../src/backend/agent/harness/repair_router');
+const { reconcile } = require('../src/backend/agent/harness/join_plan_lifecycle');
+const workflowReply = require('../src/backend/agent/harness/workflow_reply');
+const analysis = require('../src/backend/agent/harness/analysis_response');
 
 test('repair router repairs the earliest failed phase and keeps stage guidance free', () => {
   assert.equal(router.route(['TOOL_NOT_IN_STAGE']).free, true);
@@ -70,7 +70,7 @@ test('anomaly verdict is computed by a named method with baseline, threshold and
   assert.match(computed.text, /\*\*Tiêu chí:\*\*.*trung vị/);
   assert.match(computed.text, /không phải ngưỡng nghiệp vụ/);
   // The rendered answer passes the completion gate on its own content.
-  const { evaluateCompletion } = require('../src/backend/agent_core/harness/completion_policy');
+  const { evaluateCompletion } = require('../src/backend/agent/harness/completion_policy');
   assert.ok(!evaluateCompletion({ reply: computed.text, plan: { table: 'Usage', outputs: { data: true }, analysisTask: 'anomaly' }, toolCalls: [series] })
     .failures.includes('ANALYSIS_CRITERION_MISSING'));
 });
@@ -92,23 +92,23 @@ test('stable, short, gapped or user-criterion series never produce an invented v
 });
 
 test('a revise follow-up of an empty previous request is a valid follow-up, not an independent question', () => {
-  const { decode } = require('../src/backend/memory_core/conversation_resolver');
+  const { decode } = require('../src/backend/memory/conversation_resolver');
   const value = { relation: 'followup', operation: 'list', cardinality: 'collection', attributes: [], selectedIds: [], clarification: '', dataUse: 'current', scopeAction: 'revise' };
   const response = { content: JSON.stringify(value) };
   assert.throws(() => decode(response, []), /MISSING_REFERENCE/);
   assert.equal(decode(response, [], { previousRequest: { businessState: { table: 'T_ElectricityOutput' } } }).relation, 'followup');
-  const { dependsOnPrevious } = require('../src/backend/memory_core/followup_policy');
+  const { dependsOnPrevious } = require('../src/backend/memory/followup_policy');
   assert.equal(dependsOnPrevious('vậy tìm trong năm 2024 đi'), true);
   assert.equal(dependsOnPrevious('còn khách DC6011 thì sao?'), true);
   assert.equal(dependsOnPrevious('con số doanh thu tháng 3'), false);
-  const state = require('../src/backend/memory_core/business_state').fromPlan({ table: 'T', requestFilters: [{ table: 'M_Customer', column: 'CustomerCode', value: 'KA0021' }] });
+  const state = require('../src/backend/memory/business_state').fromPlan({ table: 'T', requestFilters: [{ table: 'M_Customer', column: 'CustomerCode', value: 'KA0021' }] });
   assert.deepEqual(state.requestFilters, [{ table: 'M_Customer', column: 'CustomerCode', value: 'KA0021' }]);
 });
 
 test('a revise follow-up keeps the previous customer filter and says so in the answer', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), executed = [];
   for (const name of ['list_workflows', 'search_schema', 'execute_sql_query']) {
     const tool = new Base({ name, description: name, parameters: { type: 'object', properties: { sql: { type: 'string' }, query: { type: 'string' } } } });

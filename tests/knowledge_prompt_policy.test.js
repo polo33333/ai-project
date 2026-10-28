@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSelectedKnowledgeMessages } = require('../src/backend/intelligent_core/knowledge_prompt_policy');
+const { buildSelectedKnowledgeMessages } = require('../src/backend/assistant/knowledge_prompt_policy');
 
 test('selected knowledge prompt contains only the current question', () => {
   const messages = buildSelectedKnowledgeMessages('Selected document context', 'cách tải app');

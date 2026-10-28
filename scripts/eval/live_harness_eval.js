@@ -51,8 +51,8 @@ async function ask(storage, account, sessionId, question, history) {
     governance.setPrincipal({ subject: `account:${account.id}`, role: account.role, permissions: account.permissions,
       dataAccess: account.dataAccess, tenantId: account.tenantId, channel: 'chat' });
     governance.current().requestId = crypto.randomUUID();
-    const { memoryService } = require(path.join(root, 'src/backend/memory_core'));
-    const { core } = require(path.join(root, 'src/backend/intelligent_core'));
+    const { memoryService } = require(path.join(root, 'src/backend/memory'));
+    const { core } = require(path.join(root, 'src/backend/assistant'));
     const session = memoryService.normalizeSessionId(sessionId);
     const requestMemory = memoryService.requestView({ sessionId: session, accountId: account.id, question, history });
     const started = Date.now();
@@ -130,7 +130,7 @@ const quantile = (values, q) => { const sorted = values.filter(Number.isFinite).
   const account = await storage.run(() => structuredClone(storage.read('accounts.json', []).find(item => item.role === 'admin' && item.isActive !== false)), { files: ['accounts.json'] });
   if (!account) throw new Error('No active admin account for evaluation.');
   if (args.provider === 'local') {
-    const { isLocalProvider } = require(path.join(root, 'src/backend/agent_core/harness/provider_classifier'));
+    const { isLocalProvider } = require(path.join(root, 'src/backend/agent/harness/provider_classifier'));
     const local = (await storage.run(() => storage.read('ai_providers.json', []), { files: ['ai_providers.json'] }))
       .filter(item => isLocalProvider(item) && item.status !== 'unconfigured').sort((a, b) => Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)))[0];
     if (!local) throw new Error('No local provider configured.');

@@ -1,10 +1,10 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {partition}=require('../src/backend/agent_core/harness/result_grouping');
-const {buildSqlRowsFallbackReply}=require('../src/backend/agent_core/harness/grounded_reply');
+const {partition}=require('../src/backend/agent/harness/result_grouping');
+const {buildSqlRowsFallbackReply}=require('../src/backend/agent/harness/grounded_reply');
 test('conversational feedback referencing historical output never requires fresh business data',()=>{
- const resolver=require('../src/backend/memory_core/conversation_resolver');
+ const resolver=require('../src/backend/memory/conversation_resolver');
  const value=resolver.decode({content:JSON.stringify({relation:'followup',operation:'conversation',cardinality:'none',attributes:[],selectedIds:['d'],clarification:'',dataUse:'historical'})},[{id:'d',kind:'dataset',data:{table:'Employees'}}]);
  assert.equal(value.dataUse,'none');
 });
@@ -25,7 +25,7 @@ test('missing and ambiguous grouping fields fail closed; nulls and partial cover
  assert.match(reply,/Chưa xác định/);assert.match(reply,/chưa bao phủ toàn bộ/);
 });
 test('answer complaint stays on prior transcript and executes no schema or data tools',async()=>{
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
  let calls=0;
  const harness=new Harness({toolManager:{getToolDefinitions:()=>[]},dispatch:async(provider,messages,defs)=>{
   calls++;

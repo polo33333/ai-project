@@ -7,12 +7,12 @@ async function main(){
   const log=require('../src/backend/services/logger_service').chatHistory.find(x=>x.id==='8f448e9c-676e-4f49-82a8-9ee84b2d4f36');assert.ok(log);
   const evidence=Object.values(log.requestPayload.evidencePayloads).find(e=>e.rows);
   const provider=require('../src/backend/services/ai_provider_manager').getProviderForExecution(log.requestPayload.providerId);
-  const dispatch=(defs,messages)=>require('../src/backend/intelligent_core/adapters').dispatchToProvider({...provider,temperature:0.1},messages,defs,AbortSignal.timeout(45000));
-  const fields=await require('../src/backend/agent_core/harness/result_grouping').bind(['giới tính nv'],Object.values(evidence.displayNames),dispatch,log.question);
+  const dispatch=(defs,messages)=>require('../src/backend/assistant/adapters').dispatchToProvider({...provider,temperature:0.1},messages,defs,AbortSignal.timeout(45000));
+  const fields=await require('../src/backend/agent/harness/result_grouping').bind(['giới tính nv'],Object.values(evidence.displayNames),dispatch,log.question);
   assert.deepEqual(fields,['Giới tính']);
-  const rendered=require('../src/backend/agent_core/harness/grounded_reply').buildSqlRowsFallbackReply({result:evidence},{},{resultGroupBy:fields});
+  const rendered=require('../src/backend/agent/harness/grounded_reply').buildSqlRowsFallbackReply({result:evidence},{},{resultGroupBy:fields});
   assert.match(rendered,/\*\*Nam \(7\)\*\*/);assert.match(rendered,/\*\*Nữ \(2\)\*\*/);
-  const result=await new(require('../src/backend/agent_core/tools/builtins').ExportDataTool)().run({data:evidence.rows,format:'xlsx',filename:'Danh_sach_nhan_vien_tach_nhom_da_sua'}, {verifiedExport:{displayNames:evidence.displayNames,resultGroupBy:fields}});
+  const result=await new(require('../src/backend/agent/tools/builtins').ExportDataTool)().run({data:evidence.rows,format:'xlsx',filename:'Danh_sach_nhan_vien_tach_nhom_da_sua'}, {verifiedExport:{displayNames:evidence.displayNames,resultGroupBy:fields}});
   const file=path.join(require('../src/backend/utils/export_paths').getExportsDirectory(),result.fileName),XLSX=require('xlsx'),book=XLSX.readFile(file);
   assert.deepEqual(book.SheetNames,['Nam','Nữ']);
   for(const [name,count]of [['Nam',7],['Nữ',2]]) {

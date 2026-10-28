@@ -72,7 +72,7 @@ async function readApi(binding,state,signal) {
   const startedAt = Date.now();
   const dangerous = hasWriteEffect({ ...binding, type: 'api' });
   let dispatched = false;
-  const normalize = execution => require('../agent_core/tools/tool_result').createToolResult({
+  const normalize = execution => require('../agent/tools/tool_result').createToolResult({
     tool: 'http_api', durationMs: Date.now() - startedAt, ...execution
   }, {}, { isDangerous: dangerous });
   try {

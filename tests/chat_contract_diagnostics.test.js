@@ -2,9 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 test('missing contract fields stay in administrative diagnostics and outside reply text', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const BaseTool = require('../src/backend/agent_core/tools/base_tool');
-  const manager = new (require('../src/backend/agent_core/tools/tool_manager'))();
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const BaseTool = require('../src/backend/agent/tools/base_tool');
+  const manager = new (require('../src/backend/agent/tools/tool_manager'))();
   const search = new BaseTool({ name: 'search_schema', description: 'Schema', parameters: { type: 'object', properties: { query: { type: 'string' } } } });
   search.run = async () => ({ mode: 'data', selectedTables: ['records'], tables: [{ tableName: 'records', columns: [{ name: 'InternalTechnicalField', description: 'A required field' }] }] });
   manager.registerTool(search);
@@ -27,9 +27,9 @@ test('missing contract fields stay in administrative diagnostics and outside rep
 
 
 test('partial SQL evidence keeps completion failures in diagnostics without a chat warning', async () => {
-  const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const BaseTool=require('../src/backend/agent_core/tools/base_tool');
-  const manager=new (require('../src/backend/agent_core/tools/tool_manager'))();
+  const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+  const BaseTool=require('../src/backend/agent/tools/base_tool');
+  const manager=new (require('../src/backend/agent/tools/tool_manager'))();
   const add=(name,run)=>{const tool=new BaseTool({name,description:name,parameters:{type:'object',properties:{sql:{type:'string'},query:{type:'string'}}}});tool.run=run;manager.registerTool(tool);};
   add('list_workflows',async()=>({workflows:[]}));
   add('search_schema',async()=>({mode:'data',selectedTables:['records'],tables:[{tableName:'records',columns:[{name:'code'},{name:'dob',description:'Ngày sinh'}]}]}));

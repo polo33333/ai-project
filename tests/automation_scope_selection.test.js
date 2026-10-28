@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 test('collection requests reject targeted workflows while detail requests allow missing identifiers', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'selected', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definition = { id: 'contract/lookup', name: 'Lookup', description: 'Find contracts by number', inputs: { query: { required: true, label: 'Contract number', schema: { type: 'string' } } } };
@@ -18,7 +18,7 @@ test('collection requests reject targeted workflows while detail requests allow 
 
 test('abbreviated data requests cannot return a social reply', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'selected', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   t.mock.method(adapters, 'dispatchToProvider', async (_, messages) => ({ content: JSON.stringify(messages[0].content.startsWith('Independently verify') ? { social: false } : { intent: 'chat', chatKind: 'social', templateId: null, inputs: {}, replyText: 'Which employee?' }) }));

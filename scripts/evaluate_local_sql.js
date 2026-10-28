@@ -37,7 +37,7 @@ async function runLive(corpus, args, projectRoot) {
   const providerId = args.provider || process.env.LOCAL_SQL_EVAL_PROVIDER_ID;
   const dbSourceId = args.db || process.env.LOCAL_SQL_EVAL_DB_SOURCE_ID;
   if (!providerId || !dbSourceId) throw new Error('Live eval requires --provider and --db (or matching environment variables)');
-  const core = require('../src/backend/intelligent_core/core');
+  const core = require('../src/backend/assistant/core');
   const evaluations = [];
 
   for (let repetition = 1; repetition <= args.repetitions; repetition += 1) {

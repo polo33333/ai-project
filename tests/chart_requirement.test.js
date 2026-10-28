@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 test('chart/export requirement cannot be satisfied by a lookup workflow', async () => {
-  const { assess } = require('../src/backend/memory_core/workflow_suitability');
+  const { assess } = require('../src/backend/memory/workflow_suitability');
   let calls = 0;
   const dispatch = async () => { calls++; return { content: '{"suitable":true,"reason":"lookup"}' }; };
   for (const resolution of [{ operation: 'chart' }, { operation: 'aggregate', outputs: { chart: true } }, { operation: 'export' }])
@@ -9,7 +9,7 @@ test('chart/export requirement cannot be satisfied by a lookup workflow', async 
   assert.equal(calls, 0);
 });
 test('chart intent is retained after a general-mode conversation resolution', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
   const harness = new Harness({ toolManager: { getToolDefinitions: () => [] }, maxRepairs: 0,
     dispatch: async (provider, messages, definitions) => definitions.some(item => item.function?.name === 'resolve_conversation')
       ? { content: JSON.stringify({ relation: 'independent', sourceScope: 'enterprise', operation: 'chart', cardinality: 'collection', attributes: [], selectedIds: [], clarification: '', dataUse: 'current', presentation: 'chart' }) }
@@ -20,7 +20,7 @@ test('chart intent is retained after a general-mode conversation resolution', as
   assert.ok(result.trace.training.responseEvaluation.failures.includes('MISSING_CHART'));
 });
 test('derived monthly aggregate remains qualified and year/month chart labels are grounded', () => {
-  const { qualifiedSql, validateOutputData } = require('../src/backend/agent_core/harness/completion_policy');
+  const { qualifiedSql, validateOutputData } = require('../src/backend/agent/harness/completion_policy');
   const sql = 'SELECT Y, M, Qty FROM (SELECT YEAR(D) AS Y, MONTH(D) AS M, SUM(Q) AS Qty FROM TestRows GROUP BY YEAR(D), MONTH(D)) AS grouped ORDER BY Y,M';
   const call = { toolName: 'execute_sql_query', success: true, args: { sql }, result: { rows: [{ Y: 2024, M: 1, Qty: 12 }] } };
   assert.equal(qualifiedSql([call], { table: 'TestRows', conversationState: { operation: 'aggregate' } }).length, 1);
@@ -37,7 +37,7 @@ test('latest monthly buckets select descending then present chronologically with
   assert.ok(!result.sql.includes('*'));
 });
 test('backend plan execution is evidence, never a forged native provider function frame', () => {
-  const { wireMessages } = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const { wireMessages } = require('../src/backend/agent/harness/guarded_agent_harness');
   const messages = [{ role: 'assistant', backendGenerated: true, tool_calls: [{ id: 'backend', function: { name: 'execute_sql_query', arguments: '{}' } }] },
     { role: 'tool', tool_call_id: 'backend', name: 'execute_sql_query', content: '{"success":true}' },
     { role: 'assistant', tool_calls: [{ id: 'native' }], rawParts: [{ thoughtSignature: 'signed' }] },
@@ -48,7 +48,7 @@ test('backend plan execution is evidence, never a forged native provider functio
   assert.deepEqual(outgoing.slice(1), messages.slice(2));
 });
 test('monthly renderer binds exact SQL aggregates and chronological labels without model numbers', () => {
-  const { bindMonthly } = require('../src/backend/agent_core/harness/chart_evidence');
+  const { bindMonthly } = require('../src/backend/agent/harness/chart_evidence');
   const source = { args: { sql: 'SELECT DATEFROMPARTS(YEAR(D),MONTH(D),1) AS period, SUM(Q) AS Qty FROM TestRows GROUP BY DATEFROMPARTS(YEAR(D),MONTH(D),1)' },
     result: { rows: [{ period: new Date('2024-02-01'), Qty: 0 }, { period: new Date('2024-01-01'), Qty: 12 }] } };
   const bound = bindMonthly({ type: 'line', labels: ['wrong'], datasets: [{ label: 'Qty', data: [999] }] }, source);
@@ -58,8 +58,8 @@ test('monthly renderer binds exact SQL aggregates and chronological labels witho
   assert.equal(bindMonthly({ type: 'line' }, source), null);
 });
 test('chart output stage runs after agent round limit and discloses short coverage', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const ToolManager = require('../src/backend/agent_core/tools/tool_manager'), BaseTool = require('../src/backend/agent_core/tools/base_tool');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const ToolManager = require('../src/backend/agent/tools/tool_manager'), BaseTool = require('../src/backend/agent/tools/base_tool');
   const manager = new ToolManager();
   const sql = 'SELECT YEAR(D) AS Y, MONTH(D) AS M, SUM(Q) AS Qty FROM TestRows GROUP BY YEAR(D), MONTH(D)';
   const rows = [{ Y: 2024, M: 1, Qty: 12 }, { Y: 2024, M: 2, Qty: 15 }];

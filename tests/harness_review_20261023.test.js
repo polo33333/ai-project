@@ -4,12 +4,12 @@
 // into rejecting equivalent, correct SQL.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { bind, bindEach } = require('../src/backend/agent_core/harness/request_filters');
-const { matchesScope } = require('../src/backend/agent_core/harness/schema_scope');
-const { assessSqlEvidence, stableFingerprint, evaluateCompletion } = require('../src/backend/agent_core/harness/completion_policy');
-const { createRequestContract, assessRequestContract } = require('../src/backend/agent_core/harness/request_contract');
+const { bind, bindEach } = require('../src/backend/agent/harness/request_filters');
+const { matchesScope } = require('../src/backend/agent/harness/schema_scope');
+const { assessSqlEvidence, stableFingerprint, evaluateCompletion } = require('../src/backend/agent/harness/completion_policy');
+const { createRequestContract, assessRequestContract } = require('../src/backend/agent/harness/request_contract');
 const { validateSqlAgainstJoinPlan } = require('../src/backend/services/sql_join_validator');
-const answerStatus = require('../src/backend/agent_core/harness/answer_status');
+const answerStatus = require('../src/backend/agent/harness/answer_status');
 
 const tables = [{ tableName: 'Documents', schemaName: 'dbo', columns: [{ name: 'CycleID', type: 'INT' }] }];
 const question = 'Details for cycle 20';
@@ -80,7 +80,7 @@ test('F07: raw SQL reaching its TOP cap is partial unless the user asked for exa
   const original = connector.executeSqlQuery;
   connector.executeSqlQuery = async () => [{ ID: 1 }, { ID: 2 }];
   try {
-    const { ExecuteSqlTool } = require('../src/backend/agent_core/tools/builtins');
+    const { ExecuteSqlTool } = require('../src/backend/agent/tools/builtins');
     const run = (sql, requestPlan) => new ExecuteSqlTool().run({ sql }, { dbSourceId: 'synthetic', requestPlan });
     const capped = await run('SELECT TOP 2 ID FROM Documents');
     assert.equal(capped.hasMore, true);
@@ -116,9 +116,9 @@ test('F14: fallback reply states the action that can change the outcome', () => 
 });
 
 test('F05: a tool removed from the current stage is rejected at dispatch', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), executed = [];
   for (const name of ['list_workflows', 'search_schema', 'execute_sql_query']) {
     const tool = new Base({ name, description: name, parameters: { type: 'object', properties: { sql: { type: 'string' }, query: { type: 'string' } } } });

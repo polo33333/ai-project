@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { needsKnowledgeSearch } = require('../src/backend/intelligent_core/knowledge_intent');
+const { needsKnowledgeSearch } = require('../src/backend/assistant/knowledge_intent');
 
 const documents = [
   { id: 'smartca', title: 'Kịch bản tích hợp SmartCA v4.1.pdf' },

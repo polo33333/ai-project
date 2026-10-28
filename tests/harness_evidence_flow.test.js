@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-const Base = require('../src/backend/agent_core/tools/base_tool');
-const Manager = require('../src/backend/agent_core/tools/tool_manager');
+const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+const Base = require('../src/backend/agent/tools/base_tool');
+const Manager = require('../src/backend/agent/tools/tool_manager');
 const call = (name, args) => ({ tool_calls: [{ id: name, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
 function fixture(search) {
   const manager = new Manager();
@@ -56,7 +56,7 @@ test('schema lookup beyond the stage budget is rejected at dispatch, not silentl
 });
 
 test('additional schema repair is bounded and enabled only for unresolved criteria', () => {
-  const select = require('../src/backend/agent_core/harness/staged_tools').select;
+  const select = require('../src/backend/agent/harness/staged_tools').select;
   const definitions = ['search_schema', 'execute_sql_query'].map(name => ({ function: { name } }));
   const completed = ['list_workflows', 'search_schema', 'search_schema'];
   assert.ok(!select(definitions, { completed }).some(tool => tool.function.name === 'search_schema'));

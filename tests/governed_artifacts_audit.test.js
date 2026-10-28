@@ -6,7 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const context = require('../src/backend/governance/context');
 const artifacts = require('../src/backend/governance/artifacts');
-const { createAnswerEnvelope } = require('../src/backend/agent_core/harness/answer_envelope');
+const { createAnswerEnvelope } = require('../src/backend/agent/harness/answer_envelope');
 const safety = require('../src/backend/utils/export_safety');
 
 test('artifact ownership, expiration, missing metadata and path traversal fail closed', () => {

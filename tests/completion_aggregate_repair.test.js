@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { evaluateCompletion, qualifiedSql } = require('../src/backend/agent_core/harness/completion_policy');
+const { evaluateCompletion, qualifiedSql } = require('../src/backend/agent/harness/completion_policy');
 const plan = { table: 'Invoices', intent: 'aggregate', schemaColumns: ['Amount', 'CustomerID'],
   outputs: { data: true }, schemaScope: { filters: [] }, conversationState: { operation: 'aggregate' } };
 const executed = sql => ({ toolName: 'execute_sql_query', success: true, args: { sql }, result: { sql, rows: [{ Amount: 25 }] } });
@@ -28,7 +28,7 @@ test('out of scope SQL cannot become aggregate repair evidence', () => {
 });
 
 test('evidence assessment separates source, scope, plan and execution for every data domain', () => {
-  const { assessSqlEvidence } = require('../src/backend/agent_core/harness/completion_policy');
+  const { assessSqlEvidence } = require('../src/backend/agent/harness/completion_policy');
   for (const table of ['Invoices', 'Payroll', 'Warehouse']) {
     const scoped = { table, dbSourceId: 'allowed', schemaScope: { filters: [{ table, column: 'Category', value: 2 }] } };
     const valid = executed(`SELECT SUM(Amount) AS Amount FROM ${table} WHERE Category = 2`);

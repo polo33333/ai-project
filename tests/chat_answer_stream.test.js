@@ -33,8 +33,8 @@ test('business results, failed completions, cancellation and the feature flag ne
 });
 
 test('the guarded harness previews tool-free general answers but withholds data stages',async()=>{
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
- const Manager=require('../src/backend/agent_core/tools/tool_manager');
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+ const Manager=require('../src/backend/agent/tools/tool_manager');
  for(const mode of ['general','data']){
   const events=[];const stream=createAnswerStream(event=>events.push(event));
   const result=await new Harness({toolManager:new Manager(),dispatch:async(_provider,_messages,_tools,_signal,options)=>{
@@ -65,8 +65,8 @@ test('response scrolling follows delayed result growth and preserves an intentio
 });
 
 test('UI-style registered tools do not block a resolved general answer, and tool calls cancel the preview',async()=>{
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
- const Manager=require('../src/backend/agent_core/tools/tool_manager'),Base=require('../src/backend/agent_core/tools/base_tool');
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+ const Manager=require('../src/backend/agent/tools/tool_manager'),Base=require('../src/backend/agent/tools/base_tool');
  const manager=new Manager(),tool=new Base({name:'get_current_datetime',description:'Current time',parameters:{type:'object',properties:{}}});tool.run=async()=>{throw Error('Tool must not run for this explanation');};manager.registerTool(tool);
  for(const sourceScope of ['general','enterprise']){
   const events=[],stream=createAnswerStream(event=>events.push(event));let answered=false;
@@ -250,7 +250,7 @@ test('verification retains the same preview and emits only its missing tail',()=
 });
 
 test('core sends only verified successful final text and clears previews when the request fails',async t=>{
- const core=require('../src/backend/intelligent_core/core'),events=[];
+ const core=require('../src/backend/assistant/core'),events=[];
  t.mock.method(core,'_chat',async()=>({success:true,completionStatus:'SUCCESS',replyText:'Verified',toolCalls:[],trace:{completionStatus:'SUCCESS'}}));
  const result=await core.chat('test',{onAnswer:event=>events.push(event)});
  assert.ok(events.some(event=>event.type==='answer_delta'&&event.delta==='Verified'));
@@ -273,7 +273,7 @@ test('Gemini, OpenAI, Responses and Ollama publish answer deltas while their ups
    assert.equal(deltas[0],'Hello ',entry.name+' must emit before final upstream chunk');
    yield new TextEncoder().encode((entry.format==='sse'?'data: ':'')+JSON.stringify(entry.chunks[1])+(entry.format==='sse'?'\n\n':'\n'));
   })()}));
-  const result=await require('../src/backend/intelligent_core/adapters/'+entry.module)[entry.name]({model:'test',baseUrl:'https://fixture.test',supportsStreaming:true},[{role:'user',content:'hi'}],[],null,{onAnswer:delta=>deltas.push(delta)});
+  const result=await require('../src/backend/assistant/adapters/'+entry.module)[entry.name]({model:'test',baseUrl:'https://fixture.test',supportsStreaming:true},[{role:'user',content:'hi'}],[],null,{onAnswer:delta=>deltas.push(delta)});
   assert.equal(deltas.join(''),result.content);assert.ok(!deltas.includes('private'));
  }
 });

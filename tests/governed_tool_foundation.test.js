@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const BaseTool = require('../src/backend/agent_core/tools/base_tool');
-const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
+const BaseTool = require('../src/backend/agent/tools/base_tool');
+const ToolManager = require('../src/backend/agent/tools/tool_manager');
 class Probe extends BaseTool {
   constructor(options = {}) { super({ name: 'probe', description: 'Test adapter', ...options }); this.calls = 0; }
   async run(args, context) { this.calls++; return { args, cancelled: context.signal.aborted }; }

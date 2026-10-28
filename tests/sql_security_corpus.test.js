@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const guard = require('../src/backend/intelligent_core/security_guard');
+const guard = require('../src/backend/assistant/security_guard');
 
 const allowed = [
   'SELECT [Order ID] FROM [Sales Data]',

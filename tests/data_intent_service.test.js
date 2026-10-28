@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const dictionaryService = require('../src/backend/services/dictionary_service');
 const { withIdentity } = require('../src/backend/services/schema_identity');
 const { validateIntentPlan, validateSqlAgainstIntent } = require('../src/backend/services/data_intent_service');
-const { PlanDataQueryTool, ExecuteSqlTool } = require('../src/backend/agent_core/tools/builtins');
+const { PlanDataQueryTool, ExecuteSqlTool } = require('../src/backend/agent/tools/builtins');
 const sqlConnector = require('../src/backend/services/sql_connector');
 
 async function fixture(run) {

@@ -17,7 +17,7 @@ test('published executable steps establish report/chart/export capabilities with
   assert.deepEqual(capabilities.operations({ name: 'chart export', tags: ['biểu đồ'], output: { mapping: { chartCapability: true } } }), []);
 });
 test('workflow chooser keeps missing slots missing and never treats absent export as false', async () => {
-  const { choose } = require('../src/backend/memory_core/workflow_preference');
+  const { choose } = require('../src/backend/memory/workflow_preference');
   const d = report(), question = 'vẽ biểu đồ trong 7 tháng';
   const chosen = await choose(async () => ({ content: JSON.stringify({ templateId: d.id,
     inputs: { months: 7, drawChart: true, exportFile: false }, evidence: { months: '7', drawChart: 'vẽ biểu đồ' } }) }), question,
@@ -37,7 +37,7 @@ test('pending workflow accepts an explicit false answer and exposes only missing
     governance.setPrincipal({ subject: 'account:pending-owner', role: 'admin' });
     const pending = await tools.pendingInput({ session: { id: 'pending-chat', accountId: 'pending-owner' } });
     assert.deepEqual(Object.keys(pending.inputs), ['exportFile']);
-    const chosen = await require('../src/backend/memory_core/workflow_preference').choose(async (defs, messages) => {
+    const chosen = await require('../src/backend/memory/workflow_preference').choose(async (defs, messages) => {
       assert.match(messages.at(-2).content, /new business request/);
       return { content: JSON.stringify({ templateId: d.id, inputs: { exportFile: false, months: 2 }, evidence: { exportFile: 'không xuất file', months: 'không' } }) };
     }, 'không xuất file', [pending], true);
@@ -47,8 +47,8 @@ test('pending workflow accepts an explicit false answer and exposes only missing
 });
 test('matching workflow is preferred before SQL and unconfirmed boolean is left for runtime', async t => {
   const governance = require('../src/backend/governance/context'), automation = require('../src/backend/automation');
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager, d = report();
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager, d = report();
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));
   t.mock.method(automation.registry, 'list', async () => [d]);
   t.mock.method(automation.registry, 'getTemplate', async () => d);
@@ -79,8 +79,8 @@ test('matching workflow is preferred before SQL and unconfirmed boolean is left 
 });
 test('a failed workflow falls back to the data loop and is never retried in the same request', async t => {
   const governance = require('../src/backend/governance/context'), automation = require('../src/backend/automation');
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager = require('../src/backend/agent_core').defaultToolManager, d = report();
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager = require('../src/backend/agent').defaultToolManager, d = report();
   t.mock.method(automation, 'settings', async () => ({ enabled: true }));
   t.mock.method(automation.registry, 'list', async () => [d]);
   t.mock.method(automation.registry, 'getTemplate', async () => d);

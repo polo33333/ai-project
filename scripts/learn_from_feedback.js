@@ -1,6 +1,6 @@
 'use strict';
 
-// Feedback learning loop (src/backend/training_core/feedback_loop.js).
+// Feedback learning loop (src/backend/training/feedback_loop.js).
 //
 //   node scripts/learn_from_feedback.js build [--days 60]
 //   node scripts/learn_from_feedback.js approve <drafts.json>
@@ -19,7 +19,7 @@ const [command, file] = process.argv.slice(2).filter(value => !value.startsWith(
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, list) =>
   value.startsWith('--') ? [...pairs, [value.slice(2), list[index + 1]?.startsWith('--') ? true : list[index + 1] ?? true]] : pairs, []));
 const fixturePath = path.join(root, 'tests/fixtures/live_eval_cases.json');
-const learning = require(path.join(root, 'src/backend/training_core/feedback_loop'));
+const learning = require(path.join(root, 'src/backend/training/feedback_loop'));
 
 async function withStorage(action) {
   const storage = require(path.join(root, 'src/backend/storage'));
@@ -32,7 +32,7 @@ async function withStorage(action) {
 (async () => {
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
   if (command === 'build') {
-    const { parseTime } = require(path.join(root, 'src/backend/training_core/pipeline_metrics'));
+    const { parseTime } = require(path.join(root, 'src/backend/training/pipeline_metrics'));
     const since = Date.now() - (Number(args.days) || 60) * 86400000;
     const drafts = await withStorage(storage => {
       const history = storage.read('chat_history.json', []).filter(record => (parseTime(record.timestamp)?.getTime() || 0) >= since);
@@ -49,7 +49,7 @@ async function withStorage(action) {
   } else if (command === 'approve' && file) {
     const { drafts = [] } = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
     const result = await withStorage(storage => {
-      const validate = require(path.join(root, 'src/backend/agent_core/pipeline/contract_pipeline')).validateContract;
+      const validate = require(path.join(root, 'src/backend/agent/pipeline/contract_pipeline')).validateContract;
       const sources = storage.read('db_sources.json', []);
       const source = sources.find(item => item.isDefault);
       if (!source) throw new Error('No default SQL source');

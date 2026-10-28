@@ -22,7 +22,7 @@ function authorize(filename) {
   const record = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (record.owner !== actor.subject || record.expiresAt <= Date.now()) return reject();
   for (const ref of record.resources || []) {
-    const resource = ref.type === 'sql' ? require('../services/sql_connector').dbSources.find(item => item.id === ref.id) : require('../knowledge_core/services/library_service').findDocument(ref.id);
+    const resource = ref.type === 'sql' ? require('../services/sql_connector').dbSources.find(item => item.id === ref.id) : require('../knowledge/services/library_service').findDocument(ref.id);
     if (!resource || !governance.canRead(resource) || (resource.governedPolicy?.revision || 0) !== ref.revision) return reject();
   }
   return record;

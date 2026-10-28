@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const library = require('../src/backend/knowledge_core/services/library_service');
-const routes = require('../src/backend/knowledge_core/routes/document_routes');
+const library = require('../src/backend/knowledge/services/library_service');
+const routes = require('../src/backend/knowledge/routes/document_routes');
 
 function response() {
   return { writeHead(code) { this.code = code; }, end(body) { this.body = JSON.parse(body); } };

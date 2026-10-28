@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const core = require('../src/backend/intelligent_core/core');
+const core = require('../src/backend/assistant/core');
 const providers = require('../src/backend/services/ai_provider_manager');
-const schema = require('../src/backend/intelligent_core/schema_context_service');
+const schema = require('../src/backend/assistant/schema_context_service');
 const connector = require('../src/backend/services/sql_connector');
-const { trainingService } = require('../src/backend/training_core');
+const { trainingService } = require('../src/backend/training');
 const fixture = require('./fixtures/provider_raw_contract_chat.json');
 
 test('ordinary chat uses only the selected model without schema or document embedding', async t => {
@@ -13,7 +13,7 @@ test('ordinary chat uses only the selected model without schema or document embe
   t.mock.method(providers, 'getProviderForExecution', id => id === selected.id ? selected : null);
   t.mock.method(providers, 'getActiveProvider', () => ({ ...selected, id: 'other', model: 'other-model' }));
   const embeddings = t.mock.method(require('../src/backend/services/qdrant_service'), 'embedTexts', async () => { throw new Error('Embedding must not be called'); });
-  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
+  t.mock.method(require('../src/backend/knowledge/services/library_service'), 'getDocuments', () => []);
   const calls = [];
   t.mock.method(global, 'fetch', async (url, options) => {
     const request = JSON.parse(options.body);
@@ -95,12 +95,12 @@ test('web chat bypasses database schema retrieval before calling the cloud provi
 });
 
 test('selected knowledge bypasses workflow/schema and excludes old history even without hits', async t => {
-  const documents = require('../src/backend/knowledge_core/services/retrieval_service');
+  const documents = require('../src/backend/knowledge/services/retrieval_service');
   const selected = { id: 'knowledge-test', name: 'Knowledge', model: 'test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid', supportsToolCalling: true };
   t.mock.method(providers, 'getProviderForExecution', () => selected);
   t.mock.method(providers, 'getActiveProvider', () => selected);
   const schemaCalls = t.mock.method(schema, 'buildSchemaContext', async () => { throw new Error('No schema retrieval'); });
-  t.mock.method(require('../src/backend/knowledge_core/services/library_service'), 'getDocuments', () => []);
+  t.mock.method(require('../src/backend/knowledge/services/library_service'), 'getDocuments', () => []);
   let hits = [];
   let expectedSources;
   t.mock.method(documents, 'search', async (_, options) => {
@@ -109,7 +109,7 @@ test('selected knowledge bypasses workflow/schema and excludes old history even 
     return { results: hits, mode: 'hybrid' };
   });
   const requests = [];
-  t.mock.method(require('../src/backend/agent_core/harness/guarded_agent_harness').prototype, 'run', async request => {
+  t.mock.method(require('../src/backend/agent/harness/guarded_agent_harness').prototype, 'run', async request => {
     requests.push(request);
     return { replyText: 'Hướng dẫn tải app [1]', toolCalls: [], tokenUsage: { available: false } };
   });
@@ -132,9 +132,9 @@ test('selected knowledge bypasses workflow/schema and excludes old history even 
 });
 
 test('selected document follow-up persists ordered evidence and resolves it for retrieval and prompt', async t => {
-  const memory = require('../src/backend/memory_core').memoryService;
-  const library = require('../src/backend/knowledge_core/services/library_service');
-  const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+  const memory = require('../src/backend/memory').memoryService;
+  const library = require('../src/backend/knowledge/services/library_service');
+  const retrieval = require('../src/backend/knowledge/services/retrieval_service');
   const selected = { id: 'followup-test', name: 'Knowledge', model: 'test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
   t.mock.method(providers, 'getProviderForExecution', () => selected);
   t.mock.method(providers, 'getActiveProvider', () => selected);
@@ -147,7 +147,7 @@ test('selected document follow-up persists ordered evidence and resolves it for 
       fullText: 'Hồ sơ cần HD001 và HD002. Thiếu HD002 thì bổ sung.' } }], mode: 'hybrid' };
   });
   const requests = [];
-  t.mock.method(require('../src/backend/agent_core/harness/guarded_agent_harness').prototype, 'run', async request => {
+  t.mock.method(require('../src/backend/agent/harness/guarded_agent_harness').prototype, 'run', async request => {
     requests.push(request);
     return { replyText: requests.length === 1 ? '1. HD001 [1]\n2. HD002 [1]' : 'Thiếu HD002 thì bổ sung [1]',
       toolCalls: [], trace: { completionStatus: 'SUCCESS', training: { responseEvaluation: { valid: true } } } };
@@ -177,9 +177,9 @@ for (const pageInfo of [
   { pageCount: 12, pageCountSource: 'word_saved_metadata' }, null
 ]) {
 test(`document page-count follow-up resolves the actually cited document (${pageInfo?.pageCountSource || 'unknown'})`, async t => {
-  const memory = require('../src/backend/memory_core').memoryService;
-  const library = require('../src/backend/knowledge_core/services/library_service');
-  const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+  const memory = require('../src/backend/memory').memoryService;
+  const library = require('../src/backend/knowledge/services/library_service');
+  const retrieval = require('../src/backend/knowledge/services/retrieval_service');
   const provider = { id: 'doc-metadata-test', name: 'Knowledge', model: 'test', apiFormat: 'openai', executionClass: 'remote', baseUrl: 'https://chosen.invalid' };
   t.mock.method(providers, 'getProviderForExecution', () => provider);
   t.mock.method(providers, 'getActiveProvider', () => provider);
@@ -190,7 +190,7 @@ test(`document page-count follow-up resolves the actually cited document (${page
     documentId: document.id, title: document.title, revision: document.revision, chunkIndex: 0,
     chunkId: `${document.id}:${document.revision}:0`, fullText: 'Tải ứng dụng từ Google Play hoặc App Store.'
   } })), mode: 'hybrid' }));
-  const harness = t.mock.method(require('../src/backend/agent_core/harness/guarded_agent_harness').prototype, 'run', async () => ({
+  const harness = t.mock.method(require('../src/backend/agent/harness/guarded_agent_harness').prototype, 'run', async () => ({
     replyText: '1. Android:\n- Cài từ Google Play [1]\n2. iOS:\n- Cài từ App Store [1]', toolCalls: [],
     trace: { completionStatus: 'SUCCESS', training: { responseEvaluation: { valid: true } } }
   }));

@@ -233,7 +233,7 @@ class McpService {
     try { result = await this.executeValidatedSpec(spec, args, context); }
     catch (error) {
       if (error.name === 'AbortError') {
-        error.toolResult = require('../agent_core/tools/tool_result').createToolResult({ success: false,
+        error.toolResult = require('../agent/tools/tool_result').createToolResult({ success: false,
           tool: spec.name, outcome: 'cancelled', code: error.code || 'MCP_CANCELLED', error: error.message,
           effectState: preCancelled || spec.kind === 'resource' ? 'none' : 'unknown', durationMs: Date.now() - startedAt }, context);
         throw error;
@@ -245,7 +245,7 @@ class McpService {
     const execution = { ...result, tool: spec.name, success: result.success !== false,
       result: result.success === false ? null : result, durationMs: Date.now() - startedAt,
       effectState: result.effectState || (spec.kind === 'resource' ? 'none' : 'unknown') };
-    return { ...result, envelope: require('../agent_core/tools/tool_result').createToolResult(execution, context) };
+    return { ...result, envelope: require('../agent/tools/tool_result').createToolResult(execution, context) };
   }
 
   async executeValidatedSpec(spec, args = {}, context = {}) {

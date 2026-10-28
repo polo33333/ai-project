@@ -103,7 +103,7 @@ function expandStar(ast, scope, parser) {
 }
 
 function check(sql, source) {
-  const guard = require('../intelligent_core/security_guard');
+  const guard = require('../assistant/security_guard');
   const validation = guard.validateSqlQuery(sql);
   if (!validation.safe) throw Object.assign(new Error(validation.error), { code: 'SQL_READ_ONLY_DENIED', statusCode: 403 });
   const scope = scopes.forCurrent(source), sqlPolicy = scope.policy.sql;

@@ -1,10 +1,10 @@
 ﻿'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { callOllama } = require('../src/backend/intelligent_core/adapters/ollama');
-const { callOpenAI } = require('../src/backend/intelligent_core/adapters/openai');
-const { dispatchToProvider } = require('../src/backend/intelligent_core/adapters');
-const { callGemini } = require('../src/backend/intelligent_core/adapters/gemini');
+const { callOllama } = require('../src/backend/assistant/adapters/ollama');
+const { callOpenAI } = require('../src/backend/assistant/adapters/openai');
+const { dispatchToProvider } = require('../src/backend/assistant/adapters');
+const { callGemini } = require('../src/backend/assistant/adapters/gemini');
 function streamed(values, sse = false) {
   const text = values.map(value => sse ? `data: ${JSON.stringify(value)}\r\n\r\n` : JSON.stringify(value) + '\n').join('');
   const bytes = Buffer.from(text);

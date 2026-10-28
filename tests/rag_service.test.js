@@ -1,15 +1,15 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const rag = require('../src/backend/knowledge_core/rag');
-const { understand, stripCommand } = require('../src/backend/knowledge_core/rag/query');
-const { verifyClaims } = require('../src/backend/knowledge_core/rag/verify');
-const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
-const library = require('../src/backend/knowledge_core/services/library_service');
+const rag = require('../src/backend/knowledge/rag');
+const { understand, stripCommand } = require('../src/backend/knowledge/rag/query');
+const { verifyClaims } = require('../src/backend/knowledge/rag/verify');
+const retrieval = require('../src/backend/knowledge/services/retrieval_service');
+const library = require('../src/backend/knowledge/services/library_service');
 const qdrant = require('../src/backend/services/qdrant_service');
-const structured = require('../src/backend/knowledge_core/services/structured_document');
+const structured = require('../src/backend/knowledge/services/structured_document');
 const scoring = require('../scripts/eval/document_retrieval_scoring');
-const { computeMetrics } = require('../src/backend/training_core/pipeline_metrics');
+const { computeMetrics } = require('../src/backend/training/pipeline_metrics');
 
 const documents = [{ id: 'guide', title: 'TPSOFT_HDSD_IPMS_APP__v1.0.docx' }, { id: 'plan', title: 'Phase1_SQLServer_Connector_Plan.docx' }];
 
@@ -153,7 +153,7 @@ test('the knowledge base tool ranks passages of a named document instead of retu
   t.mock.method(library, 'getDocuments', () => documents);
   const retrieve = t.mock.method(rag, 'retrieve', async () => ({ mode: 'hybrid', understanding: { method: 'file_name', documentIds: ['guide'] },
     results: [{ score: 0.03, payload: { documentId: 'guide', chunkIndex: 13, title: documents[0].title, fullText: 'Thay đổi mật khẩu: Cài đặt → Thay đổi mật khẩu' } }] }));
-  const toolRegistry = require('../src/backend/intelligent_core/tool_registry');
+  const toolRegistry = require('../src/backend/assistant/tool_registry');
   const previous = { question: 'q', documentIds: ['guide'] };
   const result = await toolRegistry._searchKnowledgeBase({ query: 'TPSOFT_HDSD_IPMS_APP__v1.0.docx đổi mật khẩu' }, { ragPrevious: previous });
   assert.equal(result.success, true);
@@ -163,7 +163,7 @@ test('the knowledge base tool ranks passages of a named document instead of retu
 });
 
 test('v2 document answers search the contract query inside the previous documents and pack within the budget', async t => {
-  const memory = require('../src/backend/memory_core').memoryService;
+  const memory = require('../src/backend/memory').memoryService;
   t.mock.method(memory, 'getSession', () => ({ documentState: { accountId: 'owner', question: 'App IPMS có gì',
     updatedAt: new Date().toISOString(), sources: [{ documentId: 'guide' }] } }));
   t.mock.method(library, 'getChunks', () => []);
@@ -173,7 +173,7 @@ test('v2 document answers search the contract query inside the previous document
       { documentId: 'guide', chunkIndex: 10, source: 'Guide', text: 'Đường ống: xem chi tiết Đường ống dẫn khí.' }] } }; } };
   const steps = [];
   const toolCalls = [];
-  const result = await require('../src/backend/agent_core/pipeline/conversation_answer').searchDocuments({
+  const result = await require('../src/backend/agent/pipeline/conversation_answer').searchDocuments({
     question: 'phần đường ống thì sao', contract: { kind: 'document', documentQuery: 'chức năng đường ống trong app IPMS' },
     conversation: [{ role: 'system', content: 'persona' }], plan: { outputs: { data: false } },
     context: { session: { id: 's', accountId: 'owner' } }, toolManager, toolContext: { allowedToolNames: ['search_knowledge_base'] }, toolCalls,
@@ -221,7 +221,7 @@ test('pipeline metrics count document turns, citation repairs and degraded retri
 });
 
 test('grouped citation markers count as one marker per source', () => {
-  const citations = require('../src/backend/knowledge_core/services/citation_service');
+  const citations = require('../src/backend/knowledge/services/citation_service');
   assert.equal(citations.splitGroupedMarkers('Dùng Qdrant [1, 3, 4]. Xem thêm [2;5] và [6].'), 'Dùng Qdrant [1][3][4]. Xem thêm [2][5] và [6].');
   assert.deepEqual(citations.findMarkers('Dùng Qdrant [1, 3].'), [1, 3]);
   assert.equal(citations.splitGroupedMarkers('Mảng [1, 2](https://x)'), 'Mảng [1, 2](https://x)');
@@ -229,7 +229,7 @@ test('grouped citation markers count as one marker per source', () => {
 
 test('a v2 document answer with grouped markers is accepted without a repair call', async () => {
   const stages = [];
-  const result = await require('../src/backend/agent_core/pipeline/conversation_answer').documents({
+  const result = await require('../src/backend/agent/pipeline/conversation_answer').documents({
     conversation: [{ role: 'user', content: 'q' }], plan: { outputs: { data: false } },
     context: { knowledgeGrounding: { required: true }, citationEvidence: [{ citationIndex: 1 }, { citationIndex: 3 }] },
     dispatch: async (_tools, _messages, stage) => { stages.push(stage); return { content: 'KnowledgeHub dùng Qdrant [1, 3].' }; } });

@@ -68,13 +68,13 @@ test('explicit historical dates are preserved and leap/month/year boundaries use
 });
 
 test('SQL acceptance cannot override the request time guard at final completion', () => {
-  const { assessSqlEvidence } = require('../src/backend/agent_core/harness/completion_policy');
+  const { assessSqlEvidence } = require('../src/backend/agent/harness/completion_policy');
   const call = { toolName: 'execute_sql_query', success: true, result: { sql: sql('2023-10-27'), rows: [] } };
   assert.ok(assessSqlEvidence(call, { requestTime: clock.create('hiện tại hết hạn', now), temporalTables: tables }).failures.includes('TEMPORAL_REFERENCE_MISMATCH'));
 });
 
 test('known expired rows remain usable while an unspecified upcoming window stays incomplete', () => {
-  const { assessSqlEvidence, evaluateCompletion } = require('../src/backend/agent_core/harness/completion_policy');
+  const { assessSqlEvidence, evaluateCompletion } = require('../src/backend/agent/harness/completion_policy');
   const time = clock.create('hiện tại hết hạn hay sắp đến hạn', now, '');
   const plan = { outputs: { data: true }, requestTime: time, temporalTables: tables };
   const call = { toolName: 'execute_sql_query', success: true, result: { sql: sql(time.today), rows: [{ ID: 1, DueDate: '2025-12-31' }] } };
@@ -83,8 +83,8 @@ test('known expired rows remain usable while an unspecified upcoming window stay
 });
 
 test('both date tools use the same frozen request clock', async () => {
-  const registry = require('../src/backend/intelligent_core/tool_registry');
-  const { GetDateTimeTool, ResolveDateRangeTool } = require('../src/backend/agent_core/tools/builtins');
+  const registry = require('../src/backend/assistant/tool_registry');
+  const { GetDateTimeTool, ResolveDateRangeTool } = require('../src/backend/agent/tools/builtins');
   const context = { requestTime: clock.create('hôm nay', now) };
   const range = await new ResolveDateRangeTool().run({ unit: 'day' }, context);
   const date = await new GetDateTimeTool().run({}, context);
@@ -95,9 +95,9 @@ test('both date tools use the same frozen request clock', async () => {
 });
 
 test('harness blocks a stale current-date SQL before database execution and repairs using the request clock', async t => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
+  const Base = require('../src/backend/agent/tools/base_tool');
   const fixed = clock.create('hiện tại hết hạn', now);
   t.mock.method(clock, 'create', () => fixed);
   const manager = new Manager(), executed = [], requests = [];
@@ -124,9 +124,9 @@ test('harness blocks a stale current-date SQL before database execution and repa
 });
 
 test('temporal validation uses the final authorized schema after deferred date fields are exposed', async t => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
+  const Base = require('../src/backend/agent/tools/base_tool');
   const dictionary = require('../src/backend/services/dictionary_service');
   const fixed = clock.create('hiện tại hết hạn', now);
   t.mock.method(clock, 'create', () => fixed);

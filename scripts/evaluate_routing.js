@@ -61,8 +61,8 @@ function before(rows) {
 
 async function main() {
   const fixture = JSON.parse(fs.readFileSync(datasetPath, 'utf8'));
-  const { buildSchemaContext } = require('../src/backend/intelligent_core/schema_context_service');
-  const { documentSignal } = require('../src/backend/knowledge_core/rag/signal');
+  const { buildSchemaContext } = require('../src/backend/assistant/schema_context_service');
+  const { documentSignal } = require('../src/backend/knowledge/rag/signal');
   const rows = [];
   await documentSignal('khởi động');
   for (const item of fixture.cases) {
@@ -71,7 +71,7 @@ async function main() {
     rows.push({ id: item.id, category: item.category, route: item.route, accept: item.accept || [], query: item.query,
       gate: schema.mode === 'data' ? 'data' : 'general', signal });
   }
-  const chosen = Number(option('threshold') || require('../src/backend/knowledge_core/rag/signal').minScore());
+  const chosen = Number(option('threshold') || require('../src/backend/knowledge/rag/signal').minScore());
   const sweep = [0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7].map(threshold => ({ threshold, ...score(rows, threshold).summary }));
   const result = score(rows, chosen);
   const report = { generatedAt: new Date().toISOString(), dataset: path.relative(process.cwd(), datasetPath), fixtureStatus: fixture.status || null,

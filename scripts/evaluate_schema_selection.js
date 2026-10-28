@@ -11,7 +11,7 @@ const datasetPath = path.resolve(process.argv[2] || path.join(__dirname, '..', '
 
 // Mirrors the reduced copy the governed harness sends to the model (guarded_agent_harness.js, search_schema branch).
 function modelPayload(result) {
-  const { compactAgentToolResult } = require('../src/backend/agent_core/harness/agent_context');
+  const { compactAgentToolResult } = require('../src/backend/agent/harness/agent_context');
   return compactAgentToolResult('search_schema', { success: true, result: {
     contextRevision: result.contextRevision, metadataCacheHit: result.metadataCacheHit, mappedRelationships: result.mappedRelationships,
     tables: result.tables, selectedTables: result.selectedTables, dbSourceId: result.dbSourceId,
@@ -27,7 +27,7 @@ async function main({ prepare } = {}) {
   try {
     return await storage.run(async () => {
       if (prepare) await prepare();
-      const tools = require('../src/backend/intelligent_core/tool_registry');
+      const tools = require('../src/backend/assistant/tool_registry');
       const details = [];
       for (const item of cases) {
         const execution = await tools._searchSchema({ query: item.query, request: { operation: item.operation, attributes: [], presentation: 'table' } },

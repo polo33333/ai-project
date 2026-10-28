@@ -30,7 +30,7 @@ test('read-only policy rejects writes and unreviewed GET semantics regardless of
 test('direct API and legacy HTTP workflow paths cannot bypass the read-only gate', async () => {
   const api = require('../src/backend/automation/api_http');
   await assert.rejects(api.readApi({ url: 'https://example.invalid', method: 'POST' }, {}), { code: 'READ_ONLY_POLICY_DENIED' });
-  const { createStep } = require('../src/backend/agent_core/workflows/automation_steps');
+  const { createStep } = require('../src/backend/agent/workflows/automation_steps');
   const step = createStep({ id: 'write', type: 'http', config: { url: 'https://example.invalid', method: 'DELETE' } });
   await assert.rejects(step.execute({}, { permissions: ['admin'] }), { code: 'READ_ONLY_POLICY_DENIED' });
 });

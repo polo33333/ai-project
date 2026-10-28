@@ -9,9 +9,9 @@ test('original user role expands verified paths even when tool search omits the 
  const relation={id:'record-party',sourceTableId:tables[0].tableId,targetTableId:tables[1].tableId,sourceTable:'Records',targetTable:'Parties',isActive:true,status:'verified',cardinality:'many-to-one',businessRole:'Party',displayColumn:'PartyName',columnPairs:[{sourceColumn:'PartyID',targetColumn:'PartyID'}]};
  const dictionary=require('../src/backend/services/dictionary_service');
  t.mock.method(dictionary,'getGroupedTables',()=>tables);t.mock.method(dictionary,'getTableRelationships',()=>[relation]);t.mock.method(dictionary,'getGlossary',()=>[]);
- t.mock.method(require('../src/backend/intelligent_core/domain_alias_service'),'getDomainAliases',()=>({}));
+ t.mock.method(require('../src/backend/assistant/domain_alias_service'),'getDomainAliases',()=>({}));
  t.mock.method(require('../src/backend/services/embedding_policy'),'enabled',()=>false);
- const service=require('../src/backend/intelligent_core/schema_context_service');
+ const service=require('../src/backend/assistant/schema_context_service');
  const without=await service.buildSchemaContext('Records',{dbSourceId:'fixture',forceRetrieval:true,operation:'aggregate'});
  assert.deepEqual(without.selectedTables,['Records']);
  const expanded=await service.buildSchemaContext('Records',{dbSourceId:'fixture',forceRetrieval:true,operation:'aggregate',question:'Totals by Party'});

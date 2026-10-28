@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const dictionaryService = require('../src/backend/services/dictionary_service');
-const { createRequestPlan } = require('../src/backend/training_core/request_planner');
+const { createRequestPlan } = require('../src/backend/training/request_planner');
 
 test('batch table configuration saves column visibility and syncs once', async () => {
   const previousTables = dictionaryService.tablesStore;

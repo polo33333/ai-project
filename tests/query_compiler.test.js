@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { compile } = require('../src/backend/agent_core/pipeline/query_compiler');
-const { describe } = require('../src/backend/agent_core/pipeline/query_catalog');
+const { compile } = require('../src/backend/agent/pipeline/query_compiler');
+const { describe } = require('../src/backend/agent/pipeline/query_catalog');
 
 const columns = list => new Map(list.map(([name, type, label = '', pk = false]) => [name.toLowerCase(), { name, type, label, pk }]));
 const table = (tableName, cols, defaults = []) => [tableName.toLowerCase(), { tableId: `s::${tableName}`, tableName, schemaName: 'dbo', label: '', columns: columns(cols), defaults }];

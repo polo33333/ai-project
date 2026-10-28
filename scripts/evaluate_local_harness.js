@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { normalizeAssistantResponse } = require('../src/backend/agent_core/harness/tool_call_normalizer');
+const { normalizeAssistantResponse } = require('../src/backend/agent/harness/tool_call_normalizer');
 
 const fixturePath = path.join(__dirname, '../tests/fixtures/local_model_cases.json');
 const cases = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));

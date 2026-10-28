@@ -1,13 +1,13 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const scope = require('../src/backend/memory_core/result_scope');
-const { deriveReferences } = require('../src/backend/memory_core/reference_store');
-const { MemoryService } = require('../src/backend/memory_core/memory_service');
-const { fromPlan } = require('../src/backend/memory_core/business_state');
-const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-const Base = require('../src/backend/agent_core/tools/base_tool');
-const Manager = require('../src/backend/agent_core/tools/tool_manager');
+const scope = require('../src/backend/memory/result_scope');
+const { deriveReferences } = require('../src/backend/memory/reference_store');
+const { MemoryService } = require('../src/backend/memory/memory_service');
+const { fromPlan } = require('../src/backend/memory/business_state');
+const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+const Base = require('../src/backend/agent/tools/base_tool');
+const Manager = require('../src/backend/agent/tools/tool_manager');
 const toolCall = (name, args) => ({ tool_calls: [{ id: name, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
 
 for (const table of ['Contracts', 'Employees', 'Orders']) {
@@ -45,7 +45,7 @@ for (const table of ['Contracts', 'Employees', 'Orders']) {
 }
 
 test('explicit scope changes and independent topics do not inherit a frozen dataset', () => {
-  const { preserving, dependsOnPrevious } = require('../src/backend/memory_core/followup_policy');
+  const { preserving, dependsOnPrevious } = require('../src/backend/memory/followup_policy');
   assert.equal(preserving('filter again', { relation: 'followup', operation: 'list', scopeAction: 'revise' }), false);
   assert.equal(preserving('thêm tên cho ds trên', { relation: 'followup', operation: 'list', scopeAction: 'revise' }), true);
   assert.equal(preserving('list customers', { relation: 'independent', operation: 'list' }), false);
@@ -57,7 +57,7 @@ test('explicit scope changes and independent topics do not inherit a frozen data
   const projected = scope.project('SELECT ID FROM Records', reference, ['ID', 'EndDate']);
   assert.match(projected[0].sql, /EndDate/);
   assert.deepEqual(scope.assess({ args: { sql: projected[0].sql } }, reference), []);
-  assert.equal(require('../src/backend/memory_core/memory_sanitizer').sanitizeObject({ date: new Date('2026-10-23T00:00:00Z') }).date, '2026-10-23T00:00:00.000Z');
+  assert.equal(require('../src/backend/memory/memory_sanitizer').sanitizeObject({ date: new Date('2026-10-23T00:00:00Z') }).date, '2026-10-23T00:00:00.000Z');
   const union = scope.project("SELECT 'A' AS GroupLabel, ID, EndDate FROM Records WHERE ID = 1 UNION ALL SELECT 'B' AS GroupLabel, ID, EndDate FROM Records WHERE ID = 2", reference, ['ID', 'EndDate']);
   assert.doesNotMatch(union[0].sql, /UNION|GroupLabel/);
   assert.deepEqual(scope.assess({ args: { sql: union[0].sql } }, reference), []);
@@ -65,7 +65,7 @@ test('explicit scope changes and independent topics do not inherit a frozen data
     toolCalls: [{ toolName: 'execute_sql_query', success: true, result: { sql: 'SELECT ID FROM Records', rows: [{ ID: 1 }] } }] }).lastDataset;
   assert.equal(primary.datasets[0].identityComplete, true, 'Missing display/date fields must not disable primary-key verification');
   assert.deepEqual(primary.identityColumns, ['ID']);
-  const { validateCallAgainstPolicy } = require('../src/backend/agent_core/harness/local_execution_policy');
+  const { validateCallAgainstPolicy } = require('../src/backend/agent/harness/local_execution_policy');
   assert.equal(validateCallAgainstPolicy({ name: 'execute_sql_query', arguments: { sql: 'SELECT ID FROM Records' } },
     {}, { maxSqlCalls: 3 }, Array.from({ length: 3 }, () => ({ toolName: 'execute_sql_query', success: false, outcome: 'rejected', effectState: 'not_executed' }))).valid, true);
   assert.equal(validateCallAgainstPolicy({ name: 'execute_sql_query' }, {}, { maxSqlCalls: 3 },

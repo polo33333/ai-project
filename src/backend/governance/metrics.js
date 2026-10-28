@@ -90,7 +90,7 @@ async function execute(input, toolContext = {}) {
   if (candidates.length !== 1) throw fail(candidates.length ? 'METRIC_SOURCE_AMBIGUOUS' : 'METRIC_NOT_FOUND', 404);
   const metric = candidates[0], query = compile(metric, input), connector = require('../services/sql_connector');
   toolContext.executionBudget?.consumeSqlAttempt();
-  const rows = require('../intelligent_core/security_guard').sanitizeTabularRows(await connector.executeSqlQuery(query.sql, metric.sourceId, toolContext.signal, query.parameters));
+  const rows = require('../assistant/security_guard').sanitizeTabularRows(await connector.executeSqlQuery(query.sql, metric.sourceId, toolContext.signal, query.parameters));
   return { rows, rowCount: rows.length, sourceId: metric.sourceId, metricId: metric.metricId, metricVersion: metric.version,
     units: { value: metric.unit }, grain: input.dimensions?.length ? input.dimensions.join(',') : 'aggregate',
     timeRange: { start: input.start, end: input.end, endExclusive: true, timezone: metric.timezone },

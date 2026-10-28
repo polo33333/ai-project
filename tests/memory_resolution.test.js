@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const resolver = require('../src/backend/memory_core/conversation_resolver');
-const suitability = require('../src/backend/memory_core/workflow_suitability');
-const semantic = require('../src/backend/memory_core/semantic_recall');
+const resolver = require('../src/backend/memory/conversation_resolver');
+const suitability = require('../src/backend/memory/workflow_suitability');
+const semantic = require('../src/backend/memory/semantic_recall');
 const candidates = [{ id: 'e1', kind: 'entity', data: { key: { EmployeeCode: 'NV004' } } },
   { id: 'e2', kind: 'entity', data: { key: { EmployeeCode: 'NV007' } } },
   { id: 'p1', kind: 'preference', data: { content: 'Vietnamese' } }];
@@ -124,7 +124,7 @@ test('revoked events after embedding are never returned', async () => {
 });
 
 test('shared harness selects permitted memory but cannot claim an unqueried address from it', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
   let calls = 0;
   const harness = new Harness({ toolManager: { getToolDefinitions: () => [] }, dispatch: async (provider, messages, defs) => {
     calls++;
@@ -146,7 +146,7 @@ test('shared harness selects permitted memory but cannot claim an unqueried addr
   assert.equal(value.trace.steps.find(step => step.type === 'MODEL_USAGE').stage, 'memory_resolution');
 });
 test('ambiguous resolver stops shared harness before any business tool or second model call', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
   let calls = 0;
   const harness = new Harness({ toolManager: { getToolDefinitions: () => [] }, dispatch: async () => {
     calls++; return response(result({ relation: 'ambiguous', selectedIds: [], clarification: 'Which employee code?' }));
@@ -157,7 +157,7 @@ test('ambiguous resolver stops shared harness before any business tool or second
   assert.equal(calls, 1); assert.equal(value.replyText, 'Which employee code?'); assert.deepEqual(value.toolCalls, []);
 });
 test('resolver failure does not block a self-contained current request or reuse stale memory', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
   let calls = 0;
   const memoryDecision = { mode: 'reference', reference: { data: { runId: 'stale-run' } } };
   const harness = new Harness({ toolManager: { getToolDefinitions: () => [] }, dispatch: async (provider, messages, defs) => {
@@ -175,7 +175,7 @@ test('resolver failure does not block a self-contained current request or reuse 
   assert.equal(diagnostics.steps.find(step => step.type === 'MEMORY_RESOLUTION_REJECTED').code, 'MEMORY_RESOLUTION_UNKNOWN_ID');
 });
 test('current entity lookup cannot pass completion using memory alone', async () => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
   const harness = new Harness({ maxIterations: 1, maxRepairs: 0, toolManager: { getToolDefinitions: () => [] },
     dispatch: async (provider, messages, defs) => defs[0]?.function.name === 'resolve_conversation'
       ? response(result({ operation: 'detail', dataUse: 'current' })) : { content: 'An employee profile copied from memory.' } });
@@ -188,7 +188,7 @@ test('current entity lookup cannot pass completion using memory alone', async ()
 });
 
 test('structured session retains multiple verified identities and excludes expired references', () => {
-  const { MemoryService } = require('../src/backend/memory_core/memory_service');
+  const { MemoryService } = require('../src/backend/memory/memory_service');
   const service = new MemoryService({ store: { sessions: {} }, save() {} });
   const session = service.getSession('resolve-session', true, 'owner');
   for (const code of ['NV004', 'NV007']) {

@@ -6,7 +6,7 @@ async function main(){
  try{
   const [tables,relations,sync]=await Promise.all(['/api/dictionary','/api/dictionary/relationships','/api/dictionary/sync-status'].map(async p=>{const r=await fetch(b+p,{headers});if(!r.ok)throw Error(p+' '+r.status);return r.json()}));
   const active=tables.filter(t=>t.isActive&&t.dbSourceId==='db-src-1785684548077');
-  const customer=active.find(t=>t.tableName==='M_Customer'),project=require('../src/backend/services/semantic_model').project,compact=require('../src/backend/agent_core/harness/agent_context').compactAgentToolResult;
+  const customer=active.find(t=>t.tableName==='M_Customer'),project=require('../src/backend/services/semantic_model').project,compact=require('../src/backend/agent/harness/agent_context').compactAgentToolResult;
   const complete=project([customer],{operation:'describe',attributes:[]}).tables,summary=project([customer],{operation:'list',attributes:[]}).tables;
   const result={activeTables:active.length,classified:active.filter(t=>t.domain).length,domainCount:new Set(active.map(t=>t.domain)).size,
    verifiedRelationships:relations.filter(r=>r.status==='verified').length,sync,

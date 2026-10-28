@@ -2,9 +2,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const dictionary = require('../src/backend/services/dictionary_service');
-const aliases = require('../src/backend/intelligent_core/domain_alias_service');
+const aliases = require('../src/backend/assistant/domain_alias_service');
 const qdrant = require('../src/backend/services/qdrant_service');
-const { explicitListTable, buildSchemaContext } = require('../src/backend/intelligent_core/schema_context_service');
+const { explicitListTable, buildSchemaContext } = require('../src/backend/assistant/schema_context_service');
 const { withIdentity } = require('../src/backend/services/schema_identity');
 
 function setup(t) {

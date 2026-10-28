@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { callOllama } = require('../src/backend/intelligent_core/adapters/ollama');
+const { callOllama } = require('../src/backend/assistant/adapters/ollama');
 
 test('Ollama routing requests use JSON mode without changing ordinary chat requests', async t => {
   const bodies = [];

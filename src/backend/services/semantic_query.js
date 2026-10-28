@@ -107,7 +107,7 @@ function compile(input,tables,scope={},contract=null,requestTime=null) {
   if(value&&typeof value==='object'){
    const column=visible.find(column=>column.columnName===f.column);
    if(!['date','datetime','datetime2','smalldatetime','datetimeoffset'].includes(String(column.dataType).toLowerCase())||!['eq','gte','lt'].includes(f.operator))throw fail('SEMANTIC_DATE_FILTER_INVALID');
-   const anchor=value.anchorDate==='today' ? requestTime?.today || require('../agent_core/tools/date_range').resolve({unit:'day'}).start : value.anchorDate;
+   const anchor=value.anchorDate==='today' ? requestTime?.today || require('../agent/tools/date_range').resolve({unit:'day'}).start : value.anchorDate;
    if(requestTime?.relative && !requestTime.allowedDates.includes(anchor))throw fail('TEMPORAL_REFERENCE_MISMATCH');
    if(requestTime?.needsHorizon && value.offsetDays>0)throw fail('TEMPORAL_HORIZON_REQUIRED');
    const date=new Date(anchor+'T00:00:00.000Z');

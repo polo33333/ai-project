@@ -3,12 +3,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const XLSX = require('xlsx');
-const library = require('../src/backend/knowledge_core/services/library_service');
-const retrieval = require('../src/backend/knowledge_core/services/retrieval_service');
+const library = require('../src/backend/knowledge/services/library_service');
+const retrieval = require('../src/backend/knowledge/services/retrieval_service');
 const qdrant = require('../src/backend/services/qdrant_service');
-const structured = require('../src/backend/knowledge_core/services/structured_document');
-const citations = require('../src/backend/knowledge_core/services/citation_service');
-const conversation = require('../src/backend/memory_core/document_conversation');
+const structured = require('../src/backend/knowledge/services/structured_document');
+const citations = require('../src/backend/knowledge/services/citation_service');
+const conversation = require('../src/backend/memory/document_conversation');
 const normalize = require('../src/backend/utils/lexical_normalize');
 
 test('Vietnamese BM25 matches accented/unaccented queries without truncating đ/Đ', () => {

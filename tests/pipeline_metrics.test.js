@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { computeMetrics, parseTime } = require('../src/backend/training_core/pipeline_metrics');
-const { selectCandidates, promote } = require('../src/backend/training_core/golden_candidates');
+const { computeMetrics, parseTime } = require('../src/backend/training/pipeline_metrics');
+const { selectCandidates, promote } = require('../src/backend/training/golden_candidates');
 
 const usage = (stage, inputTokens, cachedInputTokens = 0) => ({ type: 'MODEL_USAGE', stage, calls: 1, inputTokens, cachedInputTokens });
 const record = (id, timestamp, status, diagnostics = {}, extra = {}) => ({ id, timestamp, status, question: `q-${id}`, replyText: `r-${id}`, latencyMs: 1000,

@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const providerManager = require('../src/backend/services/ai_provider_manager');
-const { callOllama } = require('../src/backend/intelligent_core/adapters/ollama');
+const { callOllama } = require('../src/backend/assistant/adapters/ollama');
 
 const base = { name: 'Local', type: 'Ollama (Local)', apiFormat: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen3.5:9b' };
 

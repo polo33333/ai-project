@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const securityGuard = require('../src/backend/intelligent_core/security_guard');
+const securityGuard = require('../src/backend/assistant/security_guard');
 
 test('SQL WHERE preserves Vietnamese lookup codes as Unicode literals', () => {
   const sql = "SELECT ContractNo AS 'Số HĐ' FROM T_Contract WHERE ContractNo = '02/HĐTQSDĐ.LG.2010'";

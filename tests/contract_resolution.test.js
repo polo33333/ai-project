@@ -11,9 +11,9 @@ async function runFallback(t, contract, question) {
   const table = { tableId: 's::T', tableName: 'T', schemaName: 'dbo', dbSourceId: 's', isActive: true, columns: [{ columnName: 'ID', dataType: 'INT', isPrimaryKey: true }] };
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [table]);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => []);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager();
   for (const name of ['search_schema', 'execute_sql_query']) {
     const tool = new Base({ name, description: name, parameters: { type: 'object' } });

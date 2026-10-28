@@ -1,5 +1,5 @@
 'use strict';
-const {partition}=require('../agent_core/harness/result_grouping');
+const {partition}=require('../agent/harness/result_grouping');
 const {safeRows}=require('./export_safety');
 function prepare(rows, metadata={}) {
   const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))], used=new Set();

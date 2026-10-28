@@ -5,10 +5,10 @@
 // tool applies the same conditions.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const catalogApi = require('../src/backend/agent_core/pipeline/query_catalog');
-const { compile, metricRoot } = require('../src/backend/agent_core/pipeline/query_compiler');
+const catalogApi = require('../src/backend/agent/pipeline/query_catalog');
+const { compile, metricRoot } = require('../src/backend/agent/pipeline/query_compiler');
 const governed = require('../src/backend/governance/metrics');
-const { computeMetrics } = require('../src/backend/training_core/pipeline_metrics');
+const { computeMetrics } = require('../src/backend/training/pipeline_metrics');
 
 const column = (columnName, dataType, displayName = '', isPrimaryKey = false) => ({ columnName, dataType, displayName, isPrimaryKey });
 const tables = [
@@ -102,9 +102,9 @@ async function runV2(t, contract) {
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => tables);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => [relation]);
   t.mock.method(governed, 'list', () => definitions);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), queries = [], prompts = [];
   const register = (name, handler) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = handler; manager.registerTool(tool); };
   register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['T_ElectricityOutput'],

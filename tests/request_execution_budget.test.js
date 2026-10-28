@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
+const { RequestExecutionBudget } = require('../src/backend/agent/harness/request_execution_budget');
 
 test('request budget counts model and SQL attempts independently', () => {
   const budget = new RequestExecutionBudget({ timeoutMs: 10000, maxModelCalls: 2, maxSqlAttempts: 1 });

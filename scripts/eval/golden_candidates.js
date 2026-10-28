@@ -18,7 +18,7 @@ const [command, file] = process.argv.slice(2).filter(value => !value.startsWith(
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, list) =>
   value.startsWith('--') ? [...pairs, [value.slice(2), list[index + 1]?.startsWith('--') ? true : list[index + 1] ?? true]] : pairs, []));
 const fixturePath = path.join(root, 'tests/fixtures/live_eval_cases.json');
-const { selectCandidates, promote } = require(path.join(root, 'src/backend/training_core/golden_candidates'));
+const { selectCandidates, promote } = require(path.join(root, 'src/backend/training/golden_candidates'));
 
 async function readStores(files) {
   const storage = require(path.join(root, 'src/backend/storage'));
@@ -33,7 +33,7 @@ async function readStores(files) {
   if (command === 'build') {
     const [history, feedback] = await readStores(['chat_history.json', 'chat_feedback.json']);
     const days = Number(args.days) || 60;
-    const { parseTime } = require(path.join(root, 'src/backend/training_core/pipeline_metrics'));
+    const { parseTime } = require(path.join(root, 'src/backend/training/pipeline_metrics'));
     const since = Date.now() - days * 86400000;
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     const candidates = selectCandidates(history.filter(record => (parseTime(record.timestamp)?.getTime() || 0) >= since), {

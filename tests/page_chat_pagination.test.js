@@ -40,7 +40,7 @@ function fixture(options={}) {
     if(name.endsWith('/pool')) return {transaction:async(_,fn)=>fn(pool)};
     if(name.endsWith('/crypto')) return {encrypt:value=>structuredClone(value),decrypt:value=>structuredClone(value)};
     if(name==='./ai_provider_manager') return {getActiveProvider:()=>({id:'p',model:'test'}),getProviderForExecution:()=>({id:'p',model:'test'})};
-    if(name==='../intelligent_core/adapters') return {dispatchToProvider:options.dispatch || (async()=>({content:'Summary'}))};
+    if(name==='../assistant/adapters') return {dispatchToProvider:options.dispatch || (async()=>({content:'Summary'}))};
     throw new Error(name);
   }});
   return module.exports;

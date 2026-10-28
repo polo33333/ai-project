@@ -126,7 +126,7 @@ class AutomationRuntime {
     const governance=require('../governance/context'), principal=governance.current()&&governance.principal();
     const visible=run=>!principal||principal.role==='admin'||Object.values(run.definition.bindings||{}).every(binding=>{
       if(binding.dbSourceId){const source=require('../services/sql_connector').dbSources.find(s=>s.id===binding.dbSourceId);return source&&governance.canRead(source,'sql');}
-      if(binding.documentId){const document=require('../knowledge_core/services/library_service').documents.find(d=>d.id===binding.documentId);return document&&governance.canRead(document,'document');}
+      if(binding.documentId){const document=require('../knowledge/services/library_service').documents.find(d=>d.id===binding.documentId);return document&&governance.canRead(document,'document');}
       return true;
     });
     return (await this.repository.list('runs', { ownerId: this.owner(context), conversationId })).filter(visible).slice(0, 100).map(run => this.view(run));
@@ -331,7 +331,7 @@ class AutomationRuntime {
       if (fresh?.status === 'RUNNING' && fresh.lease?.token === token) {
         fresh.status = writeMayHaveOccurred ? 'NEEDS_REVIEW' : 'FAILED';
         fresh.error = writeMayHaveOccurred ? 'API ghi đã trả kết quả nhưng chưa lưu được receipt. Kiểm tra hệ thống đích trước khi chạy lại.'
-          : require('../intelligent_core/security_guard').maskSensitiveData(failure.message).slice(0, 400);
+          : require('../assistant/security_guard').maskSensitiveData(failure.message).slice(0, 400);
         fresh.lease = null; event(fresh, writeMayHaveOccurred ? 'needs_review' : 'failed');
         await this.repository.put('runs', fresh, fresh.revision);
       }
@@ -341,7 +341,7 @@ class AutomationRuntime {
     let rows = resolve(step.config.data, state);
     ensure(Array.isArray(rows), 'Dữ liệu xuất cần là danh sách.');
     if (!rows.length) return { empty: true, filename: null };
-    rows = require('../utils/export_safety').safeRows(require('../intelligent_core/security_guard').sanitizeTabularRows(rows));
+    rows = require('../utils/export_safety').safeRows(require('../assistant/security_guard').sanitizeTabularRows(rows));
     const format = resolve(step.config.format || 'csv', state); ensure(['csv', 'xlsx'].includes(format), 'Định dạng file chưa hỗ trợ.');
     const artifactId = crypto.randomUUID(), filename = `${String(resolve(step.config.filename || 'Bao_cao', state)).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 70)}.${format}`;
     const directory = path.join(getExportsDirectory(), 'automation'); fs.mkdirSync(directory, { recursive: true });

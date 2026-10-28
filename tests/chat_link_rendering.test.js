@@ -20,7 +20,7 @@ test('internal paths are hidden while application download links remain', () => 
   assert.doesNotMatch(html,/file:|AppData|api_uploads|C:\//i);
   for(const path of ['C:\\Users\\Admin\\secret.txt','/home/admin/secret.txt','\\\\server\\share\\secret.txt']) {
     assert.doesNotMatch(parseInline(path),/secret\.txt|admin|server/i);
-    assert.doesNotMatch(require('../src/backend/intelligent_core/security_guard').maskSensitiveData(path),/secret\.txt|admin|server/i);
+    assert.doesNotMatch(require('../src/backend/assistant/security_guard').maskSensitiveData(path),/secret\.txt|admin|server/i);
   }
 });
 

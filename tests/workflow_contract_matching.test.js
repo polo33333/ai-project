@@ -4,8 +4,8 @@
 // spend a model call on the suitability assessment.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assess } = require('../src/backend/memory_core/workflow_suitability');
-const { describeWorkflows } = require('../src/backend/agent_core/pipeline/contract_pipeline');
+const { assess } = require('../src/backend/memory/workflow_suitability');
+const { describeWorkflows } = require('../src/backend/agent/pipeline/contract_pipeline');
 
 const lookup = { id: 'employee/details', name: 'Chi tiết nhân viên', inputs: { query: { schema: { type: 'string' } } },
   bindings: { lookup: { dbSourceId: 's', sql: 'SELECT e.EmployeeName FROM dbo.M_Employee e WHERE e.EmployeeCode = @query OR e.EmployeeName = @query',

@@ -2,7 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {normalize,withHandoff}=require('../src/backend/services/chat_request_context');
-const {createRequestPlan}=require('../src/backend/training_core/request_planner');
+const {createRequestPlan}=require('../src/backend/training/request_planner');
 const context='Công việc cũ: vẽ biểu đồ sản lượng điện 12 tháng, xuất file Excel. Nhân viên NV007 đã từng được nhắc đến.';
 const legacy=question=>'Ngữ cảnh bàn giao từ hội thoại trước:\n'+context+'\n\nCâu hỏi hiện tại:\n'+question;
 test('new handoff stays separate from current lookup requirements',()=> {

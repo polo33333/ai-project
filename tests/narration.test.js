@@ -3,7 +3,7 @@
 // appears in the rows the user sees.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { narrate, verify, eligible } = require('../src/backend/agent_core/pipeline/narration');
+const { narrate, verify, eligible } = require('../src/backend/agent/pipeline/narration');
 
 const compiled = { operation: 'aggregate', analysis: 'none', scope: ['Ngày chứng từ: 01/02/2024 – trước 01/03/2024'],
   outputs: [{ alias: 'Khách hàng', kind: 'dimension' }, { alias: 'Tổng tiền', kind: 'measure' }] };

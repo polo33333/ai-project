@@ -21,18 +21,18 @@ const authService = require('../services/auth_service');
 const settingsService = require('../services/settings_service').createSettingsService();
 const backupAdmin = require('../services/backup_admin_service');
 const embedChatService = require('../services/embed_chat_service');
-const { memoryService: conversationMemoryService } = require('../memory_core');
-const knowledgeCore = require('../knowledge_core');
+const { memoryService: conversationMemoryService } = require('../memory');
+const knowledgeCore = require('../knowledge');
 const { selectUserFacingSqlExecutions } = require('../utils/chat_result_selector');
-const { buildTrainingReport } = require('../training_core');
-const trainingResolutionService = require('../training_core/resolution_service');
-const skillCore = require('../skill_core');
-const domainAliasService = require('../intelligent_core/domain_alias_service');
+const { buildTrainingReport } = require('../training');
+const trainingResolutionService = require('../training/resolution_service');
+const skillCore = require('../skills');
+const domainAliasService = require('../assistant/domain_alias_service');
 const crypto = require('crypto');
 const { buildChatDiagnostics } = require('../utils/chat_diagnostics');
 
-// ── Intelligent Core (src/backend/intelligent_core/) ──────────────────────────
-const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } = require('../intelligent_core');
+// ── Assistant (src/backend/assistant/) ──────────────────────────
+const { core: intelligentCore, personaService: aiPersonaService, toolRegistry } = require('../assistant');
 
 
 const FRONTEND_DIR = path.join(__dirname, '../../frontend');
@@ -239,7 +239,7 @@ function buildChatClientPayload(coreResult, execMs, auditId = null) {
     durationMs: Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null
   }));
   return {
-    answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(coreResult),
+    answerEnvelope: require('../agent/harness/answer_envelope').createAnswerEnvelope(coreResult),
     retryDisposition: require('../services/chat_retry_policy').disposition(coreResult),
     status: coreResult.success ? 'success' : 'error', completionStatus: coreResult.trace?.completionStatus || (coreResult.success ? 'PARTIAL' : 'ERROR'), reply: coreResult.replyText, generatedSql, toolResult, sqlExecutions, chartSpec, downloadUrl, toolCalls,
     executionTime: `${execMs}ms`, executionMode: coreResult.executionMode, auditId, tokenUsage: coreResult.tokenUsage || null,
@@ -503,7 +503,7 @@ async function handleGovernedRequest(req, res) {
 
   if (await require('../automation/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
   if (await require('../governance/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
-  if (await require('../memory_core/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
+  if (await require('../memory/routes').handle(req, res, pathname, currentAccount, readJsonBody)) return;
 
   if (pathname === '/api/accounts' || pathname.startsWith('/api/accounts/')) {
     res.setHeader('Cache-Control', 'no-store');
@@ -525,7 +525,7 @@ async function handleGovernedRequest(req, res) {
       if (pathname === '/api/accounts/roles' && req.method === 'GET') {
         const roles=require('../services/account_roles');
         res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
-        res.end(JSON.stringify({roles:roles.list(),capabilities:roles.capabilities,functionGroups:require('../services/account_function_groups').list(),resources:{sql:sqlConnector.dbSources.map(s=>({id:s.id,name:s.name||s.dbName||s.id})),documents:require('../knowledge_core/services/library_service').documents.map(d=>({id:d.id,name:d.title||d.id}))}})); return;
+        res.end(JSON.stringify({roles:roles.list(),capabilities:roles.capabilities,functionGroups:require('../services/account_function_groups').list(),resources:{sql:sqlConnector.dbSources.map(s=>({id:s.id,name:s.name||s.dbName||s.id})),documents:require('../knowledge/services/library_service').documents.map(d=>({id:d.id,name:d.title||d.id}))}})); return;
       }
       const roleMatch=pathname.match(/^\/api\/accounts\/roles(?:\/([^/]+))?$/);
       if (roleMatch && roleMatch[1] && req.method==='DELETE') {
@@ -954,7 +954,7 @@ async function handleGovernedRequest(req, res) {
       const { tableIds, dbSourceId, question } = await readJsonBody(req);
       let result;
       if (String(question || '').trim()) {
-        const schemaContextService = require('../intelligent_core/schema_context_service');
+        const schemaContextService = require('../assistant/schema_context_service');
         const source = dbSourceId ? sqlConnector.getDbSources().find(item => item.id === dbSourceId) : sqlConnector.getDefaultDbSource();
         const selection = await schemaContextService.buildSchemaContext(question, { dbSourceId: source?.id || null, dbName: source?.dbName || null });
         result = selection.joinPlan || { outcome: 'no_path', reason: 'Câu hỏi không xác định được ít nhất hai bảng có quan hệ.' };
@@ -1121,7 +1121,7 @@ async function handleGovernedRequest(req, res) {
     return;
   }
 
-  // Knowledge Core: Library, Watch Folder and the shared ingestion pipeline.
+  // Knowledge: Library, Watch Folder and the shared ingestion pipeline.
   if (await knowledgeCore.handleRequest(req, res, pathname, {
     readJsonBody,
     logger: loggerService
@@ -1496,7 +1496,7 @@ async function handleGovernedRequest(req, res) {
     return;
   }
 
-  // Intelligent Core Chat API — Real Agentic Loop (LLM + Tool Calling + SQL DB)
+  // Assistant Chat API — Real Agentic Loop (LLM + Tool Calling + SQL DB)
   if (pathname === '/api/intelligent-core/chat' && req.method === 'POST') {
     const startTime = Date.now();
     let auditQuestionText = 'N/A';
@@ -1674,7 +1674,7 @@ async function handleGovernedRequest(req, res) {
         reply: coreResult.replyText,
         completionStatus: coreResult.trace?.completionStatus || 'PARTIAL',
         generatedSql,
-        answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(coreResult),
+        answerEnvelope: require('../agent/harness/answer_envelope').createAnswerEnvelope(coreResult),
         toolResult,
         sqlExecutions,
         chartSpec,
@@ -2021,7 +2021,7 @@ async function handleGovernedRequest(req, res) {
     return;
   }
 
-  // ── Intelligent Core: Main Chat API ───────────────────────────────────────
+  // ── Assistant: Main Chat API ───────────────────────────────────────
   if (pathname === '/api/chat' && req.method === 'POST') {
     const startTime = Date.now();
     try {
@@ -2198,7 +2198,7 @@ async function handleGovernedRequest(req, res) {
           total_tokens: userPrompt.length + (result.replyText || '').length
         },
         sqlResult: result.executionResult || null,
-        answerEnvelope: require('../agent_core/harness/answer_envelope').createAnswerEnvelope(result),
+        answerEnvelope: require('../agent/harness/answer_envelope').createAnswerEnvelope(result),
         execution: result.execution || null,
         completionStatus: result.trace?.completionStatus || (result.success ? 'PARTIAL' : 'ERROR')
       }));
@@ -2475,7 +2475,7 @@ async function handleGovernedRequest(req, res) {
 
   // Automation Workflows API (independent from chat/LLM)
   if (pathname === '/api/workflows' && req.method === 'GET') {
-    const { workflowService } = require('../agent_core');
+    const { workflowService } = require('../agent');
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ workflows: workflowService.list() }));
     return;
@@ -2483,7 +2483,7 @@ async function handleGovernedRequest(req, res) {
 
   if (pathname === '/api/workflows' && req.method === 'POST') {
     try {
-      const { workflowService } = require('../agent_core');
+      const { workflowService } = require('../agent');
       const workflow = workflowService.save(await readJsonBody(req));
       res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
       res.end(JSON.stringify({ status: 'success', workflow }));
@@ -2497,7 +2497,7 @@ async function handleGovernedRequest(req, res) {
   const workflowRunMatch = pathname.match(/^\/api\/workflows\/([^/]+)\/run$/);
   if (workflowRunMatch && req.method === 'POST') {
     try {
-      const { workflowService } = require('../agent_core');
+      const { workflowService } = require('../agent');
       const body = await readJsonBody(req);
       const execution = await workflowService.run(decodeURIComponent(workflowRunMatch[1]), body.input || body, {
         triggerType: 'manual',
@@ -2515,7 +2515,7 @@ async function handleGovernedRequest(req, res) {
 
   const workflowDeleteMatch = pathname.match(/^\/api\/workflows\/([^/]+)$/);
   if (workflowDeleteMatch && req.method === 'DELETE') {
-    const { workflowService } = require('../agent_core');
+    const { workflowService } = require('../agent');
     const removed = workflowService.remove(decodeURIComponent(workflowDeleteMatch[1]));
     res.writeHead(removed ? 200 : 404, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ status: removed ? 'success' : 'error' }));
@@ -2523,7 +2523,7 @@ async function handleGovernedRequest(req, res) {
   }
 
   if (pathname === '/api/workflows/runs' && req.method === 'GET') {
-    const { workflowService } = require('../agent_core');
+    const { workflowService } = require('../agent');
     res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
     res.end(JSON.stringify({ runs: workflowService.history(parsedUrl.searchParams.get('workflowId')) }));
     return;
@@ -2532,7 +2532,7 @@ async function handleGovernedRequest(req, res) {
   const webhookMatch = pathname.match(/^\/api\/workflows\/webhook\/([^/]+)$/);
   if (webhookMatch && req.method === 'POST') {
     try {
-      const { workflowService } = require('../agent_core');
+      const { workflowService } = require('../agent');
       const secret = req.headers['x-workflow-secret'] || parsedUrl.searchParams.get('secret');
       const execution = await workflowService.runWebhook(decodeURIComponent(webhookMatch[1]), secret, await readJsonBody(req));
       res.writeHead(execution.success ? 200 : 422, { 'Content-Type': 'application/json; charset=UTF-8' });

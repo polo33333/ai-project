@@ -3,7 +3,7 @@
 // pending marks on the others. Readers see the same state as before.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MemoryService } = require('../src/backend/memory_core/memory_service');
+const { MemoryService } = require('../src/backend/memory/memory_service');
 const { run } = require('./helpers/memory_scenario');
 
 const sql = rows => ({ toolName: 'execute_sql_query', success: true, args: { sql: 'SELECT CustomerCode FROM M_Customer' },

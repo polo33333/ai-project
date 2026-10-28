@@ -2,7 +2,7 @@
 const fs=require('node:fs'),assert=require('node:assert/strict'),{performance}=require('node:perf_hooks');
 const storage=require('../src/backend/storage');storage.loadEnvironment();
 const {requestStores}=require('../src/backend/storage/request_stores');
-const {buildTrainingReport}=require('../src/backend/training_core/report_service');
+const {buildTrainingReport}=require('../src/backend/training/report_service');
 async function main(){
  await storage.bootstrapStorage();
  try{

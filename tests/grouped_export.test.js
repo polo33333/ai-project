@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {bind}=require('../src/backend/agent_core/harness/result_grouping');
+const {bind}=require('../src/backend/agent/harness/result_grouping');
 const {prepare}=require('../src/backend/utils/export_presentation');
 const rows=[{Code:'A',GioiTinh:'Nam'},{Code:'B',GioiTinh:'Nữ'},{Code:'C',GioiTinh:'Nam'}];
 const metadata={resultGroupBy:['Giới tính'],displayNames:{GioiTinh:'Giới tính',Code:'Mã nhân viên'}};
@@ -14,7 +14,7 @@ test('entity-qualified grouping is bound to exact metadata before rendering/expo
  await assert.rejects(bind(['unknown'],['Giới tính'],async()=>({content:'{"fields":[]}'})),/UNRESOLVED/);
 });
 test('grouped XLSX round-trip has separate labeled sheets with all rows',async()=>{
- const {ExportDataTool}=require('../src/backend/agent_core/tools/builtins');
+ const {ExportDataTool}=require('../src/backend/agent/tools/builtins');
  const result=await new ExportDataTool().run({data:rows,format:'xlsx',filename:'grouped_export_regression'}, {verifiedExport:metadata});
  const path=require('node:path'),XLSX=require('xlsx');
  const workbook=XLSX.readFile(path.join(require('../src/backend/utils/export_paths').getExportsDirectory(),result.fileName));
@@ -33,10 +33,10 @@ test('sheet names and display headers remain unique after sanitization',()=>{
  assert.deepEqual(prepare(rows,{}).data,rows);
 });
 test('harness passes verified full rows and grouping to export and renders separate groups',async()=>{
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
- const BaseTool=require('../src/backend/agent_core/tools/base_tool');
- const Manager=require('../src/backend/agent_core/tools/tool_manager');
- const {ExportDataTool}=require('../src/backend/agent_core/tools/builtins');
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+ const BaseTool=require('../src/backend/agent/tools/base_tool');
+ const Manager=require('../src/backend/agent/tools/tool_manager');
+ const {ExportDataTool}=require('../src/backend/agent/tools/builtins');
  const manager=new Manager();
  const sql='SELECT Code, GioiTinh FROM Employees';
  const sqlTool=new BaseTool({name:'execute_sql_query',description:'fixture query',parameters:{type:'object',properties:{sql:{type:'string'}},required:['sql']}});

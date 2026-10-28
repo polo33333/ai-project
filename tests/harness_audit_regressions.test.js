@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assessSqlEvidence, dropsAggregateScope } = require('../src/backend/agent_core/harness/completion_policy');
+const { assessSqlEvidence, dropsAggregateScope } = require('../src/backend/agent/harness/completion_policy');
 const { protect } = require('../src/backend/storage/postgres/crypto');
-const groups = require('../src/backend/agent_core/harness/semantic_groups');
+const groups = require('../src/backend/agent/harness/semantic_groups');
 const call = sql => ({ toolName: 'execute_sql_query', success: true, args: { sql }, result: { sql, rows: [{ Total: 123 }] } });
 const plan = { table: 'Invoices', intent: 'aggregate', metric: 'Amount', aggregation: 'SUM', conversationState: { operation: 'aggregate' } };
 
@@ -46,8 +46,8 @@ test('semantic groups use latest qualified evidence without replacing it with fa
 });
 
 test('configured per-1K token price enforces cost admission before network dispatch', async () => {
-  const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
-  const { dispatchToProvider } = require('../src/backend/intelligent_core/adapters');
+  const { RequestExecutionBudget } = require('../src/backend/agent/harness/request_execution_budget');
+  const { dispatchToProvider } = require('../src/backend/assistant/adapters');
   const budget = new RequestExecutionBudget({ maxCost: 0.001, maxTokens: 20000 });
   await assert.rejects(dispatchToProvider({ tokenCost: 1 }, [], [], undefined, { executionBudget: budget }),
     { code: 'COST_BUDGET_EXCEEDED' });

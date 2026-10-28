@@ -31,7 +31,7 @@ runtime.tick = async () => { await settings(); return originalTick(); };
 async function starter(context) {
   requireAdmin(context);
   const pilot = structuredClone(require('./pilot.json'));
-  const skills = require('../skill_core').getSkills();
+  const skills = require('../skills').getSkills();
   pilot.legacySkills = structuredClone(skills);
   for (const [index, skill] of skills.entries()) {
     if (pilot.templates[index]) {

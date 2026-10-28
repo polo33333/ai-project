@@ -11,7 +11,7 @@ async function main(){await storage.bootstrapStorage();const records=fs.existsSy
    const provider=h.loadJson('ai_providers.json',[]).find(p=>p.isActive);
    const started=Date.now();
    const seed=records.find(r=>r.id==='Q-005'&&!r.historyMode);
-   const result=await require('../src/backend/intelligent_core/core').chat(question,{providerId:provider.id,dbSourceId:'db-src-1785684548077',history:historyMode?[{role:'user',content:seed.question},{role:'assistant',content:seed.result.replyText}]:[],useTools:true,knowledgeSearchEnabled:true,webSearch:false,permissions:['admin'],session:{id:'lookup-groups-fix-'+crypto.randomUUID(),accountId:account.id}});
+   const result=await require('../src/backend/assistant/core').chat(question,{providerId:provider.id,dbSourceId:'db-src-1785684548077',history:historyMode?[{role:'user',content:seed.question},{role:'assistant',content:seed.result.replyText}]:[],useTools:true,knowledgeSearchEnabled:true,webSearch:false,permissions:['admin'],session:{id:'lookup-groups-fix-'+crypto.randomUUID(),accountId:account.id}});
    delete result.usedProvider;
    records.push({id,question,historyMode,durationMs:Date.now()-started,result});fs.writeFileSync(directory+'/live.private.json',JSON.stringify(records,null,2),{mode:0o600});
    console.log(JSON.stringify({id,keys:Object.keys(result),reply:result.reply||result.replyText,status:result.completionStatus||result.trace?.completionStatus,tools:result.toolCalls?.map(c=>({name:c.toolName,success:c.success,error:c.error})),trace:result.trace?.steps?.filter(s=>['SEMANTIC_GROUPS_DISPATCHED','SEMANTIC_INTENT_REVIEW_UNAVAILABLE'].includes(s.type))}));

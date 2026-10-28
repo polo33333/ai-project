@@ -3,7 +3,7 @@
 // stay attached to the question that started them.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseJsonContent } = require('../src/backend/agent_core/harness/tool_call_normalizer');
+const { parseJsonContent } = require('../src/backend/agent/harness/tool_call_normalizer');
 
 test('a structured answer is read from bare text or a ```json block, never from a list or prose', () => {
   assert.deepEqual(parseJsonContent('{"suitable":true}'), { suitable: true });
@@ -18,19 +18,19 @@ test('a workflow assessment written in a ```json block is accepted', async () =>
   const lookup = { inputs: { query: { schema: { type: 'string' } } }, bindings: { lookup: { sql: 'SELECT e.EmployeeName FROM dbo.Employees e WHERE e.EmployeeCode = @query',
     parameters: { query: { slot: 'query' } } } } };
   const answer = { suitable: true, reason: 'Tra cứu đúng nhân viên theo mã.', confirmedSlots: ['query'], inputBindings: [{ slot: 'query', table: 'Employees', column: 'EmployeeCode' }] };
-  const result = await require('../src/backend/memory_core/workflow_suitability').assess(async () => ({ content: `\`\`\`json\n${JSON.stringify(answer, null, 2)}\n\`\`\``, finish_reason: 'STOP' }),
+  const result = await require('../src/backend/memory/workflow_suitability').assess(async () => ({ content: `\`\`\`json\n${JSON.stringify(answer, null, 2)}\n\`\`\``, finish_reason: 'STOP' }),
     'Tra cứu thông tin nhân viên NV104', { operation: 'detail', proposedInputs: { query: 'NV104' } }, lookup);
   assert.equal(result.suitable, true);
 });
 
 test('a memory resolution written in a ```json block is accepted', () => {
-  const { decode } = require('../src/backend/memory_core/conversation_resolver');
+  const { decode } = require('../src/backend/memory/conversation_resolver');
   const value = { relation: 'independent', operation: 'list', cardinality: 'collection', attributes: [], selectedIds: [], clarification: '', dataUse: 'current', sourceScope: 'enterprise' };
   assert.equal(decode({ content: `\`\`\`json\n${JSON.stringify(value)}\n\`\`\`` }, []).relation, 'independent');
 });
 
 test('a finished workflow result completes the turn that started it', () => {
-  const { MemoryService } = require('../src/backend/memory_core/memory_service');
+  const { MemoryService } = require('../src/backend/memory/memory_service');
   const memory = new MemoryService({ store: { sessions: {} }, save() {} });
   const question = 'Báo cáo sản lượng điện 3 tháng gần nhất';
   memory.persistSuccessfulExchange({ sessionId: 's1', accountId: 'a1', question, reply: 'Đang chạy quy trình.', completionStatus: 'PARTIAL',
@@ -95,9 +95,9 @@ test('the contract step reads a finished run its turn started before memory reco
   const table = { tableId: 's::t', tableName: 'T', schemaName: 'dbo', dbSourceId: 's', isActive: true, columns: [{ columnName: 'ID', dataType: 'INT', isPrimaryKey: true }] };
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [table]);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => []);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager();
   const tool = new Base({ name: 'search_schema', description: 'schema', parameters: { type: 'object' } });
   tool.run = async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['T'], tableDirectory: [{ tableName: 'T' }], intentCatalog: [], tables: [] });

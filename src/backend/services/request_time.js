@@ -14,7 +14,7 @@ function hasExplicitScope(question) {
   return /\b\d+\s*(?:ngay|days?|thang|months?|nam|years?)\b|\b\d{4}[-/]\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b(?:nam|year)\s+\d{4}\b|\b(hien tai|hom nay|hom qua|ngay mai|thang nay|thang truoc|nam nay|nam truoc|today|yesterday|tomorrow|this month|last month)\b/.test(text);
 }
 function create(question, now = new Date(), upcomingDays = process.env.AI_UPCOMING_WINDOW_DAYS) {
-  const today = require('../agent_core/tools/date_range').resolve({ unit: 'day', timezone: TIMEZONE }, now).start;
+  const today = require('../agent/tools/date_range').resolve({ unit: 'day', timezone: TIMEZONE }, now).start;
   const text = normalize(question);
   const current = /\b(hien tai|hom nay|bay gio|hnay|h nay|today|currently|now)\b/.test(text);
   const due = /\b(het han|qua han|sap den han|sap het han|den han|expired|overdue|expiring|due soon)\b/.test(text);
@@ -29,7 +29,7 @@ function create(question, now = new Date(), upcomingDays = process.env.AI_UPCOMI
   const monthCount = Number(text.match(/\b(\d+)\s*(?:thang|months?)\b/)?.[1]) || null;
   const latestAvailable = /\b(gan nhat|co du lieu|du lieu san co|latest available)\b/.test(text);
   const monthWindow = monthCount && monthCount <= 120 && !explicitOnly && !latestAvailable
-    ? require('../agent_core/tools/date_range').resolve({ unit: 'month', count: monthCount }, now) : null;
+    ? require('../agent/tools/date_range').resolve({ unit: 'month', count: monthCount }, now) : null;
   const relative = current || relativePeriod || relativeDays || due && !explicitOnly || Boolean(monthWindow);
   const dates = new Set([today]);
   if (monthWindow) { dates.add(monthWindow.start); dates.add(monthWindow.end); }
@@ -47,7 +47,7 @@ function create(question, now = new Date(), upcomingDays = process.env.AI_UPCOMI
   for (const [word, unit] of Object.entries(units)) {
     if (!new RegExp(`\\b${word}\\b`).test(text) || !relativePeriod) continue;
     const offset = new RegExp(`\\b${word} (?:truoc|ngoai)\\b|\\blast ${word}\\b`).test(text) ? -1 : 0;
-    const range = require('../agent_core/tools/date_range').resolve({ unit, offset }, now);
+    const range = require('../agent/tools/date_range').resolve({ unit, offset }, now);
     dates.add(range.start); dates.add(range.end);
   }
   // Explicit dates remain valid alongside relative predicates. Never replace

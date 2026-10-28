@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 test('selected provider narrows all authorized templates before detailed routing', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   const provider = { id: 'third-party', baseUrl: 'http://fixture.invalid', model: 'fixture' };
   t.mock.method(providers, 'getProviderForExecution', id => { assert.equal(id, provider.id); return provider; });
@@ -36,7 +36,7 @@ test('selected provider narrows all authorized templates before detailed routing
 
 test('large catalogs are batched and shortlisted candidates are reduced to five', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'local', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definitions = Array.from({ length: 24 }, (_, i) => ({ id: `task-${i}`, name: `Task ${i}`, description: 'Business description '.repeat(40), inputs: {} }));
@@ -59,7 +59,7 @@ test('large catalogs are batched and shortlisted candidates are reduced to five'
 
 test('collection intent cannot be reinterpreted as targeted or pass incomplete scope verification', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'remote', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definitions = ['lookup', 'other'].map(id => ({ id, name: id, inputs: {} }));
@@ -83,7 +83,7 @@ test('collection intent cannot be reinterpreted as targeted or pass incomplete s
 
 test('invalid or empty shortlists do not proceed to detailed routing', async t => {
   const providers = require('../src/backend/services/ai_provider_manager');
-  const adapters = require('../src/backend/intelligent_core/adapters');
+  const adapters = require('../src/backend/assistant/adapters');
   const { interpret } = require('../src/backend/automation/workflow_interpreter');
   t.mock.method(providers, 'getProviderForExecution', () => ({ id: 'selected', baseUrl: 'http://fixture.invalid', model: 'fixture' }));
   const definitions = ['first', 'second'].map(id => ({ id, name: id, inputs: {} }));

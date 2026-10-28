@@ -47,7 +47,7 @@ async function delivery(runId, context) {
       const source = require('../services/sql_connector').dbSources.find(item => item.id === binding.dbSourceId);
       if (!source) throw fail('WORKFLOW_SOURCE_REVOKED'); governance.read(source, 'sql');
     } else if (type === 'file') {
-      const document = require('../knowledge_core/services/library_service').documents.find(item => item.id === binding.documentId);
+      const document = require('../knowledge/services/library_service').documents.find(item => item.id === binding.documentId);
       if (!document) throw fail('WORKFLOW_SOURCE_REVOKED'); governance.read(document, 'document');
     }
   }

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-const { getAvailableExportBase } = require('../src/backend/agent_core/tools/builtins');
+const { getAvailableExportBase } = require('../src/backend/agent/tools/builtins');
 
 test('export keeps requested filename when it is available', () => {
   assert.equal(getAvailableExportBase('exports', 'Bao_Cao', ['.csv'], () => false), 'Bao_Cao');

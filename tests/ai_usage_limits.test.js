@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const usage=require('../src/backend/services/ai_usage_service');
 const governance=require('../src/backend/governance/context');
-const adapters=require('../src/backend/intelligent_core/adapters');
+const adapters=require('../src/backend/assistant/adapters');
 
 const provider={id:'local-1',name:'Ollama',model:'qwen',baseUrl:'http://localhost:11434',type:'Ollama (Local)'};
 function isolated(t) {

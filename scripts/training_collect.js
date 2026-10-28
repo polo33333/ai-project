@@ -2,8 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { collectCases } = require('../src/backend/training_core/case_collector');
-const { classifyCase } = require('../src/backend/training_core/failure_classifier');
+const { collectCases } = require('../src/backend/training/case_collector');
+const { classifyCase } = require('../src/backend/training/failure_classifier');
 const storage = require('../src/backend/storage');
 storage.loadEnvironment();
 

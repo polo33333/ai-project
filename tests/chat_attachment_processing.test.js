@@ -4,9 +4,9 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
 const XLSX=require('xlsx');
 const processing=require('../src/backend/services/attachment_processing');
 const service=require('../src/backend/services/chat_attachment_service');
-const adapters=require('../src/backend/intelligent_core/adapters');
+const adapters=require('../src/backend/assistant/adapters');
 const providerManager=require('../src/backend/services/ai_provider_manager');
-const structured=require('../src/backend/knowledge_core/services/structured_document');
+const structured=require('../src/backend/knowledge/services/structured_document');
 
 function pdf(content) {
  const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -96,9 +96,9 @@ test('format inspection trusts bytes, not extensions',()=>{
 
 test('adapters forward verified images to Ollama and Gemini',()=>{
  const message={role:'user',content:'Đọc ảnh',images:[{mimeType:'image/png',data:'QUJD'}]};
- assert.deepEqual(adapters.callOllama&&require('../src/backend/intelligent_core/adapters/ollama').convertMessagesToOllama([message])[0].images,['QUJD']);
- assert.equal(require('../src/backend/intelligent_core/adapters/ollama').convertMessagesToOllama([{role:'user',content:'x'}])[0].images,undefined);
- const parts=require('../src/backend/intelligent_core/adapters/gemini').convertMessagesToGeminiContents([message])[0].parts;
+ assert.deepEqual(adapters.callOllama&&require('../src/backend/assistant/adapters/ollama').convertMessagesToOllama([message])[0].images,['QUJD']);
+ assert.equal(require('../src/backend/assistant/adapters/ollama').convertMessagesToOllama([{role:'user',content:'x'}])[0].images,undefined);
+ const parts=require('../src/backend/assistant/adapters/gemini').convertMessagesToGeminiContents([message])[0].parts;
  assert.deepEqual(parts[1],{inlineData:{mimeType:'image/png',data:'QUJD'}});
  assert.equal(adapters.adapterKind(gemini),'gemini');assert.equal(adapters.adapterKind(local),'ollama');
 });

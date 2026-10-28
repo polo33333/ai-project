@@ -720,7 +720,7 @@ class DictionaryService {
       return { success: true, scheduled: true };
     }
     const qdrantService = require('./qdrant_service');
-    const domainAliasService = require('../intelligent_core/domain_alias_service');
+    const domainAliasService = require('../assistant/domain_alias_service');
     try {
       const activeRelationships = this.tableRelationships.filter(relation => relation.isActive !== false && relation.status === 'verified');
       const result = await qdrantService.syncTablesToQdrant(

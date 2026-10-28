@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const { compile } = require('../src/backend/services/semantic_lookup_query');
-const exportsStage = require('../src/backend/agent_core/harness/group_exports');
-const { resolve } = require('../src/backend/agent_core/harness/output_request');
-const { partition } = require('../src/backend/agent_core/harness/result_grouping');
+const exportsStage = require('../src/backend/agent/harness/group_exports');
+const { resolve } = require('../src/backend/agent/harness/output_request');
+const { partition } = require('../src/backend/agent/harness/result_grouping');
 const tables = [{ tableName: 'Records', schemaName: 'dbo', columns: [{ columnName: 'ID', isPrimaryKey: true }, { columnName: 'Name' }, { columnName: 'CategoryID' }] },
   { tableName: 'Types', schemaName: 'dbo', columns: [{ columnName: 'ID' }, { columnName: 'Name' }] }];
 const joinPlan = { outcome: 'ready', tableRefs: [{ tableId: 'r', tableRefId: 'r#1', tableName: 'Records', alias: 't1' }, { tableId: 't', tableRefId: 't#1', tableName: 'Types', alias: 't2' }],
@@ -31,9 +31,9 @@ test('separate-file request survives wording without the export verb and aliases
 });
 
 test('separate XLSX exports contain each verified group exactly once, including all rows', async () => {
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
-  const { ExportDataTool } = require('../src/backend/agent_core/tools/builtins');
-  const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
+  const { ExportDataTool } = require('../src/backend/agent/tools/builtins');
+  const { RequestExecutionBudget } = require('../src/backend/agent/harness/request_execution_budget');
   const manager = new Manager(); manager.registerTool(new ExportDataTool());
   const sql = compile({ table: 'Records', operation: 'list', fields: ['ID', 'Name', 'CategoryID'] }, tables, {}, contract, null, joinPlan).sql;
   const rows = [{ ID: 1, Name: 'One', Category: 'Nam' }, { ID: 2, Name: 'Two', Category: 'Nữ' }, { ID: 3, Name: 'Three', Category: 'Nam' }];
@@ -58,11 +58,11 @@ test('separate XLSX exports contain each verified group exactly once, including 
 });
 
 test('exporting an existing joined dataset resolves schema as a list and preserves lookup scope', async t => {
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const { ExportDataTool } = require('../src/backend/agent_core/tools/builtins');
-  const { deriveReferences } = require('../src/backend/memory_core/reference_store');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const { ExportDataTool } = require('../src/backend/agent/tools/builtins');
+  const { deriveReferences } = require('../src/backend/memory/reference_store');
   const raw = tables.map(table => ({ ...table, dbSourceId: 'source', isActive: true }));
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => raw);
   const query = { table: 'Records', operation: 'list', fields: ['ID', 'Name', 'CategoryID'] };

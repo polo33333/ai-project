@@ -4,9 +4,9 @@
 // branches that the end-to-end harness tests do not reach.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planBackendResponse, projectFollowupScope } = require('../src/backend/agent_core/harness/steps/loop/backend_calls');
-const resultScope = require('../src/backend/memory_core/result_scope');
-const workflowPreference = require('../src/backend/memory_core/workflow_preference');
+const { planBackendResponse, projectFollowupScope } = require('../src/backend/agent/harness/steps/loop/backend_calls');
+const resultScope = require('../src/backend/memory/result_scope');
+const workflowPreference = require('../src/backend/memory/workflow_preference');
 
 const state = (plan = {}, extra = {}) => ({ plan, context: {}, toolContext: {}, toolCalls: [], conversation: [],
   trace: { iterations: 1, steps: [] }, check() {}, ...extra });

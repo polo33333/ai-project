@@ -3,13 +3,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { MemoryService } = require('../src/backend/memory_core');
+const { MemoryService } = require('../src/backend/memory');
 const bridge = require('../src/backend/automation/conversation_memory');
 const automation = require('../src/backend/automation');
-const tools = require('../src/backend/intelligent_core/tool_registry');
-const { GetWorkflowDatasetTool, ExportDataTool } = require('../src/backend/agent_core/tools/builtins');
-const { resolvePlan } = require('../src/backend/agent_core/harness/completion_policy');
-const { getRequestPolicy } = require('../src/backend/agent_core/harness/local_execution_policy');
+const tools = require('../src/backend/assistant/tool_registry');
+const { GetWorkflowDatasetTool, ExportDataTool } = require('../src/backend/agent/tools/builtins');
+const { resolvePlan } = require('../src/backend/agent/harness/completion_policy');
+const { getRequestPolicy } = require('../src/backend/agent/harness/local_execution_policy');
 
 function fixture() {
   const rows = Array.from({ length: 121 }, (_, i) => ({ code: `item-${i}`, total: i }));
@@ -118,7 +118,7 @@ test('both tool paths paginate reads and export all verified rows instead of pre
     t.after(() => fs.unlinkSync(filename));
     assert.match(fs.readFileSync(filename, 'utf8'), /item-120/);
   }
-  const { RenderChartTool } = require('../src/backend/agent_core/tools/builtins');
+  const { RenderChartTool } = require('../src/backend/agent/tools/builtins');
   const chartContext = { ...context, workflowRunId: run.id };
   const chart = { type: 'bar', labels: ['item-1'], datasets: [{ label: 'total', data: [999] }] };
   for (const execute of [args => tools.executeTool('render_chart', args, chartContext), args => new RenderChartTool().execute(args, chartContext)]) {
@@ -151,7 +151,7 @@ test('worker records a form-completed run once and memory survives a service res
   assert.equal((await registry.test(record.id, context)).passed, true);
   record = await repository.get('catalog', record.id);
   await registry.publish(record.id, context, record.revision);
-  const memory = require('../src/backend/memory_core').memoryService;
+  const memory = require('../src/backend/memory').memoryService;
   const sessionId = 'form-memory-session';
   const started = await runtime.create('memory_forms/lookup', {}, context, { conversationId: sessionId });
   assert.equal(started.status, 'WAITING_INPUT');

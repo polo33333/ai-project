@@ -4,8 +4,8 @@
 // local context window. Remote providers must receive exactly what they did.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createDispatch } = require('../src/backend/agent_core/harness/steps/dispatch');
-const { RequestExecutionBudget } = require('../src/backend/agent_core/harness/request_execution_budget');
+const { createDispatch } = require('../src/backend/agent/harness/steps/dispatch');
+const { RequestExecutionBudget } = require('../src/backend/agent/harness/request_execution_budget');
 const requestTime = require('../src/backend/services/request_time');
 
 const ENV_KEYS = ['LOCAL_MODEL_SKILL_CORE_ENABLED', 'LOCAL_MODEL_FEW_SHOT_ENABLED', 'LOCAL_MODEL_STRUCTURED_CONTRACT',

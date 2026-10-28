@@ -76,7 +76,7 @@ function inspect(name,extension,bytes) {
  return {kind,mimeType:kind==='CSV'?'text/csv':kind==='MD'?'text/markdown':'text/plain'};
 }
 
-const adapterKind=provider=>require('../intelligent_core/adapters').adapterKind(provider);
+const adapterKind=provider=>require('../assistant/adapters').adapterKind(provider);
 const isLocal=provider=>LOCAL.test(provider?.baseUrl||'');
 const permitted=provider=>Boolean(provider)&&(isLocal(provider)||cloudAllowed());
 const visionCache=new Map();
@@ -115,7 +115,7 @@ async function visionProvider(list,{pdf=false}={}) {
 
 const attachmentUsage = new (require('node:async_hooks').AsyncLocalStorage)();
 async function call(provider,messages,signal,purpose,overrides={}) {
- const response=await require('../intelligent_core/adapters').dispatchToProvider({...provider,think:false,responseFormat:null,supportsToolCalling:false,...overrides},messages,[],signal,{purpose});
+ const response=await require('../assistant/adapters').dispatchToProvider({...provider,think:false,responseFormat:null,supportsToolCalling:false,...overrides},messages,[],signal,{purpose});
  const total=attachmentUsage.getStore(),usage=response?.usage;
  if(total&&usage){
   const input=Number(usage.inputTokens)||0,output=Number(usage.outputTokens)||0;
@@ -162,7 +162,7 @@ async function extract(file,bytes,directory,providers,signal) {
    if(!provider)return {...result,status:'unsupported',note:'Chưa có mô hình đọc được ảnh trong các mô hình dùng cho tệp đính kèm.'};
    Object.assign(result,await transcribe(provider,file,bytes,file.mimeType||inspect(file.name,path.extname(file.storedName),bytes).mimeType,signal),{reader:`vision:${provider.id}`});
   } else {
-   const parts=await require('../knowledge_core/services/structured_document').extract(kind==='TXT'||kind==='MD'||kind==='CSV'?Buffer.from(decodeText(bytes)):bytes,kind);
+   const parts=await require('../knowledge/services/structured_document').extract(kind==='TXT'||kind==='MD'||kind==='CSV'?Buffer.from(decodeText(bytes)):bytes,kind);
    Object.assign(result,fromParts(parts),{reader:`document:${kind.toLowerCase()}`});
    if(kind==='PDF'&&!result.segments.some(segment=>segment.text.replace(/\s/g,'').length>20)&&!result.tables.length) {
     // A PDF without a text layer is a scan; only a model that reads PDFs directly can handle it.

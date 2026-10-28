@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { decodeScope, matchesScope } = require('../src/backend/agent_core/harness/schema_scope');
+const { decodeScope, matchesScope } = require('../src/backend/agent/harness/schema_scope');
 const tables = [{ tableName: 'Costs', columns: [{ name: 'Category', description: 'Maintenance has id =42' }] }];
 const filter = { table: 'Costs', column: 'Category', value: 42, evidence: 'Maintenance has id =42' };
 test('category scope requires exposed metadata and verbatim mapping evidence', () => {

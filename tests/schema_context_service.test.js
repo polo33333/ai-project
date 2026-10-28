@@ -2,11 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSchemaContext, isStandaloneCalculation } = require('../src/backend/intelligent_core/schema_context_service');
+const { buildSchemaContext, isStandaloneCalculation } = require('../src/backend/assistant/schema_context_service');
 const dictionaryService = require('../src/backend/services/dictionary_service');
 const qdrantService = require('../src/backend/services/qdrant_service');
 const { withIdentity } = require('../src/backend/services/schema_identity');
-const { getDomainAliases, normalizeDomainAliases, normalizeDomainKey } = require('../src/backend/intelligent_core/domain_alias_service');
+const { getDomainAliases, normalizeDomainAliases, normalizeDomainKey } = require('../src/backend/assistant/domain_alias_service');
 const { validateSqlAgainstJoinPlan } = require('../src/backend/services/sql_join_validator');
 
 test('long general conversation bypasses embedding even with active database tables', async t => {

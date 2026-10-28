@@ -1,6 +1,6 @@
 'use strict';
 
-const { sanitizeObject } = require('../memory_core/memory_sanitizer');
+const { sanitizeObject } = require('../memory/memory_sanitizer');
 
 // Only the runtime's validated, visibility-filtered output enters memory.
 function describe(run, execution) {
@@ -19,7 +19,7 @@ function describe(run, execution) {
   };
 }
 
-function persist(run, execution, memory = require('../memory_core').memoryService) {
+function persist(run, execution, memory = require('../memory').memoryService) {
   if (run.status !== 'SUCCEEDED') return { persisted: false, reason: 'workflow_incomplete' };
   const governance = require('../governance/context');
   // Finalization runs in a new worker context. Restore all bound resources,
@@ -30,7 +30,7 @@ function persist(run, execution, memory = require('../memory_core').memoryServic
       if (!type) continue;
       const resource = type === 'sql'
         ? require('../services/sql_connector').dbSources.find(item => item.id === binding.dbSourceId)
-        : require('../knowledge_core/services/library_service').documents.find(item => item.id === binding.documentId);
+        : require('../knowledge/services/library_service').documents.find(item => item.id === binding.documentId);
       if (!resource || !governance.canRead(resource)) return { persisted: false, reason: 'workflow_source_unavailable' };
       governance.read(resource, type);
     }
@@ -47,7 +47,7 @@ async function readRun(runId, context, automation = require('./index')) {
   if (run.conversationId !== session.id || run.status !== 'SUCCEEDED') throw new Error('Workflow result is unavailable in this conversation.');
   if (!await automation.registry.canContinue(run.definition, { accountId: session.accountId,
     tenantId: session.tenantId, permissions: context.permissions || [] })) throw new Error('Workflow permission was revoked.');
-  const { isValid } = require('../memory_core/reference_store');
+  const { isValid } = require('../memory/reference_store');
   if (!isValid({ updatedAt: run.updatedAt })) throw new Error('Workflow result reference has expired.');
   return automation.runtime.view(run);
 }
@@ -64,7 +64,7 @@ async function verifyChart(args, context) {
   const runId = context.workflowRunId || context.memoryDecision?.reference?.data?.runId;
   if (!runId) return;
   const dataset = await readDataset({ runId, field: context.memoryDecision?.reference?.data?.field }, context);
-  if (!require('../agent_core/harness/completion_policy').validateOutputData('render_chart', args,
+  if (!require('../agent/harness/completion_policy').validateOutputData('render_chart', args,
     [{ result: { rows: dataset.rows } }])) throw new Error('Chart values must match the verified workflow dataset.');
 }
 

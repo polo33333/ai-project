@@ -1,6 +1,6 @@
 const test = require('node:test'), assert = require('node:assert/strict');
-const { bind } = require('../src/backend/agent_core/harness/request_measures');
-const { evaluateSql } = require('../src/backend/training_core/sql_evaluator');
+const { bind } = require('../src/backend/agent/harness/request_measures');
+const { evaluateSql } = require('../src/backend/training/sql_evaluator');
 const tables = [{tableName:'Invoices',columns:[{name:'Amount',type:'DECIMAL(18,2)'},{name:'Qty',type:'INT'},{name:'Secret',type:'MONEY',isVisible:false}]}];
 test('reviewed measures supersede defaults only through visible authorized numeric fields', () => {
   const measures = bind([{table:'Invoices',column:'Amount',aggregation:'SUM'}], tables);
@@ -13,8 +13,8 @@ test('reviewed measures supersede defaults only through visible authorized numer
 });
 
 test('harness uses reviewed aggregate measure instead of a stale table default', async t => {
-  const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Manager=require('../src/backend/agent_core/tools/tool_manager'),Base=require('../src/backend/agent_core/tools/base_tool');
+  const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+  const Manager=require('../src/backend/agent/tools/tool_manager'),Base=require('../src/backend/agent/tools/base_tool');
   const raw={tableName:'Invoices',dbSourceId:'source',isActive:true,defaultMetric:'Qty',columns:[{columnName:'Amount',dataType:'DECIMAL(18,2)'},{columnName:'Qty',dataType:'INT'}]};
   t.mock.method(require('../src/backend/services/dictionary_service'),'getGroupedTables',()=>[raw]);
   const manager=new Manager(),executed=[];

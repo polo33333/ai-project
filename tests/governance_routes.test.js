@@ -24,7 +24,7 @@ test('resource policy endpoint requires admin, validates schema, and rejects sta
   } finally { sql.dbSources = sql.dbSources.filter(item => item.id !== source.id); sql.persist(); }
 }));
 test('tool outputs must fit their schema and size limit before they reach the model', async () => {
-  const BaseTool = require('../src/backend/agent_core/tools/base_tool');
+  const BaseTool = require('../src/backend/agent/tools/base_tool');
   class Output extends BaseTool {
     constructor(value, options) { super({ name: 'output-fixture', description: 'test', ...options }); this.value = value; }
     async run() { return this.value; }

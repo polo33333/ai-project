@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const citationService = require('../src/backend/knowledge_core/services/citation_service');
+const citationService = require('../src/backend/knowledge/services/citation_service');
 
 const evidence = [
   { citationIndex: 1, payload: { documentId: 'doc 1', title: 'Hướng dẫn IPMS', chunkIndex: 2, fullText: 'Nội dung gốc của đoạn ba.' } },

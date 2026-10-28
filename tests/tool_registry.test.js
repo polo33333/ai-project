@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const toolRegistry = require('../src/backend/intelligent_core/tool_registry');
+const toolRegistry = require('../src/backend/assistant/tool_registry');
 const sqlConnector = require('../src/backend/services/sql_connector');
-const { ExecuteSqlTool } = require('../src/backend/agent_core/tools/builtins');
+const { ExecuteSqlTool } = require('../src/backend/agent/tools/builtins');
 
 test('tool registry can expose only selected general-purpose tools', () => {
   const names = toolRegistry
@@ -47,8 +47,8 @@ test('direct registry calls preserve rejection metadata and never dispatch after
 });
 
 test('schema tool wrapper preserves registry denial code and outcome', async t => {
-  const { SearchSchemaTool } = require('../src/backend/agent_core/tools/builtins');
-  const ToolManager = require('../src/backend/agent_core/tools/tool_manager');
+  const { SearchSchemaTool } = require('../src/backend/agent/tools/builtins');
+  const ToolManager = require('../src/backend/agent/tools/tool_manager');
   t.mock.method(toolRegistry, 'executeTool', async () => ({ success: false, error: 'Source denied',
     code: 'SOURCE_DENIED', outcome: 'denied', effectState: 'none' }));
   const manager = new ToolManager(); manager.registerTool(new SearchSchemaTool());

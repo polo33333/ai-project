@@ -1,0 +1,662 @@
+/**
+ * Built-in Tools — Đạt Parity 100% với assistant/tool_registry.js
+ * 
+ * 1. get_current_datetime
+ * 2. export_data
+ * 3. execute_sql_query
+ * 4. render_chart
+ * 5. calculate_stats
+ * 6. calculate_expression
+ * 7. search_schema
+ * 8. get_glossary_term
+ * 9. search_knowledge_base
+ */
+
+const BaseTool = require('../base_tool');
+const sqlConnector = require('../../../services/sql_connector');
+const dictionaryService = require('../../../services/dictionary_service');
+const libraryService = require('../../../knowledge/services/library_service');
+const retrievalService = require('../../../knowledge/services/retrieval_service');
+const securityGuard = require('../../../assistant/security_guard');
+const fs = require('fs');
+const path = require('path');
+const { getExportsDirectory } = require('../../../utils/export_paths');
+
+// ─── 1. Get Current DateTime ────────────────────────────────────────────────
+class GetDateTimeTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'get_current_datetime',
+      description: 'Lấy ngày giờ hiện tại của hệ thống theo múi giờ Việt Nam. Dùng khi người dùng hỏi "hôm nay" (kể cả viết tắt "h nay", "hnay"), "bây giờ", "hôm nay thứ mấy", "ngày hiện tại", "tháng này", "năm nay" hoặc cần mốc thời gian hiện tại.',
+      parameters: {
+        type: 'object',
+        properties: {
+          timezone: { type: 'string', description: 'Múi giờ IANA, mặc định Asia/Ho_Chi_Minh' }
+        }
+      },
+      timeoutMs: 5000
+    });
+  }
+
+  async run(args, context = {}) {
+    const tz = args?.timezone || 'Asia/Ho_Chi_Minh';
+    const now = context.requestTime?.resolvedAt ? new Date(context.requestTime.resolvedAt) : new Date();
+    const parts = new Intl.DateTimeFormat('vi-VN', {
+      timeZone: tz,
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(now);
+    const get = type => parts.find(p => p.type === type)?.value || '';
+    const weekday = get('weekday');
+    const day = get('day');
+    const month = get('month');
+    const year = get('year');
+    const hour = get('hour');
+    const minute = get('minute');
+    const second = get('second');
+
+    return {
+      timezone: tz,
+      isoUtc: now.toISOString(),
+      weekday,
+      day,
+      month,
+      year,
+      time: `${hour}:${minute}:${second}`,
+      date: `${year}-${month}-${day}`,
+      display: `${weekday}, ngày ${day}/${month}/${year} ${hour}:${minute}:${second}`,
+      note: 'Use this value as the current date/time. Do not guess.'
+    };
+  }
+}
+
+// ─── 2. Export Data ──────────────────────────────────────────────────────────
+function getAvailableExportBase(exportDir, requestedBase, extensions, fileExists = fs.existsSync) {
+  const normalizedExtensions = extensions.map(extension => extension.startsWith('.') ? extension : `.${extension}`);
+  const isAvailable = candidate => normalizedExtensions.every(extension =>
+    !fileExists(path.join(exportDir, `${candidate}${extension}`))
+  );
+  if (isAvailable(requestedBase)) return requestedBase;
+
+  const now = new Date();
+  const timestamp = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'), String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'), String(now.getSeconds()).padStart(2, '0'),
+    String(now.getMilliseconds()).padStart(3, '0')].join('');
+  let candidate = `${requestedBase}_${timestamp}`;
+  let suffix = 2;
+  while (!isAvailable(candidate)) candidate = `${requestedBase}_${timestamp}_${suffix++}`;
+  return candidate;
+}
+
+class ExportDataTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'export_data',
+      description: 'Xuất dữ liệu bảng hoặc kết quả truy vấn thành file định dạng Excel (XLSX), CSV hoặc PDF để người dùng tải về. CHÚ Ý: Sau khi gọi tool thành công, bạn BẮT BUỘC phải cung cấp đường dẫn tải file thực sự từ trường "downloadUrl" (có dạng /api/exports/filename.xlsx), tuyệt đối KHÔNG tự bịa ra đường dẫn "sandbox:/mnt/data/".',
+      parameters: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { type: 'object' }, description: 'Mảng các đối tượng dữ liệu cần xuất file (VD: kết quả rows từ execute_sql_query)' },
+          workflowRunId: { type: 'string', description: 'Export all rows from a verified workflow result in this conversation.' },
+          workflowField: { type: 'string', description: 'Dataset field in the workflow result.' },
+          format: { type: 'string', enum: ['xlsx', 'csv', 'pdf'], description: 'Định dạng file cần xuất: xlsx (Excel), csv hoặc pdf' },
+          filename: { type: 'string', description: 'Tên file không kèm đuôi mở rộng (VD: "Bao_cao_Doanh_thu_Q1")' }
+        },
+        required: ['format']
+      },
+      timeoutMs: 30000
+    });
+  }
+
+  async run(args, context = {}) {
+    const runId = args.workflowRunId || context.workflowRunId || context.memoryDecision?.reference?.data?.runId;
+    if (runId) {
+      const dataset = await require('../../../automation/conversation_memory').readDataset({ runId, field: args.workflowField || context.memoryDecision?.reference?.data?.field }, context);
+      args = { ...args, data: dataset.rows };
+    }
+    let { data, format = 'csv', filename } = args;
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      throw new Error('Không có dữ liệu để xuất file.');
+    }
+
+    const fmt = (format || 'csv').toLowerCase();
+    const presentation = require('../../../utils/export_presentation').prepare(securityGuard.sanitizeTabularRows(data), context.verifiedExport);
+    data = presentation.data;
+    const cleanFilename = (filename || `Export_Data_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const exportDir = getExportsDirectory();
+
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+
+    const extensions = fmt === 'csv' ? ['.csv'] : (fmt === 'pdf' ? ['.html'] : ['.xlsx', '.xls']);
+    const availableFilename = getAvailableExportBase(exportDir, cleanFilename, extensions);
+    const keys = Object.keys(data[0] || {});
+    let fullFileName = '';
+
+    if (fmt === 'csv') {
+      fullFileName = `${availableFilename}.csv`;
+      const fileContent = require('../../../utils/export_safety').toCsv(data);
+      fs.writeFileSync(path.join(exportDir, fullFileName), fileContent, 'utf8');
+
+    } else if (fmt === 'xlsx' || fmt === 'excel') {
+      const XLSX = require('xlsx');
+      fullFileName = `${availableFilename}.xlsx`;
+      const workbook = XLSX.utils.book_new();
+      for(const group of presentation.groups || [{name:'DataExport',data}]) {
+        const worksheet=XLSX.utils.json_to_sheet(group.data);
+        worksheet['!cols']=Object.keys(group.data[0]||{}).map(label=>({wch:Math.min(45,Math.max(18,label.length+3))}));
+        XLSX.utils.book_append_sheet(workbook,worksheet,group.name);
+      }
+      
+      const filePath = path.join(exportDir, fullFileName);
+      XLSX.writeFile(workbook, filePath);
+
+      const xlsFilePath = path.join(exportDir, `${availableFilename}.xls`);
+      XLSX.writeFile(workbook, xlsFilePath, { bookType: 'biff8' });
+
+    } else if (fmt === 'pdf') {
+      fullFileName = `${availableFilename}.html`;
+      const ths = keys.map(k => `<th style="background:#4f46e5;color:#fff;padding:8px 12px;text-align:left;">${require('../../../utils/export_safety').escapeHtml(k)}</th>`).join('');
+      const trs = data.map(row => `<tr>${keys.map(k => `<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${require('../../../utils/export_safety').escapeHtml(row[k])}</td>`).join('')}</tr>`).join('');
+      const tablesHtml=(presentation.groups||[{label:'',data}]).map(group=>
+        (group.label?`<h3>${require('../../../utils/export_safety').escapeHtml(group.label)} (${group.data.length})</h3>`:'')
+        +`<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr>${ths}</tr></thead><tbody>`
+        +group.data.map(row=>`<tr>${keys.map(k=>`<td>${require('../../../utils/export_safety').escapeHtml(row[k])}</td>`).join('')}</tr>`).join('')+'</tbody></table>').join('');
+      const fileContent = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><title>${availableFilename}</title></head>
+        <body style="font-family:Arial,sans-serif;padding:20px;">
+          <h2 style="color:#4f46e5;">Báo cáo Xuất Dữ liệu: ${availableFilename}</h2>
+          <p style="font-size:12px;color:#64748b;">Thời gian khởi tạo: ${new Date().toLocaleString('vi-VN')} | Tong so ban ghi: ${data.length}</p>
+          ${tablesHtml}
+          <script>window.onload = function() { window.print(); };</script>
+        </body>
+        </html>
+      `;
+      fs.writeFileSync(path.join(exportDir, fullFileName), fileContent, 'utf8');
+    }
+
+    const downloadUrl = `/api/exports/${encodeURIComponent(fullFileName)}`;
+    return {
+      format: fmt.toUpperCase(),
+      fileName: fullFileName,
+      downloadUrl,
+      recordCount: data.length,
+      ...(presentation.groups?{groups:presentation.groups.map(g=>({label:g.label,sheetName:fmt==='xlsx'||fmt==='excel'?g.name:undefined,rowCount:g.data.length}))}:{}),
+      message: `🎉 Đã xuất thành công file ${fmt.toUpperCase()} (${data.length} bản ghi). Người dùng có thể bấm tải về tại: ${downloadUrl}`
+    };
+  }
+}
+
+// ─── 3. Plan Data Query ─────────────────────────────────────────────────────
+class PlanDataQueryTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'plan_data_query',
+      description: 'Phân loại ý định truy vấn dữ liệu trước khi viết SQL. Chọn bảng gốc, lookup theo tên/mã, bộ lọc quan hệ và grain từ schema/Relationships đã cung cấp. Không đưa SQL vào tool này.',
+      parameters: {
+        type: 'object',
+        properties: {
+          intent: { type: 'string', enum: ['list', 'record_lookup', 'aggregate', 'aggregate_timeseries', 'clarification'] },
+          rootTable: { type: 'string', description: 'Tên chính xác của bảng gốc trong schema context; bắt buộc với intent thực thi, có thể bỏ qua khi clarification.' },
+          entityLookup: { type: 'object', properties: {
+            field: { type: 'string' }, operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
+          } },
+          temporalFilter: { type: 'object', description: 'Use for date/time windows such as the latest 7 months. Do not put time windows in entityLookup.', properties: {
+            field: { type: 'string' }, mode: { type: 'string', enum: ['latest_available_months', 'calendar_range'] },
+            count: { type: 'integer' }, from: { type: 'string' }, to: { type: 'string' }
+          }, required: ['field', 'mode'] },
+          relationshipFilters: { type: 'array', items: { type: 'object', properties: {
+            relationshipId: { type: 'string' }, relationshipRole: { type: 'string' },
+            operator: { type: 'string', enum: ['equals', 'contains'] }, value: { type: 'string' }
+          }, required: ['value'] } },
+          requestedFields: { type: 'array', items: { type: 'string' } },
+          resultGrain: { type: 'string' }, confidence: { type: 'number' }, clarification: { type: 'string' }
+        },
+        required: ['intent']
+      },
+      timeoutMs: 5000
+    });
+  }
+
+  async run(args, context = {}) {
+    const { validateIntentPlan } = require('../../../services/data_intent_service');
+    const plan = validateIntentPlan(args, context);
+    context.modelIntentPlan = plan;
+    return { accepted: true, plan,
+      instruction: plan.intent === 'clarification'
+        ? 'Ask the clarification question and do not execute SQL.'
+        : 'Now write one SELECT matching this plan and call execute_sql_query.' };
+  }
+}
+
+// ─── 4. Execute SQL Query ───────────────────────────────────────────────────
+// The planner exposes the user's explicit "top/liệt kê N" as rowLimit.
+function requestedRowLimit(plan) { return plan?.rowLimit ?? plan?.requestedRowLimit ?? null; }
+
+// Raw SQL capped by TOP/FETCH that returned the full cap may have more rows.
+// It is complete only when the user asked for exactly that many rows, or for a
+// small ordered ranking ("top 5 theo doanh thu"). A large ordered cap is a page.
+const MAX_RANKING_ROWS = 20;
+function sqlLimitState(sql, returnedCount, plan) {
+  let statement;
+  try {
+    const parsed = new (require('node-sql-parser').Parser)().astify(sql, { database: 'TransactSQL' });
+    statement = Array.isArray(parsed) ? parsed[0] : parsed;
+  } catch { return {}; }
+  const appliedLimit = Number(statement?.top?.value ?? statement?.limit?.fetch?.value?.value);
+  if (!Number.isInteger(appliedLimit) || statement.top?.percent) return {};
+  const requestedLimit = requestedRowLimit(plan);
+  const ranking = Boolean(statement.orderby) && appliedLimit <= MAX_RANKING_ROWS;
+  const hasMore = returnedCount >= appliedLimit && requestedLimit !== appliedLimit && !ranking;
+  return { hasMore, completeness: { status: hasMore ? 'partial' : 'complete', requestedLimit, appliedLimit, returnedCount } };
+}
+
+class ExecuteSqlTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'execute_sql_query',
+      description: 'Read actual SQL data. Supply sql as a SELECT string, OR dataQuery as a structured single-table plan. Backend compiles dataQuery fields, filters, configured segments and time grouping. Complex verified JOINs use sql. Never supply both.',
+      parameters: {
+        type: 'object',
+        properties: {
+          sql: { type: 'string', description: 'Câu lệnh SQL SELECT hợp lệ (T-SQL, SQL Server chuẩn). Chỉ SELECT, không INSERT/UPDATE/DELETE.' },
+          dataQuery: require('../../../services/semantic_query').schema
+        },
+        required: []
+      },
+      requiredPermissions: ['sql:read'],
+      timeoutMs: 45000,
+      isDangerous: true
+    });
+  }
+
+  async run(args, context = {}) {
+    if(!context.compiledSemanticQuery) {
+      args=require('../../../services/semantic_query').normalizeArguments(args);
+      if(args.dataQuery){args.query=args.dataQuery;delete args.dataQuery;}
+    }
+    if (args.query && args.sql && !context.compiledSemanticQuery) throw Object.assign(new Error('Supply exactly one query or sql.'), {code:'SEMANTIC_QUERY_CONFLICT'});
+    if (args.query && !args.sql) {
+      const tables = dictionaryService.getGroupedTables().filter(t=>t.isActive && t.dbSourceId===context.dbSourceId);
+      const compiled = require('../../../services/semantic_query').compile(args.query,tables,context.requestPlan?.schemaScope,context.requestPlan?.requestContract);
+      args.sql = compiled.sql;context.semanticQueryUnits = compiled.units;
+    }
+    const { sql } = args;
+    if (context.requireModelIntentPlan) {
+      const { validateSqlAgainstIntent } = require('../../../services/data_intent_service');
+      const intentCheck = validateSqlAgainstIntent(sql, context.modelIntentPlan, context.joinPlan);
+      if (!intentCheck.valid) throw Object.assign(new Error(intentCheck.error), { code: intentCheck.code });
+    }
+    const check = securityGuard.validateSqlQuery(sql);
+    if (!check.safe) {
+      throw new Error(check.error || 'Câu lệnh SQL không an toàn.');
+    }
+    const { validateSqlAgainstJoinPlan } = require('../../../services/sql_join_validator');
+    // Resolve missing metadata with the same permission-filtered planner as
+    // get_join_path; SQL still passes the exact key and grain checks below.
+    const resolvedJoinPlan = require('../join_path').planForSql(check.cleanedSql, context);
+    const joinCheck = validateSqlAgainstJoinPlan(check.cleanedSql, context.joinPlan);
+    if (!joinCheck.valid) throw Object.assign(new Error(joinCheck.error), { code: joinCheck.code, details: joinCheck.details });
+
+    const rawRows = await sqlConnector.executeSqlQuery(check.cleanedSql, context.dbSourceId || null, context.signal || null);
+    const rows = securityGuard.sanitizeTabularRows(rawRows);
+    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const units=args.query ? context.semanticQueryUnits || {} : require('../../../services/semantic_query').inferUnits(check.cleanedSql,
+      dictionaryService.getGroupedTables().filter(table=>table.isActive&&table.dbSourceId===context.dbSourceId));
+    return {
+      rows,
+      columns,
+      displayNames: require('../../../services/sql_result_labels').inferDisplayNames(check.cleanedSql,
+        dictionaryService.getGroupedTables().filter(table=>table.isActive&&table.dbSourceId===context.dbSourceId),
+        dictionaryService.getTableRelationships()),
+      rowCount: rows.length,
+      ...(resolvedJoinPlan ? { joinPlanResolution: { source: 'verified_catalog', planId: resolvedJoinPlan.planId,
+        reason: resolvedJoinPlan.resolutionReason, tables: resolvedJoinPlan.tableRefs.map(ref => `${ref.schemaName || 'dbo'}.${ref.tableName}`),
+        relationshipIds: resolvedJoinPlan.edges.map(edge => edge.relationshipId) } } : {}),
+      ...(Object.keys(units).length?{units}:{}),
+      ...(args.query ? { hasMore: rows.length >= (args.query.limit || 100)
+        && !(Number.isInteger(args.query.limit) && requestedRowLimit(context.requestPlan) === args.query.limit)
+        && (args.query.operation !== 'aggregate' || args.query.dimensions?.length > 0 || Boolean(args.query.time)) }
+        : sqlLimitState(check.cleanedSql, rows.length, context.requestPlan)),
+      sql: check.cleanedSql
+    };
+  }
+}
+
+// ─── 4. Render Chart ────────────────────────────────────────────────────────
+class RenderChartTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'render_chart',
+      description: 'Vẽ biểu đồ trực quan từ dữ liệu. Dùng khi người dùng muốn xem biểu đồ, đồ thị, chart hoặc visualization.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['bar', 'line', 'pie', 'doughnut', 'scatter'], description: 'Loại biểu đồ' },
+          title: { type: 'string', description: 'Tiêu đề biểu đồ' },
+          labels: { type: 'array', items: { type: 'string' }, description: 'Nhãn trục X hoặc các phần' },
+          datasets: {
+            type: 'array',
+            description: 'Mảng dataset, mỗi dataset có label và data array',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string' },
+                data: { type: 'array', items: { type: 'number' } }
+              }
+            }
+          }
+        },
+        required: ['type', 'labels', 'datasets']
+      },
+      timeoutMs: 10000
+    });
+  }
+
+  async run(args, context = {}) {
+    await require('../../../automation/conversation_memory').verifyChart(args, context);
+    const { type, title, labels, datasets } = args;
+    if (!type || !labels || !datasets) {
+      throw new Error('Thiếu type, labels hoặc datasets.');
+    }
+
+    const PALETTE = [
+      'rgba(99,102,241,0.85)', 'rgba(16,185,129,0.85)', 'rgba(245,158,11,0.85)',
+      'rgba(239,68,68,0.85)', 'rgba(59,130,246,0.85)', 'rgba(168,85,247,0.85)',
+      'rgba(20,184,166,0.85)', 'rgba(249,115,22,0.85)'
+    ];
+
+    const enrichedDatasets = datasets.map((ds, i) => ({
+      label: ds.label || `Series ${i + 1}`,
+      data: ds.data || [],
+      backgroundColor: type === 'line'
+        ? PALETTE[i % PALETTE.length].replace('0.85', '0.15')
+        : PALETTE.slice(0, (ds.data || []).length).map((_, j) => PALETTE[(i + j) % PALETTE.length]),
+      borderColor: PALETTE[i % PALETTE.length],
+      borderWidth: type === 'line' ? 2.5 : 1,
+      tension: 0.4,
+      fill: type === 'line'
+    }));
+
+    const chartSpec = {
+      type,
+      data: { labels, datasets: enrichedDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { family: 'Inter', size: 12 } } },
+          title: title ? { display: true, text: title, font: { family: 'Inter', size: 14, weight: '700' } } : { display: false }
+        },
+        scales: ['pie', 'doughnut'].includes(type) ? {} : {
+          x: { grid: { display: false } },
+          y: { grid: { color: '#f1f5f9' } }
+        }
+      }
+    };
+
+    return {
+      chartSpec,
+      title: title || 'Biểu đồ'
+    };
+  }
+}
+
+// ─── 5. Calculate Stats ─────────────────────────────────────────────────────
+class CalculateStatsTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'calculate_stats',
+      description: 'Tính toán thống kê: min, max, avg (trung bình), sum (tổng), count (đếm) từ mảng số liệu.',
+      parameters: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number' }, description: 'Mảng các số cần tính toán' },
+          operation: { type: 'string', enum: ['min', 'max', 'avg', 'sum', 'count', 'all'], description: 'Phép tính. "all" tính tất cả cùng lúc.' }
+        },
+        required: ['data', 'operation']
+      },
+      timeoutMs: 10000
+    });
+  }
+
+  async run(args) {
+    const { data, operation } = args;
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      throw new Error('Mảng dữ liệu rỗng hoặc không hợp lệ.');
+    }
+
+    const nums = data.map(Number).filter(n => !isNaN(n));
+    if (nums.length === 0) throw new Error('Không có số hợp lệ trong mảng.');
+
+    const sorted = [...nums].sort((a, b) => a - b);
+    const sum = nums.reduce((acc, n) => acc + n, 0);
+    const avg = sum / nums.length;
+    const median = nums.length % 2 === 0
+      ? (sorted[nums.length / 2 - 1] + sorted[nums.length / 2]) / 2
+      : sorted[Math.floor(nums.length / 2)];
+
+    const all = {
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
+      sum: Math.round(sum * 1000) / 1000,
+      avg: Math.round(avg * 1000) / 1000,
+      count: nums.length,
+      median: Math.round(median * 1000) / 1000
+    };
+
+    let result;
+    switch (operation) {
+      case 'min': result = { min: all.min }; break;
+      case 'max': result = { max: all.max }; break;
+      case 'sum': result = { sum: all.sum }; break;
+      case 'avg': result = { avg: all.avg }; break;
+      case 'count': result = { count: all.count }; break;
+      default: result = all;
+    }
+
+    return result;
+  }
+}
+
+// ─── 6. Calculate Expression ────────────────────────────────────────────────
+class CalculateExpressionTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'calculate_expression',
+      description: 'Tính toán biểu thức số học. Hỗ trợ +, -, *, /, %, **, Math.sqrt, Math.abs, Math.round, Math.floor, Math.ceil.',
+      parameters: {
+        type: 'object',
+        properties: {
+          expression: { type: 'string', description: 'Biểu thức toán học (VD: "100 * 1.1", "(200 + 300) / 2", "Math.sqrt(144)")' }
+        },
+        required: ['expression']
+      },
+      timeoutMs: 5000
+    });
+  }
+
+  async run(args) {
+    const { expression } = args;
+    const check = securityGuard.validateExpression(expression);
+    if (!check.safe) {
+      throw new Error(check.error || 'Biểu thức không an toàn.');
+    }
+
+    const result = Function('"use strict"; const Math = globalThis.Math; return (' + expression + ')')();
+    if (typeof result !== 'number' || !isFinite(result)) {
+      throw new Error('Kết quả không phải số hữu hạn.');
+    }
+    return {
+      expression,
+      value: Math.round(result * 1000000) / 1000000
+    };
+  }
+}
+
+// ─── 7. Search Schema ───────────────────────────────────────────────────────
+class SearchSchemaTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'search_schema',
+      description: 'Tìm kiếm bảng và cột trong Data Dictionary (schema SQL Server đã nạp vào hệ thống).',
+      parameters: {
+        type: 'object',
+        properties: {
+        query: { type: 'string', description: 'Từ khóa tìm kiếm tên bảng hoặc cột' },
+        request: { ...require('../../harness/request_contract').intentSchema,
+          description: 'Use aggregate for statistics/count/sum/average/trends, never list. Use describe for stored fields/classification criteria without records; guidance for lookup prerequisites, not execution. For actual list/compare/detail/attribute requests declare only explicitly requested attributes (empty for default fields). Keep the same user operation across schema searches; this grants no permissions.' }
+        },
+        required: ['query']
+      },
+      timeoutMs: 10000
+    });
+  }
+
+  async run(args, context) {
+    const execution = await require('../../../assistant/tool_registry').executeTool(this.name, args, context);
+    if (!execution.success) throw Object.assign(new Error(execution.error), { code: execution.code, outcome: execution.outcome, effectState: execution.effectState });
+    return execution.result;
+  }
+}
+
+// ─── 8. Get Glossary Term ───────────────────────────────────────────────────
+class GetGlossaryTermTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'get_glossary_term',
+      description: 'Tra cứu thuật ngữ nghiệp vụ trong Business Glossary (VD: NV = Nhân viên, HD = Hóa đơn).',
+      parameters: {
+        type: 'object',
+        properties: {
+          term: { type: 'string', description: 'Thuật ngữ cần tra cứu' }
+        },
+        required: ['term']
+      },
+      timeoutMs: 5000
+    });
+  }
+
+  async run(args) {
+    const { term } = args;
+    if (!term) throw new Error('Thiếu thuật ngữ.');
+    const glossary = dictionaryService.getGlossary();
+    const found = glossary.find(g => g.term.toLowerCase() === term.toLowerCase());
+
+    if (found) {
+      return {
+        term: found.term,
+        meaning: found.fullMeaning,
+        category: found.category
+      };
+    }
+
+    const partials = glossary.filter(g =>
+      g.term.toLowerCase().includes(term.toLowerCase()) ||
+      g.fullMeaning.toLowerCase().includes(term.toLowerCase())
+    );
+    return {
+      term,
+      found: false,
+      suggestions: partials.slice(0, 5)
+    };
+  }
+}
+
+// ─── 9. Search Knowledge Base ───────────────────────────────────────────────
+class SearchKnowledgeTool extends BaseTool {
+  constructor() {
+    super({
+      name: 'search_knowledge_base',
+      description: 'Tìm kiếm tri thức Semantic Vector Search trong Qdrant Vector DB (Tài liệu, PDF, quy trình, mô tả dữ liệu bóc tách).',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Câu hỏi hoặc từ khóa ngữ nghĩa cần tìm kiếm trong Vector DB' },
+          limit: { type: 'integer', minimum: 1, maximum: 20, description: 'Số lượng kết quả liên quan nhất (mặc định 5)' }
+        },
+        required: ['query']
+      },
+      timeoutMs: 30000
+    });
+  }
+
+  async run(args, context) {
+    const execution = await require('../../../assistant/tool_registry').executeTool(this.name, args, context);
+    if (!execution.success) throw Object.assign(new Error(execution.error), { code: execution.code, outcome: execution.outcome, effectState: execution.effectState });
+    return execution.result;
+  }
+}
+
+class GetWorkflowDatasetTool extends BaseTool {
+  constructor() {
+    const definition = require('../../../assistant/tool_registry').listTools().find(tool => tool.name === 'get_workflow_dataset');
+    super(definition);
+  }
+  async run(args, context) {
+    const execution = await require('../../../assistant/tool_registry').executeTool(this.name, args, context);
+    if (!execution.success) throw Object.assign(new Error(execution.error), { code: execution.code, outcome: execution.outcome, effectState: execution.effectState });
+    return execution.result;
+  }
+}
+
+class ListSqlMetricsTool extends BaseTool {
+  constructor() { super({ ...require('../../../assistant/tool_registry').listTools().find(tool => tool.name === 'list_sql_metrics'), requiredPermissions: ['sql:read'] }); }
+  async run() { return { metrics: require('../../../governance/metrics').list() }; }
+}
+class GovernedWorkflowTool extends BaseTool {
+  constructor(name) { super({ ...require('../../../assistant/tool_registry').listTools().find(tool => tool.name === name), requiredPermissions: ['sql:read'] }); }
+  async run(args, context) { return require('../../../governance/workflow_tools').execute(this.name, args, context); }
+}
+class QuerySqlMetricTool extends BaseTool {
+  constructor() { super({ ...require('../../../assistant/tool_registry').listTools().find(tool => tool.name === 'query_sql_metric'), requiredPermissions: ['sql:read'] }); }
+  async run(args, context) { return require('../../../governance/metrics').execute(args, context); }
+}
+module.exports = {
+  GetJoinPathTool: class GetJoinPathTool extends BaseTool {
+    constructor() { super({ ...require('../join_path').definition, requiredPermissions: ['sql:read'] }); }
+    async run(args, context) { return require('../join_path').execute(args, context); }
+  },
+  ResolveDateRangeTool: class ResolveDateRangeTool extends BaseTool {
+    constructor() { super(require('../date_range').definition); }
+    async run(args, context = {}) { return require('../date_range').resolve(args,
+      context.requestTime?.resolvedAt ? new Date(context.requestTime.resolvedAt) : new Date()); }
+  },
+  ReadContextResultTool: class ReadContextResultTool extends BaseTool {
+    constructor() { super(require('../../../assistant/tool_registry').listTools().find(tool => tool.name === 'read_context_result')); }
+    available(context) { return typeof context.readContextResult === 'function'; }
+    async run(args, context) {
+      if (typeof context.readContextResult !== 'function') throw new Error('CONTEXT_RESULT_NOT_AVAILABLE');
+      return context.readContextResult(args);
+    }
+  },
+  MemoryTool: class MemoryTool extends BaseTool {
+    constructor(name) { super(require('../../../memory/tools').definitions.find(item => item.name === name)); }
+    available() { return require('../../../memory/tools').available(); }
+    async run(args, context) { return require('../../../memory/tools').execute(this.name, args, context); }
+  },
+  GovernedWorkflowTool,
+  ListSqlMetricsTool, QuerySqlMetricTool,
+  GetWorkflowDatasetTool,
+  GetDateTimeTool,
+  ExportDataTool,
+  PlanDataQueryTool,
+  ExecuteSqlTool,
+  RenderChartTool,
+  CalculateStatsTool,
+  CalculateExpressionTool,
+  SearchSchemaTool,
+  GetGlossaryTermTool,
+  SearchKnowledgeTool,
+  getAvailableExportBase
+};

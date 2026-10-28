@@ -30,7 +30,7 @@ async function interpret(question, definitions, current, options) {
       const timer = setTimeout(cancel, 10000);
       try {
         if (controller.signal.aborted) throw Object.assign(new Error('Routing aborted'), { name: 'AbortError' });
-        const response = await require('../intelligent_core/adapters').dispatchToProvider(...args);
+        const response = await require('../assistant/adapters').dispatchToProvider(...args);
         options.onWorkflowProvider?.({ id: provider.id, name: provider.name, model: provider.model, type: provider.type });
         options.onWorkflowUsage?.(response.usage); return response;
       } finally { clearTimeout(timer); }

@@ -13,9 +13,9 @@ async function run(t, filter, stored) {
       { columnName: 'StaffName', dataType: 'NVARCHAR', displayName: 'Tên NV' }] };
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => [table]);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => []);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), queries = [];
   const register = (name, handler) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = handler; manager.registerTool(tool); };
   register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['Staff'], tableDirectory: [{ tableName: 'Staff' }], intentCatalog: [], tables: [] }));

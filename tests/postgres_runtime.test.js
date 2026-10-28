@@ -47,11 +47,11 @@ test('PostgreSQL runtime stores app mutations and protects concurrent chat write
     let logger, memory, providers, auth, router, core;
     await storage.run(() => {
       logger = require('../src/backend/services/logger_service');
-      memory = require('../src/backend/memory_core').memoryService;
+      memory = require('../src/backend/memory').memoryService;
       providers = require('../src/backend/services/ai_provider_manager');
       auth = require('../src/backend/services/auth_service');
       router = require('../src/backend/routes/router');
-      core = require('../src/backend/intelligent_core/core');
+      core = require('../src/backend/assistant/core');
     });
     const exchange = (sessionId, question) => memory.persistSuccessfulExchange({ sessionId, accountId:'a', question, reply:'Verified reply ' + question,
       completionStatus:'SUCCESS', responseEvaluation:{valid:true,failures:[]}, currentPlan:{table:'Contract'} });
@@ -273,7 +273,7 @@ test('PostgreSQL runtime stores app mutations and protects concurrent chat write
       const conflict=await send({...request,question:'Changed body'});assert.equal(conflict.status,409);
     });
     await t.test('document ingest/delete jobs survive outside the HTTP request', async () => {
-      const library=require('../src/backend/knowledge_core/services/library_service');
+      const library=require('../src/backend/knowledge/services/library_service');
       const qdrant=require('../src/backend/services/qdrant_service');
       t.mock.method(qdrant,'indexDocumentChunks',async()=>({success:true}));
       t.mock.method(qdrant,'deleteDocumentChunks',async()=>({success:true}));

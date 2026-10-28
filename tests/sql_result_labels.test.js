@@ -2,7 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {inferDisplayNames}=require('../src/backend/services/sql_result_labels');
-const {buildSqlRowsFallbackReply}=require('../src/backend/agent_core/harness/grounded_reply');
+const {buildSqlRowsFallbackReply}=require('../src/backend/agent/harness/grounded_reply');
 const tables=[
  {tableId:'employee',tableName:'Employee',columns:[{columnName:'Code',displayName:'Mã nhân viên'},{columnName:'GenderID'},{columnName:'DepartmentID'}]},
  {tableId:'lookup',tableName:'Lookup',columns:[{columnName:'ID'},{columnName:'Name',displayName:'Tên danh mục'}]}

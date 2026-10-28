@@ -1,5 +1,5 @@
 'use strict';
-const security=require('../intelligent_core/security_guard');
+const security=require('../assistant/security_guard');
 const {randomUUID}=require('node:crypto');
 
 // Only an explicit public answer for an eligible general request may stream.

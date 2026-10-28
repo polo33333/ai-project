@@ -3,10 +3,10 @@
 // These assert current observations, not desired product behavior.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { bind } = require('../src/backend/agent_core/harness/request_filters');
-const { matchesScope } = require('../src/backend/agent_core/harness/schema_scope');
-const { assessSqlEvidence, stableFingerprint, evaluateCompletion } = require('../src/backend/agent_core/harness/completion_policy');
-const { createRequestContract, assessRequestContract } = require('../src/backend/agent_core/harness/request_contract');
+const { bind } = require('../src/backend/agent/harness/request_filters');
+const { matchesScope } = require('../src/backend/agent/harness/schema_scope');
+const { assessSqlEvidence, stableFingerprint, evaluateCompletion } = require('../src/backend/agent/harness/completion_policy');
+const { createRequestContract, assessRequestContract } = require('../src/backend/agent/harness/request_contract');
 const { validateSqlAgainstJoinPlan } = require('../src/backend/services/sql_join_validator');
 const observations=[];
 function record(id, observed, expected, meaning) { assert.deepEqual(observed,expected,id); observations.push({id,observed,meaning}); }
@@ -38,15 +38,15 @@ async function rawTopProbe(){
  const original=connector.executeSqlQuery;
  connector.executeSqlQuery=async()=>[{ID:1},{ID:2}];
  try{
-  const {ExecuteSqlTool}=require('../src/backend/agent_core/tools/builtins');
+  const {ExecuteSqlTool}=require('../src/backend/agent/tools/builtins');
   const result=await new ExecuteSqlTool().run({sql:'SELECT TOP 2 ID FROM Documents'},{dbSourceId:'synthetic'});
   record('F12-raw-top-completeness',{rowCount:result.rowCount,hasCompletenessFlag:Object.hasOwn(result,'hasMore')||Object.hasOwn(result,'truncated')},{rowCount:2,hasCompletenessFlag:false},'Raw TOP query has no completeness flag. Connector mocked, no live DB.');
  }finally{connector.executeSqlQuery=original;}
 }
 async function stagedProbe(){
- const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
- const Base=require('../src/backend/agent_core/tools/base_tool');
- const Manager=require('../src/backend/agent_core/tools/tool_manager');
+ const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+ const Base=require('../src/backend/agent/tools/base_tool');
+ const Manager=require('../src/backend/agent/tools/tool_manager');
  const manager=new Manager(), executed=[], offered=[];
  for(const name of ['list_workflows','search_schema','execute_sql_query']){
    const tool=new Base({name,description:name,parameters:{type:'object',properties:{sql:{type:'string'},query:{type:'string'}}}});

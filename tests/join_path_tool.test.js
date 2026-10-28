@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const dictionary = require('../src/backend/services/dictionary_service');
 const connector = require('../src/backend/services/sql_connector');
 const { withIdentity } = require('../src/backend/services/schema_identity');
-const { execute } = require('../src/backend/agent_core/tools/join_path');
+const { execute } = require('../src/backend/agent/tools/join_path');
 
 function fixture(t) {
   const oldTables = dictionary.tablesStore, oldRelations = dictionary.tableRelationships, oldSources = connector.dbSources;
@@ -22,7 +22,7 @@ const args = { fromTable: 'dbo.A', toTable: 'B' };
 test('registry SQL uses the same verified JOIN resolver as the built-in executor', async t => {
   const old=process.env.SQL_JOIN_PLANNER_ENABLED;process.env.SQL_JOIN_PLANNER_ENABLED='true';
   t.after(()=>{if(old===undefined)delete process.env.SQL_JOIN_PLANNER_ENABLED;else process.env.SQL_JOIN_PLANNER_ENABLED=old});
-  const context=fixture(t), registry=require('../src/backend/intelligent_core/tool_registry');
+  const context=fixture(t), registry=require('../src/backend/assistant/tool_registry');
   let reads=0;
   t.mock.method(connector,'executeSqlQuery',async()=>{reads++;return [{Id:1}]});
   const sql='SELECT a.Id FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id';
@@ -34,7 +34,7 @@ test('registry SQL uses the same verified JOIN resolver as the built-in executor
 });
 
 test('direct SQL resolves missing JOIN metadata without guessing keys or bypassing source policy', t => {
-  const context=fixture(t), {planForSql}=require('../src/backend/agent_core/tools/join_path');
+  const context=fixture(t), {planForSql}=require('../src/backend/agent/tools/join_path');
   const {validateSqlAgainstJoinPlan}=require('../src/backend/services/sql_join_validator');
   const sql='SELECT a.Id FROM A a JOIN Bridge b ON a.Id=b.Id JOIN B c ON b.Id=c.Id';
   assert.ok(planForSql(sql,context));
@@ -59,7 +59,7 @@ test('sequential path discovery retains both verified joins for one query', t =>
 });
 
 test('a narrow existing detail/header plan expands to an authorized lookup without changing its grain', t => {
-  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  const context = fixture(t), { planForSql } = require('../src/backend/agent/tools/join_path');
   execute({ fromTable: 'Bridge', toTable: 'A' }, context);
   context.joinPlan.expectedGrain = 'root';
   const root = context.joinPlan.rootTableId;
@@ -74,7 +74,7 @@ test('a narrow existing detail/header plan expands to an authorized lookup witho
 });
 
 test('scope expansion never installs invented keys or drops mapped projection constraints', t => {
-  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  const context = fixture(t), { planForSql } = require('../src/backend/agent/tools/join_path');
   execute({ fromTable: 'Bridge', toTable: 'A' }, context);
   context.joinPlan.requireMappedProjection = true;
   const old = context.joinPlan;
@@ -86,7 +86,7 @@ test('scope expansion never installs invented keys or drops mapped projection co
 });
 
 test('existing scope cannot grow through revoked, hidden, ambiguous or policy-denied lookups', t => {
-  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  const context = fixture(t), { planForSql } = require('../src/backend/agent/tools/join_path');
   execute({ fromTable: 'Bridge', toTable: 'A' }, context);
   const old = context.joinPlan;
   const sql = 'SELECT b.Id FROM Bridge b JOIN A a ON b.Id=a.Id JOIN B c ON b.Id=c.Id';
@@ -106,7 +106,7 @@ test('existing scope cannot grow through revoked, hidden, ambiguous or policy-de
 });
 
 test('scope expansion retains parent fanout protection', t => {
-  const context = fixture(t), { planForSql } = require('../src/backend/agent_core/tools/join_path');
+  const context = fixture(t), { planForSql } = require('../src/backend/agent/tools/join_path');
   execute({ fromTable: 'A', toTable: 'Bridge' }, context);
   context.joinPlan.expectedGrain = 'root';
   const previous = context.joinPlan;
@@ -163,13 +163,13 @@ test('join tool preserves ambiguity, limits hops and requires SQL permission', t
 
 test('both gateways register the tool and reject invalid parameters', async t => {
   const context = fixture(t);
-  const registry = require('../src/backend/intelligent_core/tool_registry');
-  const { defaultToolManager } = require('../src/backend/agent_core');
+  const registry = require('../src/backend/assistant/tool_registry');
+  const { defaultToolManager } = require('../src/backend/agent');
   assert.equal((await registry.executeTool('get_join_path', args, context)).success, true);
   assert.equal((await defaultToolManager.executeTool('get_join_path', args, context)).success, true);
   assert.equal((await registry.executeTool('get_join_path', { ...args, maxHops: 5 }, context)).success, false);
   assert.equal((await registry.executeTool('get_join_path', args, { permissions: [] })).success, false);
-  const select = require('../src/backend/agent_core/harness/staged_tools').select;
+  const select = require('../src/backend/agent/harness/staged_tools').select;
   assert.equal(select(registry.listTools(), { completed: ['search_schema'] }).some(t => t.name === 'get_join_path'), true);
 });
 

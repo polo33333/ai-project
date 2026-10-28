@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createAnswerEnvelope } = require('../src/backend/agent_core/harness/answer_envelope');
+const { createAnswerEnvelope } = require('../src/backend/agent/harness/answer_envelope');
 
 test('legacy completion never becomes a verified factual claim', () => {
   const answer = createAnswerEnvelope({ success: true, replyText: 'A value', trace: { completionStatus: 'SUCCESS' } });

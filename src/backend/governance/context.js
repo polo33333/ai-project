@@ -26,7 +26,7 @@ function principal() {
 const label = (resource, type) => resource.title || resource.name || resource.dbName || resource.database || resource.path || resource.id;
 const typeLabel = type => type === 'sql' ? 'SQL' : type === 'watchfolder' ? 'thư mục' : 'tài liệu';
 function folders() {
-  try { return require('../knowledge_core/services/watchfolder_service').folders || []; } catch { return []; }
+  try { return require('../knowledge/services/watchfolder_service').folders || []; } catch { return []; }
 }
 function folderOf(document) {
   if (!document?.sourcePath) return null;
@@ -105,7 +105,7 @@ async function refresh(providerId, local = false) {
     principal();
     for (const [key, { resource, type }] of current().resources) {
       const latest = type === 'sql' ? require('../services/sql_connector').dbSources.find(item => item.id === resource.id)
-        : require('../knowledge_core/services/library_service').documents.find(item => item.id === resource.id);
+        : require('../knowledge/services/library_service').documents.find(item => item.id === resource.id);
       if (!latest || !canRead(latest, type)) throw denied('RESOURCE_ACCESS_REVOKED');
       current().resources.set(key, { resource: latest, type });
     }

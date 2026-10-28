@@ -21,9 +21,9 @@ async function main() {
       const account = StorageHelper.loadJson('accounts.json', []).find(item => item.role === 'admin' && item.isActive !== false);
       if (!account) throw new Error('No active administrator is available for this local evaluation.');
       accountId = account.id;
-      core = require('../src/backend/intelligent_core/core');
-      memory = require('../src/backend/memory_core').memoryService;
-      library = require('../src/backend/knowledge_core/services/library_service');
+      core = require('../src/backend/assistant/core');
+      memory = require('../src/backend/memory').memoryService;
+      library = require('../src/backend/knowledge/services/library_service');
       const documents = library.getDocuments();
       const ipms = documents.find(item => /TPSOFT_HDSD_IPMS_APP/i.test(item.title));
       const smartca = documents.find(item => /Kich_ban_tich_hop_smartca/i.test(item.title));

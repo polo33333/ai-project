@@ -3,9 +3,9 @@
 // (routing plan of 26/10/2026): document signal, LIBRARY prompt, gate and chat rescue.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const signal = require('../src/backend/knowledge_core/rag/signal');
-const pipeline = require('../src/backend/agent_core/pipeline/contract_pipeline');
-const library = require('../src/backend/knowledge_core/services/library_service');
+const signal = require('../src/backend/knowledge/rag/signal');
+const pipeline = require('../src/backend/agent/pipeline/contract_pipeline');
+const library = require('../src/backend/knowledge/services/library_service');
 const qdrant = require('../src/backend/services/qdrant_service');
 
 const guide = { id: 'guide', title: 'TPSOFT_HDSD_IPMS_APP__v1.0.docx', preview: 'HƯỚNG DẪN SỬ DỤNG   ỨNG DỤNG QUẢN LÝ KCN IPMS' };
@@ -137,7 +137,7 @@ test('a weak signal leaves the model chat choice as conversation', async t => {
 });
 
 test('pipeline metrics show where questions were routed and how often the signal changed it', () => {
-  const { computeMetrics } = require('../src/backend/training_core/pipeline_metrics');
+  const { computeMetrics } = require('../src/backend/training/pipeline_metrics');
   const record = (id, routing) => ({ id, timestamp: '2026-10-26T08:00:00Z', status: 'SUCCESS', latencyMs: 1000,
     requestPayload: { diagnostics: { pipeline: 'v2', steps: [{ type: 'ROUTING_DECISION', ...routing }] } } });
   const metrics = computeMetrics([
@@ -180,7 +180,7 @@ test('the signal reports a better match in a document the model may not receive'
 
 test('the notice names the document and the model, never a restricted title', t => {
   t.mock.method(require('../src/backend/services/ai_provider_manager'), 'getProviderForExecution', () => ({ name: 'Google Gemini - Payment' }));
-  const { blockedNotice } = require('../src/backend/agent_core/pipeline/conversation_answer');
+  const { blockedNotice } = require('../src/backend/agent/pipeline/conversation_answer');
   const text = blockedNotice(withheld, { id: 'cloud', local: false });
   assert.match(text, /“Kich_ban_tich_hop_smartca_v4\.1_thuong\.pdf”/);
   assert.match(text, /chưa được phép gửi cho mô hình đang dùng \(Google Gemini - Payment\)/);

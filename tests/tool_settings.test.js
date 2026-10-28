@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const settings = require('../src/backend/services/tool_settings_service');
-const registry = require('../src/backend/intelligent_core/tool_registry');
+const registry = require('../src/backend/assistant/tool_registry');
 
 test('disabled tool disappears from model definitions and cannot execute through either gateway', async t => {
   const name = 'calculate_expression';
@@ -15,7 +15,7 @@ test('disabled tool disappears from model definitions and cannot execute through
   assert.equal(direct.code, 'TOOL_DISABLED');
   assert.equal(direct.envelope.status, 'denied');
   assert.equal(legacy.mock.callCount(), 0);
-  const manager = require('../src/backend/agent_core').defaultToolManager;
+  const manager = require('../src/backend/agent').defaultToolManager;
   assert.ok(!manager.getToolDefinitions({ permissions: ['admin'] }).some(tool => tool.function.name === name));
   assert.equal((await manager.executeTool(name, { expression: '1+1' }, { permissions: ['admin'] })).code, 'TOOL_DISABLED');
   const { execFileSync } = require('node:child_process');

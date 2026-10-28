@@ -4,9 +4,9 @@
 // for a similar question whose contract still compiles.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const learning = require('../src/backend/training_core/feedback_loop');
-const catalogApi = require('../src/backend/agent_core/pipeline/query_catalog');
-const { validateContract } = require('../src/backend/agent_core/pipeline/contract_pipeline');
+const learning = require('../src/backend/training/feedback_loop');
+const catalogApi = require('../src/backend/agent/pipeline/query_catalog');
+const { validateContract } = require('../src/backend/agent/pipeline/contract_pipeline');
 const golden = require('./fixtures/live_eval_cases.json');
 
 const billQuestion = 'Tiền hóa đơn điện sau thuế của KA0021 trong 2024-02 là bao nhiêu?';
@@ -92,9 +92,9 @@ test('v2 shows reviewed examples of similar questions to the planner', async t =
   t.mock.method(require('../src/backend/services/dictionary_service'), 'getGroupedTables', () => tables);
   t.mock.method(require('../src/backend/services/relationship_service'), 'verifiedRelationships', () => [relation]);
   t.mock.method(learning, 'sourceExamples', () => [example, { id: 'learn-staff', question: 'Danh sách nhân viên phòng Kỹ thuật', contract: { kind: 'data', root: 'M_Employee', operation: 'list' } }]);
-  const Harness = require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const Base = require('../src/backend/agent_core/tools/base_tool');
-  const Manager = require('../src/backend/agent_core/tools/tool_manager');
+  const Harness = require('../src/backend/agent/harness/guarded_agent_harness');
+  const Base = require('../src/backend/agent/tools/base_tool');
+  const Manager = require('../src/backend/agent/tools/tool_manager');
   const manager = new Manager(), prompts = [];
   const register = (name, handler) => { const tool = new Base({ name, description: name, parameters: { type: 'object' } }); tool.run = handler; manager.registerTool(tool); };
   register('search_schema', async () => ({ mode: 'data', dbSourceId: 's', selectedTables: ['T_ElectricityOutput'],

@@ -32,7 +32,7 @@ const MODES = {
   lexical: { env: { EMBEDDING_ENABLED: 'false', GRAPHRAG_ENABLED: 'false' }, run: (rag, item) => rag.retrievalService.search(item.query, { limit: LIMIT }) },
   // The governed search_knowledge_base tool used by the v2 document answer (verbatim question).
   v2_tool: { env: {}, run: async (rag, item) => {
-    const search = await require('../src/backend/intelligent_core/tool_registry')._searchKnowledgeBase({ query: item.query, limit: LIMIT });
+    const search = await require('../src/backend/assistant/tool_registry')._searchKnowledgeBase({ query: item.query, limit: LIMIT });
     return { results: (search.result?.documents || []).map(document => ({ payload: { documentId: document.documentId,
       chunkIndex: document.chunkIndex, fullText: document.text } })) };
   } },
@@ -44,9 +44,9 @@ const MODES = {
 // --rechunk: measure the current chunker before reindexing. The library files
 // are chunked and embedded again in memory; Qdrant and the library are not written.
 async function simulateRechunk() {
-  const library = require('../src/backend/knowledge_core/services/library_service');
+  const library = require('../src/backend/knowledge/services/library_service');
   const qdrant = require('../src/backend/services/qdrant_service');
-  const structured = require('../src/backend/knowledge_core/services/structured_document');
+  const structured = require('../src/backend/knowledge/services/structured_document');
   const corpus = new Map();
   for (const document of library.getDocuments()) {
     const parts = await structured.extract(fs.readFileSync(library.findDocument(document.id).storagePath), document.fileType);
@@ -106,8 +106,8 @@ function table(report, baseline) {
 async function main() {
   const fixture = JSON.parse(fs.readFileSync(datasetPath, 'utf8'));
   const cases = validateFixture(fixture);
-  const rag = { retrievalService: require('../src/backend/knowledge_core/services/retrieval_service') };
-  try { rag.ragService = require('../src/backend/knowledge_core/rag'); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
+  const rag = { retrievalService: require('../src/backend/knowledge/services/retrieval_service') };
+  try { rag.ragService = require('../src/backend/knowledge/rag'); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   const requested = (option('modes') || 'hybrid,hybrid_nograph,lexical,v2_tool,pipeline').split(',').map(name => name.trim()).filter(Boolean);
   const unknown = requested.filter(name => !MODES[name]);
   if (unknown.length) throw new Error(`Unknown mode: ${unknown.join(', ')}`);

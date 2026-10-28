@@ -1,6 +1,6 @@
 ﻿'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {assessCalculation}=require('../src/backend/agent_core/harness/calculation_scope');
+const {assessCalculation}=require('../src/backend/agent/harness/calculation_scope');
 test('conflicting sources are blocked while independent arithmetic can proceed',async()=>{
   const reply=value=>async()=>({tool_calls:[{id:'review',type:'function',function:{name:'assess_calculation',arguments:JSON.stringify(value)}}]});
   const blocked=await assessCalculation(reply({allowed:false,answer:'Two sources disagree; reconcile before deciding the amount.'}),'Contract and same-period invoice disagree',{expression:'100+120'});
@@ -20,15 +20,15 @@ test('calculation review receives already verified source rows and incomplete-pr
 });
 
 test('an unverified data calculation cannot pass completion merely because SQL rows exist',()=>{
- const {evaluateCompletion}=require('../src/backend/agent_core/harness/completion_policy');
+ const {evaluateCompletion}=require('../src/backend/agent/harness/completion_policy');
  const plan={table:'Records',outputs:{data:true},calculationUnverified:true};
  const result=evaluateCompletion({reply:'Please provide the values again.',plan,toolCalls:[{toolName:'execute_sql_query',success:true,result:{sql:'SELECT Amount FROM Records',rows:[{Amount:100}]}}]});
  assert.ok(result.failures.includes('CALCULATION_NOT_VERIFIED'));
  assert.equal(result.valid,false);
 });
 test('guarded calculator never executes an expression rejected for source conflict',async t=>{
-  const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
-  const manager=require('../src/backend/agent_core').defaultToolManager;
+  const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
+  const manager=require('../src/backend/agent').defaultToolManager;
   let executed=0;t.mock.method(manager.getTool('calculate_expression'),'run',async()=>{executed++;return {value:220}});
   const harness=new Harness({toolManager:manager,dispatch:async(provider,messages,defs)=>defs.some(d=>d.function?.name==='assess_calculation')
     ? {tool_calls:[{id:'review',type:'function',function:{name:'assess_calculation',arguments:'{"allowed":false,"answer":"The two sources differ by 20 million. The correct payable amount requires reconciliation."}'}}]}

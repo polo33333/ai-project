@@ -3,8 +3,8 @@
 // rule that was broken, so the repair round does not repeat the same error.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { hint, suggest } = require('../src/backend/agent_core/pipeline/repair_hints');
-const { compile } = require('../src/backend/agent_core/pipeline/query_compiler');
+const { hint, suggest } = require('../src/backend/agent/pipeline/repair_hints');
+const { compile } = require('../src/backend/agent/pipeline/query_compiler');
 
 const columns = list => new Map(list.map(([name, type, label = '', pk = false]) => [name.toLowerCase(), { name, type, label, pk }]));
 const table = (tableName, cols, extra = {}) => [tableName.toLowerCase(), { tableId: `s::${tableName}`, tableName, schemaName: 'dbo', label: '', columns: columns(cols), defaults: [], ...extra }];

@@ -11,18 +11,18 @@ async function main(){
   const complaint=logs.find(x=>x.id==='efb5ab38-3a38-449b-8f43-44fa0719b2fe');
   assert.ok(grouped&&complaint);
   const provider=require('../src/backend/services/ai_provider_manager').getProviderForExecution(grouped.requestPayload.providerId);
-  const adapter=require('../src/backend/intelligent_core/adapters');
+  const adapter=require('../src/backend/assistant/adapters');
   const dispatch=(defs,messages)=>adapter.dispatchToProvider({...provider,temperature:0.1},messages,defs,AbortSignal.timeout(45000));
   const candidates=[{id:'dataset:latest',kind:'dataset',data:{table:'M_Employee',rowCount:9}}];
   const recent=[{role:'user',content:'hiển thị ds nv trên thêm cột giới tính và phòng ban'},{role:'assistant',content:'Danh sách nhân viên có các cột Mã nhân viên, Tên nhân viên, Giới tính, Phòng ban. Giá trị giới tính trong kết quả: Nam, Nữ.'}];
-  const resolution=await require('../src/backend/memory_core/conversation_resolver').resolve(dispatch,grouped.question,{candidates,recent});
+  const resolution=await require('../src/backend/memory/conversation_resolver').resolve(dispatch,grouped.question,{candidates,recent});
   assert.equal(resolution.operation,'list');assert.ok(resolution.resultGroupBy?.length);
   const evidence=Object.values(grouped.requestPayload.evidencePayloads).find(e=>e.rows);
   const call={result:evidence};
-  const groups=require('../src/backend/agent_core/harness/result_grouping').partition(call,resolution.resultGroupBy);
+  const groups=require('../src/backend/agent/harness/result_grouping').partition(call,resolution.resultGroupBy);
   assert.ok(groups);assert.deepEqual(groups.map(g=>g.rows.length).sort((a,b)=>a-b),[2,7]);
-  const rendered=require('../src/backend/agent_core/harness/grounded_reply').buildSqlRowsFallbackReply(call,{}, {resultGroupBy:resolution.resultGroupBy});
-  const Harness=require('../src/backend/agent_core/harness/guarded_agent_harness');
+  const rendered=require('../src/backend/agent/harness/grounded_reply').buildSqlRowsFallbackReply(call,{}, {resultGroupBy:resolution.resultGroupBy});
+  const Harness=require('../src/backend/agent/harness/guarded_agent_harness');
   const result=await new Harness({toolManager:{getToolDefinitions:()=>[]},dispatch:(p,m,d)=>adapter.dispatchToProvider(p,m,d,AbortSignal.timeout(45000))}).run({userMessage:complaint.question,provider,
     context:{governedController:true,lockProvider:true,mode:'general',requestPlan:{outputs:{data:false}},resolutionContext:{candidates,recent:[{role:'user',content:grouped.question},{role:'assistant',content:grouped.replyText}]}}});
   console.log(JSON.stringify({feedback:result.replyText,steps:result.trace.steps.filter(s=>['MEMORY_RESOLVED','MEMORY_RESOLUTION_UNAVAILABLE','MEMORY_RESOLUTION_REJECTED'].includes(s.type))}));

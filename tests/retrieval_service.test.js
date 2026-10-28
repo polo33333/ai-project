@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const retrievalService = require('../src/backend/knowledge_core/services/retrieval_service');
-const libraryService = require('../src/backend/knowledge_core/services/library_service');
+const retrievalService = require('../src/backend/knowledge/services/retrieval_service');
+const libraryService = require('../src/backend/knowledge/services/library_service');
 const qdrantService = require('../src/backend/services/qdrant_service');
 
 const corpus = [

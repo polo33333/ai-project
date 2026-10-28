@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {MemoryService}=require('../src/backend/memory_core/memory_service');
+const {MemoryService}=require('../src/backend/memory/memory_service');
 test('retry history bounds repeated identical answers by their actual occurrence',()=>{
   const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('src/backend/services/page_chat_history_service.js','utf8');
   const context=vm.createContext({fail(message){throw Error(message)}});

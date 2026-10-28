@@ -5,8 +5,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const mcpService = require('../src/backend/services/mcp_service');
-const { defaultToolManager } = require('../src/backend/agent_core');
-const toolRegistry = require('../src/backend/intelligent_core/tool_registry');
+const { defaultToolManager } = require('../src/backend/agent');
+const toolRegistry = require('../src/backend/assistant/tool_registry');
 
 test('MCP stdio server is discovered and exposed to the agent', async () => {
   const fixture = path.join(__dirname, 'fixtures', 'mcp_stdio_server.js');

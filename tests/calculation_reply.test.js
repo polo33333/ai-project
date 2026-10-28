@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildCalculationReply } = require('../src/backend/agent_core/harness/calculation_reply');
+const { buildCalculationReply } = require('../src/backend/agent/harness/calculation_reply');
 
 const call = {
   toolName: 'calculate_expression', success: true,
@@ -21,7 +21,7 @@ test('calculation answer preserves a unit only when the user supplied it', () =>
 });
 
 test('forecast analysis survives a supporting arithmetic tool result', () => {
-  const core = require('../src/backend/intelligent_core/core');
+  const core = require('../src/backend/assistant/core');
   const analysis = 'Sản lượng giảm từ 3.322.035 xuống 1.868.033 kWh. Chỉ có 2 tháng dữ liệu nên chưa đủ để dự báo tin cậy cho 3 tháng sau.';
   const result = core._buildSuccessResponse(
     'dựa vào dữ liệu sản lượng trên dự đoán xu hướng trong 3 tháng sau', analysis,
@@ -34,7 +34,7 @@ test('forecast analysis survives a supporting arithmetic tool result', () => {
 });
 
 test('plain arithmetic response remains grounded in the executed result', () => {
-  const core = require('../src/backend/intelligent_core/core');
+  const core = require('../src/backend/assistant/core');
   const result = core._buildSuccessResponse('34+34', 'Wrong model answer: 99', [call],
     { id: 'fixture', name: 'Fixture', model: 'fixture', type: 'remote' });
   assert.equal(result.replyText, 'Kết quả của phép tính **34 + 34** là **68**.');

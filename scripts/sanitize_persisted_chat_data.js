@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const securityGuard = require('../src/backend/intelligent_core/security_guard');
+const securityGuard = require('../src/backend/assistant/security_guard');
 const storage = require('../src/backend/storage');
 const StorageHelper = require('../src/backend/utils/storage_helper');
 storage.loadEnvironment();

@@ -1,6 +1,6 @@
 'use strict';
 const { Parser } = require('node-sql-parser');
-const guard = require('../intelligent_core/security_guard');
+const guard = require('../assistant/security_guard');
 const { error } = require('./contract');
 function validateBinding(binding) {
   const check = guard.validateSqlQuery(binding.sql);

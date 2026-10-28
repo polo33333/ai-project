@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const governance = require('../src/backend/governance/context');
-const routes = require('../src/backend/memory_core/routes');
+const routes = require('../src/backend/memory/routes');
 async function request(method, account, body, path = '/api/memory') {
   let status, value;
   const response = { writeHead(code) { status = code; }, end(json) { value = JSON.parse(json); } };
