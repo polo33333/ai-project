@@ -4,7 +4,7 @@ KnowledgeHub AI là nền tảng tri thức self-hosted đang được phát tri
 
 > **Trạng thái:** MVP đang phát triển. Runtime dữ liệu ứng dụng đã chuyển sang PostgreSQL, gồm auth, cấu hình, chat/memory/audit và metadata tài liệu. Ingest/delete tài liệu có outbox PostgreSQL, retry và worker lease; chưa triển khai Redis/BullMQ hoặc parser service riêng. Xem [Trạng thái triển khai](#trạng-thái-triển-khai).
 
-README đối chiếu tổng thể với mã nguồn ngày **26/10/2026** (phần hiệu suất tải tab đo ngày 22/10/2026). Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
+README đối chiếu tổng thể với mã nguồn ngày **26/10/2026**; cấu trúc thư mục và kết quả kiểm thử cập nhật ngày **29/10/2026** (phần hiệu suất tải tab đo ngày 22/10/2026). Trạng thái dưới đây mô tả chức năng đã triển khai; kết nối SQL, model, Qdrant và MCP thực tế phụ thuộc cấu hình của từng máy.
 
 ## Tính năng hiện có
 
@@ -29,15 +29,15 @@ README đối chiếu tổng thể với mã nguồn ngày **26/10/2026** (phầ
 - Gate `SUCCESS/PARTIAL`: PARTIAL có thể hiển thị kèm trạng thái nhưng không vào memory thành công hoặc history SUCCESS gửi cho lượt tiếp theo. Memory do ứng dụng quản lý, không giao provider tự quyết định ghi nhớ.
 - Lịch sử giao diện page chat lưu riêng trong PostgreSQL theo account, có version chống ghi đè giữa thiết bị; localStorage chỉ giữ tùy chọn và ID phiên đang mở. Nhập lịch sử trình duyệt cũ cần xác nhận quyền sở hữu.
 - Che đường dẫn hệ thống trong câu trả lời của page/modal/embed; giữ link tải hợp lệ qua `/api/exports/...`.
-- `skill_core`: registry và editor skill (tab Skills), dùng trong catalog quy trình; luồng chat không còn gọi skill/few-shot từ đây sau khi gỡ Local Model Harness. Ví dụ hợp đồng đã duyệt cho v2 đến từ vòng học phản hồi (`npm run learn:build` / `learn:approve`).
+- `skills`: registry và editor skill (tab Skills), dùng trong catalog quy trình; luồng chat không còn gọi skill/few-shot từ đây sau khi gỡ Local Model Harness. Ví dụ hợp đồng đã duyệt cho v2 đến từ vòng học phản hồi (`npm run learn:build` / `learn:approve`).
 - Request budget dùng chung cho model call, SQL attempt và deadline; truyền abort signal xuống SQL connector.
-- Memory Core: phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
+- Bộ nhớ hội thoại (`src/backend/memory`): phân loại follow-up/chủ đề, lưu references và kiểm tra chất lượng trước khi ghi nhớ hội thoại.
 - Streaming tiến trình qua `/api/intelligent-core/chat/stream`, gồm sự kiện tiến trình và kết quả cuối; không đồng nghĩa streaming token đầy đủ.
-- Training Core: thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
+- Training (`src/backend/training`, tab Training Core): thu thập case, đánh giá SQL/câu trả lời, phân loại lỗi và tạo đề xuất cải tiến; chưa phải hệ thống fine-tuning model.
 - Workflow phase 1: catalog/plugin có phiên bản, template/slot, fixture/publish, run checkpoint/resume/cancel và file tải theo owner. Tab Quy trình tự động đã mở; tính năng mặc định tắt.
 - Tệp đính kèm trong chat (PDF/DOCX/XLSX/CSV/TXT/MD và ảnh PNG/JPG/WEBP): ảnh và PDF quét được chép thành chữ bằng mô hình đọc được ảnh (Gemini hoặc Ollama có vision); nội dung chỉ dùng trong cuộc trò chuyện đó, không vào thư viện tài liệu. Bật bằng `CHAT_ATTACHMENT_PROCESSING_ENABLED`.
 - Training Core có tab Skills để sửa hướng dẫn, bật/tắt skill và chọn ví dụ; cấu hình lưu PostgreSQL khi dùng backend `postgres`.
-- Memory Core v2 có pending turn, context budget và summary (cấu hình mẫu bật cả ba). Cờ `MEMORY_SEMANTIC_ROUTING_ENABLED` vẫn hiện trong Cài đặt nhưng không còn mã chạy dùng tới.
+- Memory v2 có pending turn, context budget và summary (cấu hình mẫu bật cả ba). Cờ `MEMORY_SEMANTIC_ROUTING_ENABLED` vẫn hiện trong Cài đặt nhưng không còn mã chạy dùng tới.
 
 ### Quy trình tự động và định tuyến chat
 
@@ -51,7 +51,7 @@ Model trả lời được ghim đầu request. Hỏi bổ sung khi thiếu inpu
 
 ### Hỏi đáp tài liệu (RAG) — cập nhật 26/10/2026
 
-Một dịch vụ RAG dùng chung (`src/backend/knowledge_core/rag/`) cho đường v2, công cụ `search_knowledge_base` của vòng agent và tài liệu nguồn chọn trong khung chat:
+Một dịch vụ RAG dùng chung (`src/backend/knowledge/rag/`) cho đường v2, công cụ `search_knowledge_base` của vòng agent và tài liệu nguồn chọn trong khung chat:
 
 1. **Hiểu câu hỏi** (`query.js`, không gọi model): bỏ tiền tố lệnh ("kho tri thức:", "tìm trong…"); tên tệp trong câu → chỉ tìm trong tài liệu đó; câu hỏi tiếp ("còn…", "phần … thì sao", "tài liệu trên…") → tìm trong tài liệu của câu trả lời trước. v2 còn nhận `documentQuery` do model viết lại trong cùng lần lập hợp đồng.
 2. **Truy hồi**: BGE-M3/Qdrant + BM25 (giữ cả chữ số đơn), gộp RRF; bỏ đoạn chỉ có tiêu đề và đoạn trùng; lọc theo quyền đọc và phiên bản. Mất Qdrant/embedding thì chuyển sang chỉ từ khóa và ghi chế độ `lexical_degraded`. GraphRAG (quy tắc từ khóa) **mặc định tắt** vì làm giảm thứ hạng trên bộ đo.
@@ -80,7 +80,7 @@ Một dịch vụ RAG dùng chung (`src/backend/knowledge_core/rag/`) cho đư�
 - Câu trả lời theo tài liệu có marker `[1]`, `[2]` dùng chung cho mọi provider. Khối “Đoạn nguồn theo trích dẫn” mặc định thu gọn và cho phép mở đoạn nguồn để đối chiếu. Kiểm tra số/ngày/mã trong câu so với đoạn được trích đang ở chế độ ghi nhận, chưa phải xác minh ngữ nghĩa toàn bộ câu trả lời.
 - Quyền theo từng tài liệu (`governedPolicy`): ai được đọc, độ nhạy và model nào được nhận nội dung.
 - Dashboard và trang Analytics hiển thị trạng thái chờ trong khi tải dữ liệu biểu đồ, gồm tần suất gọi AI, đánh giá, bản đồ nhiệt và tỷ trọng provider.
-- MCP client kết nối server qua stdio, Streamable HTTP hoặc SSE; có handshake, discovery tools/resources và thực thi tool qua Agent Core/registry.
+- MCP client kết nối server qua stdio, Streamable HTTP hoặc SSE; có handshake, discovery tools/resources và thực thi tool qua `agent`/registry.
 - Embed Chat hiển thị bảng Markdown, biểu đồ, link xuất file; hỗ trợ `data-theme="auto|light|dark"` và preview theo Embed ID từ trang quản trị.
 
 ### Hiệu suất tải tab — cập nhật 22/10/2026
@@ -117,7 +117,7 @@ Script ghi thời gian, kích thước và kết quả đối chiếu vào `arti
 | Data Dictionary/Glossary | Khả dụng | Có lưu trữ và đồng bộ Qdrant |
 | Text-to-SQL | Khả dụng có giới hạn | Cần dùng SQL account read-only ở môi trường thật |
 | AI Provider adapters | Khả dụng | Luồng chat ghim provider/model đầu request; không tự chuyển provider khi lỗi |
-| Intelligent Core/tools | Khả dụng | Guarded harness cho mọi provider; luồng hợp đồng v2 trước, vòng agent gọi công cụ làm dự phòng |
+| Assistant/tools (`assistant`, `agent`) | Khả dụng | Guarded harness cho mọi provider; luồng hợp đồng v2 trước, vòng agent gọi công cụ làm dự phòng |
 | Harness dữ liệu v2 | Đã triển khai (`HARNESS_PIPELINE=v2`) | Một lần gọi model lập hợp đồng; SQL do code biên dịch; chỉ tiêu nghiệp vụ đã duyệt (`npm run metrics:seed`) và ví dụ hợp đồng học từ phản hồi |
 | Qdrant schema search | Khả dụng khi có Qdrant/BGE-M3 | Collection schema v2 dùng embedding thật 1024 chiều; fallback deterministic mặc định tắt |
 | Dictionary identity | Đã triển khai | Phân biệt nguồn kết nối, database, schema, table và column; backup migration nằm trong `data/backup/` |
@@ -128,7 +128,7 @@ Script ghi thời gian, kích thước và kết quả đối chiếu vào `arti
 | MCP Sources | Đã triển khai kết nối thật | SDK MCP, handshake/discovery/execution; cần khai báo server riêng, test stdio không chứng minh mọi server bên ngoài tương thích |
 | Embed Chat | Đã triển khai | Endpoint JSON, domain allowlist, giới hạn theo cấu hình; admin preview bỏ kiểm tra domain |
 | Skill editor | Đã triển khai | Sửa hướng dẫn và ví dụ trên UI; hiệu lực xử lý phụ thuộc feature flag |
-| Memory Core v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary |
+| Memory v2 | Triển khai theo feature flag | Cấu hình mẫu bật pending turn, context budget và summary |
 | Workflow Automation | Đã triển khai, mặc định tắt | Editor mẫu, SQL/API/file/bước trước, mapping, biểu đồ/export và checkpoint; cần cấu hình nguồn và publish |
 | Chat/workflow routing | Đã triển khai | Bộ điều phối có quản trị; quy trình chọn trong hợp đồng v2 hoặc qua công cụ; TEV1 đã gỡ |
 | Định tuyến tài liệu/dữ liệu/trò chuyện | Đã triển khai | Tín hiệu tài liệu + mục `LIBRARY`; đo bằng `npm run eval:routing` (bộ câu nháp) |
@@ -139,7 +139,7 @@ Script ghi thời gian, kích thước và kết quả đối chiếu vào `arti
 | Redis/BullMQ | Chưa triển khai | Outbox hiện chạy trong Node.js, chưa có worker service riêng |
 | Page chat history | Đã triển khai | Bảng `app.ui_chat_sessions`, owner account, mã hóa và kiểm tra version |
 | Tải dữ liệu theo tab | Đã tối ưu | View được tải lười theo tab; request đang chạy được dùng chung; dữ liệu tab có cache ngắn hạn và tự tải lại khi hết hạn; thao tác thay đổi dữ liệu cập nhật trực tiếp |
-| Document RAG | Đã triển khai, phụ thuộc dịch vụ | Dịch vụ `knowledge_core/rag` dùng chung; BGE-M3 + BM25 + RRF; khi mất vector ghi `lexical_degraded`. Bộ đo nháp 26/10: recall@5 100%, MRR 94,6% |
+| Document RAG | Đã triển khai, phụ thuộc dịch vụ | Dịch vụ `knowledge/rag` dùng chung; BGE-M3 + BM25 + RRF; khi mất vector ghi `lexical_degraded`. Bộ đo nháp 26/10: recall@5 100%, MRR 94,6% |
 | BGE Reranker | Sẵn sàng tích hợp, chưa đo | Bật bằng `RERANKER_ENABLED=true` khi reranker HTTP hoạt động |
 | GraphRAG | Mặc định tắt | Quy tắc từ khóa; làm giảm thứ hạng trên bộ đo; chưa có knowledge graph lưu trữ |
 
@@ -200,6 +200,8 @@ EMBEDDING_ENABLED=false
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_BASE_URL=http://127.0.0.1:11434
 EMBEDDING_MODEL=bge-m3
+# Giữ bge-m3 trong bộ nhớ Ollama; hết hạn thì câu hỏi kế tiếp chờ nạp lại khoảng 3 giây
+EMBEDDING_KEEP_ALIVE=30m
 EMBEDDING_FALLBACK_MODE=error
 
 # Hybrid retrieval
@@ -218,7 +220,7 @@ RAG_ROUTING_MIN_SCORE=0.6
 # Bật đúng một lần sau khi đổi model/collection, rồi chuyển lại false
 KNOWLEDGE_REINDEX_ON_START=false
 
-# Intelligent Core
+# Assistant: chat, harness, provider
 AI_DEFAULT_TIMEOUT_MS=30000
 LOCAL_MODEL_MAX_MODEL_CALLS=12
 LOCAL_MODEL_MAX_SQL_CALLS=3
@@ -236,7 +238,7 @@ SQL_JOIN_PLANNER_ENABLED=false
 # System log retention (the selected storage backend applies)
 MAX_CHAT_HISTORY=5000
 
-# Memory Core v2
+# Memory v2
 MEMORY_PENDING_TURN_ENABLED=true
 MEMORY_CONTEXT_BUDGET_ENABLED=true
 MEMORY_SUMMARY_ENABLED=true
@@ -376,7 +378,7 @@ Script tạo bản sao trước migration trong `data/backup/`. Sau migration, �
 
 Tại **API tích hợp & Embed Chat**, tạo cấu hình rồi sao chép mã nhúng với `data-embed-id` tương ứng. `data-title` đặt tên hiển thị, độc lập với ID/tên cấu hình. `data-theme="auto"` theo `data-theme` trên `<html>`, nếu không có thì theo hệ điều hành; không tự nhận biết mọi quy ước theme của website khác.
 
-Nút **Mở thử** bật preview theo ID đã chọn; nhấn lại ẩn cả khung và nút nổi. Preview của admin đăng nhập bỏ qua domain allowlist, vẫn kiểm tra ID/trạng thái và giới hạn yêu cầu. Widget công khai vẫn kiểm tra domain. Embed dùng `/api/embed/chat`, trả kết quả một lần; Page Chat dùng stream tiến trình. Hai luồng cùng gọi Intelligent Core nhưng khác quyền và giới hạn lịch sử/kết quả.
+Nút **Mở thử** bật preview theo ID đã chọn; nhấn lại ẩn cả khung và nút nổi. Preview của admin đăng nhập bỏ qua domain allowlist, vẫn kiểm tra ID/trạng thái và giới hạn yêu cầu. Widget công khai vẫn kiểm tra domain. Embed dùng `/api/embed/chat`, trả kết quả một lần; Page Chat dùng stream tiến trình. Hai luồng cùng gọi `assistant` nhưng khác quyền và giới hạn lịch sử/kết quả.
 
 Tại **Nguồn MCP Server**, thêm endpoint HTTP/SSE hoặc command stdio. Hệ thống thử kết nối, lấy tools/resources và đăng ký tools vào luồng agent; dùng nút **Kết nối** để thử lại khi lỗi. Cấu hình lưu PostgreSQL khi dùng backend `postgres`; `data/mcp_servers.json` thuộc backend JSON/legacy. Đây là MCP client kết nối dịch vụ ngoài, không phải endpoint MCP server do KnowledgeHub tự cung cấp. Khả năng gọi tool còn phụ thuộc model, quyền và trạng thái server.
 
@@ -389,13 +391,13 @@ Node.js HTTP Server
   |-- Static Vanilla HTML/CSS/JS
   |-- Authentication/session
   |-- REST router
-  |-- Intelligent Core
+  |-- Assistant (src/backend/assistant)
   |     |-- Provider adapters
   |     |-- Governed harness
   |     |     |-- Contract pipeline v2 (data / workflow / document / chat)
   |     |     `-- Agent tool loop (fallback)
   |     |-- Tool registry
-  |     `-- Document RAG service (knowledge_core/rag)
+  |     `-- Document RAG service (knowledge/rag)
   |           |-- Question understanding + document signal
   |           |-- BGE-M3 dense search --> Qdrant
   |           |-- BM25 keyword search
@@ -411,7 +413,7 @@ Node.js HTTP Server
 
 ### Harness dữ liệu v2 và khi đổi nguồn SQL
 
-Bật bằng `HARNESS_PIPELINE=v2` (cần restart). Mã nguồn ở `src/backend/agent_core/pipeline/`. Với câu hỏi dữ liệu, luồng chạy:
+Bật bằng `HARNESS_PIPELINE=v2` (cần restart). Mã nguồn ở `src/backend/agent/pipeline/`. Với câu hỏi dữ liệu, luồng chạy:
 
 1. Lấy schema bằng code (`search_schema`), bổ sung bảng tra cứu nối trực tiếp và bảng của câu hỏi trước.
 2. Một lần gọi model để lập **hợp đồng truy vấn**: bảng gốc, cột, phép đo, bộ lọc kèm trích dẫn từ câu hỏi, đầu ra (biểu đồ/xuất file) hoặc workflow phù hợp. Model không viết SQL.
@@ -457,37 +459,42 @@ Backend dùng `node:http` hoặc `node:https` khi cấu hình TLS, chưa dùng F
 |-- server.js                         # Entrypoint HTTP server
 |-- src/
 |   |-- frontend/
-|   |   |-- index.html                # Dashboard shell
-|   |   |-- login.html
-|   |   |-- views/                    # Các trang chức năng
-|   |   |-- js/                       # Vanilla JS modules
-|   |   |-- css/
-|   |   `-- embed/                    # Embed chat widget
+|   |   |-- admin-client/             # Trang quản trị: index.html, login.html, views/, js/, css/
+|   |   |-- chat-client/              # Trang chat riêng cho người dùng
+|   |   |-- embed-client/             # Widget chat nhúng vào website khác
+|   |   `-- shared/                   # JS/CSS/views/icon dùng chung (page chat, provider...)
 |   `-- backend/
-|       |-- routes/router.js          # REST và static-file router
-|       |-- intelligent_core/         # Điểm vào chat (core.js), tool registry, adapters, guardrails
-|       |-- agent_core/
+|       |-- routes/router.js          # Router gốc: REST và static-file (governance, automation, knowledge có routes riêng)
+|       |-- assistant/                # Điểm vào chat (core.js), persona, tool registry, adapters cho từng provider, guardrails
+|       |-- agent/
 |       |   |-- harness/              # Guarded harness, completion policy, budget
 |       |   |-- pipeline/             # Luồng hợp đồng v2: catalog, compiler, câu trả lời tài liệu/trò chuyện
 |       |   |-- tools/                # Công cụ cho vòng agent
 |       |   `-- workflows/            # Workflow engine
 |       |-- governance/               # Bộ điều phối, quyền tài nguyên/gửi model, chỉ tiêu, SQL policy
 |       |-- automation/               # Catalog quy trình, template, runtime, nguồn dữ liệu, MCP soạn quy trình
-|       |-- skill_core/               # Skill registry cho tab Skills
-|       |-- memory_core/              # Memory, tham chiếu, trạng thái hội thoại tài liệu
-|       |-- training_core/            # Đánh giá, chỉ số đường xử lý, vòng học từ phản hồi
-|       |-- knowledge_core/           # Library, Watch Folder, cắt đoạn, truy hồi
+|       |-- skills/                   # Skill registry cho tab Skills
+|       |-- memory/                   # Memory, tham chiếu, trạng thái hội thoại tài liệu
+|       |-- training/                 # Đánh giá, chỉ số đường xử lý, vòng học từ phản hồi
+|       |-- knowledge/                # Library, Watch Folder, cắt đoạn, truy hồi
 |       |   `-- rag/                  # Dịch vụ RAG: hiểu câu hỏi, tín hiệu, đóng gói, kiểm chứng
-|       |-- services/                 # SQL, Qdrant, provider, auth, logs...
+|       |-- services/                 # SQL, Qdrant, provider, tài khoản, auth, backup, logs...
 |       |-- storage/                  # Async operation scope, PostgreSQL repository/outbox
-|       `-- utils/storage_helper.js   # Chuyển loadJson/saveJson sang storage theo backend
+|       `-- utils/                    # Tiện ích dùng chung; storage_helper.js chuyển loadJson/saveJson sang storage
 |-- migrations/postgres/              # SQL migration có checksum
 |-- compose.docker.yml                # PostgreSQL 18, Qdrant, named volumes và healthcheck
+|-- config/                           # Cấu hình mẫu (agent_operations.example.json)
 |-- data/                             # File tài liệu/export và JSON legacy giữ làm bản sao
 |   `-- backup/                       # Backup migration cục bộ, không dùng ở runtime
+|-- examples/
+|   |-- sql-server/sample_schema.sql  # Lược đồ SQL Server mẫu để thử nạp DDL
+|   |-- embed-identity-server.js      # Ví dụ máy chủ định danh cho Embed
+|   `-- workflow-mcp/                 # Cấu hình mẫu để Claude/Codex nối vào MCP soạn quy trình
 |-- scripts/
 |   `-- eval/                         # Live eval, golden candidates, chấm điểm truy hồi
-|-- tests/fixtures/                   # Bộ câu chuẩn: live eval, truy hồi, định tuyến, chọn schema
+|-- tests/                            # Unit/integration test (node:test)
+|   `-- fixtures/                     # Bộ câu chuẩn: live eval, truy hồi, định tuyến, chọn schema
+|-- artifacts/, output/               # Kết quả eval, báo cáo chỉ số, bản phát hành (sinh ra khi chạy)
 |-- docs/                             # Master plan và implementation plans
 |-- .agents/                          # Quy tắc dành cho coding agents
 |-- package.json
@@ -561,7 +568,7 @@ node --require ./tests/helpers/setup_isolated_data.js --test tests/analytics.tes
 
 Các kiểm thử bao gồm phạm vi kho dữ liệu, quyền đọc audit, giải mã token đúng vị trí, tải JSON theo yêu cầu và tải song song các phần độc lập. Script đo trên dữ liệu thật ở mục hiệu suất phía trên là bước đối chiếu bổ sung; không thay thế toàn bộ bộ kiểm thử.
 
-Lần chạy ngày **26/10/2026**: `npm test` **1.079 đạt, 14 bỏ qua, không có lỗi** (1.093 test). Nhóm `document` + `routing` của live eval trên Google Gemini đạt **18/18** sau khi cấp quyền tài liệu. Unit test sử dụng fixture/mock, không thay thế nghiệm thu SQL nghiệp vụ, retrieval hoặc provider thật. Test PostgreSQL cần credentials bootstrap và database test riêng:
+Lần chạy ngày **29/10/2026**: `npm test` **1.119 đạt, 14 bỏ qua, không có lỗi** (1.133 test). Ngày 26/10/2026, nhóm `document` + `routing` của live eval trên Google Gemini đạt **18/18** sau khi cấp quyền tài liệu. Unit test sử dụng fixture/mock, không thay thế nghiệm thu SQL nghiệp vụ, retrieval hoặc provider thật. Test PostgreSQL cần credentials bootstrap và database test riêng:
 
 ```powershell
 npm run test:storage
@@ -569,7 +576,7 @@ npm run test:storage
 
 Đã đo thời gian snapshot từng tab trên dữ liệu hiện tại; số liệu này chưa phải thời gian tải trang end-to-end hoặc p95 tải lớn.
 
-Project có tests cho guarded harness, luồng v2, Memory Core, Training Core, RAG và định tuyến tài liệu, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context và export. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
+Project có tests cho guarded harness, luồng v2, bộ nhớ hội thoại, training, RAG và định tuyến tài liệu, bảo vệ dữ liệu nhạy cảm, workflow, adapters, settings, SQL/schema context và export. Unit test không thay thế baseline end-to-end với SQL source, Qdrant và LLM thật:
 
 ```powershell
 npm test
@@ -595,7 +602,7 @@ npm run migrate:dictionary-identity   # migration identity + backup
 npm run sanitize:chat-data            # loại secret khỏi lịch sử chat đã lưu
 npm run training:collect
 npm run training:evaluate
-npm run eval:memory                   # đánh giá Memory Core
+npm run eval:memory                   # đánh giá bộ nhớ hội thoại
 npm run eval:sql                      # SQL security corpus
 npm run benchmark:http               # benchmark HTTP
 npm run backup                       # backup dữ liệu
