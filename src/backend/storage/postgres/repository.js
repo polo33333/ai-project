@@ -22,7 +22,6 @@ function commitFiles(dirty) {
     ['account_function_groups.json', ['account_roles.json', 'accounts.json']],
     ['sessions.json', ['accounts.json']],
     ['dictionary.json', ['db_sources.json']],
-    ['chat_feedback.json', ['chat_history.json']],
     ['workflow_runs.json', ['workflows.json']],
     ['conversation_memory.json', ['accounts.json']],
     ['chat_history.json', ['conversation_memory.json']]
@@ -238,7 +237,7 @@ class PostgresRepository {
   }
 
   async commit(work) {
-    if (!work.dirty.size && !work.jobs.length && !work.receipt) return;
+    if (!work.dirty.size && !work.jobs.length && !work.prepends?.length && !work.receipt) return;
     return transaction(this.pool, async client => {
       // Serialize only the short write phase; NEVER hold a lock during model,
       // SQL Server, filesystem processing or Qdrant requests.
@@ -275,6 +274,13 @@ class PostgresRepository {
       for (const row of target.rows.ai_providers) row.is_active = row.payload.isActive === true;
       if (target.rows.ai_providers.filter(row => row.is_active).length > 1) throw conflict();
       for (const row of target.rows.chat_sessions) row.embed_id = row.payload.embedId || null;
+      // Feedback links to its run by id; look up only the referenced runs instead
+      // of loading the whole chat history to resolve them.
+      if (target.rows.chat_feedback.length && !fresh.documents.has('chat_history.json')) {
+        const ids = [...new Set(target.rows.chat_feedback.map(row => row.payload.auditId).filter(Boolean).map(String))];
+        const runs = new Set((await client.query('SELECT id FROM app.chat_runs WHERE id=ANY($1::text[])', [ids])).rows.map(row => row.id));
+        for (const row of target.rows.chat_feedback) row.run_id = runs.has(String(row.payload.auditId)) ? String(row.payload.auditId) : null;
+      }
       const sessionIds = new Set(target.rows.chat_sessions.map(row => row.id));
       for (const row of target.rows.chat_runs) {
         const decision = row.payload.requestPayload?.memoryDecision;
@@ -344,6 +350,23 @@ class PostgresRepository {
       }
       // Restore unaffected children whose ordinals were moved with their parent.
       for (const table of children) if (writableTables.has(table)) await client.query(`UPDATE app.${table} SET ordinal=ordinal-1000000 WHERE ordinal>=1000000`);
+      // Prepended records (newest first) are written without loading their store:
+      // shift the stored order once, insert the record and its children, trim.
+      for (const { file, record, limit } of work.prepends || []) {
+        const source = sourcesByFile.get(file);
+        const built = buildModel(new Map([[file, [record]]]), { recordId, runtime: true });
+        const [row] = built.rows[source.table];
+        if (source.table === 'chat_runs') {
+          const decision = row.payload.requestPayload?.memoryDecision;
+          const key = decision?.accountId && decision.sessionId ? `${decision.accountId}__${decision.sessionId}` : decision?.sessionId;
+          row.session_id = key && (await client.query('SELECT 1 FROM app.chat_sessions WHERE id=$1', [key])).rowCount ? key : null;
+          row.request_id = row.payload.requestId || null;
+        }
+        await client.query(`UPDATE app.${source.table} SET ordinal=ordinal+1`);
+        await insertRow(client, source.table, row);
+        for (const child of childTables[source.table] || []) for (const childRow of built.rows[child.table]) await insertRow(client, child.table, childRow);
+        if (limit) await client.query(`DELETE FROM app.${source.table} WHERE ordinal>=$1`, [limit]);
+      }
       for (const file of target.files) {
         if (!work.dirty.has(file.file)) continue;
         await client.query(`INSERT INTO app.domain_stores(file, root) VALUES($1,$2)

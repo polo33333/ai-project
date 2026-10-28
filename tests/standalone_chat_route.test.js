@@ -123,7 +123,8 @@ test('chat client requests load the same app stores as the routes they stand for
   assert.deepEqual(stores('GET', '/chat/api/ai-usage/me'), stores('GET', '/api/ai-usage/me'));
   assert.deepEqual(stores('GET', '/chat/api/chat/providers'), stores('GET', '/api/chat/providers'));
   assert.deepEqual(stores('POST', '/chat/api/page-chat/sessions'), stores('POST', '/api/page-chat/sessions'));
-  assert.equal(stores('POST', '/chat/api/intelligent-core/chat/stream'), undefined);
+  assert.deepEqual(stores('POST', '/chat/api/intelligent-core/chat/stream'), stores('POST', '/api/intelligent-core/chat/stream'));
+  assert.ok(!stores('POST', '/chat/api/intelligent-core/chat/stream').includes('chat_history.json'));
   assert.deepEqual(stores('GET', '/admin/api/accounts'), stores('GET', '/api/accounts'));
   for (const page of ['/chat', '/chat/', '/chat?embed=x', '/chat/login?embed=x']) assert.ok(stores('GET', page).includes('embed_chat_configs.json'), page);
   for (const page of ['/login', '/admin/login', '/admin']) assert.ok(!stores('GET', page).includes('embed_chat_configs.json'), page);

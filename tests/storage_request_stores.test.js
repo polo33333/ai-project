@@ -44,3 +44,18 @@ test('individual workflow polling is scoped and never falls back to full chat hi
     assert.equal(requestStores({ method: 'POST', url: `/api/automation-runs/${id}/inputs` }), undefined);
   }
 });
+
+test('chat requests load every store except the chat history', () => {
+  for (const url of ['/api/intelligent-core/chat/stream', '/api/intelligent-core/chat', '/api/embed/chat', '/chat/api/intelligent-core/chat/stream', '/api/v1/chat/completions']) {
+    const files = requestStores({ method: 'POST', url });
+    assert.ok(!files.includes('chat_history.json'), url);
+    for (const file of ['chat_feedback.json', 'accounts.json', 'sessions.json', 'ai_providers.json', 'conversation_memory.json', 'db_sources.json', 'embed_chat_configs.json', 'api_keys.json'])
+      assert.ok(files.includes(file), `${url} ${file}`);
+  }
+  assert.ok(!requestStores({ method: 'POST', url: '/api/chat/attachments' }).includes('chat_history.json'));
+});
+
+test('rating an answer loads only the feedback store and authentication', () => {
+  for (const [method, url] of [['POST', '/api/chat-feedback'], ['PUT', '/api/chat-feedback/review'], ['POST', '/chat/api/chat-feedback']])
+    assert.deepEqual(requestStores({ method, url }), ['accounts.json', 'sessions.json', 'account_roles.json', 'account_function_groups.json', 'chat_feedback.json'], url);
+});

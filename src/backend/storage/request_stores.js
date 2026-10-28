@@ -3,11 +3,19 @@
 // routes whose store dependencies are explicitly known; never cache auth.
 const auth=['accounts.json','sessions.json','account_roles.json','account_function_groups.json'];
 const dictionaryFiles=['dictionary.json','table_relationships.json','db_sources.json','domain_aliases.json','glossary.json','logs.json'];
+// Chat runs reach the history through storage.prepend and chat requests never
+// read it; loading the history took seconds per message. Embed feedback is
+// written through the embed chat route, so its small store stays loaded.
+const chatRoutes=new Set(['/api/chat','/api/intelligent-core/chat','/api/intelligent-core/chat/stream','/api/embed/chat','/api/v1/chat/completions']);
+const chatStores=require('./postgres/catalog').sources.map(source=>source.file).filter(file=>file!=='chat_history.json');
 const mutations=new Map([
   ['POST /api/auth/logout',[]],
   // Attachment answers pick a model from the provider catalog.
-  ['POST /api/chat/attachments',['ai_providers.json','chat_history.json']],
+  ['POST /api/chat/attachments',['ai_providers.json']],
   ['DELETE /api/chat/attachments',[]],
+  // Feedback resolves its run by id at commit, without the chat history.
+  ['POST /api/chat-feedback',['chat_feedback.json']],
+  ['PUT /api/chat-feedback/review',['chat_feedback.json']],
   // Limits and counters live in their own SQL tables; only names come from stores.
   ['PUT /api/ai-usage/limits',['ai_providers.json','logs.json']],
   ['POST /api/ai-usage/reset',['ai_providers.json','logs.json']],
@@ -84,6 +92,7 @@ function requestStores(req) {
   if(req.method==='GET'&&pathname==='/api/chat-feedback'&&new URL(req.url,'http://localhost').searchParams.get('list')==='1')return auth;
   if(req.method==='GET'&&new URL(req.url,'http://localhost').searchParams.get('summary')==='1'
     &&['/api/chat-history','/api/chat-feedback'].includes(pathname))return auth;
+  if (req.method==='POST'&&chatRoutes.has(pathname)) return chatStores;
   const mutation = mutations.get(`${req.method} ${pathname}`);
   if (mutation) return [...auth,...mutation];
   // Polling a run must not reconstruct the entire chat history. Run documents

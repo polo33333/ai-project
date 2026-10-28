@@ -1197,7 +1197,7 @@ async function handleGovernedRequest(req, res) {
       const { question, message, history, embedId, sessionId, preview } = body;
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
       const isAdminPreview = preview === true && currentAccount?.role === 'admin';
-      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview, recordUsage: !body.presence && !['get','artifact'].includes(body.workflowAction) });
+      const authorization = embedChatService.authorize(embedId, req.headers.origin, clientIp, { skipOrigin: isAdminPreview, recordUsage: !body.presence && !body.feedback && !['get','artifact'].includes(body.workflowAction) });
       if (!authorization.ok) {
         res.writeHead(authorization.status, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ status: 'error', message: authorization.message }));
@@ -1213,6 +1213,19 @@ async function handleGovernedRequest(req, res) {
       if (body.presence === true) {
         res.writeHead(200, {'Content-Type':'application/json; charset=UTF-8'});
         res.end(JSON.stringify({status:'success',mode:embedChatService.normalizeMode(authorization.config.mode)})); return;
+      }
+      // A visitor rates only an answer of this widget in their own conversation.
+      if (body.feedback) {
+        if (!['like','dislike'].includes(body.feedback.rating)) throw Object.assign(new Error('Đánh giá không hợp lệ.'),{statusCode:400});
+        const auditId=String(body.feedback.auditId||''), visitorSession=String(sessionId||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,100)||null;
+        const [run]=auditId?await require('../services/audit_reader').records([auditId]):[];
+        if (!run || run.requestPayload?.embedId!==authorization.config.id || !visitorSession || run.requestPayload?.sessionId!==visitorSession) {
+          res.writeHead(404,{'Content-Type':'application/json; charset=UTF-8'});
+          res.end(JSON.stringify({status:'error',message:'Không tìm thấy câu trả lời để đánh giá.'})); return;
+        }
+        const feedback=loggerService.addChatFeedback(auditId,body.feedback.rating,{providerId:run.requestPayload?.providerId||null,model:run.modelName||null});
+        res.writeHead(200,{'Content-Type':'application/json; charset=UTF-8'});
+        res.end(JSON.stringify({status:'success',rating:feedback.rating})); return;
       }
       if(body.files || body.batchId) {
         const uploadOwner=JSON.stringify([req.storageOwner,visitorIdentity?.id||sessionId]);

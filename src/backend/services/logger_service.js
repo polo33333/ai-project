@@ -123,6 +123,12 @@ class LoggerService {
       errorReason: errorReason
     };
 
+    // PostgreSQL: write the run on commit without loading the whole history.
+    const storage = require('../storage');
+    if (storage.enabled()) {
+      storage.prepend('chat_history.json', auditItem, { limit: this.maxChatHistory });
+      return auditItem;
+    }
     this.chatHistory.unshift(auditItem);
     if (this.chatHistory.length > this.maxChatHistory) this.chatHistory.length = this.maxChatHistory;
 

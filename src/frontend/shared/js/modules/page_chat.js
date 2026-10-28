@@ -1451,7 +1451,9 @@ function renderPageChatActionIcon(name) {
     edit: '<path d="m15 5 4 4M4 16l-1 5 5-1L20 8a2.8 2.8 0 0 0-4-4Z"/>',
     more: '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
-    speak: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5Z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.3a8 8 0 0 1 0 11.4"/>'
+    speak: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5Z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.3a8 8 0 0 1 0 11.4"/>',
+    like: '<path d="M7 10v11"/><path d="M7 10h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h13.6a2 2 0 0 0 2-1.7l1.4-8A2 2 0 0 0 18 9h-5V5a2 2 0 0 0-2-2Z"/>',
+    dislike: '<g transform="rotate(180 12 12)"><path d="M7 10v11"/><path d="M7 10h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h13.6a2 2 0 0 0 2-1.7l1.4-8A2 2 0 0 0 18 9h-5V5a2 2 0 0 0-2-2Z"/></g>'
   };
   return `<svg class="chat-answer-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || ''}</svg>`;
 }
@@ -1525,7 +1527,14 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true, ta
       const actions = node.querySelector('.chat-answer-actions') || document.createElement('div');
       actions.className = 'chat-answer-actions';
       actions.setAttribute('aria-label', 'Thao tác với câu trả lời');
-      actions.innerHTML = `<button type="button" onclick="copyPageChatAnswer(this)" title="Sao chép" aria-label="Sao chép câu trả lời">${renderPageChatActionIcon('copy')}</button><button type="button" onclick="retryPageChatAnswer(this)" title="Thử lại" aria-label="Yêu cầu AI trả lời lại câu hỏi này">${renderPageChatActionIcon('retry')}</button><button type="button" class="chat-speak-btn" onclick="toggleAnswerSpeech(this)" title="Đọc to" aria-label="Đọc to câu trả lời" aria-pressed="false">${renderPageChatActionIcon('speak')}</button>`;
+      // Rating and token usage sit in this row; the answer keeps its feedback block
+      // only for the run identity. Saved answers still carry the old layout.
+      const feedback = node.querySelector('.chat-feedback');
+      const rated = node.querySelector('button[data-rating].is-selected')?.dataset.rating || null;
+      const usage = node.querySelector('.chat-token-usage');
+      feedback?.querySelector('.chat-feedback-actions')?.remove();
+      if (feedback) feedback.hidden = true;
+      actions.innerHTML = `<button type="button" onclick="copyPageChatAnswer(this)" title="Sao chép" aria-label="Sao chép câu trả lời">${renderPageChatActionIcon('copy')}</button><button type="button" onclick="retryPageChatAnswer(this)" title="Thử lại" aria-label="Yêu cầu AI trả lời lại câu hỏi này">${renderPageChatActionIcon('retry')}</button><button type="button" class="chat-speak-btn" onclick="toggleAnswerSpeech(this)" title="Đọc to" aria-label="Đọc to câu trả lời" aria-pressed="false">${renderPageChatActionIcon('speak')}</button>${renderInlineChatFeedback(feedback, rated)}`;
       const answeredAt = new Date(record.createdAt);
       const answerTime = answeredAt.toLocaleString('vi-VN', {
         day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'
@@ -1534,12 +1543,13 @@ function appendChatMessage(record, shouldPersist = true, shouldScroll = true, ta
         <summary title="Thông tin câu trả lời" aria-label="Thông tin câu trả lời">${renderPageChatActionIcon('more')}</summary>
         <div class="chat-answer-time-menu"><span>Thời gian trả lời</span><time datetime="${answeredAt.toISOString()}">${answerTime}</time></div>
       </details>`);
+      if (usage) actions.append(usage);
       node.append(actions);
     }
   }
   node.addEventListener('workflow-execution-updated', event => {
     const execution = event.detail.execution;
-    if (execution.tokenUsage?.available) { const feedback = node.querySelector('.chat-feedback'); if (feedback) { feedback.querySelector('.chat-token-usage')?.remove(); feedback.querySelector('.chat-routing-usage')?.remove(); feedback.insertAdjacentHTML('beforeend', renderChatTokenUsage(execution.tokenUsage, execution.routing)); } }
+    if (execution.tokenUsage?.available) { const actions = node.querySelector('.chat-answer-actions'); if (actions) { node.querySelectorAll('.chat-token-usage,.chat-routing-usage').forEach(item => item.remove()); actions.insertAdjacentHTML('beforeend', renderChatTokenUsage(execution.tokenUsage, execution.routing)); } }
     const answer = node.querySelector('.chat-ai-answer');
     if (answer && execution.status === 'SUCCEEDED') answer.textContent = `${execution.name} đã hoàn thành.`;
     if (answer && execution.status === 'CANCELLED') answer.textContent = `Đã hủy ${execution.name}.`;
@@ -1636,9 +1646,17 @@ function renderCurrentChatMessages(preserveScroll = false) {
 }
 
 async function submitChatFeedback(button) {
-  const group = button?.closest('.chat-feedback');
+  const group = button?.closest('.chat-feedback-inline, .chat-feedback');
   if (!group) return;
   const rating = button.dataset.rating;
+  const buttons = [...group.querySelectorAll('button[data-rating]')];
+  const label = group.querySelector('.chat-feedback-label');
+  const previous = { selected: buttons.find(item => item.classList.contains('is-selected')) || null, label: label?.textContent };
+  if (previous.selected === button) return;
+  // The choice shows at once; it reverts if the server does not save it.
+  const select = chosen => buttons.forEach(item => item.classList.toggle('is-selected', item === chosen));
+  select(button);
+  if (label) label.textContent = 'Cảm ơn bạn đã đánh giá';
   try {
     const res = await fetch('/api/chat-feedback', {
       method: 'POST',
@@ -1651,12 +1669,20 @@ async function submitChatFeedback(button) {
       })
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    group.querySelectorAll('button').forEach(item => item.classList.toggle('is-selected', item.dataset.rating === rating));
-    group.querySelector('.chat-feedback-label').textContent = 'Cảm ơn bạn đã đánh giá';
     if (typeof showToast === 'function') showToast('Đã ghi nhận đánh giá.', 'success');
   } catch (_) {
+    select(previous.selected);
+    if (label) label.textContent = previous.label;
     if (typeof showToast === 'function') showToast('Không thể lưu đánh giá.', 'error');
   }
+}
+
+function renderInlineChatFeedback(feedback, rated = null) {
+  if (!feedback?.dataset.auditId) return '';
+  const attribute = name => escapeChatMarkdown(feedback.dataset[name] || '');
+  const button = (rating, title, label) => `<button type="button" data-rating="${rating}" class="${rated === rating ? 'is-selected' : ''}" onclick="submitChatFeedback(this)" title="${title}" aria-label="${label}">${renderPageChatActionIcon(rating)}</button>`;
+  return `<span class="chat-feedback-inline" role="group" aria-label="Đánh giá câu trả lời" data-audit-id="${attribute('auditId')}" data-provider-id="${attribute('providerId')}" data-model="${attribute('model')}">${
+    button('like', 'Hữu ích', 'Thích câu trả lời')}${button('dislike', 'Chưa hữu ích', 'Không thích câu trả lời')}</span>`;
 }
 
 function renderChatFeedback(data = {}, tokenUsage = null, options = {}) {

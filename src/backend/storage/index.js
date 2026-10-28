@@ -72,7 +72,7 @@ async function run(operation, { independent = false, files } = {}) {
     const snapshot = await repository.snapshot(files);
     const work = {
       id: crypto.randomUUID(), documents: snapshot.documents,
-      baseline: cloneDocuments(snapshot.documents), dirty: new Set(), jobs: [], closed: false,
+      baseline: cloneDocuments(snapshot.documents), dirty: new Set(), jobs: [], prepends: [], closed: false,
       transforms: new Set(), committing: null, allowedFiles: files ? new Set(files) : null,
       afterCommit: new Map()
     };
@@ -120,12 +120,12 @@ async function flush() {
   if (!enabled()) return;
   const work = scope();
   if (work.committing) return work.committing;
-  if (!work.dirty.size && !work.jobs.length && !work.receipt) return;
+  if (!work.dirty.size && !work.jobs.length && !work.prepends.length && !work.receipt) return;
   work.committing = repository.commit(work);
   try {
     await work.committing;
     work.baseline = cloneDocuments(work.documents);
-    work.dirty.clear(); work.jobs = []; work.id = crypto.randomUUID();
+    work.dirty.clear(); work.jobs = []; work.prepends = []; work.id = crypto.randomUUID();
   } finally { work.committing = null; }
 }
 
@@ -159,6 +159,19 @@ function bind(service, property, file, fallback, transform) {
     },
     set(value) { scope().documents.set(file, value); }
   });
+}
+
+// Adds one record at the front of a newest-first array store without loading
+// the store: the commit inserts it and trims the store to `limit` records.
+// The record is not visible to reads of that store in this operation.
+function prepend(file, record, { limit } = {}) {
+  checkFile(file);
+  if (known.get(file).shape !== 'array') throw new Error(`Store does not accept prepends: ${file}`);
+  const work = scope();
+  if (work.committing) throw new Error('Cannot mutate storage while committing.');
+  // Kept by reference like a store write: the commit serializes the record as it is then.
+  work.prepends.push({ file, record, limit: Number.isInteger(limit) && limit > 0 ? limit : null });
+  return true;
 }
 
 function enqueue(kind, resourceId, payload = {}) {
@@ -198,4 +211,4 @@ async function lease(key, operation, { ttlMs = 120000, pool: leasePool = pool } 
   finally { clearInterval(timer); await leasePool.query('DELETE FROM app.worker_leases WHERE key=$1 AND owner=$2', [key, owner]); }
 }
 
-module.exports = { enabled, loadEnvironment, bootstrapStorage, run, flush, read, write, bind, enqueue, receipt, afterCommit, detach, ready, close, lease, getPool: () => pool };
+module.exports = { enabled, loadEnvironment, bootstrapStorage, run, flush, read, write, bind, prepend, enqueue, receipt, afterCommit, detach, ready, close, lease, getPool: () => pool };

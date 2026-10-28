@@ -294,7 +294,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     .kh-embed-root.expanded .kh-workflow .kh-embed-table-wrap{width:100%;min-width:0;box-sizing:border-box}
     .kh-embed-root.expanded .kh-workflow .kh-embed-table-wrap table{width:100%}
     .kh-embed-root.expanded .kh-workflow .kh-embed-chart{width:100%;min-width:0;box-sizing:border-box}
-    .kh-embed-answer-actions{display:flex;align-items:center;gap:6px;margin:-5px 0 12px;padding-left:2px}.kh-embed-answer-actions button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:7px;background:transparent;color:#718096;cursor:pointer}.kh-embed-answer-actions button:hover{color:var(--kh-primary);background:rgba(99,102,241,.08)}.kh-embed-answer-actions button:focus-visible{outline:2px solid var(--kh-primary);outline-offset:2px}.kh-embed-answer-actions button:disabled{opacity:.4;cursor:wait}.kh-embed-answer-actions svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.dark .kh-embed-answer-actions button{color:#a9b6cc}.dark .kh-embed-answer-actions button:hover{color:#c4b5fd;background:#29264b}
+    .kh-embed-answer-actions{display:flex;align-items:center;gap:6px;margin:-5px 0 12px;padding-left:2px}.kh-embed-answer-actions button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:7px;background:transparent;color:#718096;cursor:pointer}.kh-embed-answer-actions button:hover{color:var(--kh-primary);background:rgba(99,102,241,.08)}.kh-embed-answer-actions button:focus-visible{outline:2px solid var(--kh-primary);outline-offset:2px}.kh-embed-answer-actions button:disabled{opacity:.4;cursor:wait}.kh-embed-answer-actions button.is-selected{color:var(--kh-primary);background:rgba(99,102,241,.12)}.kh-embed-answer-actions .kh-embed-dislike svg{transform:rotate(180deg)}.kh-embed-answer-actions svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.dark .kh-embed-answer-actions button{color:#a9b6cc}.dark .kh-embed-answer-actions button:hover{color:#c4b5fd;background:#29264b}.dark .kh-embed-answer-actions button.is-selected{color:#c4b5fd;background:#29264b}
     .kh-embed-table-wrap{width:100%;margin-top:9px;overflow-x:auto;border:1px solid #dbe3ef;border-radius:10px;background:#fff}.kh-embed-table-wrap table{width:100%;border-collapse:collapse;font-size:11px;line-height:1.4}.kh-embed-table-wrap th,.kh-embed-table-wrap td{padding:8px 9px;border-right:1px solid #e8edf4;border-bottom:1px solid #e8edf4;white-space:nowrap;text-align:left;vertical-align:top}.kh-embed-table-wrap th{color:#334155;background:#f5f7fb;font-weight:750}.kh-embed-table-wrap tr:last-child td{border-bottom:0}.kh-embed-table-wrap th:last-child,.kh-embed-table-wrap td:last-child{border-right:0}.kh-embed-table-wrap tbody tr:nth-child(even){background:#fafbfe}
     .kh-embed-table-wrap{max-width:100%;min-width:0}.kh-embed-table-wrap table.kh-embed-markdown-table{width:max(100%,var(--chat-table-width,520px));table-layout:fixed}.kh-embed-table-wrap .kh-embed-markdown-table td{white-space:normal;overflow-wrap:anywhere}
     .kh-embed-message.kh-embed-thinking{display:flex;align-items:center;gap:12px;color:#64748b;width:320px;max-width:100%;min-width:0;box-sizing:border-box;overflow:hidden}
@@ -840,7 +840,25 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     return (await streamApi()).read(response,{onProgress,onAnswer});
   }
 
-  function addAnswerActions(node, question, copyText = null) {
+  // The choice shows at once; it reverts if the server does not save it.
+  function addFeedbackButtons(actions, auditId) {
+    const thumb = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3l4-7a2 2 0 0 1 2 2v5h5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>';
+    actions.insertAdjacentHTML('beforeend', `<button type="button" data-rating="like" title="Hữu ích" aria-label="Câu trả lời hữu ích" aria-pressed="false">${thumb}</button><button type="button" class="kh-embed-dislike" data-rating="dislike" title="Chưa hữu ích" aria-label="Câu trả lời chưa hữu ích" aria-pressed="false">${thumb}</button>`);
+    const buttons = [...actions.querySelectorAll('[data-rating]')];
+    const select = chosen => buttons.forEach(button => { button.classList.toggle('is-selected', button === chosen); button.setAttribute('aria-pressed', String(button === chosen)); });
+    for (const button of buttons) button.onclick = async () => {
+      const previous = buttons.find(item => item.classList.contains('is-selected')) || null;
+      if (previous === button) return;
+      select(button);
+      try {
+        const response = await fetch(apiBase + '/api/embed/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identityToken: await identityToken(), embedId, sessionId, preview: isPreview, feedback: { auditId, rating: button.dataset.rating } }) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch (_) { select(previous); }
+    };
+  }
+
+  function addAnswerActions(node, question, copyText = null, auditId = null) {
     const actions = document.createElement('div');
     actions.className = 'kh-embed-answer-actions';
     actions.setAttribute('aria-label', 'Thao tác với câu trả lời');
@@ -861,6 +879,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       retry.disabled = true;
       try { await submitEmbedQuestion(question, true); } finally { retry.disabled = false; }
     };
+    if (auditId) addFeedbackButtons(actions, auditId);
     node.after(actions);
     if (followMessages) messages.scrollTo({ top: messages.scrollHeight, behavior: 'instant' });
   }
@@ -919,7 +938,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       if (!response.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${response.status}`);
       if (requestVersion !== conversationVersion) return;
       if(data.workflowToken){workflowToken=data.workflowToken;saveWorkflow();}
-      if(data.execution){thinking.remove();const node=append('','ai');mountWorkflow(node,data.execution);addAnswerActions(node,question);return;}
+      if(data.execution){thinking.remove();const node=append('','ai');mountWorkflow(node,data.execution);addAnswerActions(node,question,null,data.auditId);return;}
       const replyWithoutDownloadLink = stripInlineDownloadLink(data.reply || '', data.downloadUrl);
       const hasMarkdownTable = replyWithoutDownloadLink.includes('|') && /\|?\s*:?-+:?\s*\|/.test(replyWithoutDownloadLink);
       let result = hasMarkdownTable ? renderRichText(replyWithoutDownloadLink) : renderText(replyWithoutDownloadLink);
@@ -934,7 +953,7 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
         result += `<details class="kh-embed-data"><summary style="padding:7px 8px;cursor:pointer">Xem dữ liệu (${data.toolResult.rows.length} dòng)</summary><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></details>`;
       }
       thinking.remove(); const answerNode = append(result, 'ai', hasMarkdownTable ? 'kh-embed-has-table' : '');
-      addAnswerActions(answerNode, question, replyWithoutDownloadLink);
+      addAnswerActions(answerNode, question, replyWithoutDownloadLink, data.auditId);
       if (data.completionStatus === 'SUCCESS') {
         history.push({ role: 'user', content: question }, { role: 'assistant', content: data.reply || '' });
       }

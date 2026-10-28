@@ -415,3 +415,5 @@ html[data-page="chat"], .kh-chat-standalone { height:100%; }
 
 /* Token accounting stays in administration, outside the visitor conversation. */
 .kh-chat-standalone .chat-token-usage, .kh-chat-embedded .chat-token-usage { display:none !important; }
+/* Rating lives in the action row; a block left with hidden token usage only would draw an empty rule. */
+:is(.kh-chat-standalone,.kh-chat-embedded) .chat-feedback:not(:has(> :not(.chat-token-usage))) { display:none !important; }

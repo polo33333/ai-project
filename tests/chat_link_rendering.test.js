@@ -189,3 +189,19 @@ test('chat token badges show request totals without model breakdowns', () => {
     bodyClasses.delete(mode);
   }
 });
+
+test('answer rating sits in the action row and keeps the earlier choice', () => {
+  const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
+  const context = vm.createContext({});
+  const slice = (from, to) => source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)));
+  vm.runInContext(slice('function escapeChatMarkdown', 'function sanitizeSystemPaths') + slice('function renderPageChatActionIcon', 'function appendChatMessage')
+    + slice('function renderInlineChatFeedback', 'function renderChatFeedback'), context);
+  const feedback = { dataset: { auditId: 'run-1', providerId: 'p1', model: 'gemini' } };
+  const html = context.renderInlineChatFeedback(feedback, 'dislike');
+  assert.match(html, /class="chat-feedback-inline"[^>]*data-audit-id="run-1"[^>]*data-provider-id="p1"[^>]*data-model="gemini"/);
+  assert.equal((html.match(/onclick="submitChatFeedback\(this\)"/g) || []).length, 2);
+  assert.match(html, /data-rating="dislike" class="is-selected"/);
+  assert.match(html, /data-rating="like" class=""/);
+  assert.equal(context.renderInlineChatFeedback({ dataset: {} }), '', 'answers without a run cannot be rated');
+  assert.equal(context.renderInlineChatFeedback(null), '');
+});
