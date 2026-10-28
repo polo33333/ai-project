@@ -134,6 +134,8 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     const url = String(downloadUrl || '').trim();
     if (!/^\/api\/exports\/[^\s<>"']+$/i.test(url)) return text;
     const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Multiple export links carry group labels and row counts in their list items; keep them.
+    if ((text.match(/\]\(\s*\/api\/exports\//g) || []).length > 1) return text;
     return text
       .replace(new RegExp(`\\[[^\\]]*\\]\\(\\s*${escapedUrl}\\s*\\)`, 'gi'), '')
       .replace(new RegExp(escapedUrl, 'gi'), '')
@@ -146,9 +148,14 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, rawUrl) => {
       const decodedUrl = rawUrl.replace(/&amp;/g, '&');
       let href = '';
+      // Visitors have no KnowledgeHub session, so export files download through the widget API.
+      if (decodedUrl.startsWith('/api/exports/')) {
+        let filename = decodedUrl.split('/').at(-1).split(/[?#]/)[0];
+        try { filename = decodeURIComponent(filename); } catch (_) {}
+        return `<button type="button" class="kh-embed-link" data-kh-export="${escapeHtml(filename)}">${label}</button>`;
+      }
       try {
-        if (decodedUrl.startsWith('/api/exports/')) href = new URL(decodedUrl, `${apiBase}/`).href;
-        else if (/^https?:\/\//i.test(decodedUrl)) href = new URL(decodedUrl).href;
+        if (/^https?:\/\//i.test(decodedUrl)) href = new URL(decodedUrl).href;
       } catch (_) {}
       return href ? `<a class="kh-embed-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>` : `${label} (${rawUrl})`;
     })
@@ -942,8 +949,9 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       const replyWithoutDownloadLink = stripInlineDownloadLink(data.reply || '', data.downloadUrl);
       const hasMarkdownTable = replyWithoutDownloadLink.includes('|') && /\|?\s*:?-+:?\s*\|/.test(replyWithoutDownloadLink);
       let result = hasMarkdownTable ? renderRichText(replyWithoutDownloadLink) : renderText(replyWithoutDownloadLink);
-      if (data.downloadUrl) {
-        const filename = decodeURIComponent(String(data.downloadUrl).split('/').at(-1));
+      const filename = data.downloadUrl ? decodeURIComponent(String(data.downloadUrl).split('/').at(-1)) : '';
+      // Grouped exports already show one button per file in the reply.
+      if (filename && !result.includes(`data-kh-export="${escapeHtml(filename)}"`)) {
         result += `<br><button type="button" class="kh-embed-link" data-kh-export="${escapeHtml(filename)}">Tải file kết quả</button>`;
       }
       result += renderEmbedChart(data.chartSpec);

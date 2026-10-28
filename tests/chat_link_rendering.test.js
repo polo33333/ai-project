@@ -71,10 +71,24 @@ test('modal and standalone embed renderers hide paths while retaining export lin
   const embed=fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js','utf8');
   const standalone=vm.createContext({URL,apiBase:'https://chat.example.com'});
   vm.runInContext(embed.slice(embed.indexOf('  const escapeHtml'),embed.indexOf('  const markdownCells'))+`\nthis.result=renderText(${JSON.stringify(value)});`,standalone);
-  for(const html of [modalHtml,standalone.result]) {
-    assert.doesNotMatch(html,/file:|AppData|C:\/Users|Local\/Temp/i);
-    assert.match(html,/href="(?:https:\/\/chat.example.com)?\/api\/exports\/report.xlsx"/);
-  }
+  for(const html of [modalHtml,standalone.result]) assert.doesNotMatch(html,/file:|AppData|C:\/Users|Local\/Temp/i);
+  assert.match(modalHtml,/href="\/api\/exports\/report.xlsx"/);
+  // Widget visitors have no session, so the export downloads through the widget API instead of a link.
+  assert.match(standalone.result,/<button type="button" class="kh-embed-link" data-kh-export="report.xlsx">Tải<\/button>/);
+});
+
+test('embed widget keeps grouped export labels and counts', () => {
+  const embed=fs.readFileSync('src/frontend/embed-client/knowledgehub-chat.js','utf8');
+  const context=vm.createContext({URL,apiBase:'https://chat.example.com'});
+  vm.runInContext(embed.slice(embed.indexOf('  const escapeHtml'),embed.indexOf('  const markdownCells')),context);
+  context.reply='- [Nam](/api/exports/men.xlsx) — 7 bản ghi\n- [Nữ](/api/exports/women.xlsx) — 2 bản ghi';
+  const kept=vm.runInContext("stripInlineDownloadLink(reply, '/api/exports/men.xlsx')",context);
+  assert.equal(kept,context.reply);
+  const html=vm.runInContext('renderText(stripInlineDownloadLink(reply, "/api/exports/men.xlsx"))',context);
+  assert.match(html,/data-kh-export="men.xlsx">Nam<\/button> — 7 bản ghi/);
+  assert.match(html,/data-kh-export="women.xlsx">Nữ<\/button> — 2 bản ghi/);
+  assert.equal(vm.runInContext("stripInlineDownloadLink('Đã xuất file: [Tải](/api/exports/one.xlsx).', '/api/exports/one.xlsx')",context),'Đã xuất file.');
+  assert.match(embed,/if \(filename && !result\.includes\(`data-kh-export="\$\{escapeHtml\(filename\)\}"`\)\)/,'no duplicate fallback button');
 });
 
 test('bare HTTP URLs become safe clickable links', () => {
