@@ -365,6 +365,14 @@ async function handleGovernedRequest(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
+    // A website with the chat widget calls /api/embed/chat without cookies; the POST itself checks the embed ID and domain.
+    if (!allowedOrigin && new URL(req.url, 'http://localhost').pathname === '/api/embed/chat' && embedChatService.allowsOrigin(req.headers.origin)) {
+      res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+      res.setHeader('Vary', 'Origin');
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     res.writeHead(req.headers.origin && !allowedOrigin ? 403 : 204);
     res.end();
     return;

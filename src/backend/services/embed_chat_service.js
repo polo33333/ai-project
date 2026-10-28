@@ -30,6 +30,12 @@ class EmbedChatService {
     return this.configs;
   }
 
+  // A browser preflight carries no embed ID, so it passes when any active widget lists the origin.
+  allowsOrigin(origin) {
+    const normalizedOrigin = this.normalizeOrigin(origin);
+    return Boolean(normalizedOrigin) && this.configs.some(item => item.isActive && item.allowedOrigins.includes(normalizedOrigin));
+  }
+
   // The widget reads data through this role. Admin cannot be given to a public widget.
   normalizeRole(value, current = 'khach_widget') {
     if (value === undefined || value === null || value === '') return current;

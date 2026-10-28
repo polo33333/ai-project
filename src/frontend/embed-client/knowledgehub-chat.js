@@ -959,8 +959,12 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       }
     } catch (error) {
       if (error.name === 'AbortError' || requestVersion !== conversationVersion) return;
-      thinking.remove(); const errorNode = append(escapeHtml(error.message), 'ai', 'kh-embed-error');
-      addAnswerActions(errorNode, question, error.message);
+      // The browser hides a blocked or unreachable server behind "Failed to fetch".
+      const message = error instanceof TypeError && /fetch|network|load failed/i.test(error.message)
+        ? 'Không kết nối được máy chủ trợ lý. Hãy kiểm tra máy chủ đang chạy và domain của trang này đã được khai báo trong cấu hình Embed.'
+        : error.message;
+      thinking.remove(); const errorNode = append(escapeHtml(message), 'ai', 'kh-embed-error');
+      addAnswerActions(errorNode, question, message);
     } finally { answerPreview?.dispose();stopOrb(); clearInterval(elapsedTimer); if (requestVersion === conversationVersion) { activeRequest = null; input.disabled = false; sendButton.disabled = false; updateToggleStatus(true); if (root.classList.contains('open')) input.focus(); } }
   }
   root.querySelector('form').onsubmit = event => {

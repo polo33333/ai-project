@@ -33,3 +33,24 @@ test('embed visitors rate only answers of their widget and conversation', async 
   assert.equal((await rate('mine','love')).status,400);
   assert.equal(saved.mock.callCount(),1);
 });
+
+test('a website listed on an active widget passes the browser preflight', async t => {
+  process.env.BOOTSTRAP_ADMIN_PASSWORD ||= 'embed-feedback-test-password';
+  const embed=require('../src/backend/services/embed_chat_service');
+  const old=embed.configs;
+  t.after(()=>{embed.configs=old;});
+  embed.configs=[];
+  t.mock.method(embed,'persist',()=>{});
+  const config=embed.createConfig({name:'Preflight widget',allowedOrigins:['https://website.test']});
+  const router=require('../src/backend/routes/router');const server=http.createServer((req,res)=>router.handleRequest(req,res));
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{server.closeAllConnections();return new Promise(resolve=>server.close(resolve));});
+  const preflight=(origin,path='/api/embed/chat')=>fetch(`http://127.0.0.1:${server.address().port}${path}`,{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'}});
+  const allowed=await preflight('https://website.test');
+  assert.equal(allowed.status,204);
+  assert.equal(allowed.headers.get('access-control-allow-origin'),'https://website.test');
+  assert.equal(allowed.headers.get('access-control-allow-credentials'),null);
+  assert.equal((await preflight('https://other.test')).status,403);
+  assert.equal((await preflight('https://website.test','/api/chat')).status,403,'only the widget endpoint opens to widget domains');
+  embed.toggleConfig(config.id,false);
+  assert.equal((await preflight('https://website.test')).status,403,'a disabled widget opens nothing');
+});
