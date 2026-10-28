@@ -166,7 +166,9 @@ test('copy code uses only the displayed code text', async () => {
 
 test('chat token badges show request totals without model breakdowns', () => {
   const source = fs.readFileSync('src/frontend/shared/js/modules/page_chat.js', 'utf8');
-  const context = vm.createContext({});
+  const bodyClasses = new Set();
+  const context = vm.createContext({ document: { body: { classList: { contains: name => bodyClasses.has(name) } } } });
+  vm.runInContext(source.slice(source.indexOf('const isPageChatEmbedded'), source.indexOf('\nfunction pageChatProviderId')), context);
   vm.runInContext(source.slice(source.indexOf('function escapeChatMarkdown'), source.indexOf('function sanitizeSystemPaths')) + source.slice(source.indexOf('function renderChatTokenUsage'), source.indexOf('async function copyPageChatQuestion')), context);
   const routing = { stages: [
     { model: 'tev1:4b', calls: 1, inputTokens: 323, outputTokens: 1, totalTokens: 324 },
@@ -181,4 +183,9 @@ test('chat token badges show request totals without model breakdowns', () => {
   assert.doesNotMatch(html, /423|425|tev1:4b|chat-model|chat-routing-inline/);
   assert.doesNotMatch(html, /<details/);
   assert.equal(context.renderChatTokenUsage(null), '');
+  for (const mode of ['kh-chat-standalone', 'kh-chat-embedded']) {
+    bodyClasses.add(mode);
+    assert.equal(context.renderChatTokenUsage({ available: true, totalTokens: 5014 }), '');
+    bodyClasses.delete(mode);
+  }
 });
