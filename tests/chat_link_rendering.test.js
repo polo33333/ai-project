@@ -74,7 +74,9 @@ test('modal and standalone embed renderers hide paths while retaining export lin
   for(const html of [modalHtml,standalone.result]) assert.doesNotMatch(html,/file:|AppData|C:\/Users|Local\/Temp/i);
   assert.match(modalHtml,/href="\/api\/exports\/report.xlsx"/);
   // Widget visitors have no session, so the export downloads through the widget API instead of a link.
-  assert.match(standalone.result,/<button type="button" class="kh-embed-link" data-kh-export="report.xlsx">Tải<\/button>/);
+  assert.match(standalone.result,/class="kh-embed-file-name" title="report.xlsx">Tải<\/span>/);
+  assert.match(standalone.result,/<button type="button" class="kh-embed-file-download" data-kh-export="report.xlsx"/);
+  assert.doesNotMatch(standalone.result,/href="[^"]*\/api\/exports\//);
 });
 
 test('embed widget keeps grouped export labels and counts', () => {
@@ -85,10 +87,14 @@ test('embed widget keeps grouped export labels and counts', () => {
   const kept=vm.runInContext("stripInlineDownloadLink(reply, '/api/exports/men.xlsx')",context);
   assert.equal(kept,context.reply);
   const html=vm.runInContext('renderText(stripInlineDownloadLink(reply, "/api/exports/men.xlsx"))',context);
-  assert.match(html,/data-kh-export="men.xlsx">Nam<\/button> — 7 bản ghi/);
-  assert.match(html,/data-kh-export="women.xlsx">Nữ<\/button> — 2 bản ghi/);
+  assert.equal((html.match(/class="kh-embed-file"/g)||[]).length,2,'one card per group');
+  assert.match(html,/title="men.xlsx">Nam<\/span><span class="kh-embed-file-meta">7 bản ghi · Bảng tính · XLSX<\/span>/);
+  assert.match(html,/title="women.xlsx">Nữ<\/span><span class="kh-embed-file-meta">2 bản ghi · Bảng tính · XLSX<\/span>/);
+  assert.match(html,/data-kh-export="women.xlsx" aria-label="Tải xuống women.xlsx">Tải xuống<\/button>/);
+  assert.doesNotMatch(html,/<br>|^-|— \d/,'no bullets, dashes or gaps around the cards');
+  assert.match(vm.runInContext("renderExportCard('/api/exports/report.pdf')",context),/title="report.pdf">report.pdf<\/span><span class="kh-embed-file-meta">Tài liệu · PDF/);
   assert.equal(vm.runInContext("stripInlineDownloadLink('Đã xuất file: [Tải](/api/exports/one.xlsx).', '/api/exports/one.xlsx')",context),'Đã xuất file.');
-  assert.match(embed,/if \(filename && !result\.includes\(`data-kh-export="\$\{escapeHtml\(filename\)\}"`\)\)/,'no duplicate fallback button');
+  assert.match(embed,/if \(filename && !result\.includes\(`data-kh-export="\$\{escapeHtml\(filename\)\}"`\)\) result \+= renderExportCard/,'no duplicate fallback card');
 });
 
 test('bare HTTP URLs become safe clickable links', () => {

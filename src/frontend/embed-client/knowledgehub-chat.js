@@ -144,16 +144,26 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   };
+  // A download card for an export file. Visitors have no KnowledgeHub session, so the file
+  // downloads through the widget API. label and summary arrive already escaped.
+  const renderExportCard = (url, label = '', summary = '') => {
+    let filename = String(url).split('/').at(-1).split(/[?#]/)[0];
+    try { filename = decodeURIComponent(filename); } catch (_) {}
+    const extension = filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase() || 'FILE';
+    const spreadsheet = ['XLSX', 'XLS', 'CSV', 'TSV'].includes(extension);
+    const kind = spreadsheet ? 'Bảng tính' : ['HTML', 'HTM'].includes(extension) ? 'Mã' : 'Tài liệu';
+    const mark = spreadsheet ? '<path d="m9.5 12.5 5 5m0-5-5 5"/>' : '<path d="M9 13h6M9 17h4"/>';
+    const name = escapeHtml(filename);
+    return `<div class="kh-embed-file"><span class="kh-embed-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/>${mark}</svg></span><span class="kh-embed-file-info"><span class="kh-embed-file-name" title="${name}">${label || name}</span><span class="kh-embed-file-meta">${summary ? summary + ' · ' : ''}${kind} · ${extension}</span></span><button type="button" class="kh-embed-file-download" data-kh-export="${name}" aria-label="Tải xuống ${name}">Tải xuống</button></div>`;
+  };
   const renderText = value => escapeHtml(normalizeDownloadLinks(sanitizeSystemPaths(value)))
+    // A list item holding only an export link, such as "- [Nam](/api/exports/x.xlsx) — 7 bản ghi", becomes one card.
+    .replace(/^[ \t]*(?:[-*•][ \t]+)?\[([^\]\n]+)\]\((\/api\/exports\/[^)\s]+)\)[ \t]*(?:[—–-][ \t]*([^\n]*?))?[ \t]*$/gm,
+      (_, label, rawUrl, summary) => renderExportCard(rawUrl.replace(/&amp;/g, '&'), label, summary || ''))
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, rawUrl) => {
       const decodedUrl = rawUrl.replace(/&amp;/g, '&');
       let href = '';
-      // Visitors have no KnowledgeHub session, so export files download through the widget API.
-      if (decodedUrl.startsWith('/api/exports/')) {
-        let filename = decodedUrl.split('/').at(-1).split(/[?#]/)[0];
-        try { filename = decodeURIComponent(filename); } catch (_) {}
-        return `<button type="button" class="kh-embed-link" data-kh-export="${escapeHtml(filename)}">${label}</button>`;
-      }
+      if (decodedUrl.startsWith('/api/exports/')) return renderExportCard(decodedUrl, label);
       try {
         if (/^https?:\/\//i.test(decodedUrl)) href = new URL(decodedUrl).href;
       } catch (_) {}
@@ -169,7 +179,10 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     })
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
+    .replace(/\n/g, '<br>')
+    // Cards are blocks; the line breaks around them would only add gaps.
+    .replace(/(?:<br>)+(?=<div class="kh-embed-file">)/g, '')
+    .replace(/(<\/button><\/div>)(?:<br>)+/g, '$1');
   const markdownCells = line => {
     const text = String(line || '').trim();
     const cells = []; let cell = '', delimiter = false;
@@ -297,6 +310,12 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
     .kh-embed-welcome{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px}.kh-embed-mini-avatar{display:grid;place-items:center;flex:0 0 26px;width:26px;height:26px;border-radius:8px;color:var(--kh-primary);background:#eef2ff}.kh-embed-mini-avatar svg{width:15px;height:15px}
     .kh-embed-message{width:fit-content;max-width:88%;margin:0 0 11px;padding:11px 13px;border-radius:12px;font-size:12.8px;line-height:1.58;overflow-wrap:anywhere;box-shadow:0 1px 3px rgba(15,23,42,.035)}.kh-embed-message.ai{border:1px solid #dfe5ee;border-radius:5px 12px 12px;background:#fff;color:#334155}.kh-embed-message.user{margin-left:auto;border-radius:12px 12px 5px;color:#fff;background:var(--kh-primary);box-shadow:0 3px 9px rgba(79,70,229,.15)}.kh-embed-message code{padding:2px 4px;border-radius:4px;color:#4338ca;background:#eef2ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px}.kh-embed-link{display:inline-flex;align-items:center;margin:5px 0;padding:7px 10px;border-radius:7px;color:#fff!important;background:var(--kh-primary);font-weight:750;text-decoration:none;box-shadow:0 2px 6px rgba(79,70,229,.14)}.kh-embed-link:hover{filter:brightness(1.04);text-decoration:none}
     .kh-embed-message.kh-embed-has-table{width:100%;max-width:100%}
+    .kh-embed-file{display:flex;align-items:center;gap:14px;width:100%;max-width:440px;min-height:68px;margin:10px 0;padding:12px 14px 12px 16px;overflow:hidden;border:1px solid #e2e8f0;border-radius:13px;background:#fff;color:#172b46;line-height:1.45}
+    .kh-embed-file-icon{display:grid;place-items:center;flex:0 0 46px;height:48px;margin-bottom:-13px;align-self:flex-end;border:1px solid #e8b7cb;border-bottom:0;border-radius:8px 8px 0 0;background:linear-gradient(145deg,#fce8f0,#f8edf2);color:#d6417b}.kh-embed-root .kh-embed-file-icon svg{width:20px;height:20px}
+    .kh-embed-file-info{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}.kh-embed-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;font-weight:600}.kh-embed-file-meta{color:#64748b;font-size:11.5px}
+    .kh-embed-file-download{flex:0 0 auto;padding:7px 12px;border:0;border-radius:8px;background:#f1f5f9;color:#172b46;font:inherit;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .15s}.kh-embed-file-download:hover{background:#e2e8f0}.kh-embed-file-download:focus-visible{outline:2px solid var(--kh-primary);outline-offset:2px}.kh-embed-file-download:disabled{opacity:.6;cursor:wait}
+    .kh-embed-root.dark .kh-embed-file{border-color:#344258;background:#172337;color:#e6edf7}.kh-embed-root.dark .kh-embed-file-icon{border-color:#7b354f;background:linear-gradient(145deg,#492033,#25151e);color:#f25391}.kh-embed-root.dark .kh-embed-file-meta{color:#9eabc0}.kh-embed-root.dark .kh-embed-file-download{background:#24324a;color:#e6edf7}.kh-embed-root.dark .kh-embed-file-download:hover{background:#2e3f5b}
+    @media(max-width:520px){.kh-embed-file{gap:10px;padding-left:12px;padding-right:12px}.kh-embed-file-icon{flex-basis:40px;height:44px}}
     .kh-embed-root.expanded .kh-embed-message.ai.kh-workflow{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
     .kh-embed-root.expanded .kh-workflow .kh-embed-table-wrap{width:100%;min-width:0;box-sizing:border-box}
     .kh-embed-root.expanded .kh-workflow .kh-embed-table-wrap table{width:100%}
@@ -950,10 +969,8 @@ function formatMoneyDisplayValue(value, label = '', unit = '') {
       const hasMarkdownTable = replyWithoutDownloadLink.includes('|') && /\|?\s*:?-+:?\s*\|/.test(replyWithoutDownloadLink);
       let result = hasMarkdownTable ? renderRichText(replyWithoutDownloadLink) : renderText(replyWithoutDownloadLink);
       const filename = data.downloadUrl ? decodeURIComponent(String(data.downloadUrl).split('/').at(-1)) : '';
-      // Grouped exports already show one button per file in the reply.
-      if (filename && !result.includes(`data-kh-export="${escapeHtml(filename)}"`)) {
-        result += `<br><button type="button" class="kh-embed-link" data-kh-export="${escapeHtml(filename)}">Tải file kết quả</button>`;
-      }
+      // Grouped exports already show one card per file in the reply.
+      if (filename && !result.includes(`data-kh-export="${escapeHtml(filename)}"`)) result += renderExportCard(data.downloadUrl);
       result += renderEmbedChart(data.chartSpec);
       if (!hasMarkdownTable && data.toolResult?.rows?.length) {
         const head = data.toolResult.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('');
