@@ -60,6 +60,7 @@ module.exports = {
   EMBEDDING_PROVIDER: ['Dịch vụ tạo embedding', 'ollama: dùng Ollama nội bộ; openai: endpoint tương thích OpenAI. Dịch vụ chuyển văn bản thành vector để tìm kiếm.'],
   EMBEDDING_BASE_URL: ['Địa chỉ dịch vụ embedding', 'URL máy chủ cung cấp model embedding, ví dụ http://127.0.0.1:11434 cho Ollama.'],
   EMBEDDING_MODEL: ['Model embedding', 'Tên model chuyển văn bản thành vector, ví dụ bge-m3. Đổi model có thể yêu cầu đổi số chiều và lập chỉ mục tài liệu lại.'],
+  EMBEDDING_KEEP_ALIVE: ['Thời gian giữ model embedding', 'Thời gian Ollama giữ model embedding trong bộ nhớ sau mỗi lần dùng, ví dụ 30m = 30 phút. Hết thời gian thì câu hỏi kế tiếp phải chờ nạp lại model (khoảng 3 giây với bge-m3).'],
   EMBEDDING_FALLBACK_MODE: ['Xử lý khi embedding lỗi', 'error: báo lỗi và dừng. deterministic: dùng vector dự phòng, không đảm bảo chất lượng tìm kiếm ngữ nghĩa.'],
   RETRIEVAL_CANDIDATE_LIMIT: ['Số ứng viên tìm kiếm', 'Số kết quả ứng viên cho bước truy xuất. Tăng để xét nhiều đoạn hơn trước khi chọn nội dung gửi AI.'],
   RRF_K: ['Hệ số gộp thứ hạng', 'Hệ số Reciprocal Rank Fusion khi kết hợp các nguồn tìm kiếm. Giá trị lớn giảm chênh lệch trọng số giữa các vị trí đứng đầu.'],

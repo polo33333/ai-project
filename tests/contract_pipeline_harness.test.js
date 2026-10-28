@@ -126,6 +126,22 @@ test('conversation is answered in v2 instead of falling back to the agent loop',
   assert.ok(!result.trace.steps.some(step => step.type === 'V2_FALLBACK'));
 });
 
+test('a greeting skips schema search, document search and plan_query', async t => {
+  const { result, seen } = await runForm(t, { question: 'Chào bạn!', answers: ['Xin chào! Mình có thể giúp gì?'],
+    tools: { search_schema: async () => { throw new Error('search_schema must not run for a greeting'); } } });
+  assert.equal(result.replyText, 'Xin chào! Mình có thể giúp gì?');
+  assert.equal(result.trace.pipeline, 'v2');
+  assert.equal(seen.prompts.length, 1);
+  assert.ok(!seen.prompts.some(prompt => prompt.tool === 'plan_query'));
+  assert.equal(result.trace.steps.find(step => step.type === 'ROUTING_DECISION')?.gate, 'social');
+});
+
+test('a greeting while a workflow waits for inputs still goes through plan_query', async t => {
+  const pendingInput = { runId: 'run-1', revision: 1, name: 'Báo cáo', inputs: { months: { label: 'Số tháng', schema: { type: 'integer' } } } };
+  const { seen } = await runForm(t, { question: 'hi', pendingInput, contracts: [{ kind: 'chat' }], answers: ['Xin chào!'] });
+  assert.ok(seen.prompts.some(prompt => prompt.tool === 'plan_query'));
+});
+
 test('a waiting workflow resumes with question-grounded inputs only', async t => {
   const pendingInput = { runId: 'run-9', revision: 3, name: 'Báo cáo', inputs: {
     months: { label: 'Số tháng', ask: 'Bao nhiêu tháng?', schema: { type: 'integer', minimum: 1, maximum: 24 } },

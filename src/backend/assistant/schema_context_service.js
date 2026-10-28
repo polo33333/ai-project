@@ -25,6 +25,10 @@ function normalize(value) {
     .toLowerCase().trim();
 }
 
+// A whole message that is only a greeting or thanks ("hi", "chào bạn", "cảm ơn").
+const SOCIAL = /^(hi|hello|hey|chao|xin chao|cam on|thank you|thanks)(\s+ban)?[.!?\s]*$/;
+const isSocialMessage = query => SOCIAL.test(normalize(query));
+
 function tokens(value) {
   return [...new Set(normalize(value).split(/\s+/).filter(token => token.length >= 2 && !STOP_WORDS.has(token)))];
 }
@@ -110,7 +114,7 @@ function isGeneralConversation(query, queryTokens, tables, hasGlossaryExpansion 
   const generalExplanation = /\b(giai thich|huong dan|la gi|khai niem|explain|what is|how to|tutorial)\b/.test(normalized);
   const explicitStoredData = /\b(kho du lieu|noi bo|da ket noi|trong bang|tu bang|theo du lieu)\b/.test(normalized)
     || tables.some(table => ` ${normalized} `.includes(` ${normalize(table.tableName)} `));
-  const greeting = /^(hi|hello|hey|chao|xin chao|cam on|thank you|thanks)(\s+ban)?[.!?\s]*$/.test(normalized);
+  const greeting = SOCIAL.test(normalized);
   const standaloneCalculation = isStandaloneCalculation(query, { hasSchemaMatch });
   return greeting || standaloneCalculation || (generalExplanation && !explicitStoredData && !hasGlossaryExpansion)
     || (!hasGlossaryExpansion && !dataIntent && !hasSchemaMatch);
@@ -471,4 +475,4 @@ function refineSchemaContext(query, requestedTableNames = [], options = {}) {
   };
 }
 
-module.exports = { buildSchemaContext, refineSchemaContext, isStandaloneCalculation, explicitListTable };
+module.exports = { buildSchemaContext, refineSchemaContext, isStandaloneCalculation, explicitListTable, isSocialMessage };

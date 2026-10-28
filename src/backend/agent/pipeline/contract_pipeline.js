@@ -204,6 +204,10 @@ function carryFilters(contract, previous, question) {
 
 async function run({ question, plan, context, toolContext, dispatch, toolManager, trace, toolCalls, requestTime, conversation = [], pendingInput = null }) {
   const step = (type, data = {}) => trace.steps.push({ type, ...data });
+  // A greeting or thanks needs no schema search, document search or plan_query call.
+  // A waiting workflow keeps the contract call: the message may answer its inputs.
+  if (!pendingInput && require('../../assistant/schema_context_service').isSocialMessage(question)) return answerWithoutCatalog({ question,
+    conversation, dispatch, plan, context, toolContext, toolManager, toolCalls, trace, gate: 'social', signal: null });
   // 1. Schema retrieval is deterministic tool code, not a model round.
   const searchArgs = { query: question, request: { operation: 'list', attributes: [], presentation: 'unspecified' } };
   // Authorized workflows are offered in the same contract call (tool code, no

@@ -42,6 +42,8 @@ class QdrantService {
     this.embeddingModel = process.env.EMBEDDING_MODEL || 'bge-m3';
     this.embeddingProvider = (process.env.EMBEDDING_PROVIDER || 'ollama').toLowerCase();
     this.embeddingBaseUrl = (process.env.EMBEDDING_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
+    // Ollama unloads a model after 5 idle minutes by default; reloading bge-m3 adds ~3 s to the next question.
+    this.embeddingKeepAlive = process.env.EMBEDDING_KEEP_ALIVE || '30m';
     this.documentCollectionPromise = null;
   }
 
@@ -79,7 +81,7 @@ class QdrantService {
         if (vectors.some(vector => !Array.isArray(vector) || vector.length !== expectedSize)) throw new Error(`Embedding dimension does not match collection (${expectedSize})`);
         return vectors;
       }
-      response = await postJson(`${this.embeddingBaseUrl}/api/embed`, { model: this.embeddingModel, input });
+      response = await postJson(`${this.embeddingBaseUrl}/api/embed`, { model: this.embeddingModel, input, keep_alive: this.embeddingKeepAlive });
       const vectors = response.embeddings || (response.embedding ? [response.embedding] : []);
       if (vectors.length !== input.length) throw new Error('Embedding response is incomplete');
       if (vectors.some(vector => !Array.isArray(vector) || vector.length !== expectedSize)) throw new Error(`Embedding dimension does not match collection (${expectedSize})`);
@@ -93,6 +95,13 @@ class QdrantService {
       console.warn(`[Embedding] ${this.embeddingModel} unavailable; deterministic fallback is active: ${error.message}`);
       return input.map(text => this.generateDeterministicVector(text, expectedSize));
     }
+  }
+
+  /** Loads the embedding model at startup so the first question does not wait for it. */
+  async warmUp() {
+    if (!require('./embedding_policy').enabled()) return false;
+    try { await this.embedTexts(['warm-up']); return true; }
+    catch (error) { console.warn(`[Embedding] Warm-up skipped: ${error.message}`); return false; }
   }
 
   /**

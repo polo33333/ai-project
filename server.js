@@ -63,6 +63,7 @@ async function start() {
   console.log(`[KnowledgeHub] ${protocol}://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT} storage=${process.env.APP_STORAGE_BACKEND || 'json'}`);
   if (HOST === '0.0.0.0') console.log(`[KnowledgeHub] LAN access: ${protocol}://<mac-mini-ip>:${PORT}`);
   if (process.env.KNOWLEDGEHUB_SUPERVISED === 'true') console.log('[Startup] Completed.');
+  require('./src/backend/services/qdrant_service').warmUp();
 }
 async function shutdown(signal) {
   if (shuttingDown) return; shuttingDown = true;

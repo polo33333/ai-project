@@ -96,3 +96,22 @@ test('schema and document retrieval never create collections or payload indexes'
   assert.equal(calls.length, 4);
   assert.ok(!calls.some(call => call.path.includes('/index')));
 });
+
+test('Ollama embeddings ask to keep the model loaded, and warm-up loads it once', async t => {
+  mode(t, 'true');
+  const bodies = [];
+  const server = require('node:http').createServer((req, res) => {
+    let data = ''; req.on('data', chunk => { data += chunk; });
+    req.on('end', () => { bodies.push(JSON.parse(data)); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ embeddings: [new Array(1024).fill(0.1)] })); });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const before = { url: qdrant.embeddingBaseUrl, provider: qdrant.embeddingProvider, keepAlive: qdrant.embeddingKeepAlive };
+  t.after(() => { qdrant.embeddingBaseUrl = before.url; qdrant.embeddingProvider = before.provider; qdrant.embeddingKeepAlive = before.keepAlive; });
+  Object.assign(qdrant, { embeddingBaseUrl: `http://127.0.0.1:${server.address().port}`, embeddingProvider: 'ollama', embeddingKeepAlive: '30m' });
+  assert.equal(await qdrant.warmUp(), true);
+  assert.deepEqual(bodies.map(body => body.keep_alive), ['30m']);
+  mode(t, 'false');
+  assert.equal(await qdrant.warmUp(), false);
+  assert.equal(bodies.length, 1);
+});
