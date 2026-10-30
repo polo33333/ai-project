@@ -1,6 +1,7 @@
 'use strict';
 // Function groups: one business job each (permissions, sources, table packages,
 // workflow packages). A role is the union of its function groups.
+// Workflow packages are off for every group until the group turns them on (its `workflows` list).
 const StorageHelper = require('../utils/storage_helper');
 const { higherLevel, PACKAGE_LEVELS } = require('../governance/policy');
 const fail = (message, statusCode = 400) => { throw Object.assign(new Error(message), { statusCode }); };
@@ -62,7 +63,8 @@ class AccountFunctionGroups {
       result.revisions.push(`${group.id}:${group.revision}`);
       group.permissions.forEach(item => result.permissions.add(item));
       for (const type of ['sql', 'documents', 'watchfolders']) (group.sources?.[type] || []).forEach(item => result[type].add(item));
-      (group.workflows || []).forEach(item => result.workflows.add(item));
+      // A package turned on counts only in a group that may use workflows.
+      if (group.permissions.includes('workflows.use')) (group.workflows || []).forEach(item => result.workflows.add(item));
       for (const [sourceId, grants] of Object.entries(group.packages || {})) {
         const target = result.packages[sourceId] ||= {};
         for (const [packageId, level] of Object.entries(grants)) target[packageId] = higherLevel(target[packageId], level);

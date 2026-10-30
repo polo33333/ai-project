@@ -56,7 +56,6 @@ async function handle(req, res, pathname, account, readBody) {
       else if (action === 'test') send(await automation.registry.test(id, context));
       else if (action === 'publish') send({ package: await automation.registry.publish(id, context, body.revision) });
       else if (action === 'enabled') send({ package: await automation.registry.enable(id, body.enabled, context, body.revision) });
-      else if (action === 'access') send({ package: await automation.registry.setAccess(id, body.mode, context, body.revision) });
       else if (action === 'overlay') send({ package: await automation.registry.overlay(id, body.scopeId, body.bundle, context, body.revision) });
       else if (action === 'rollback') send({ package: await automation.registry.rollback(id, body.version, context, body.revision) });
       else throw error('Thao tác không được hỗ trợ.', 405);

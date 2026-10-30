@@ -7,9 +7,9 @@ function authorized(definition, context) {
   const audience = definition.audience;
   return (!audience?.accountIds?.length || audience.accountIds.includes(context.accountId)) && (!audience?.tenantIds?.length || audience.tenantIds.includes(scope(context)));
 }
-// Packages set to "Theo nhóm chức năng" are offered only to roles whose function groups list them.
+// A package reaches a role only when one of its function groups turned it on; admins see every package.
 function packageAllowed(record, context) {
-  if (record?.access?.mode !== 'grants' || context.permissions?.includes('admin') || context.role === 'admin') return true;
+  if (context.permissions?.includes('admin') || context.role === 'admin') return true;
   return (context.workflowGrants || context.grants?.workflows || []).includes(record.id);
 }
 function requireAdmin(context) { if (!context.permissions?.includes('admin')) throw error('Cần quyền quản trị definition.', 403); }
@@ -133,12 +133,6 @@ class PluginRegistry {
     if (!record || record.revision !== revision) throw error('Revision gói đã thay đổi.', 409);
     ensure(typeof enabled === 'boolean', 'enabled phải là boolean.');
     return this.repository.put('catalog', { ...record, enabled }, revision);
-  }
-  async setAccess(id, mode, context, revision) {
-    requireAdmin(context); const record = await this.repository.get('catalog', id);
-    if (!record) throw error('Gói không tồn tại.', 404);
-    ensure(['all', 'grants'].includes(mode), 'Chế độ sử dụng không hợp lệ.');
-    return this.repository.put('catalog', { ...record, access: { mode } }, revision);
   }
   async rollback(id, version, context, revision) {
     requireAdmin(context); const record = await this.repository.get('catalog', id);

@@ -10,7 +10,8 @@ const { AutomationRuntime } = require('../src/backend/automation/runtime');
 const { validatePackage, validateValue } = require('../src/backend/automation/contract');
 const pilot = require('../src/backend/automation/pilot.json');
 const admin = { accountId: 'admin-test', permissions: ['admin'] };
-const user = { accountId: 'user-test', permissions: ['sql:read'] };
+// Packages are off until a function group turns them on; this user's groups turn on every package the tests publish.
+const user = { accountId: 'user-test', permissions: ['sql:read'], workflowGrants: ['phase1_examples', 'lab_samples', 'shipping_routes', 'broken', 'mismatch', 'placeholder', 'required_review'] };
 function setup(t, options = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'automation-test-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -217,4 +218,13 @@ test('SQL binding uses typed parameters and rejects tables outside the allowlist
   assert.equal(result.rowCount, 1); assert.ok(!received[0].includes(injected));
   assert.deepEqual(received[3], [{ name: 'code', type: 'string', value: injected }]);
   await assert.rejects(executeBinding(binding, { code: 'a' }, { permissions: [] }), { statusCode: 403 });
+});
+
+test('a published package stays hidden from a user until one of their groups turns it on', async t => {
+  const { registry } = setup(t);
+  await publish(registry);
+  const name = pilot.templates[0].examples[0];
+  assert.notEqual((await registry.match(name, { accountId: 'other', permissions: ['sql:read'], workflowGrants: [] })).status, 'matched');
+  assert.equal((await registry.list({ accountId: 'other', permissions: ['sql:read'], workflowGrants: [] })).length, 0);
+  assert.ok((await registry.list(user)).length > 0);
 });

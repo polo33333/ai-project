@@ -93,3 +93,28 @@ test('source pagination stays visible, resets on filtering and selects only the 
  assert.match(elements.get('dg-sources-pagination').innerHTML,/Trang 1\/1/);
  assert.match(elements.get('dg-sources-body').innerHTML,/source_11/);
 });
+test('workflow tab shows one switch per published package, off unless the group turned it on',async()=>{
+ const elements=new Map();
+ const make=id=>({id,hidden:true,value:'',textContent:'',innerHTML:'',setAttribute(){},classList:{toggle(name,on){this[name]=on;}},focus(){},
+  querySelectorAll(selector){
+   const switches=[...this.innerHTML.matchAll(/role="switch" value="([^"]*)" (checked)? ?aria/g)];
+   if(selector==='#dg-group-workflows input[role="switch"]')return switches;
+   if(selector==='#dg-group-workflows input[role="switch"]:checked')return switches.filter(m=>m[2]).map(m=>({value:m[1]}));
+   if(selector==='#dg-group-permissions input[value="workflows.use"]:checked')return /value="workflows.use" checked/.test(this.innerHTML)?[1]:[];
+   return [];}});
+ let saved;
+ const context=vm.createContext({window:{DG:{esc:String,api:async(url,method,body)=>{if(method){saved=body;return {group:body};}return {groups:[{id:'g',name:'G',permissions:['chat.use'],workflows:['contract_lookup','retired_draft'],impact:{roles:[],accounts:0}}],roles:[],capabilities:[{id:'chat.use',label:'Trò chuyện'},{id:'workflows.use',label:'Mẫu nghiệp vụ'}],
+  catalog:{sql:[],documents:[],watchfolders:[],workflows:[{id:'employee_lookup',name:'Nhân viên',enabled:true},{id:'contract_lookup',name:'Hợp đồng',enabled:true},{id:'phase1',name:'Mẫu cũ',enabled:false}]}};}}},
+  CSS:{escape:String},document:{getElementById(id){if(!elements.has(id))elements.set(id,make(id));return elements.get(id);},addEventListener(){}}});
+ vm.runInContext(fs.readFileSync('src/frontend/admin-client/js/modules/governance_groups.js','utf8'),context);
+ await context.window.loadFunctionGroups();context.window.openFunctionGroupEditor(0);
+ const html=elements.get('dg-group-body').innerHTML;
+ assert.match(html,/role="switch" value="employee_lookup"  aria/);assert.match(html,/role="switch" value="contract_lookup" checked aria/);
+ assert.match(html,/Gói đang tắt trên toàn hệ thống/);assert.doesNotMatch(html,/Mọi người dùng mẫu|Chỉ theo nhóm chức năng/);
+ // Without the workflow permission the switches have no effect, and the tab says so.
+ assert.equal(elements.get('dg-group-workflows-warning').hidden,false);
+ assert.equal(elements.get('dg-gcount-workflows').textContent,'1/3');
+ // Saving keeps a package the list hides (a draft or a removed package) as it was.
+ await context.window.saveFunctionGroup({preventDefault(){}});
+ assert.deepEqual([...saved.workflows].sort(),['contract_lookup','retired_draft']);
+});

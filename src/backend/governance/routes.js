@@ -226,11 +226,12 @@ function suggestPackages(sourceId) {
   }
   return { packages: [...groups].map(([prefix, names]) => ({ id: prefix, name: prefix === 'khac' ? 'Khác' : `Nhóm ${prefix.toUpperCase()}_`, tables: names, sensitiveColumns: [], allowBridge: true, base: false })), hiddenTables: hidden };
 }
+// Published packages only: a draft reaches no one, and a newly published package stays off until a group turns it on.
 async function workflowPackages() {
   try {
     const automation = require('../automation'); await automation.settings();
-    return (await automation.repository.list('catalog')).filter(record => record.draft && record.id !== '_settings')
-      .map(record => ({ id: record.id, name: record.draft?.manifest?.name || record.id, mode: record.access?.mode || 'all', revision: record.revision }));
+    return (await automation.repository.list('catalog')).filter(record => record.published && record.id !== '_settings')
+      .map(record => ({ id: record.id, name: record.published.manifest?.name || record.id, enabled: record.enabled !== false }));
   } catch { return []; }
 }
 async function handle(req, res, pathname, account, readBody) {

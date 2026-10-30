@@ -153,7 +153,9 @@
   function preview(groupIds) {
     const chosen=groupIds.map(id=>functionGroups.find(g=>g.id===id)).filter(Boolean);
     const permissions=new Set(chosen.flatMap(g=>g.permissions)), packages=new Set(chosen.flatMap(g=>Object.entries(g.packages||{}).flatMap(([s,p])=>Object.keys(p).map(k=>s+'/'+k))));
-    const sources=new Set(chosen.flatMap(g=>[...(g.sources?.sql||[]),...(g.sources?.documents||[])])), workflows=new Set(chosen.flatMap(g=>g.workflows||[]));
+    const sources=new Set(chosen.flatMap(g=>[...(g.sources?.sql||[]),...(g.sources?.documents||[])]));
+    // A workflow package turned on counts only in a group that may use workflows (account_function_groups.combine).
+    const workflows=new Set(chosen.filter(g=>g.permissions.includes('workflows.use')).flatMap(g=>g.workflows||[]));
     return chosen.length?`Quyền tổng hợp: ${permissions.size} quyền chức năng (${capabilities.filter(c=>permissions.has(c.id)).map(c=>c.label).join(', ')||'không có'}) · ${packages.size} gói bảng · ${sources.size} nguồn hạn chế · ${workflows.size} mẫu nghiệp vụ.`:'Chưa chọn nhóm chức năng nào: vai trò không có quyền sử dụng.';
   }
   window.updateAccountPermissionPreview=function() {

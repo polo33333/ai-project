@@ -57,6 +57,9 @@
     'workflows.use': 'Mẫu nghiệp vụ', 'feedback.read': 'Đánh giá AI', 'analytics.read': 'Báo cáo' };
   const DATA_PERMISSIONS = new Set(['sql:read', 'knowledge:read']);
   const initials = name => String(name).replace(/\(.*?\)/g, '').replace(/[—&-]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase() || '?';
+  // Workflow packages this group turned on; none when the group may not use workflows at all.
+  const workflowsOn = group => group.permissions.includes('workflows.use')
+    ? (groupsState.data?.catalog?.workflows || []).filter(item => item.enabled !== false && (group.workflows || []).includes(item.id)).length : 0;
   function groupCard(group, index) {
     const packages = Object.values(group.packages || {}).reduce((sum, grants) => sum + Object.keys(grants).length, 0);
     const sources = (group.sources?.sql?.length || 0) + (group.sources?.documents?.length || 0) + (group.sources?.watchfolders?.length || 0);
@@ -73,7 +76,7 @@
       <p class="dg-gdesc" title="${esc(group.description || '')}">${esc(group.description || '')}</p>
       <ul class="dg-chips-list" aria-label="Quyền chức năng">${chips}${more > 0 ? `<li class="is-more" title="${esc(permissions.slice(3).map(capabilityLabel).join(', '))}">+${more}</li>` : ''}</ul>
       <footer class="dg-gfoot">
-        <code class="dg-gid">${esc(group.id)}</code><div class="dg-gstats">${stat('table-cells', packages, 'gói bảng')}${stat('database', sources, 'nguồn hạn chế')}${stat('diagram-project', group.workflows?.length || 0, 'mẫu nghiệp vụ')}</div>
+        <code class="dg-gid">${esc(group.id)}</code><div class="dg-gstats">${stat('table-cells', packages, 'gói bảng')}${stat('database', sources, 'nguồn hạn chế')}${stat('diagram-project', workflowsOn(group), 'mẫu nghiệp vụ đang bật')}</div>
         <button type="button" class="btn-secondary-sm" onclick="openFunctionGroupEditor(${index})" aria-label="Sửa nhóm ${esc(group.name)}"><i class="fa-solid fa-pen" aria-hidden="true"></i> Sửa</button>
       </footer></article>`;
   }
@@ -191,9 +194,10 @@
             || '<div class="dg-empty-state"><i class="fa-solid fa-table-cells" aria-hidden="true"></i><p>Chưa nguồn SQL nào chia gói bảng: mọi bảng đang mở cho người đọc được nguồn. Chia gói tại thẻ Nguồn dữ liệu → Chi tiết → Gói bảng.</p></div>'}
         </section>
         <section id="dg-gpanel-workflows" role="tabpanel" aria-labelledby="dg-gtab-workflows" hidden>
-          ${catalog.workflows.length ? `<p class="settings-governance-hint">Mẫu đặt “Chỉ theo nhóm chức năng” chỉ hiện với vai trò có nhóm chứa mẫu đó. Đổi “Ai được dùng” có hiệu lực ngay.</p>
-            <div class="dg-checks dg-gwf-list" id="dg-group-workflows">${catalog.workflows.map(item => `<label class="dg-workflow"><input type="checkbox" value="${esc(item.id)}" ${checked(group?.workflows, item.id)} onchange="updateGroupTabCounts()"><span>${esc(item.name)}</span><select class="form-control" aria-label="Ai được dùng mẫu ${esc(item.name)}" onchange="setWorkflowAccess('${esc(item.id)}', this.value, ${Number(item.revision) || 0}, this)"><option value="all" ${item.mode !== 'grants' ? 'selected' : ''}>Mọi người dùng mẫu</option><option value="grants" ${item.mode === 'grants' ? 'selected' : ''}>Chỉ theo nhóm chức năng</option></select></label>`).join('')}</div>`
-            : '<div class="dg-empty-state"><i class="fa-solid fa-diagram-project" aria-hidden="true"></i><p>Chưa có gói mẫu nghiệp vụ.</p></div>'}
+          ${catalog.workflows.length ? `<p class="settings-governance-hint">Chỉ hiện mẫu đã phát hành. Mẫu mới phát hành mặc định tắt: bật mẫu mà nhóm này được dùng. Vai trò dùng được mẫu khi ít nhất một nhóm của nó bật mẫu đó.</p>
+            <p class="dg-gwf-warning" id="dg-group-workflows-warning" hidden><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Nhóm chưa có quyền “Sử dụng mẫu nghiệp vụ” (thẻ Quyền chức năng), nên các công tắc dưới đây chưa có tác dụng.</p>
+            <div class="dg-gwf-list" id="dg-group-workflows">${catalog.workflows.map(item => `<label class="dg-workflow ${item.enabled === false ? 'is-off' : ''}"><span>${esc(item.name)}${item.enabled === false ? '<small class="dg-workflow-note">Gói đang tắt trên toàn hệ thống.</small>' : ''}</span><span class="dg-switch"><input type="checkbox" role="switch" value="${esc(item.id)}" ${checked(group?.workflows, item.id)} aria-label="Dùng mẫu ${esc(item.name)} trong nhóm này" onchange="updateGroupTabCounts()"><span class="dg-switch-track" aria-hidden="true"></span><span class="dg-switch-label"></span></span></label>`).join('')}</div>`
+            : '<div class="dg-empty-state"><i class="fa-solid fa-diagram-project" aria-hidden="true"></i><p>Chưa có gói mẫu nghiệp vụ nào được đăng.</p></div>'}
         </section>
       </div>`;
     window.updateGroupTabCounts();
@@ -214,7 +218,10 @@
     set('permissions', count('#dg-group-permissions input:checked'));
     set('sources', count('input[data-source]:checked'));
     set('packages', [...body.querySelectorAll('select[data-package]')].filter(select => select.value).length);
-    set('workflows', count('#dg-group-workflows input[type="checkbox"]:checked'));
+    const total = count('#dg-group-workflows input[role="switch"]'), on = count('#dg-group-workflows input[role="switch"]:checked');
+    set('workflows', total ? `${on}/${total}` : 0);
+    const warning = el('dg-group-workflows-warning');
+    if (warning) warning.hidden = !total || count('#dg-group-permissions input[value="workflows.use"]:checked') > 0;
   };
   window.toggleGroupPermissions = on => { el('dg-group-permissions').querySelectorAll('input').forEach(input => { input.checked = on; }); window.updateGroupTabCounts(); };
   window.setAllGroupPackages = function (select) {
@@ -230,17 +237,6 @@
     window.showGroupTab(next); el(`dg-gtab-${next}`).focus();
   });
   window.closeFunctionGroupEditor = () => { if (!groupsState.saving) el('dg-group-editor').hidden = true; };
-  window.setWorkflowAccess = async function (id, mode, revision, select) {
-    select.disabled = true;
-    try {
-      const response = await dg().api(`/api/workflow-plugins/${encodeURIComponent(id)}/access`, 'POST', { mode, revision });
-      const item = groupsState.data.catalog.workflows.find(entry => entry.id === id);
-      if (item) { item.mode = mode; item.revision = response.package?.revision ?? item.revision; }
-      select.setAttribute('onchange', `setWorkflowAccess('${id.replace(/'/g, '')}', this.value, ${Number(item?.revision) || 0}, this)`);
-      window.showToast?.('Đã đổi phạm vi dùng mẫu nghiệp vụ.', 'success');
-    } catch (error) { window.showToast?.(error.message, 'error'); select.value = mode === 'all' ? 'grants' : 'all'; }
-    finally { select.disabled = false; }
-  };
   function readGroupForm() {
     const values = selector => [...el('dg-group-body').querySelectorAll(selector)].map(input => input.value);
     const packages = {};
@@ -256,7 +252,9 @@
       permissions: values('#dg-group-permissions input:checked'),
       sources: { sql: keepOther('sql', values('input[data-source="sql"]:checked')), documents: keepOther('documents', values('input[data-source="documents"]:checked')), watchfolders: keepOther('watchfolders', values('input[data-source="watchfolders"]:checked')) },
       packages: { ...Object.fromEntries(Object.entries(groupsState.editing?.packages || {}).filter(([sourceId]) => !el('dg-group-body').querySelector(`.dg-group-packages[data-source-id="${CSS.escape(sourceId)}"]`))), ...packages },
-      workflows: values('#dg-group-workflows input[type="checkbox"]:checked'), revision: groupsState.editing?.revision };
+      // Keep packages the list does not show (not published or removed) as they were.
+      workflows: [...new Set([...values('#dg-group-workflows input[role="switch"]:checked'), ...(groupsState.editing?.workflows || []).filter(id => !(groupsState.data?.catalog?.workflows || []).some(item => item.id === id))])],
+      revision: groupsState.editing?.revision };
   }
   window.saveFunctionGroup = async function (event) {
     event.preventDefault(); if (groupsState.saving) return;
@@ -379,7 +377,7 @@
   };
   function renderInspectReport() {
     const report = inspectPaging.report, actor = report.actor, { LABELS } = dg(), box = el('dg-inspect-result');
-      box.innerHTML = `<div class="dg-actor"><strong>${esc(actor.label)}</strong><span class="metric-tag purple">${esc(actor.role || '')}</span>${actor.functionGroups.map(group => `<span class="metric-tag gray">${esc(group.name)}</span>`).join('') || (actor.role === 'admin' ? '<small>Toàn quyền truy cập các nguồn</small>' : '<small>Không có nhóm chức năng</small>')}${actor.workflows.length ? `<small>${actor.workflows.length} gói mẫu nghiệp vụ</small>` : ''}</div>
+      box.innerHTML = `<div class="dg-actor"><strong>${esc(actor.label)}</strong><span class="metric-tag purple">${esc(actor.role || '')}</span>${actor.functionGroups.map(group => `<span class="metric-tag gray">${esc(group.name)}</span>`).join('') || (actor.role === 'admin' ? '<small>Toàn quyền truy cập các nguồn</small>' : '<small>Không có nhóm chức năng</small>')}${actor.workflows?.length ? `<small>${actor.workflows.length} gói mẫu nghiệp vụ</small>` : ''}</div>
         <div class="dg-table-wrap dg-inspect-table"><table class="dg-table"><colgroup><col class="dg-inspect-source"><col class="dg-inspect-access"><col class="dg-inspect-ai"></colgroup><thead><tr><th scope="col">Nguồn</th><th scope="col">Đọc được</th><th scope="col">AI nhận dữ liệu</th></tr></thead><tbody>${report.resources.slice((inspectPaging.page - 1) * inspectPaging.size, inspectPaging.page * inspectPaging.size).map((item, offset) => `<tr>
           <td class="dg-name"><strong>${esc(item.name)}</strong><small>${LABELS.type[item.type]}</small></td>
           <td data-label="Đọc được"><span class="dg-verdict ${item.allowed ? 'is-yes' : 'is-no'}">${item.allowed ? '✓ Có' : '✗ Không'}</span><small>${esc(REASONS[item.reason] || item.reason)}${item.via.length ? `: ${item.via.map(esc).join(', ')}` : ''}</small>

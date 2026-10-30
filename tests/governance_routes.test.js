@@ -64,3 +64,16 @@ test('function groups, version 2 policies and the effective report work over the
   } finally { groups.groups = previous.groups; roles.roles = previous.roles; storage.saveJson = previous.save; sql.dbSources = sql.dbSources.filter(item => item.id !== source.id); }
 }));
 function rulesLevel(source) { return require('../src/backend/governance/policy').normalize(source.governedPolicy).aiSharing.level; }
+test('the function group editor lists published workflow packages only', async t => context.run(async () => {
+  const automation = require('../src/backend/automation');
+  t.mock.method(automation, 'settings', async () => ({ enabled: true }));
+  t.mock.method(automation.repository, 'list', async () => [
+    { id: '_settings', enabled: true },
+    { id: 'live', enabled: true, draft: { manifest: { name: 'Nháp mới' } }, published: { manifest: { name: 'Đã đăng' } } },
+    { id: 'off', enabled: false, draft: { manifest: { name: 'Tắt' } }, published: { manifest: { name: 'Đã đăng nhưng tắt' } } },
+    { id: 'draft', enabled: true, draft: { manifest: { name: 'Chỉ có nháp' } } }]);
+  context.setPrincipal({ subject: 'account:a', role: 'admin' });
+  let value; const response = { writeHead() {}, end(json) { value = JSON.parse(json); } };
+  await routes.handle({ method: 'GET', url: '/api/governance/function-groups' }, response, '/api/governance/function-groups', { id: 'a', role: 'admin' }, async () => ({}));
+  assert.deepEqual(value.catalog.workflows, [{ id: 'live', name: 'Đã đăng', enabled: true }, { id: 'off', name: 'Đã đăng nhưng tắt', enabled: false }]);
+}));

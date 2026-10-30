@@ -110,8 +110,8 @@
 .dg-group-packages { display:flex; flex-direction:column; gap:6px; }
 .dg-group-packages strong { color:var(--text-primary); font-size:12px; }
 .dg-group-packages label { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--text-secondary); font-size:12px; }
-.dg-group-packages .form-control, .dg-workflow .form-control { width:auto; min-width:150px; min-height:32px; font-size:12px; }
-.dg-workflow span { flex:1; }
+.dg-group-packages .form-control { width:auto; min-width:150px; min-height:32px; font-size:12px; }
+.dg-workflow > span:first-child { flex:1; min-width:0; }
 .dg-matrix th[scope="row"] { color:var(--text-primary); font-weight:650; white-space:nowrap; }
 .dg-matrix td { min-width:130px; }
 .dg-level { min-height:32px; font-size:12px; }
@@ -265,8 +265,23 @@
 .dg-gpkg-grid label span { min-width:0; overflow-wrap:anywhere; }
 .dg-gpkg-grid label small { display:block; color:var(--text-muted); font-size:11px; }
 .dg-gpkg-grid .form-control { flex:0 0 120px; width:120px; min-width:0; }
-.dg-gwf-list { gap:8px; }
-.dg-gwf-list .dg-workflow { padding:6px 0; border-bottom:1px solid var(--border-color); }
+.dg-gwf-list { display:flex; flex-direction:column; }
+.dg-gwf-list .dg-workflow { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-color); color:var(--text-primary); font-size:12px; cursor:pointer; }
+.dg-workflow-note { display:block; margin-top:2px; color:var(--text-muted); font-size:11px; font-weight:400; }
+.dg-gwf-list .dg-workflow.is-off > span:first-child { color:var(--text-muted); }
+.dg-switch { position:relative; display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; }
+.dg-switch input { position:absolute; left:0; top:50%; width:38px; height:22px; margin:0; transform:translateY(-50%); opacity:0; cursor:pointer; z-index:1; }
+.dg-switch-track { position:relative; flex:0 0 38px; height:22px; border-radius:20px; background:var(--border-color,#cbd5e1); transition:background .15s; }
+.dg-switch-track::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0002; transition:transform .15s; }
+.dg-switch input:checked + .dg-switch-track { background:var(--primary-color,#6366f1); }
+.dg-switch input:checked + .dg-switch-track::after { transform:translateX(16px); }
+.dg-switch input:focus-visible + .dg-switch-track { outline:2px solid var(--primary-color,#6366f1); outline-offset:3px; }
+.dg-switch-label { min-width:24px; color:var(--text-muted); font-size:11px; font-weight:600; }
+.dg-switch-label::before { content:'Tắt'; }
+.dg-switch input:checked ~ .dg-switch-label { color:var(--primary-color,#6366f1); }
+.dg-switch input:checked ~ .dg-switch-label::before { content:'Bật'; }
+.dg-gwf-warning { display:flex; gap:8px; align-items:flex-start; margin:0 0 8px; padding:8px 10px; border-radius:8px; background:var(--warning-bg,#fff7ed); color:var(--warning-text,#9a3412); font-size:12px; }
+.dg-gwf-warning[hidden] { display:none; }
 .dg-empty-state { display:flex; flex-direction:column; align-items:center; gap:8px; padding:28px 16px; color:var(--text-muted); font-size:12px; text-align:center; }
 .dg-empty-state i { font-size:22px; opacity:.6; }
 .dg-empty-state p { max-width:420px; margin:0; line-height:1.6; }

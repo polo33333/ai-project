@@ -95,13 +95,24 @@ test('function groups combine into a role and widgets read through their role', 
   groups.groups = []; roles.roles = [];
   groups.save({ id: 'co_ban', name: 'Cơ bản', permissions: ['chat.use', 'knowledge:read'] });
   groups.save({ id: 'tra_cuu_hd', name: 'Tra cứu hợp đồng', permissions: ['sql:read'], packages: { s1: { contracts: 'lookup' } } });
-  groups.save({ id: 'quan_ly_hd', name: 'Quản lý hợp đồng', permissions: ['sql:read'], packages: { s1: { contracts: 'full' } }, workflows: ['contracts-report'] });
+  groups.save({ id: 'quan_ly_hd', name: 'Quản lý hợp đồng', permissions: ['sql:read', 'workflows.use'], packages: { s1: { contracts: 'full' } }, workflows: ['contracts-report'] });
+  groups.save({ id: 'hanh_chinh', name: 'Hành chính', permissions: ['workflows.use'], workflows: ['payroll'] });
+  groups.save({ id: 'xem', name: 'Chỉ xem', permissions: ['chat.use'], workflows: ['secret-report'] });
   roles.save({ id: 'sales', name: 'Kinh doanh', functionGroups: ['co_ban', 'tra_cuu_hd', 'quan_ly_hd'] });
   const effective = roles.effective({ role: 'sales' });
-  assert.deepEqual(effective.permissions.sort(), ['chat.use', 'knowledge:read', 'sql:read']);
+  assert.deepEqual(effective.permissions.sort(), ['chat.use', 'knowledge:read', 'sql:read', 'workflows.use']);
   // The higher level wins when two groups grant one package.
   assert.equal(effective.grants.packages.s1.contracts, 'full');
+  // Workflow packages are off until a group turns them on; a group without the workflow permission turns nothing on.
   assert.deepEqual(effective.grants.workflows, ['contracts-report']);
+  roles.save({ id: 'office', name: 'Văn phòng', functionGroups: ['quan_ly_hd', 'hanh_chinh', 'xem'] });
+  const office = roles.effective({ role: 'office' });
+  assert.deepEqual(office.grants.workflows.sort(), ['contracts-report', 'payroll']);
+  const { packageAllowed } = require('../src/backend/automation/registry');
+  assert.equal(packageAllowed({ id: 'payroll' }, { role: 'office', grants: office.grants }), true);
+  assert.equal(packageAllowed({ id: 'secret-report' }, { role: 'office', grants: office.grants }), false);
+  assert.equal(packageAllowed({ id: 'new-package' }, { role: 'office', grants: office.grants }), false);
+  assert.equal(packageAllowed({ id: 'new-package' }, { role: 'admin' }), true);
   // Extra groups on one account add to the role.
   groups.save({ id: 'tai_chinh', name: 'Tài chính', permissions: ['sql:read'], packages: { s1: { finance: 'full' } } });
   assert.equal(roles.effective({ role: 'sales', extraFunctionGroups: ['tai_chinh'] }).grants.packages.s1.finance, 'full');
