@@ -104,20 +104,21 @@
   </form>
   <label class="chat-history-search" for="chat-history-search">
     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-    <input type="search" id="chat-history-search" placeholder="Tìm câu hỏi, model, nguồn chat, trạng thái…" aria-label="Tìm kiếm lịch sử trò chuyện" oninput="searchChatHistory()">
+    <input type="search" id="chat-history-search" placeholder="Tìm câu hỏi, người dùng, model, nguồn chat, trạng thái…" aria-label="Tìm kiếm lịch sử trò chuyện" oninput="searchChatHistory()">
   </label>
   <div class="system-tools-card data-table-container chat-history-table-wrap">
     <table class="custom-table chat-history-table">
       <thead>
         <tr>
           <th style="width: 10%;">Thời gian</th>
+          <th style="width: 11%;">Người dùng</th>
           <th style="width: 17%;">Câu hỏi / Prompt</th>
           <th style="width: 12%;">Model AI</th>
           <th style="width: 10%;">Nguồn chat</th>
           <th style="width: 7%;">Độ trễ</th>
           <th style="width: 8%;">Trạng thái</th>
           <th style="width: 8%;">Đánh giá</th>
-          <th style="width: 28%;">Truy vấn / Data JSON gọi AI</th>
+          <th style="width: 17%;">Truy vấn / Data JSON gọi AI</th>
         </tr>
       </thead>
       <tbody id="chat-history-tbody">

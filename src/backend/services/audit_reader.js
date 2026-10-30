@@ -1,6 +1,6 @@
 'use strict';
 const storage=require('../storage');
-const owner=(item,account)=>account.role==='admin'||item.requestPayload?.principalRef===`account:${account.id}`||item.requestPayload?.memoryDecision?.accountId===account.id;
+const owner=(item,account)=>account.role==='admin'||item.requestPayload?.principalRef===`account:${account.id}`||item.requestPayload?.memoryDecision?.accountId===account.id||item.requestPayload?.account?.id===account.id;
 const error=()=>Object.assign(new Error('Không tìm thấy lượt chat.'),{statusCode:404});
 async function records(ids) {
   if(!ids.length)return [];
@@ -26,7 +26,7 @@ function listItem(item) {
   const p=item.requestPayload||{};
   return {id:item.id,status:item.status,timestamp:item.timestamp,question:item.question,modelName:item.modelName,
     latencyMs:item.latencyMs,errorReason:item.errorReason,feedback:item.feedback,
-    requestPayload:{endpoint:p.endpoint,embedId:p.embedId,visitorIdentity:p.visitorIdentity,sessionId:p.sessionId,origin:p.origin},detailsAvailable:true};
+    requestPayload:{endpoint:p.endpoint,embedId:p.embedId,visitorIdentity:p.visitorIdentity,account:p.account,sessionId:p.sessionId,origin:p.origin},detailsAvailable:true};
 }
 async function list(account) {
   if(!storage.enabled())return require('./logger_service').getChatHistory().filter(item=>owner(item,account)).map(listItem);
@@ -34,10 +34,11 @@ async function list(account) {
     r.payload->>'question' AS question,r.payload->>'modelName' AS "modelName",r.payload->'latencyMs' AS "latencyMs",
     r.payload->>'errorReason' AS "errorReason",f.payload->>'rating' AS feedback,
     jsonb_build_object('endpoint',r.payload#>'{requestPayload,endpoint}','embedId',r.payload#>'{requestPayload,embedId}',
-      'visitorIdentity',r.payload#>'{requestPayload,visitorIdentity}','sessionId',r.payload#>'{requestPayload,sessionId}',
+      'visitorIdentity',r.payload#>'{requestPayload,visitorIdentity}','account',r.payload#>'{requestPayload,account}','sessionId',r.payload#>'{requestPayload,sessionId}',
       'origin',r.payload#>'{requestPayload,origin}') AS "requestPayload",true AS "detailsAvailable"
     FROM app.chat_runs r LEFT JOIN LATERAL (SELECT payload FROM app.chat_feedback WHERE run_id=r.id ORDER BY ordinal,id LIMIT 1) f ON true
     WHERE $1::boolean OR r.payload#>>'{requestPayload,principalRef}'=$2 OR r.payload#>>'{requestPayload,memoryDecision,accountId}'=$3
+      OR r.payload#>>'{requestPayload,account,id}'=$3
     ORDER BY r.ordinal,r.id`,[account.role==='admin',`account:${account.id}`,account.id]);
   return result.rows;
 }

@@ -34,3 +34,31 @@ test('history JSON is requested on first open and retained while toggling',async
  assert.ok(host.innerHTML.includes('Copy JSON'));assert.equal(typeof copyHandler,'function');
  panel.open=false;await context.loadChatAuditDetails(panel);panel.open=true;await context.loadChatAuditDetails(panel);assert.equal(requests,1);
 });
+test('chat history names the signed-in account and lets that account open its own runs',async t=>{
+ process.env.BOOTSTRAP_ADMIN_PASSWORD??='audit-reader-test-password';
+ const governance=require('../src/backend/governance/context'),auth=require('../src/backend/services/auth_service'),logger=require('../src/backend/services/logger_service');
+ t.mock.method(storage,'enabled',()=>false);
+ const oldAccounts=auth.accounts,oldHistory=logger.chatHistory;t.after(()=>{auth.accounts=oldAccounts;logger.chatHistory=oldHistory;});
+ auth.accounts=[{id:'u1',username:'lan',displayName:'Nguyễn Lan',role:'user'}];logger.chatHistory=[];
+ const audit=await governance.run(async()=>{governance.setPrincipal({subject:'account:u1',channel:'chat'});return logger.addChatAudit('ds nv','ok',null,null,10,'SUCCESS',null,{endpoint:'/api/intelligent-core/chat/stream'});});
+ assert.deepEqual(audit.requestPayload.account,{id:'u1',username:'lan',name:'Nguyễn Lan'});
+ const embed=await governance.run(async()=>{governance.setPrincipal({subject:'embed:w:https://site.test',channel:'embed'});return logger.addChatAudit('ds nv','ok',null,null,10,'SUCCESS',null,{endpoint:'/api/embed/chat'});});
+ assert.equal(embed.requestPayload.account,undefined);
+ assert.deepEqual((await reader.list({id:'u1',role:'user'})).map(item=>item.requestPayload.account?.name),['Nguyễn Lan']);
+ assert.equal((await reader.detail(audit.id,{id:'u1',role:'user'})).id,audit.id);
+ await assert.rejects(reader.detail(audit.id,{id:'u2',role:'user'}),error=>error.statusCode===404);
+ let request;t.mock.method(storage,'enabled',()=>true);
+ t.mock.method(storage,'getPool',()=>({query:async(sql,args)=>{request={sql,args};return {rows:[]};}}));
+ await reader.list({id:'u1',role:'user'});
+ assert.match(request.sql,/'account',r\.payload#>'\{requestPayload,account\}'/);assert.match(request.sql,/\{requestPayload,account,id\}'=\$3/);
+});
+test('history table shows who asked for each source',()=>{
+ const source=fs.readFileSync('src/frontend/admin-client/js/modules/chat_history.js','utf8');
+ const context=vm.createContext({window:{}});vm.runInContext(source,context);
+ const user=payload=>{const value=context.getChatUser({requestPayload:payload});return value.name+'|'+value.detail;};
+ assert.equal(user({endpoint:'/api/intelligent-core/chat/stream',account:{id:'u1',username:'lan',name:'Nguyễn Lan'}}),'Nguyễn Lan|@lan');
+ assert.equal(user({endpoint:'/api/embed/chat',visitorIdentity:{verified:true,name:'Web User',subject:'w-1'}}),'Web User|w-1');
+ assert.equal(user({endpoint:'/api/embed/chat',sessionId:'embed_mvspxadn_vcatggmg'}),'Khách #vcatggmg|Chưa xác thực');
+ assert.equal(user({endpoint:'/api/intelligent-core/chat/stream'}),'—|Chưa ghi nhận');
+ assert.equal(context.getChatSource({requestPayload:{endpoint:'/api/embed/chat',origin:'http://localhost:3000'}}).detail,'http://localhost:3000');
+});

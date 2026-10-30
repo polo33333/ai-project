@@ -167,6 +167,15 @@
 .chat-source-tag.api { color:#0369a1; border-color:#bae6fd; background:#f0f9ff; }
 .chat-source-tag.unknown { color:#64748b; border-color:#e2e8f0; background:#f8fafc; }
 .chat-source-detail { display:block; max-width:120px; margin-top:5px; overflow:hidden; color:#7c3aed; background:transparent; text-overflow:ellipsis; white-space:nowrap; font-size:9.5px; }
+.chat-user { display:flex; align-items:flex-start; gap:7px; min-width:0; color:#0f172a; }
+.chat-user > i { margin-top:2px; font-size:11px; color:#4338ca; }
+.chat-user > span { display:flex; flex-direction:column; min-width:0; }
+.chat-user strong, .chat-user small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chat-user strong { font-size:12px; font-weight:600; }
+.chat-user small { font-size:10px; color:#64748b; }
+.chat-user.visitor > i { color:#6d28d9; }
+.chat-user.guest > i, .chat-user.unknown > i { color:#94a3b8; }
+.chat-user.guest strong, .chat-user.unknown strong { color:#64748b; font-weight:500; }
 
 .chat-payload-card {
   overflow: hidden;

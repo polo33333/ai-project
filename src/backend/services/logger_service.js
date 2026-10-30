@@ -109,6 +109,14 @@ class LoggerService {
       requestPayload = { ...requestPayload, answerEnvelope: scope.finalEnvelope, evidencePayloads: scope.evidencePayloads,
         principalRef: scope.principal?.subject || null, requestId: scope.requestId || null };
     }
+    // The signed-in account that asked, kept as a snapshot so the history still names it after a rename.
+    const subject = String(scope?.principal?.subject || '');
+    if (subject.startsWith('account:') && !requestPayload?.account) {
+      const id = subject.slice('account:'.length);
+      let account = null;
+      try { account = require('./auth_service').accounts?.find(item => item.id === id); } catch (_) { /* The audit is kept even when accounts cannot be read. */ }
+      requestPayload = { ...requestPayload, account: { id, username: account?.username || null, name: account?.displayName || account?.username || id } };
+    }
     const auditItem = {
       id: crypto.randomUUID(),
       timestamp: new Date().toLocaleString('vi-VN'),

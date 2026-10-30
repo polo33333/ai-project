@@ -70,7 +70,7 @@ function getChatSource(item) {
   const payload = item.requestPayload || item.aiRequestData || item.payload || {};
   const endpoint = String(payload.endpoint || '');
   if (endpoint === '/api/embed/chat' || payload.embedId) {
-    return { label: 'Embed Chat', icon: 'fa-window-restore', tone: 'embed', detail: (payload.visitorIdentity?.verified ? `${payload.visitorIdentity.name} · ${payload.visitorIdentity.subject}` : `Khách · ${payload.sessionId || ''}`) + ` · ${payload.origin || payload.embedId || ''}` };
+    return { label: 'Embed Chat', icon: 'fa-window-restore', tone: 'embed', detail: payload.origin || payload.embedId || '' };
   }
   if (endpoint.startsWith('/api/intelligent-core/chat') || endpoint === '/api/chat/attachments') {
     return { label: 'Page Chat', icon: 'fa-comments', tone: 'page', detail: '' };
@@ -80,6 +80,15 @@ function getChatSource(item) {
   }
   if (endpoint) return { label: 'API', icon: 'fa-plug', tone: 'api', detail: endpoint };
   return { label: 'Không xác định', icon: 'fa-circle-question', tone: 'unknown', detail: '' };
+}
+
+// Who asked: the signed-in account, the visitor the website vouched for, or an anonymous widget visitor.
+function getChatUser(item) {
+  const payload = item.requestPayload || item.aiRequestData || item.payload || {};
+  if (payload.account?.id) return { name: payload.account.name || payload.account.id, detail: payload.account.username ? '@' + payload.account.username : 'Tài khoản', tone: 'account', icon: 'fa-user' };
+  if (payload.visitorIdentity?.verified) return { name: payload.visitorIdentity.name || payload.visitorIdentity.subject, detail: payload.visitorIdentity.subject || 'Đã xác thực', tone: 'visitor', icon: 'fa-user-check' };
+  if (payload.endpoint === '/api/embed/chat' || payload.embedId) return { name: 'Khách' + (payload.sessionId ? ' #' + String(payload.sessionId).slice(-8) : ''), detail: 'Chưa xác thực', tone: 'guest', icon: 'fa-user-secret' };
+  return { name: '—', detail: 'Chưa ghi nhận', tone: 'unknown', icon: 'fa-circle-question' };
 }
 
 function renderChatHistoryStats(history) {
@@ -115,8 +124,8 @@ function filterChatHistory(history, query) {
   const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
   const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
   return terms.length ? history.filter(item => {
-    const source = getChatSource(item);
-    const text = normalize(JSON.stringify(item) + ' ' + source.label + ' ' + source.detail);
+    const source = getChatSource(item), user = getChatUser(item);
+    const text = normalize(JSON.stringify(item) + ' ' + source.label + ' ' + source.detail + ' ' + user.name + ' ' + user.detail);
     return terms.every(term => text.includes(term));
   }) : history;
 }
@@ -134,7 +143,7 @@ function renderChatHistoryTable() {
   if (history.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="chat-history-empty">
+        <td colspan="9" class="chat-history-empty">
           <i class="fa-solid fa-clock-rotate-left"></i>
           <strong>${query.trim() ? 'Không tìm thấy trò chuyện phù hợp.' : 'Chưa có lịch sử trò chuyện nào.'}</strong>
         </td>
@@ -156,11 +165,18 @@ function renderChatHistoryTable() {
     const isError = status === 'ERROR';
     const latency = item.latencyMs != null ? `${item.latencyMs}ms` : (item.latency || '0ms');
     const source = getChatSource(item);
+    const user = getChatUser(item);
     const model = item.modelName || item.model || 'Chưa rõ model';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="chat-time">${escapeHtml(item.timestamp || '-')}</td>
+      <td>
+        <div class="chat-user ${user.tone}" title="${escapeHtml(user.name + ' · ' + user.detail)}">
+          <i class="fa-solid ${user.icon}" aria-hidden="true"></i>
+          <span><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.detail)}</small></span>
+        </div>
+      </td>
       <td>
         <div class="chat-prompt">${escapeHtml(item.prompt || item.question || '-')}</div>
         ${item.errorReason ? `<div class="chat-error-text">${escapeHtml(item.errorReason)}</div>` : ''}

@@ -378,6 +378,10 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .chat-source-tag.api { color:#bae6fd; border-color:#31566d; background:#1c3547; }
 :root[data-theme="dark"] .chat-source-tag.unknown { color:#a9b6ca; border-color:#3b4a62; background:#1a2638; }
 :root[data-theme="dark"] .chat-source-detail { color:#c4b5fd; }
+:root[data-theme="dark"] .chat-user { color:#e2e8f0; }
+:root[data-theme="dark"] .chat-user small, :root[data-theme="dark"] .chat-user.guest strong, :root[data-theme="dark"] .chat-user.unknown strong { color:#a9b6ca; }
+:root[data-theme="dark"] .chat-user > i { color:#c7d2fe; }
+:root[data-theme="dark"] .chat-user.visitor > i { color:#d8b4fe; }
 
 /* Populated data surfaces must share the theme, including saved chat HTML. */
 :root[data-theme="dark"] :is(.dashboard-log-item,.dictionary-table-row,.dictionary-column-card,.chat-markdown-table-wrap,.chat-tool-result) { background: var(--dark-surface) !important; border-color: var(--border-color) !important; }
