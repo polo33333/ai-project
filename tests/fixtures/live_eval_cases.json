@@ -1173,6 +1173,65 @@
           "re": "\\[\\d+\\]"
         }
       ]
+    },
+    {
+      "id": "forecast-buy-sell-ahead",
+      "group": "analysis",
+      "turns": [
+        "phân tích và dự báo điện mua vào và bán ra cho 3 tháng tới"
+      ],
+      "must": [
+        {
+          "re": "Dự báo \\d{2}/\\d{4}"
+        },
+        {
+          "re": "bán ra"
+        },
+        {
+          "re": "mua vào"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "Không tìm thấy dữ liệu"
+        }
+      ]
+    },
+    {
+      "id": "forecast-followup-months",
+      "group": "analysis",
+      "turns": [
+        "phân tích và dự báo điện",
+        "dự báo cho tháng 3,4"
+      ],
+      "must": [
+        {
+          "re": "Dự báo 03/2024 – 04/2024"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "chưa có (số liệu|dữ liệu)"
+        }
+      ]
+    },
+    {
+      "id": "forecast-usage-after-list",
+      "group": "analysis",
+      "turns": [
+        "điện",
+        "dự  báo tháng 3 và tháng 4 sẽ xài điện bao nhiêu"
+      ],
+      "must": [
+        {
+          "re": "Dự báo 03/2024 – 04/2024"
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "chưa có (số liệu|dữ liệu)"
+        }
+      ]
     }
   ],
   "note": "PowerMoney is labelled \"Tiền điện\" (empty in this IPMS copy); amount questions use \"tiền hóa đơn điện sau thuế\" (FinalTotalAmount)."

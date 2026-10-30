@@ -138,3 +138,16 @@ test('a follow-up that only states the change inherits the rest of the previous 
   // A complete independent contract is left alone.
   assert.deepEqual(pipeline.completeFollowup({ kind: 'data', root: 'M_Employee', operation: 'list' }, previous, 'ds nv'), []);
 });
+
+test('a v2 table keeps the compiler labels, heads a metric with its unit and formats months and measures', () => {
+  const compiled = { scope: [], operation: 'aggregate', analysis: 'none', outputs: [{ alias: 'Tháng', kind: 'dimension', grain: 'month' },
+    { alias: 'Sản lượng điện mua vào', kind: 'measure', aggregation: 'SUM', column: 'TotalQty', metric: 'dien_mua_san_luong', unit: 'kWh' },
+    { alias: 'Số bản ghi', kind: 'measure', aggregation: 'COUNT' }] };
+  const rows = [{ 'Tháng': new Date('2024-01-01T00:00:00Z'), 'Sản lượng điện mua vào': 40085700, 'Số bản ghi': 1200 },
+    { 'Tháng': '2024-02-01T00:00:00.000Z', 'Sản lượng điện mua vào': 22952700, 'Số bản ghi': 1100 }];
+  const reply = pipeline.render(compiled, { result: { rows, displayNames: { 'Sản lượng điện mua vào': 'Tổng Tổng sản lượng' } } }, 'q');
+  assert.match(reply, /\| Tháng \| Sản lượng điện mua vào \(kWh\) \| Số bản ghi \|/);
+  assert.match(reply, /\| 01\/2024 \| 40\.085\.700 \| 1\.200 \|\n\| 02\/2024 \| 22\.952\.700 \| 1\.100 \|/);
+  assert.doesNotMatch(reply, /Tổng Tổng/);
+  assert.ok(rows[0]['Tháng'] instanceof Date, 'the verified rows are not changed');
+});

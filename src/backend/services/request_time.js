@@ -9,6 +9,14 @@ function shift(date, days) {
   parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
 }
+// Same day N calendar months later, clamped to the month's last day (31/01 + 1 = 28/02).
+function addMonths(date, months) {
+  const [year, month, day] = date.split('-').map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(day, last));
+  return target.toISOString().slice(0, 10);
+}
 function hasExplicitScope(question) {
   const text = normalize(question);
   return /\b\d+\s*(?:ngay|days?|thang|months?|nam|years?)\b|\b\d{4}[-/]\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b(?:nam|year)\s+\d{4}\b|\b(hien tai|hom nay|hom qua|ngay mai|thang nay|thang truoc|nam nay|nam truoc|today|yesterday|tomorrow|this month|last month)\b/.test(text);
@@ -28,11 +36,15 @@ function create(question, now = new Date(), upcomingDays = process.env.AI_UPCOMI
   const explicitOnly = !current && !relativePeriod && !relativeDays && /\b\d{4}[-/]\d{1,2}|\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b(?:nam|year|truoc|sau|before|after)\s+\d{4}\b/.test(text);
   const monthCount = Number(text.match(/\b(\d+)\s*(?:thang|months?)\b/)?.[1]) || null;
   const latestAvailable = /\b(gan nhat|co du lieu|du lieu san co|latest available)\b/.test(text);
-  const monthWindow = monthCount && monthCount <= 120 && !explicitOnly && !latestAvailable
+  // "3 tháng tới" looks ahead from today; it is not the past window "3 tháng".
+  const ahead = monthCount && /\b\d+\s*thang\s*(?:toi|tiep theo|ke tiep|sap toi|sau)\b|\bnext \d+ months?\b/.test(text);
+  const monthWindow = monthCount && monthCount <= 120 && !explicitOnly && !latestAvailable && !ahead
     ? require('../agent/tools/date_range').resolve({ unit: 'month', count: monthCount }, now) : null;
-  const relative = current || relativePeriod || relativeDays || due && !explicitOnly || Boolean(monthWindow);
+  const upcomingMonths = ahead && monthCount <= 120 ? { start: today, end: addMonths(today, monthCount), count: monthCount } : null;
+  const relative = current || relativePeriod || relativeDays || due && !explicitOnly || Boolean(monthWindow) || Boolean(upcomingMonths);
   const dates = new Set([today]);
   if (monthWindow) { dates.add(monthWindow.start); dates.add(monthWindow.end); }
+  if (upcomingMonths) dates.add(upcomingMonths.end);
   const add = days => dates.add(shift(today, days));
   if (/\b(ngay mai|tomorrow)\b/.test(text)) { add(1); add(2); }
   if (/\b(hom qua|yesterday)\b/.test(text)) add(-1);
@@ -69,6 +81,7 @@ function create(question, now = new Date(), upcomingDays = process.env.AI_UPCOMI
   return { today, timezone: TIMEZONE, resolvedAt: now.toISOString(), relative,
     dateScoped: relative && (Boolean(monthWindow) || due || relativePeriod || relativeDays || /\b(hom nay|today|hom qua|yesterday|ngay mai|tomorrow)\b/.test(text)),
     ...(monthWindow ? { monthWindow: { start: monthWindow.start, end: monthWindow.end, count: monthCount, includesCurrentMonth: true } } : {}),
+    ...(upcomingMonths ? { upcomingMonths } : {}),
     horizonDays: soon ? horizon : null, horizonSource: soon && horizon ? duration.length === 1 ? 'user' : 'configuration' : null,
     needsHorizon: relative && soon && !horizon, allowedDates: [...dates] };
 }

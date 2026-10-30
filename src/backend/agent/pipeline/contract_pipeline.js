@@ -41,8 +41,14 @@ const contractSchema = { type: 'object', additionalProperties: false, required: 
   sort: { type: 'object', additionalProperties: false, required: ['by'], properties: { by: { type: 'string', maxLength: 200 }, direction: { enum: ['ASC', 'DESC'] } } },
   limit: { type: 'integer', minimum: 1, maximum: 1000 },
   ignoredTerms: { type: 'array', maxItems: 10, items: { type: 'string', maxLength: 100 } },
-  analysis: { enum: ['none', 'anomaly'] }
+  analysis: { enum: ['none', 'anomaly', 'forecast'] }
 } };
+// A second business flow of another table in the same question ("mua vào và
+// bán ra"): its own root and measures; grouping and date filters default to
+// the main contract's, moved onto its own business date.
+contractSchema.properties.also = { type: 'array', maxItems: 2, items: { type: 'object', additionalProperties: false, properties: {
+  root: { type: 'string', maxLength: 128 }, measures: contractSchema.properties.measures,
+  groupBy: contractSchema.properties.groupBy, filters: contractSchema.properties.filters } } };
 const validate = new Ajv({ strict: false }).compile(contractSchema);
 const definition = { type: 'function', function: { name: 'plan_query',
   description: 'Return the query contract for the current question over the supplied catalog.', parameters: contractSchema } };
@@ -63,6 +69,8 @@ const RULES = `You translate the user's business question into a query contract 
 - Prefer columns with a business label (in quotes) over unlabeled columns of similar meaning, and the table whose entity matches the subject of the question.
 - Every filter needs evidence: an exact quote from the question that contains the value. Dates: operator=period with value "YYYY", "YYYY-MM" or "YYYY-MM-DD" on the business date column; ranges use gte/lt with ISO dates. Relative periods are computed from TODAY. A named period such as "Kỳ 3" or "Q1" is a value in a lookup table reached through its foreign key, not a date.
 - Unusual/abnormal months: operation=aggregate grouped by the business date with grain=month, analysis=anomaly.
+- Forecasts ("dự báo", "dự đoán", "sẽ ... bao nhiêu" for coming months): kind=data, operation=aggregate grouped by the business date with grain=month, analysis=forecast. The history is the input and the backend projects the months, so never filter on the forecast months ("3 tháng tới", "tháng 3,4"); a date filter only limits the history when the user says so ("dựa trên năm 2024"). A follow-up asking a forecast of the previous data ("dự báo cho tháng 3,4") is kind=data with followup=true and analysis=forecast, never kind=chat.
+- Two flows held by different tables in one question ("mua vào và bán ra", "thu và chi"), operation=aggregate: the contract covers the first; put each other flow in also[] with its own root and measures (groupBy and date filters are copied onto its own business date when omitted).
 - kind=workflow when one of WORKFLOWS is built for the requested lookup or report (same entity, measure, time semantics and outputs): prefer it over kind=data even if the catalog could also answer, because the business configured it. Set workflow.templateId, and in workflow.inputs only values stated in the question, each with its exact quote in workflow.evidence (missing inputs are asked later). A broader report, a different entity or a filter the workflow cannot apply means kind=data.
 - PENDING lists a workflow waiting for inputs. Use kind=resume only when the current message answers one or more of those inputs: put them in workflow.inputs with exact quotes in workflow.evidence. A new or different request is not a resume.
 - One file per group ("mỗi phòng ban một file", "tách file theo X"): operation=list, output.export and output.splitBy = the grouping ref (e.g. "Root.FKColumn").
@@ -79,7 +87,7 @@ function decode(response) {
   // A contract that omits kind but is otherwise explicit is not ambiguous.
   if (value && typeof value === 'object' && !value.kind) value.kind = value.workflow ? 'workflow' : value.root ? 'data' : value.kind;
   if (!validate(value)) throw Object.assign(new Error('V2_CONTRACT_INVALID'), { code: 'V2_CONTRACT_INVALID',
-    details: (validate.errors || []).slice(0, 5).map(error => `${error.instancePath} ${error.message}`) });
+    details: (validate.errors || []).slice(0, 5).map(error => `${error.instancePath} ${error.message}${error.params?.additionalProperty ? ` (${error.params.additionalProperty})` : ''}`) });
   return value;
 }
 
@@ -99,7 +107,8 @@ function uncovered(contract, question) {
     ...(question.replace(/\b\d{4}-\d{1,2}(?:-\d{1,2})?\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b\d{1,2}\/\d{4}\b/g, ' ').match(/\b(?:19|20)\d{2}\b/g) || []),
     ...(question.match(/\b[A-Za-z][A-Za-z_-]*\d[A-Za-z0-9_-]*\b/g) || [])
   ])];
-  const covered = [...(contract.filters || []).map(filter => fold([filter.evidence, filter.value, ...(filter.values || [])].join(' '))),
+  const covered = [...[...(contract.filters || []), ...(contract.also || []).flatMap(part => part.filters || [])]
+    .map(filter => fold([filter.evidence, filter.value, ...(filter.values || [])].join(' '))),
     ...(contract.ignoredTerms || []).map(fold)];
   return tokens.filter(token => !covered.some(text => text.includes(fold(token))) && String(contract.limit) !== token);
 }
@@ -151,6 +160,10 @@ function completeFollowup(contract, previous, question) {
     if (contract.operation === 'aggregate' && !contract.measures?.length && before.measures?.length) { contract.measures = structuredClone(before.measures); filled.push('measures'); }
     if (contract.operation === 'aggregate' && !contract.groupBy && before.groupBy?.length) { contract.groupBy = structuredClone(before.groupBy); filled.push('groupBy'); }
     if (contract.operation === 'list' && !contract.fields?.length && before.fields?.length) { contract.fields = [...before.fields]; filled.push('fields'); }
+    if (contract.operation === 'aggregate' && !contract.also && before.also?.length) {
+      contract.also = structuredClone(before.also).map(part => ({ ...part, ...(part.filters ? { filters: part.filters.map(filter => ({ ...filter, inherited: true })) } : {}) }));
+      filled.push('also');
+    }
   }
   const fold = value => String(value ?? '').normalize('NFC').toLocaleLowerCase('vi');
   for (const filter of contract.filters || []) {
@@ -191,6 +204,31 @@ function keepMeasures(contract, previous, question, catalog) {
   const replaced = contract.measures;
   contract.measures = structuredClone(before.measures);
   return { from: replaced.map(item => item.metric || item.ref), to: contract.measures.map(item => item.metric || item.ref) };
+}
+
+// The full contract of a flow in also[]: grouping and date filters it leaves
+// out are the main contract's, moved onto its own business date. Other
+// filters belong to the main table and are not copied.
+function alsoContract(part, contract, catalog) {
+  const fail = (code, detail) => Object.assign(new Error(`${code}: ${detail}`), { code });
+  const { dateColumn } = require('./forecast');
+  const root = part.root || metricRoot(part, catalog);
+  // An authorized table outside the catalog is loaded for the repair round (V2_ROOT_UNKNOWN).
+  if (!catalogApi.table(catalog, root)) throw fail('V2_ROOT_UNKNOWN', root);
+  const date = dateColumn({ ...part, root }, catalog);
+  const mainDate = dateColumn(contract, catalog);
+  const sameColumn = (ref, target) => Boolean(target) && catalogApi.key(String(ref).split('->')[0].split('.').pop()) === catalogApi.key(target.split('.').pop())
+    && (!String(ref).includes('.') || catalogApi.key(String(ref).split('.')[0]) === catalogApi.key(target.split('.')[0]));
+  const groupBy = part.groupBy || (contract.groupBy || []).map(group => {
+    if (!group.grain) throw fail('V2_ALSO_GROUP', `also[] for ${root} must state its own groupBy for ${group.ref}`);
+    if (!date) throw fail('V2_ALSO_DATE', `${root} has no business date; state also[].groupBy`);
+    return { ref: date, grain: group.grain };
+  });
+  const filters = part.filters || (contract.filters || []).filter(filter => sameColumn(filter.ref, mainDate)).map(filter => {
+    if (!date) throw fail('V2_ALSO_DATE', `${root} has no business date; state also[].filters`);
+    return { ...filter, ref: date };
+  });
+  return { kind: 'data', root, operation: 'aggregate', measures: part.measures, groupBy, filters, analysis: contract.analysis };
 }
 
 // Safety net for follow-ups: an equality filter of the previous contract that
@@ -283,12 +321,16 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
     const result = await toolManager.executeTool('execute_sql_query', { sql: query.sql }, { ...toolContext, joinPlan: query.joinPlan, compiledSemanticQuery: false });
     return result.success ? result.result?.rows || [] : null;
   };
-  let contract, compiled, lastError, attempts = 2;
+  const forecast = require('./forecast');
+  let contract, compiled, parts = [], lastError, attempts = 2;
   for (let attempt = 0; attempt < attempts && !compiled; attempt++) {
     const response = await dispatch([definition], messages, attempt ? 'v2_contract_repair' : 'v2_contract');
     try {
       contract = decode(response);
       step('V2_CONTRACT', { attempt, contract: structuredClone(contract) });
+      // A forecast of data already queried is computed from rows, never answered as conversation.
+      if (contract.kind === 'chat' && forecast.asked(question) && previous?.contract?.root)
+        throw Object.assign(new Error('V2_FORECAST_NEEDS_DATA: a forecast is computed by the backend from catalog rows; answer kind=data with followup=true and analysis=forecast, starting from PREVIOUS.contract'), { code: 'V2_FORECAST_NEEDS_DATA' });
       const strong = signal?.strength === 'strong';
       // A strong document signal rescues a chat choice; it never overrides data, workflows or follow-ups on results.
       const rescued = contract.kind === 'chat' && strong && toolContext.allowedToolNames?.includes('search_knowledge_base');
@@ -353,13 +395,21 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       }
       // A file needs every matching row, not the 100-row display page.
       if (exportFormat(contract, plan) && contract.operation !== 'aggregate' && !contract.limit) contract.exportLimit = true;
-      const dropped = uncovered(contract, question);
+      // The months a forecast asks for are projected, not filtered, so they need no filter.
+      const forecasting = contract.kind === 'data' && (contract.analysis === 'forecast' || forecast.asked(question));
+      const targetWords = forecasting ? [question, previousQuestions].flatMap(text => forecast.targets(text).phrases) : [];
+      const dropped = uncovered(contract, question).filter(token => !targetWords.some(phrase => phrase.includes(token.toLowerCase())));
       if (dropped.length) throw Object.assign(new Error(`V2_CRITERION_DROPPED: the question states ${dropped.map(item => `"${item}"`).join(', ')} but no filter uses it`), { code: 'V2_CRITERION_DROPPED' });
       const filled = completeFollowup(contract, previous, question);
       if (filled.length) step('V2_FOLLOWUP_COMPLETED', { fields: filled });
       // Set before the checks below, which all start from the root table.
       const inferredRoot = metricRoot(contract, catalog);
       if (inferredRoot) { contract.root = inferredRoot; step('V2_ROOT_FROM_METRIC', { root: inferredRoot }); }
+      if (forecasting) {
+        if (contract.analysis !== 'forecast') { step('V2_FORECAST_REQUESTED', { from: contract.analysis || 'none' }); contract.analysis = 'forecast'; }
+        const prepared = forecast.prepare(contract, catalog, [question, previousQuestions]);
+        if (prepared.length) step('V2_FORECAST_PREPARED', { changes: prepared });
+      }
       const roles = applyRoles(contract, question, catalog);
       if (roles.length) step('V2_ROLES_APPLIED', { refs: roles });
       // A list is shown (and split into files) by its group columns, so they must be selected.
@@ -377,13 +427,16 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
       if (kept) step('V2_MEASURES_KEPT', kept);
       const carried = carryFilters(contract, previous, question);
       if (carried.length) step('V2_FILTERS_CARRIED', { refs: carried.map(item => item.ref) });
-      compiled = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previousQuestions, resultValues });
+      const main = compile(contract.exportLimit ? { ...contract, limit: 1000 } : contract, catalog, { question, previousQuestion: previousQuestions, resultValues });
+      if (contract.also?.length && main.operation !== 'aggregate') throw Object.assign(new Error('V2_ALSO_LIST: also[] is only for operation=aggregate'), { code: 'V2_ALSO_LIST' });
+      parts = (contract.also || []).map(part => compile(alsoContract(part, contract, catalog), catalog, { question, previousQuestion: previousQuestions, resultValues }));
+      compiled = main;
     } catch (error) {
       lastError = error;
       // Retrieval may miss the right table (a similar entity is selected). A
       // contract naming an authorized table outside the catalog loads its
       // metadata for the repair round instead of failing.
-      const named = [...new Set([contract?.root, ...(JSON.stringify(contract || {}).match(/[A-Za-z_][A-Za-z0-9_]*(?=\.[A-Za-z_])/g) || [])]
+      const named = [...new Set([contract?.root, ...(contract?.also || []).map(part => part.root), ...(JSON.stringify(contract || {}).match(/[A-Za-z_][A-Za-z0-9_]*(?=\.[A-Za-z_])/g) || [])]
         .filter(name => name && !catalogApi.table(catalog, name)))];
       if (['V2_ROOT_UNKNOWN', 'V2_TABLE_UNKNOWN'].includes(error.code) && named.length) {
         const before = new Set(catalog.tables.keys());
@@ -451,7 +504,20 @@ async function run({ question, plan, context, toolContext, dispatch, toolManager
   const split = contract.output?.splitBy && groupOutput(compiled, contract.output.splitBy);
   // A grouped list ("theo X", or files split by X) is listed group by group, matching the files.
   const groups = listGroupRefs(contract).map(ref => groupOutput(compiled, ref)?.alias).filter(Boolean);
-  let reply = render(compiled, call, question, [...new Set(groups)]), status = 'SUCCESS';
+  const options = { today: requestTime?.today };
+  let reply = render(compiled, call, question, [...new Set(groups)], options), status = 'SUCCESS';
+  // Each other flow of also[] is its own query and its own section.
+  if (parts.length) {
+    const title = item => `**${catalogApi.table(catalog, item.root)?.label || item.root}**`;
+    const sections = [`${title(compiled)}\n\n${reply}`];
+    for (const part of parts) {
+      const result = await execute(part);
+      if (!result.success) status = 'PARTIAL';
+      sections.push(`${title(part)}\n\n${result.success ? render(part, result, question, [], options) : 'Chưa lấy được số liệu phần này.'}`);
+    }
+    step('V2_ALSO_EXECUTED', { roots: parts.map(part => part.root) });
+    reply = sections.join('\n\n');
+  }
   if (excluded.missing.length) reply += `\n\nKhông tìm thấy ${excluded.missing.map(value => `“${value}”`).join(', ')} trong dữ liệu nên không có bản ghi nào bị loại trừ.`;
   // A checked commentary on a summary result; dropped if it cites an unseen number.
   const commentary = await require('./narration').narrate({ compiled, call, question, dispatch, step });
@@ -784,7 +850,7 @@ async function resolveValues(textFilters, contract, toolManager, toolContext, st
   return { changes };
 }
 
-function render(compiled, call, question, groupBy) {
+function render(compiled, call, question, groupBy, { today = null } = {}) {
   const rows = call.result.rows || [];
   const analysis = require('../harness/analysis_response');
   const scope = compiled.scope.length ? `Phạm vi: ${compiled.scope.join('; ')}.` : '';
@@ -799,13 +865,25 @@ function render(compiled, call, question, groupBy) {
     const plan = { analysisTask: 'anomaly' };
     body = analysis.shortAnomalyReply(call, plan) || analysis.seriesAnomalyReply(call, plan, question)?.text || null;
   }
+  // The compiler's aliases are the business labels: names inferred from the SQL
+  // ("Tổng " + column label) would rename them. A metric's unit heads its column,
+  // and every measure is shown with thousands separators. A month bucket reads 02/2024, not 01/02/2024.
+  const months = compiled.outputs.filter(item => item.kind === 'dimension' && item.grain === 'month').map(item => item.alias);
+  const monthText = value => { const iso = value instanceof Date ? value.toISOString() : String(value ?? '');
+    return /^\d{4}-\d{2}/.test(iso) ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : value; };
+  const shown = { ...call, result: { ...call.result, displayNames: {},
+    rows: months.length ? rows.map(row => ({ ...row, ...Object.fromEntries(months.map(alias => [alias, monthText(row[alias])])) })) : rows,
+    units: { ...Object.fromEntries(measures.filter(item => item.unit).map(item => [item.alias, item.unit])), ...call.result.units } } };
+  const numberColumns = measures.map(item => item.alias);
+  const table = () => require('../harness/grounded_reply').buildSqlRowsFallbackReply(shown, {}, { forceTable: rows.length > 1, numberColumns });
+  if (compiled.analysis === 'forecast') body = require('./forecast').reply({ call, compiled, question, today, actual: table() });
   if (!body) {
     if (rows.length === 1 && measures.length === compiled.outputs.length) {
       const format = value => typeof value === 'number' ? new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value) : value ?? '—';
       body = measures.map(item => `**${item.alias}:** ${format(rows[0][item.alias])}`).join('\n');
     } else {
-      const grouped = groupBy?.length && rows.length > 1 && require('../harness/result_grouping').partition(call, groupBy);
-      body = require('../harness/grounded_reply').buildSqlRowsFallbackReply(call, {}, grouped ? { resultGroupBy: groupBy } : { forceTable: rows.length > 1 });
+      const grouped = groupBy?.length && rows.length > 1 && require('../harness/result_grouping').partition(shown, groupBy);
+      body = require('../harness/grounded_reply').buildSqlRowsFallbackReply(shown, {}, grouped ? { resultGroupBy: groupBy, numberColumns } : { forceTable: rows.length > 1, numberColumns });
     }
   }
   const more = call.result.hasMore ? `\n\nĐang hiển thị ${rows.length} dòng đầu; dữ liệu có thể còn thêm.` : '';
@@ -821,5 +899,5 @@ function render(compiled, call, question, groupBy) {
   return `${scope ? `${scope}\n` : ''}${scope && !method ? '\n' : ''}${method}${body}${more}${note}`;
 }
 
-module.exports = { run, answerWithoutCatalog, libraryPrompt, render, listGroupRefs, groupOutput, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema,
+module.exports = { run, answerWithoutCatalog, libraryPrompt, render, alsoContract, listGroupRefs, groupOutput, decode, applyRoles, carryFilters, keepMeasures, completeFollowup, uncovered, chartArgs, describeWorkflows, previousRows, datasetChart, contractSchema,
   validateContract: validate };

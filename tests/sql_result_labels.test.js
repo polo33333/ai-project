@@ -53,3 +53,8 @@ test('unresolved or placeholder result names never become a dash label', () => {
  assert.ok(reply.includes('| Giá trị kết quả 1 |'));
  assert.ok(reply.includes('| — |'));
 });
+test('a label that already names its aggregation is not prefixed twice',()=>{
+ const sales=[{tableId:'s',tableName:'Sales',columns:[{columnName:'TotalQty',displayName:'Tổng sản lượng'},{columnName:'Amount',displayName:'Thành tiền'}]}];
+ assert.deepEqual(inferDisplayNames('SELECT SUM(s.TotalQty) AS Qty, SUM(s.Amount) AS Amount, AVG(s.TotalQty) AS AvgQty FROM Sales s',sales,[]),
+  {Qty:'Tổng sản lượng',Amount:'Tổng Thành tiền',AvgQty:'Trung bình Tổng sản lượng'});
+});

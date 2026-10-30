@@ -19,7 +19,7 @@ function format(value, grain) {
 
 function eligible(compiled, call) {
   const rows = call?.result?.rows || [];
-  return process.env.V2_NARRATION !== 'off' && compiled.operation === 'aggregate' && compiled.analysis !== 'anomaly'
+  return process.env.V2_NARRATION !== 'off' && compiled.operation === 'aggregate' && !['anomaly', 'forecast'].includes(compiled.analysis)
     && rows.length >= 2 && rows.length <= MAX_ROWS && !call.result.hasMore
     && compiled.outputs.some(item => item.kind === 'measure');
 }

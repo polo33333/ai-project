@@ -36,7 +36,9 @@ function inferDisplayNames(sql, tables = [], relationships = []) {
               || (q.rightAlias === source.alias && q.rightColumn === key(p.sourceColumn) && q.leftAlias === target.alias && q.leftColumn === key(p.targetColumn))))));
       const roleNames = [...new Set(roles.map(r => r.businessRole))];
       const baseLabel = roleNames.length === 1 ? roleNames[0] : column.displayName;
-      const label = aggregate && baseLabel ? `${prefixes[aggregate]} ${baseLabel}` : baseLabel;
+      // A label that already names the aggregation ("Tổng sản lượng") is not prefixed again.
+      const named = aggregate && baseLabel && String(baseLabel).toLocaleLowerCase('vi').startsWith(prefixes[aggregate].toLocaleLowerCase('vi'));
+      const label = aggregate && baseLabel && !named ? `${prefixes[aggregate]} ${baseLabel}` : baseLabel;
       // SQL Server returns an empty result key for a single unnamed expression.
       // Multiple unnamed expressions cannot be bound safely by that shared key.
       if (aggregate && !projection.as && unnamedExpressions.length !== 1) continue;

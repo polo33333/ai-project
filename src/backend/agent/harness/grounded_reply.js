@@ -83,8 +83,10 @@ function buildSqlRowsFallbackReply(sqlCall, displayNames = {}, options = {}) {
     return `${name}${sqlCall?.result?.units?.[column] ? ` (${sqlCall.result.units[column]})` : ''}`;
   });
   const uniqueLabels = labels.map((label, index) => labels.indexOf(label) === index ? label : `${label} (${columns[index]})`);
-  const valueCell = (column, value) => markdownCell(require('./money_display').format(value,
-    `${column} ${displayNames[column] || ''}`, sqlCall.result.units?.[column]), sqlCall.result.units?.[column]);
+  // options.numberColumns: measures without a unit, still shown with thousands separators.
+  const valueCell = (column, value) => !sqlCall.result.units?.[column] && options.numberColumns?.includes(column) && typeof value === 'number' && Number.isFinite(value)
+    ? new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value)
+    : markdownCell(require('./money_display').format(value, `${column} ${displayNames[column] || ''}`, sqlCall.result.units?.[column]), sqlCall.result.units?.[column]);
   const fieldLabels=uniqueLabels.filter(label=>!/(?:^id$|ID$)/.test(label)).slice(0,4);
   let introduction=`Đã tra cứu được **${rows.length}** bản ghi phù hợp với yêu cầu.`;
   if(fieldLabels.length)introduction+=' Thông tin gồm '+fieldLabels.map(label=>`**${markdownCell(label)}**`).join(', ')+'.';
