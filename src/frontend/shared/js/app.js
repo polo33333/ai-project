@@ -342,7 +342,7 @@ async function openChangePassword() {
   }catch(error){message.textContent=error.message;}
 }
 async function saveAccountProfile(event) {
-  event.preventDefault();const button=event.target.querySelector('[type="submit"]');const message=document.getElementById('account-profile-message');button.disabled=true;
+  event.preventDefault();const message=document.getElementById('account-profile-message');const idle=window.busyButton?.(event.submitter||event.target.querySelector('[type="submit"]'),'Đang lưu…');if(idle===null)return;
   try {
     const response=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:document.getElementById('account-profile-name').value,email:document.getElementById('account-profile-email').value.trim()})});
     const data=await response.json();if(!response.ok)throw new Error(data.message||'Không lưu được tài khoản.');
@@ -351,7 +351,7 @@ async function saveAccountProfile(event) {
       const refreshed = await fetch('/api/auth/me', {cache:'no-store'}).then(response => response.json());
       if (refreshed.account) window.dispatchEvent(new CustomEvent('account-profile-updated', {detail:refreshed.account}));
     } else await loadCurrentAccount();
-  }catch(error){message.textContent=error.message;}finally{button.disabled=false;}
+  }catch(error){message.textContent=error.message;}finally{idle?.();}
 }
 function closeChangePassword() {
   const modal=document.getElementById('change-password-modal');
@@ -367,12 +367,12 @@ async function submitChangePassword(event) {
   const newPassword=document.getElementById('password-new').value;
   error.textContent='';
   if(newPassword!==document.getElementById('password-confirm').value){error.textContent='Hai mật khẩu mới không khớp.';return;}
-  button.disabled=true;
+  const idle=window.busyButton?.(button,'Đang đổi…');if(idle===null)return;
   try {
     const response=await fetch('/api/auth/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:document.getElementById('password-current').value,newPassword})});
     const data=await response.json();if(!response.ok)throw new Error(data.message||'Không thể đổi mật khẩu.');
     closeChangePassword();window.location.href=isStandaloneChatPage ? '/chat/login' + window.location.search : '/admin/login';
-  }catch(err){error.textContent=err.message;}finally{button.disabled=false;}
+  }catch(err){error.textContent=err.message;}finally{idle?.();}
 }
 
 function closeLogoutConfirmation() {

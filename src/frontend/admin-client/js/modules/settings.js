@@ -198,6 +198,7 @@
     const values = changedValues();
     if (saving || (!restart && !Object.keys(values).length)) return;
     saving = true; updateDirtyState(); showMessage('Đang lưu cấu hình…');
+    const idle = window.busyButton?.(el(restart ? 'settings-save-restart' : 'settings-save'), 'Đang lưu…');
     try {
       let changed = 0;
       if (Object.keys(values).length) {
@@ -219,7 +220,7 @@
     } catch (error) {
       showMessage(error.message, 'error');
       if (/thay đổi|changed/i.test(error.message)) await window.fetchSettings(true);
-    } finally { saving = false; updateDirtyState(); }
+    } finally { idle?.(); saving = false; updateDirtyState(); }
   };
 
   window.checkSettingsConnection = async function (silent = false) {

@@ -339,6 +339,8 @@ async function savePageNewAiProvider() {
   }
 
   const apiFormat = getProviderFormat(type);
+  const idle = window.busyButton?.(document.getElementById('page-provider-save-btn'), 'Đang lưu…');
+  if (idle === null) return;
   try {
     const capability = document.getElementById('page-new-prov-tools')?.value || 'auto';
     const contextWindow = Number(document.getElementById('page-new-prov-context')?.value || 16384);
@@ -372,7 +374,7 @@ async function savePageNewAiProvider() {
     const actionText = editingId ? 'cập nhật' : 'thêm';
     console.error(`Không thể ${actionText} Provider:`, err);
     if (typeof showToast === 'function') showToast(`Không thể ${actionText} Provider: ${err.message}`, 'error');
-  }
+  } finally { idle?.(); }
 }
 
 async function autoFetchProviderModels() {

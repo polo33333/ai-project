@@ -126,13 +126,14 @@
   window.toggleGovernanceSelect = (index, checked) => { if (checked) state.selected.add(index); else state.selected.delete(index); window.renderGovernanceSources(); };
   window.toggleGovernanceSelectAll = checked => { for (const { index } of sourcePageRows()) if (checked) state.selected.add(index); else state.selected.delete(index); window.renderGovernanceSources(); };
   window.clearGovernanceSelection = () => { state.selected.clear(); window.renderGovernanceSources(); };
-  window.applyGovernanceBulk = async function () {
+  window.applyGovernanceBulk = async function (button) {
     const ai = el('dg-bulk-ai').value, mode = el('dg-bulk-mode').value;
     if (!ai && !mode) { window.showToast?.('Chọn mức chia sẻ AI hoặc chế độ mở cần đặt.', 'warning'); return; }
     const items = [...state.selected].map(index => state.data.resources[index]).filter(Boolean);
     const summary = [ai ? `chia sẻ AI: “${LABELS.ai[ai]}”` : '', mode ? `mở cho: “${LABELS.mode[mode]}”` : ''].filter(Boolean).join(', ');
     const ok = window.showUiConfirm ? await window.showUiConfirm(`Đặt ${summary} cho ${items.length} nguồn?`, { title: 'Sửa hàng loạt', confirmText: 'Áp dụng' }) : window.confirm(`Đặt ${summary} cho ${items.length} nguồn?`);
     if (!ok) return;
+    const idle = window.busyButton?.(button, 'Đang áp dụng…'); if (idle === null) return;
     try {
       await api('/api/governance/resources/bulk', 'POST', { items: items.map(item => ({ type: item.type, id: item.id, expectedRevision: item.revision })),
         patch: { ...(ai ? { aiSharing: { level: ai } } : {}), ...(mode ? { access: { mode } } : {}) } });
@@ -141,7 +142,7 @@
     } catch (error) {
       const names = (error.data?.conflicts || []).map(item => item.name).join(', ');
       window.showToast?.(names ? `${error.message} (${names})` : error.message, 'error');
-    }
+    } finally { idle?.(); }
   };
 
   // Opens one source from another page (library badge, watch folder row).
@@ -397,14 +398,14 @@
     el('metric-message').textContent = existing ? `Phiên bản ${existing.version} · Chủ nghiệp vụ: ${existing.owner}` : 'Chưa có chỉ tiêu nghiệp vụ mặc định. Điền định nghĩa trước khi lưu.';
   };
   window.saveGovernedMetric = async function (event) {
-    event.preventDefault(); const button = event.currentTarget.querySelector('button'); button.disabled = true;
+    event.preventDefault(); const idle = window.busyButton?.(event.submitter || event.currentTarget.querySelector('[type="submit"]'), 'Đang lưu…'); if (idle === null) return;
     try {
       const definition = JSON.parse(el('metric-definition').value), existing = metrics.find(metric => metric.metricId === definition.metricId);
       const response = await fetch('/api/governance/metrics', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: el('metric-source').value, definition, expectedRevision: existing?.version || 0 }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.message);
       await window.loadGovernedMetrics(); el('metric-existing').value = data.metric.metricId; window.selectGovernedMetric();
     } catch (error) { el('metric-message').textContent = error.message; }
-    finally { button.disabled = false; }
+    finally { idle?.(); }
   };
 
   // ---------- Operations ----------

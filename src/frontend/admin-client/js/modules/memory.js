@@ -102,7 +102,7 @@
       el('memory-prev').onclick = () => { offset = Math.max(0, offset - size); load(); };
       el('memory-next').onclick = () => { offset += size; load(); };
       el('memory-editor').onsubmit = async event => {
-        event.preventDefault(); const submit = event.submitter; if (submit) submit.disabled = true;
+        event.preventDefault(); const idle = window.busyButton?.(event.submitter || el('memory-editor').querySelector('[type="submit"]'), 'Đang lưu…'); if (idle === null) return;
         try {
           await request('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
             id: editing?.id, revision: editing?.revision, scope: scope(), title: el('memory-title').value,
@@ -110,7 +110,7 @@
             approved: canApprove && el('memory-approved').checked }) });
           el('memory-editor').hidden = true; await load();
         } catch (error) { el('memory-notice').textContent = error.message; }
-        finally { if (submit) submit.disabled = false; }
+        finally { idle?.(); }
       };
     }
     try { const auth = await request('/api/auth/me'); owner = auth.account ? `account:${auth.account.id}` : null; await load(); }

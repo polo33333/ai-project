@@ -78,7 +78,7 @@ function renderMcpServersTable() {
   }).join('');
 }
 
-async function submitNewMcpServer() {
+async function submitNewMcpServer(event) {
   const name = document.getElementById('mcp-new-name')?.value.trim();
   const protocol = document.getElementById('mcp-new-protocol')?.value || 'sse';
   const endpoint = document.getElementById('mcp-new-endpoint')?.value.trim();
@@ -87,7 +87,8 @@ async function submitNewMcpServer() {
     if (typeof showToast === 'function') showToast('Vui lòng nhập tên và endpoint MCP Server.', 'warn');
     return;
   }
-
+  const idle = window.busyButton?.(event?.submitter, 'Đang kết nối…');
+  if (idle === null) return;
   try {
     const res = await fetch('/api/mcp/add', {
       method: 'POST',
@@ -106,7 +107,7 @@ async function submitNewMcpServer() {
   } catch (err) {
     console.error('Không thể thêm MCP Server:', err);
     if (typeof showToast === 'function') showToast(err.message || 'Không thể thêm MCP Server.', 'error');
-  }
+  } finally { idle?.(); }
 }
 
 function openMcpReadOnlyReview(id) {
@@ -123,8 +124,8 @@ function openMcpReadOnlyReview(id) {
 
 async function saveMcpReadOnlyReview(event) {
   event.preventDefault();
-  const form = event.currentTarget, button = form.querySelector('button[type="submit"]');
-  button.disabled = true;
+  const form = event.currentTarget, idle = window.busyButton?.(form.querySelector('button[type="submit"]'), 'Đang lưu…');
+  if (idle === null) return;
   try {
     const values = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(input => input.value);
     const server = window.mcpServersData.find(item => item.id === document.getElementById('mcp-review-id').value);
@@ -137,7 +138,7 @@ async function saveMcpReadOnlyReview(event) {
     document.getElementById('mcp-read-only-review').hidden = true;
     await fetchMcpServers(); showToast('Đã cập nhật phạm vi chỉ đọc.', 'success');
   } catch (error) { showToast(error.message, 'error'); }
-  finally { button.disabled = false; }
+  finally { idle?.(); }
 }
 
 async function connectMcpServer(id) {
@@ -376,6 +377,8 @@ async function saveEmbedConfig(event) {
     mode: document.getElementById('embed-config-mode')?.value === 'page' ? 'page' : 'widget',
     role: document.getElementById('embed-config-role')?.value || 'khach_widget'
   };
+  const idle = window.busyButton?.(event.submitter || event.currentTarget?.querySelector?.('[type="submit"]'), 'Đang lưu…');
+  if (idle === null) return;
   try {
     const endpoint = id ? '/api/embed/configs/update' : '/api/embed/configs/create';
     const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -386,7 +389,7 @@ async function saveEmbedConfig(event) {
     if (typeof showToast === 'function') showToast(id ? 'Đã cập nhật cấu hình Embed.' : 'Đã tạo cấu hình Embed.', 'success');
   } catch (err) {
     if (typeof showToast === 'function') showToast(err.message, 'error', 'Không thể tạo Embed');
-  }
+  } finally { idle?.(); }
 }
 
 async function toggleEmbedConfig(id, isActive) {
@@ -407,15 +410,19 @@ function closeEmbedDeleteModal() {
   if (typeof closeModal === 'function') closeModal('embed-delete-modal');
 }
 
-async function confirmDeleteEmbedConfig() {
+async function confirmDeleteEmbedConfig(button) {
   const id = document.getElementById('embed-delete-id')?.value;
   if (!id) return;
-  const res = await fetch('/api/embed/configs/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-  if (res.ok) {
-    closeEmbedDeleteModal();
-    await fetchEmbedConfigs();
-    if (typeof showToast === 'function') showToast('Đã xóa cấu hình Embed.', 'success');
-  }
+  const idle = window.busyButton?.(button, 'Đang xóa…');
+  if (idle === null) return;
+  try {
+    const res = await fetch('/api/embed/configs/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    if (res.ok) {
+      closeEmbedDeleteModal();
+      await fetchEmbedConfigs();
+      if (typeof showToast === 'function') showToast('Đã xóa cấu hình Embed.', 'success');
+    }
+  } finally { idle?.(); }
 }
 
 async function copyEmbedSnippet(id) {
@@ -485,7 +492,7 @@ function generateNewApiKey() {
   openApiKeyModal();
 }
 
-async function submitNewApiKeyFromModal() {
+async function submitNewApiKeyFromModal(button) {
   const input = document.getElementById('api-key-app-name');
   const rateInput = document.getElementById('api-key-rate-limit');
   const name = input?.value?.trim();
@@ -497,6 +504,8 @@ async function submitNewApiKeyFromModal() {
     return;
   }
 
+  const idle = window.busyButton?.(button, 'Đang tạo…');
+  if (idle === null) return;
   try {
     const res = await fetch('/api/keys/generate', {
       method: 'POST',
@@ -510,7 +519,7 @@ async function submitNewApiKeyFromModal() {
   } catch (err) {
     console.error('Không thể tạo API Key:', err);
     if (typeof showToast === 'function') showToast('Không thể tạo API Key.', 'error');
-  }
+  } finally { idle?.(); }
 }
 
 async function revokeApiKey(id) {

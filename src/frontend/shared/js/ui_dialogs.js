@@ -65,4 +65,27 @@
 
   window.showUiConfirm = (message, options = {}) => openDialog({ ...options, message, kind: 'confirm' });
   window.showUiPrompt = (message, defaultValue = '', options = {}) => openDialog({ ...options, message, defaultValue, kind: 'prompt' });
+
+  // Shows a spinner on a button while its action runs, with `label` or the button's own text.
+  // The button's own content stays in place (hidden), so code that relabels it meanwhile keeps working.
+  // Returns the function that puts the button back, or null when it is already busy (a second click).
+  window.busyButton = (button, label) => {
+    if (!button) return () => {};
+    if (button.classList.contains('is-busy')) return null;
+    for (const node of [...button.childNodes]) {
+      if (node.nodeType !== 3 || !node.data.trim()) continue;
+      const wrapper = document.createElement('span'); node.replaceWith(wrapper); wrapper.append(node);
+    }
+    const state = document.createElement('span'), spinner = document.createElement('i');
+    state.className = 'busy-button-state';
+    spinner.className = 'fa-solid fa-spinner fa-spin'; spinner.setAttribute('aria-hidden', 'true');
+    state.append(spinner, ` ${label || button.textContent.trim()}`);
+    const idleDisabled = button.disabled;
+    button.classList.add('is-busy'); button.append(state);
+    button.disabled = true; button.setAttribute('aria-busy', 'true');
+    return () => {
+      state.remove(); button.classList.remove('is-busy');
+      button.disabled = idleDisabled; button.removeAttribute('aria-busy');
+    };
+  };
 })();

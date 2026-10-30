@@ -142,6 +142,8 @@
     const value = tableRow.querySelector('[data-field="tokenLimit"]').value.trim();
     const body = { scope: tableRow.dataset.scope, targetId: tableRow.dataset.id, period: tableRow.querySelector('[data-field="period"]').value,
       tokenLimit: value === '' ? null : Number(value), locked: !tableRow.querySelector('[data-field="locked"]').checked };
+    const idle = window.busyButton?.(tableRow.querySelector('[data-action="save"]'), 'Đang lưu');
+    if (idle === null) return;
     tableRow.querySelectorAll('input, select, button').forEach(control => { control.disabled = true; });
     try {
       await request('/api/ai-usage/limits', { method: 'PUT', body: JSON.stringify(body) });
@@ -149,6 +151,7 @@
       await window.loadAiUsage();
     } catch (failure) {
       if (typeof showToast === 'function') showToast(failure.message, 'error');
+      idle?.();
       tableRow.querySelectorAll('input, select').forEach(control => { control.disabled = false; });
       tableRow.querySelector('[data-action="save"]').disabled = false;
     }

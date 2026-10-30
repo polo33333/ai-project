@@ -51,14 +51,14 @@
     } catch(error) {el('embed-identity-message').textContent=error.message;}
   };
   window.saveEmbedIdentity = async function(event) {
-    event.preventDefault(); el('embed-identity-save').disabled=true;
+    event.preventDefault(); const idle=window.busyButton?.(el('embed-identity-save'),'Đang lưu…'); if(idle===null)return;
     el('embed-identity-message').classList.remove('is-error');
     el('embed-identity-message').textContent='Đang lưu cấu hình…';
     try {
       await request('/api/accounts/embed-identity','PUT',{embedId:el('embed-identity-config').value,identity:{enabled:el('embed-identity-enabled').checked,required:el('embed-identity-required').checked,serverUrl:el('embed-identity-server').value,issuer:el('embed-identity-issuer').value,audience:el('embed-identity-audience').value,publicKey:el('embed-identity-key').value}});
       await window.loadEmbedIdentity(); el('embed-identity-message').textContent='Đã lưu server xác thực.';
     } catch(error) {el('embed-identity-message').textContent=error.message;el('embed-identity-message').classList.add('is-error');}
-    finally {el('embed-identity-save').disabled=!embedConfigs.length;}
+    finally {idle?.();el('embed-identity-save').disabled=!embedConfigs.length;}
   };
   // Which client the account may sign in to (see auth_service.clientAccess).
   const CLIENT_ACCESS_LABELS = { both: 'Trò chuyện + quản lý', chat: 'Chỉ trò chuyện', admin: 'Chỉ quản lý' };
@@ -103,7 +103,7 @@
   };
   window.closeAccountEditor = function () { if (saving) return; el('accounts-editor').hidden = true; el('accounts-password').value = ''; trigger?.focus(); };
   window.saveAccountEditor = async function (event) {
-    event.preventDefault(); if (saving) return; saving = true; el('accounts-save').disabled = true;
+    event.preventDefault(); if (saving) return; saving = true; const idle = window.busyButton?.(el('accounts-save'), 'Đang lưu…');
     el('accounts-editor-message').textContent = '';
     const selectedId = editing?.id;
     try {
@@ -117,7 +117,7 @@
       if (mode === 'password') { const me = await request('/api/auth/me'); if (!me.authenticated || me.account?.id === selectedId) { window.location.href='/admin/login'; return; } }
       saving = false; window.closeAccountEditor(); window.invalidateMainTabData?.('accounts'); if(loading)await loading; await window.loadAccounts(); window.showToast?.('Đã lưu tài khoản.', 'success');
     } catch (error) { el('accounts-editor-message').textContent = error.message; }
-    finally { saving = false; el('accounts-save').disabled = false; }
+    finally { saving = false; idle?.(); }
   };
   function renderRoleOptions() {
     for(const id of ['accounts-role','accounts-role-filter']) {
@@ -195,14 +195,14 @@
   };
   window.closeRoleEditor=function(){if(!roleSaving)el('accounts-role-editor').hidden=true;};
   window.saveRoleEditor=async function(event) {
-    event.preventDefault();if(roleSaving||roleEditing?.id==='admin')return;roleSaving=true;el('account-role-save').disabled=true;
+    event.preventDefault();if(roleSaving||roleEditing?.id==='admin')return;roleSaving=true;const idle=window.busyButton?.(el('account-role-save'),'Đang lưu…');
     try {
       const body={id:el('account-role-id').value,name:el('account-role-name').value,description:el('account-role-description').value,functionGroups:readChecked('role-function-groups'),revision:roleEditing?.revision};
       const result=await request('/api/accounts/roles'+(roleEditing?'/'+encodeURIComponent(roleEditing.id):''),roleEditing?'PUT':'POST',body);
       if(loading)await loading;await window.loadAccounts();roleSaving=false;window.closeRoleEditor();
       if(!el('accounts-editor').hidden){el('accounts-role').value=result.role.id;window.updateAccountPermissionPreview();}
       window.showToast?.('Đã lưu vai trò.','success');
-    } catch(error){el('account-role-message').dataset.kind='';el('account-role-message').textContent=error.message;} finally{roleSaving=false;el('account-role-save').disabled=false;}
+    } catch(error){el('account-role-message').dataset.kind='';el('account-role-message').textContent=error.message;} finally{roleSaving=false;idle?.();}
   };
   document.addEventListener('keydown', event => {
     const roleOverlay=el('accounts-role-editor');

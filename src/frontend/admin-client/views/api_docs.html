@@ -130,7 +130,7 @@
     <h3>Xóa cấu hình Embed?</h3>
     <p>Cấu hình <strong id="embed-delete-name"></strong> sẽ ngừng hoạt động ngay lập tức. Website đang sử dụng Embed ID này sẽ không thể gọi AI.</p>
     <input type="hidden" id="embed-delete-id">
-    <div class="embed-delete-actions"><button class="btn-secondary-sm" onclick="closeEmbedDeleteModal()">Hủy</button><button class="btn-danger-sm" onclick="confirmDeleteEmbedConfig()"><i class="fa-solid fa-trash-can"></i> Xóa cấu hình</button></div>
+    <div class="embed-delete-actions"><button class="btn-secondary-sm" onclick="closeEmbedDeleteModal()">Hủy</button><button class="btn-danger-sm" onclick="confirmDeleteEmbedConfig(this)"><i class="fa-solid fa-trash-can"></i> Xóa cấu hình</button></div>
   </div>
 </div>
 
@@ -158,7 +158,7 @@
     </div>
     <div class="api-key-modal-actions">
       <button class="btn-secondary-sm" onclick="closeApiKeyModal()">Hủy</button>
-      <button class="btn-primary" onclick="submitNewApiKeyFromModal()">
+      <button class="btn-primary" onclick="submitNewApiKeyFromModal(this)">
         <i class="fa-solid fa-plus"></i> Tạo key
       </button>
     </div>

@@ -6656,3 +6656,8 @@ table td {
 .chat-reasoning-panel { margin:8px 0; padding:10px 12px; border:1px solid var(--border-color,#e2e8f0); border-radius:10px; min-width:0; color:var(--text-secondary,#64748b); }
 .chat-reasoning-panel summary { cursor:pointer; font-size:12px; font-weight:600; }
 .chat-reasoning-panel pre { margin:8px 0 0; max-height:280px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-family:inherit; font-size:12px; line-height:1.6; }
+
+/* A button whose action is running (ui_dialogs.js busyButton): its own content is hidden behind the spinner. */
+button.is-busy > :not(.busy-button-state) { display: none !important; }
+button.is-busy { cursor: progress; }
+.busy-button-state { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }

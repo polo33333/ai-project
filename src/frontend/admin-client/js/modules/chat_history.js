@@ -292,7 +292,8 @@ async function exportChatHistory(event) {
     status.textContent = '"Từ ngày" phải trước hoặc bằng "Đến ngày".';
     return;
   }
-  button.disabled = true;
+  const idle = window.busyButton?.(button, 'Đang xuất…');
+  if (idle === null) return;
   status.textContent = 'Đang chuẩn bị tệp…';
   try {
     const response = await fetch('/api/chat-history/export?' + params, { cache: 'no-store' });
@@ -311,7 +312,7 @@ async function exportChatHistory(event) {
     status.classList.add('is-error');
     status.textContent = error.message;
   } finally {
-    button.disabled = false;
+    idle?.();
   }
 }
 

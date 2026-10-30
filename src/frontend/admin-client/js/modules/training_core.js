@@ -116,8 +116,8 @@ window.saveSelectedSkill = async function saveSelectedSkill(event) {
   event?.preventDefault();
   const skill = selectedSkill();
   if (!skill) return;
-  const button = document.getElementById('skill-editor-save');
-  if (button) button.disabled = true;
+  const idle = window.busyButton?.(document.getElementById('skill-editor-save'), 'Đang lưu…');
+  if (idle === null) return;
   const exampleIds = [...document.querySelectorAll('#skill-editor-examples input:checked')].map(input => input.value);
   try {
     const response = await fetch('/api/training/skills/save', {
@@ -132,7 +132,7 @@ window.saveSelectedSkill = async function saveSelectedSkill(event) {
   } catch (error) {
     if (typeof showToast === 'function') showToast(error.message, 'error');
   } finally {
-    if (button) button.disabled = false;
+    idle?.();
   }
 };
 

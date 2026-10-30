@@ -957,11 +957,13 @@ function resetBusinessDomainForm() {
   setBusinessDomainFormOpen(false);
 }
 
-async function saveBusinessDomain() {
+async function saveBusinessDomain(button) {
   const oldDomain = document.getElementById('domain-old-key')?.value.trim() || '';
   const domain = document.getElementById('domain-key-input')?.value.trim() || '';
   const aliases = document.getElementById('domain-aliases-input')?.value || '';
   if (!domain) return showToast?.('Vui lòng nhập mã nghiệp vụ.', 'warning');
+  const idle = window.busyButton?.(button, 'Đang lưu…');
+  if (idle === null) return;
   try {
     const res = await fetch('/api/dictionary/domains/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldDomain, domain, aliases }) });
     const data = await res.json();
@@ -974,7 +976,7 @@ async function saveBusinessDomain() {
     showToast?.('Đã lưu lĩnh vực nghiệp vụ và đồng bộ cho AI.', 'success');
   } catch (err) {
     showToast?.(`Không thể lưu lĩnh vực nghiệp vụ: ${err.message}`, 'error');
-  }
+  } finally { idle?.(); }
 }
 
 async function deleteBusinessDomain(encodedDomain) {
@@ -1672,6 +1674,8 @@ async function createTableRelationship() {
     if (typeof showToast === 'function') showToast('Hãy chọn đầy đủ bảng và cột.', 'warn');
     return;
   }
+  const idle = window.busyButton?.(document.getElementById('relationship-save-button'), 'Đang lưu…');
+  if (idle === null) return;
   try {
     const isEditing = !!window.editingTableRelationshipId;
     const endpoint = isEditing ? '/api/dictionary/relationships/update' : '/api/dictionary/relationships/add';
@@ -1687,7 +1691,7 @@ async function createTableRelationship() {
     if (typeof showToast === 'function') showToast(isEditing ? 'Đã cập nhật quan hệ bảng.' : 'Đã tạo quan hệ giữa hai bảng.', 'success');
   } catch (err) {
     if (typeof showToast === 'function') showToast(`Không thể tạo quan hệ: ${err.message}`, 'error');
-  }
+  } finally { idle?.(); }
 }
 
 function editTableRelationship(encodedId) {

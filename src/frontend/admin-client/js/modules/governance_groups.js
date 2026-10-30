@@ -258,7 +258,7 @@
   }
   window.saveFunctionGroup = async function (event) {
     event.preventDefault(); if (groupsState.saving) return;
-    groupsState.saving = true; el('dg-group-save').disabled = true; el('dg-group-message').textContent = 'Đang lưu…';
+    groupsState.saving = true; const idle = window.busyButton?.(el('dg-group-save'), 'Đang lưu…'); el('dg-group-message').textContent = 'Đang lưu…';
     try {
       const body = readGroupForm(), editing = groupsState.editing;
       const result = await dg().api(editing ? `/api/governance/function-groups/${encodeURIComponent(editing.id)}` : '/api/governance/function-groups', editing ? 'PUT' : 'POST', body);
@@ -266,7 +266,7 @@
       await window.loadFunctionGroups();
       window.showToast?.(editing ? `Đã lưu “${result.group.name}”${result.impact?.roles?.length ? ` · áp dụng cho ${result.impact.roles.length} vai trò` : ''}.` : `Đã tạo “${result.group.name}”. Gán nhóm vào vai trò tại Tài khoản → Vai trò.`, 'success');
     } catch (error) { el('dg-group-message').textContent = error.message; }
-    finally { groupsState.saving = false; el('dg-group-save').disabled = false; }
+    finally { groupsState.saving = false; idle?.(); }
   };
   window.deleteFunctionGroup = async function () {
     const group = groupsState.editing; if (!group) return;
@@ -323,11 +323,11 @@
   window.saveGovernanceMatrix = async function () {
     const sourceId = el('dg-matrix-source').value, cells = [...groupsState.matrix].map(([key, level]) => { const [groupId, packageId] = key.split('|'); return { groupId, packageId, level: level || null }; });
     if (!cells.length) return;
-    el('dg-matrix-save').disabled = true;
+    const idle = window.busyButton?.(el('dg-matrix-save'), 'Đang lưu…'); if (idle === null) return;
     try {
       await dg().api('/api/governance/function-groups/matrix', 'POST', { sourceId, cells, revisions: Object.fromEntries(groupsState.data.groups.map(group => [group.id, group.revision])) });
-      await window.loadFunctionGroups(); window.showToast?.('Đã lưu ma trận gói bảng.', 'success');
-    } catch (error) { window.showToast?.(error.message, 'error'); el('dg-matrix-save').disabled = false; }
+      await window.loadFunctionGroups(); idle?.(); el('dg-matrix-save').disabled = true; window.showToast?.('Đã lưu ma trận gói bảng.', 'success');
+    } catch (error) { idle?.(); window.showToast?.(error.message, 'error'); }
   };
 
   // ---------- Inspect ----------
