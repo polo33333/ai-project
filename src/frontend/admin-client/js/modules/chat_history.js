@@ -324,6 +324,11 @@ function chatExportDay(offset = 0) {
 // Presets fill the date inputs; "Hôm nay" is one day, "7 ngày" includes today and the six days before.
 function setChatExportRange(button) {
   const form = button.form;
+  if (button.dataset.days === 'custom') {
+    syncChatExportDates(form, button);
+    form.elements.from.focus();
+    return;
+  }
   const days = Number(button.dataset.days);
   form.elements.from.value = days ? chatExportDay(days - 1) : '';
   form.elements.to.value = days ? chatExportDay() : '';
@@ -335,8 +340,12 @@ function syncChatExportDates(form, activePreset = null) {
   from.max = to.value || chatExportDay();
   to.min = from.value;
   to.max = chatExportDay();
+  const customButton = form.querySelector('[data-days="custom"]');
+  const custom = !activePreset || activePreset === customButton;
+  form.querySelector('.chat-export-dates').hidden = !custom;
+  customButton.setAttribute('aria-expanded', String(custom));
   form.querySelectorAll('.chat-export-presets button').forEach(button => {
-    const active = activePreset ? button === activePreset : (!from.value && !to.value && button.dataset.days === '0');
+    const active = activePreset ? button === activePreset : button === customButton;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', String(active));
   });

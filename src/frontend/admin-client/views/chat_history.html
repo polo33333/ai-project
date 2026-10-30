@@ -70,17 +70,18 @@
         </div>
       </fieldset>
       <fieldset class="chat-export-field chat-export-period">
-        <legend>Thời gian</legend>
-        <div class="chat-export-dates">
-          <label><input type="date" class="form-control" name="from" aria-label="Từ ngày" oninput="syncChatExportDates(this.form)"></label>
-          <span class="chat-export-dash" aria-hidden="true">→</span>
-          <label><input type="date" class="form-control" name="to" aria-label="Đến ngày" oninput="syncChatExportDates(this.form)"></label>
-        </div>
+        <legend>Khoảng thời gian</legend>
         <div class="chat-export-presets" role="group" aria-label="Chọn nhanh khoảng thời gian">
-          <button type="button" data-days="1" onclick="setChatExportRange(this)">Hôm nay</button>
-          <button type="button" data-days="7" onclick="setChatExportRange(this)">7 ngày</button>
-          <button type="button" data-days="30" onclick="setChatExportRange(this)">30 ngày</button>
-          <button type="button" data-days="0" class="is-active" onclick="setChatExportRange(this)">Mọi lúc</button>
+          <button type="button" data-days="1" aria-pressed="false" onclick="setChatExportRange(this)">Hôm nay</button>
+          <button type="button" data-days="7" aria-pressed="false" onclick="setChatExportRange(this)">7 ngày</button>
+          <button type="button" data-days="30" aria-pressed="false" onclick="setChatExportRange(this)">30 ngày</button>
+          <button type="button" data-days="0" class="is-active" aria-pressed="true" onclick="setChatExportRange(this)">Mọi lúc</button>
+          <button type="button" data-days="custom" aria-pressed="false" aria-controls="chat-export-custom-dates" aria-expanded="false" onclick="setChatExportRange(this)">Tùy chọn</button>
+        </div>
+        <div class="chat-export-dates" id="chat-export-custom-dates" hidden>
+          <label><span>Từ ngày</span><input type="date" class="form-control" name="from" aria-label="Từ ngày" oninput="syncChatExportDates(this.form)"></label>
+          <span class="chat-export-dash" aria-hidden="true">—</span>
+          <label><span>Đến ngày</span><input type="date" class="form-control" name="to" aria-label="Đến ngày" oninput="syncChatExportDates(this.form)"></label>
         </div>
       </fieldset>
       <label class="chat-export-field chat-export-limit">
