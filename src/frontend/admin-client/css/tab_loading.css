@@ -44,8 +44,11 @@
 @keyframes dashboard-boot-shimmer { from { background-position:100% 0; } to { background-position:-100% 0; } }
 @media(prefers-reduced-motion:reduce) { .dashboard-booting * { animation:none !important; } }
 
-.dictionary-header-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-.dictionary-sync-status { max-width:360px; height:auto; min-height:0; padding:0; border:0; color:var(--text-secondary); background:transparent; font-size:12px; line-height:1.5; text-align:right; }
+/* Source label and add button share one row; the sync status wraps below them. */
+.dictionary-header-actions { display:flex; flex-flow:row wrap; align-items:center; justify-content:flex-end; gap:8px; }
+.dictionary-header-actions .dictionary-source-label { display:inline-flex; align-items:center; align-self:stretch; box-sizing:border-box; white-space:nowrap; }
+.dictionary-header-actions .dictionary-source-label:empty { display:none; }
+.dictionary-sync-status { flex-basis:100%; max-width:360px; margin-left:auto; height:auto; min-height:0; padding:0; border:0; color:var(--text-secondary); background:transparent; font-size:12px; line-height:1.5; text-align:right; }
 .dictionary-sync-status[hidden] { display:none !important; }
 .dictionary-sync-status[data-state="failed"], .dictionary-sync-status[data-state="unavailable"] { color:var(--danger,#dc2626); }
 
@@ -65,7 +68,7 @@
 .tab-skeleton-cards .tab-skeleton-line:first-child { width:55%; height:18px; }
 .tab-skeleton-cards .tab-skeleton-line:last-child { width:75%; }
 @keyframes tab-skeleton-shimmer { to { transform:translateX(100%); } }
-@media(max-width:620px) { .dictionary-header-actions { grid-column:1/-1; align-items:flex-start; } .dictionary-sync-status { text-align:left; max-width:100%; } .tab-data-loading { padding:12px; } .tab-skeleton-row { gap:12px; } }
+@media(max-width:620px) { .dictionary-header-actions { grid-column:1/-1; justify-content:flex-start; } .dictionary-sync-status { text-align:left; max-width:100%; margin-left:0; } .tab-data-loading { padding:12px; } .tab-skeleton-row { gap:12px; } }
 @media(prefers-reduced-motion:reduce) { .tab-skeleton-line::after { animation:none; } }
 
 .analytics-loading-overlay { padding:16px; box-sizing:border-box; }
