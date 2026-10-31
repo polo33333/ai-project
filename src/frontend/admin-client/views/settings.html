@@ -4,47 +4,66 @@
     <div><div class="card-title">Cài đặt hệ thống</div><p>Quản lý cấu hình máy chủ, AI và kho tri thức.</p></div>
     <span class="metric-tag purple">Chỉ dành cho admin</span>
   </header>
- <!-- <div class="settings-notice"><i class="fa-solid fa-triangle-exclamation"></i><div><strong>Chỉnh sửa cấu hình cẩn thận</strong><span>Các thay đổi được lưu vào <code>.env</code>. Khởi động lại ứng dụng để tiến trình nạp và sử dụng cấu hình mới.</span></div></div> -->
-  <section class="settings-qdrant-card" aria-labelledby="settings-qdrant-title">
-    <div class="settings-qdrant-icon" id="settings-qdrant-icon"><i class="fa-solid fa-database"></i></div>
-    <div class="settings-qdrant-main"><span>VECTOR DATABASE</span><h3 id="settings-qdrant-title">Trạng thái Qdrant</h3><p id="settings-qdrant-message" role="status" aria-live="polite">Nhấn kiểm tra để xem trạng thái dịch vụ đang chạy.</p></div>
-    <div class="settings-qdrant-metrics">
-      <div><span>Kết nối</span><strong id="settings-qdrant-state">Chưa kiểm tra</strong></div>
-      <div><span>Collection</span><strong id="settings-qdrant-collection">—</strong></div>
-      <div><span>Vectors</span><strong id="settings-qdrant-points">—</strong></div>
-    </div>
-    <div class="settings-qdrant-action"><button type="button" class="btn-primary" id="settings-check" onclick="checkSettingsConnection()"><i class="fa-solid fa-rotate"></i><span>Kiểm tra lại</span></button><small id="settings-qdrant-checked-at">Chưa kiểm tra</small></div>
-  </section>
+  <div class="settings-shell">
+    <aside class="settings-sidebar">
+      <div class="settings-search-wrap"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="settings-search" class="form-control" type="search" placeholder="Tìm tên hoặc biến .env…" aria-label="Tìm cấu hình" oninput="filterSettings(this.value)"></div>
+      <nav id="settings-nav" class="settings-nav" aria-label="Danh mục cài đặt"></nav>
+    </aside>
 
-  <section class="settings-backup-card" aria-labelledby="settings-backup-title">
-    <header class="settings-backup-heading"><div><span>QUẢN LÝ DỮ LIỆU</span><h3 id="settings-backup-title">Sao lưu và khôi phục</h3><p>PostgreSQL, ba collection Qdrant (schema, tài liệu, workflow) và file thư viện trong cùng một gói.</p></div><strong id="settings-backup-mode">Đang kiểm tra…</strong></header>
-    <p id="settings-backup-message" class="settings-backup-message" role="status" aria-live="polite">Đang tải danh sách backup.</p>
-    <div class="settings-backup-grid">
-      <section class="settings-backup-pane" aria-labelledby="settings-backup-create-title">
-        <div class="settings-backup-pane-heading"><span class="settings-backup-pane-icon"><i class="fa-solid fa-cloud-arrow-down"></i></span><div><h4 id="settings-backup-create-title">Tạo bản sao lưu</h4><p>Chụp dữ liệu hiện tại. Ứng dụng tự tạm dừng ghi trong lúc tạo gói.</p></div></div>
-        <div class="settings-backup-pane-actions"><button type="button" class="btn-primary" id="settings-backup-create" onclick="startStorageBackup()" disabled><i class="fa-solid fa-plus"></i> Tạo backup ngay</button><button type="button" class="btn-secondary-sm" onclick="loadStorageBackups()"><i class="fa-solid fa-rotate"></i> Làm mới danh sách</button></div>
-        <p class="settings-backup-hint">Sau khi hoàn tất, chọn gói bên phải để tải file <code>.khbackup</code> về lưu trữ.</p>
-      </section>
-      <section class="settings-backup-pane" aria-labelledby="settings-backup-restore-title">
-        <div class="settings-backup-pane-heading"><span class="settings-backup-pane-icon"><i class="fa-solid fa-rotate-left"></i></span><div><h4 id="settings-backup-restore-title">Khôi phục từ backup</h4><p>Tải gói lên hoặc chọn gói có sẵn, rồi khôi phục vào database đang dùng.</p></div></div>
-        <div class="settings-backup-step"><span class="settings-backup-step-number">1</span><div class="settings-backup-step-content"><label for="settings-backup-file">Tải file backup từ máy lên</label><div class="settings-backup-control-row"><div class="settings-backup-file-picker"><input id="settings-backup-file" type="file" accept=".khbackup" onchange="updateStorageBackupFileName()"><label for="settings-backup-file" class="settings-backup-file-button"><i class="fa-solid fa-folder-open"></i> Chọn file backup</label><span id="settings-backup-file-name" class="settings-backup-file-name">Chưa chọn file .khbackup</span></div><button type="button" class="btn-secondary-sm" onclick="uploadStorageBackup()">Tải lên &amp; kiểm tra</button></div></div></div>
-        <div class="settings-backup-step"><span class="settings-backup-step-number">2</span><div class="settings-backup-step-content"><label for="settings-backup-select">Chọn gói backup</label><div class="settings-backup-control-row"><select id="settings-backup-select" class="form-control"></select><button type="button" class="btn-secondary-sm" onclick="verifyStorageBackup()">Kiểm tra</button><button type="button" class="btn-secondary-sm" onclick="downloadStorageBackup()">Tải về</button></div></div></div>
-        <div class="settings-backup-step"><span class="settings-backup-step-number">3</span><div class="settings-backup-step-content"><label for="settings-backup-target">Database hiện tại sẽ được ghi đè</label><div class="settings-backup-control-row"><input id="settings-backup-target" class="form-control" value="Đang tải…" readonly><button type="button" class="btn-secondary-sm" onclick="importStorageBackup(true)">Xem kế hoạch</button><button type="button" class="btn-primary settings-backup-danger" id="settings-backup-import" onclick="importStorageBackup(false)" disabled>Khôi phục DB hiện tại</button></div><small>Máy chủ sẽ dừng, tạo backup an toàn rồi khởi động lại sau khi khôi phục thành công.</small></div></div>
-      </section>
-    </div>
-    <details class="settings-backup-details" id="settings-backup-details"><summary>Kết quả tác vụ <i class="fa-solid fa-chevron-down"></i></summary><pre id="settings-backup-result" aria-label="Kết quả backup"></pre></details>
-  </section>
-  <div id="settings-form">
-    <div class="settings-layout">
-      <div class="settings-panel">
-        <div class="settings-toolbar">
-          <div class="settings-toolbar-title"><i class="fa-solid fa-list-check"></i><strong>Thuộc tính hệ thống</strong></div>
-          <div class="settings-search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="settings-search" class="form-control" type="search" placeholder="Tìm theo tên hoặc biến .env…" aria-label="Tìm cấu hình" oninput="filterSettings(this.value)"></div>
-          <div class="settings-toolbar-actions"><span id="settings-dirty-count" aria-live="polite"></span><span id="settings-total"></span><button type="button" class="btn-secondary-sm" onclick="reloadSettings()"><i class="fa-solid fa-rotate"></i> Tải lại</button><button type="button" class="btn-secondary-sm" id="settings-save" onclick="requestSettingsSave()" disabled><i class="fa-solid fa-floppy-disk"></i> Lưu</button><button type="button" class="btn-primary" id="settings-save-restart" onclick="requestSettingsSave(true)"><i class="fa-solid fa-power-off"></i> Lưu &amp; restart</button></div>
-        </div>
+    <div class="settings-main">
+      <section class="settings-pane" data-pane="config" id="settings-form" aria-labelledby="settings-pane-title">
+        <header class="settings-pane-header">
+          <div><h2 id="settings-pane-title">Tất cả thuộc tính</h2><p id="settings-pane-summary">Các thay đổi được ghi vào <code>.env</code> và có hiệu lực sau khi khởi động lại máy chủ.</p></div>
+          <span id="settings-total" class="settings-pane-count"></span>
+        </header>
         <p id="settings-message" role="status" aria-live="polite"></p>
-        <div class="settings-workspace"><nav id="settings-nav" class="settings-nav" aria-label="Nhóm cấu hình"></nav><div class="settings-content"><div id="settings-fields"></div><p id="settings-empty" hidden>Không có cấu hình phù hợp. Thử tên tiếng Việt hoặc tên biến .env.</p></div></div>
-      </div>
+        <div id="settings-fields"></div>
+        <p id="settings-empty" hidden>Không có cấu hình phù hợp. Thử tên tiếng Việt hoặc tên biến .env.</p>
+        <footer class="settings-savebar" aria-label="Lưu cấu hình">
+          <span id="settings-dirty-count" aria-live="polite"></span>
+          <div class="settings-savebar-actions">
+            <button type="button" class="btn-secondary-sm" id="settings-discard" onclick="discardSettingsChanges()" hidden><i class="fa-solid fa-rotate-left"></i> Hoàn tác tất cả</button>
+            <button type="button" class="btn-secondary-sm" onclick="reloadSettings()"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+            <button type="button" class="btn-secondary-sm" id="settings-save" onclick="requestSettingsSave()" disabled><i class="fa-solid fa-floppy-disk"></i> Lưu</button>
+            <button type="button" class="btn-primary" id="settings-save-restart" onclick="requestSettingsSave(true)"><i class="fa-solid fa-power-off"></i> Lưu &amp; khởi động lại</button>
+          </div>
+        </footer>
+      </section>
+
+      <section class="settings-pane" data-pane="status" aria-labelledby="settings-status-title" hidden>
+        <header class="settings-pane-header">
+          <div><h2 id="settings-status-title">Trạng thái dịch vụ</h2><p>Kết nối tới Vector Database theo cấu hình của tiến trình đang chạy.</p></div>
+        </header>
+        <div class="settings-qdrant-card">
+          <div class="settings-qdrant-icon" id="settings-qdrant-icon"><i class="fa-solid fa-database"></i></div>
+          <div class="settings-qdrant-main"><span>VECTOR DATABASE</span><h3 id="settings-qdrant-title">Trạng thái Qdrant</h3><p id="settings-qdrant-message" role="status" aria-live="polite">Nhấn kiểm tra để xem trạng thái dịch vụ đang chạy.</p></div>
+          <div class="settings-qdrant-metrics">
+            <div><span>Kết nối</span><strong id="settings-qdrant-state">Chưa kiểm tra</strong></div>
+            <div><span>Collection</span><strong id="settings-qdrant-collection">—</strong></div>
+            <div><span>Vectors</span><strong id="settings-qdrant-points">—</strong></div>
+          </div>
+          <div class="settings-qdrant-action"><button type="button" class="btn-primary" id="settings-check" onclick="checkSettingsConnection()"><i class="fa-solid fa-rotate"></i><span>Kiểm tra lại</span></button><small id="settings-qdrant-checked-at">Chưa kiểm tra</small></div>
+        </div>
+      </section>
+
+      <section class="settings-pane settings-backup-card" data-pane="backup" aria-labelledby="settings-backup-title" hidden>
+        <header class="settings-backup-heading"><div><span>QUẢN LÝ DỮ LIỆU</span><h3 id="settings-backup-title">Sao lưu và khôi phục</h3><p>PostgreSQL, ba collection Qdrant (schema, tài liệu, workflow) và file thư viện trong cùng một gói.</p></div><strong id="settings-backup-mode">Đang kiểm tra…</strong></header>
+        <p id="settings-backup-message" class="settings-backup-message" role="status" aria-live="polite">Đang tải danh sách backup.</p>
+        <div class="settings-backup-grid">
+          <section class="settings-backup-pane" aria-labelledby="settings-backup-create-title">
+            <div class="settings-backup-pane-heading"><span class="settings-backup-pane-icon"><i class="fa-solid fa-cloud-arrow-down"></i></span><div><h4 id="settings-backup-create-title">Tạo bản sao lưu</h4><p>Chụp dữ liệu hiện tại. Ứng dụng tự tạm dừng ghi trong lúc tạo gói.</p></div></div>
+            <div class="settings-backup-pane-actions"><button type="button" class="btn-primary" id="settings-backup-create" onclick="startStorageBackup()" disabled><i class="fa-solid fa-plus"></i> Tạo backup ngay</button><button type="button" class="btn-secondary-sm" onclick="loadStorageBackups()"><i class="fa-solid fa-rotate"></i> Làm mới danh sách</button></div>
+            <p class="settings-backup-hint">Sau khi hoàn tất, chọn gói bên phải để tải file <code>.khbackup</code> về lưu trữ.</p>
+          </section>
+          <section class="settings-backup-pane" aria-labelledby="settings-backup-restore-title">
+            <div class="settings-backup-pane-heading"><span class="settings-backup-pane-icon"><i class="fa-solid fa-rotate-left"></i></span><div><h4 id="settings-backup-restore-title">Khôi phục từ backup</h4><p>Tải gói lên hoặc chọn gói có sẵn, rồi khôi phục vào database đang dùng.</p></div></div>
+            <div class="settings-backup-step"><span class="settings-backup-step-number">1</span><div class="settings-backup-step-content"><label for="settings-backup-file">Tải file backup từ máy lên</label><div class="settings-backup-control-row"><div class="settings-backup-file-picker"><input id="settings-backup-file" type="file" accept=".khbackup" onchange="updateStorageBackupFileName()"><label for="settings-backup-file" class="settings-backup-file-button"><i class="fa-solid fa-folder-open"></i> Chọn file backup</label><span id="settings-backup-file-name" class="settings-backup-file-name">Chưa chọn file .khbackup</span></div><button type="button" class="btn-secondary-sm" onclick="uploadStorageBackup()">Tải lên &amp; kiểm tra</button></div></div></div>
+            <div class="settings-backup-step"><span class="settings-backup-step-number">2</span><div class="settings-backup-step-content"><label for="settings-backup-select">Chọn gói backup</label><div class="settings-backup-control-row"><select id="settings-backup-select" class="form-control"></select><button type="button" class="btn-secondary-sm" onclick="verifyStorageBackup()">Kiểm tra</button><button type="button" class="btn-secondary-sm" onclick="downloadStorageBackup()">Tải về</button></div></div></div>
+            <div class="settings-backup-step"><span class="settings-backup-step-number">3</span><div class="settings-backup-step-content"><label for="settings-backup-target">Database hiện tại sẽ được ghi đè</label><div class="settings-backup-control-row"><input id="settings-backup-target" class="form-control" value="Đang tải…" readonly><button type="button" class="btn-secondary-sm" onclick="importStorageBackup(true)">Xem kế hoạch</button><button type="button" class="btn-primary settings-backup-danger" id="settings-backup-import" onclick="importStorageBackup(false)" disabled>Khôi phục DB hiện tại</button></div><small>Máy chủ sẽ dừng, tạo backup an toàn rồi khởi động lại sau khi khôi phục thành công.</small></div></div>
+          </section>
+        </div>
+        <details class="settings-backup-details" id="settings-backup-details"><summary>Kết quả tác vụ <i class="fa-solid fa-chevron-down"></i></summary><pre id="settings-backup-result" aria-label="Kết quả backup"></pre></details>
+      </section>
     </div>
   </div>
 </section>

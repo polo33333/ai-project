@@ -4,7 +4,17 @@
   let currentRevision = '';
   let pendingRestart = false;
   let activeGroup = '';
+  let activePane = 'config';
   const el = id => document.getElementById(id);
+  const PANE_STORAGE_KEY = 'knowledgehub.settingsPane';
+  // Sidebar sections in reading order: infrastructure first, then AI, data and integrations.
+  const NAV_SECTIONS = [
+    ['Hạ tầng', [['Máy chủ', 'fa-server'], ['Lưu trữ PostgreSQL', 'fa-database']]],
+    ['AI & Agent', [['AI và model local', 'fa-microchip'], ['AI provider bên thứ ba', 'fa-cloud'], ['Điều phối agent và giới hạn', 'fa-diagram-project'], ['Bộ nhớ hội thoại', 'fa-brain']]],
+    ['Dữ liệu & tri thức', [['Kho tri thức và embedding', 'fa-book-bookmark'], ['Ngữ cảnh và quan hệ CSDL', 'fa-sitemap'], ['Tìm kiếm web', 'fa-globe']]],
+    ['Tích hợp', [['MCP và công cụ', 'fa-plug'], ['Mẫu nghiệp vụ', 'fa-briefcase']]]
+  ];
+  const groupIcon = group => NAV_SECTIONS.flatMap(([, items]) => items).find(([name]) => name === group)?.[1] || 'fa-sliders';
   function panelToggle(panel, heading, targets) {
     if (!panel || !heading || heading.querySelector('.settings-panel-toggle')) return;
     const button = document.createElement('button');
@@ -19,18 +29,46 @@
     button.onclick = () => update(button.getAttribute('aria-expanded') === 'true');
     heading.append(button); update(false);
   }
-  function initializePanels() {
-    const root = el('view-settings'); if (!root) return;
-    const backup = root.querySelector('.settings-backup-card');
-    if (backup) panelToggle(backup, backup.querySelector('.settings-backup-heading'), [...backup.children].filter(node => !node.matches('header')));
-    const panel = root.querySelector('.settings-panel');
-    if (panel) panelToggle(panel, panel.querySelector('.settings-toolbar'), [...panel.children].filter(node => !node.matches('.settings-toolbar')));
-    root.querySelectorAll('.settings-governance-card').forEach(card => {
-      panelToggle(card, card.querySelector('.settings-governance-heading'), [card.querySelector('.settings-governance-body')]);
+  function navButton({ label, icon, count, onClick, dataset }) {
+    const button = document.createElement('button'); button.type = 'button';
+    Object.assign(button.dataset, dataset);
+    const symbol = document.createElement('i'); symbol.className = `fa-solid ${icon}`; symbol.setAttribute('aria-hidden', 'true');
+    const title = document.createElement('span'); title.className = 'settings-nav-label'; title.textContent = label;
+    button.append(symbol, title);
+    if (count !== undefined) { const badge = document.createElement('span'); badge.className = 'settings-nav-count'; badge.textContent = count; button.append(badge); }
+    button.onclick = onClick;
+    return button;
+  }
+  const navHeading = text => { const heading = document.createElement('small'); heading.textContent = text; return heading; };
+
+  // The app header sticks over the scrolling page; measure it so the sidebar sticks just below it.
+  function syncStickyTop() {
+    const view = el('view-settings'), header = document.querySelector('header.top-bar'), main = view?.closest('main');
+    if (!view || !header || !main) return;
+    const paddingTop = parseFloat(getComputedStyle(main).paddingTop) || 0;
+    view.style.setProperty('--settings-sticky-top', `${Math.max(12, header.offsetHeight - paddingTop + 12)}px`);
+  }
+  window.addEventListener('resize', syncStickyTop);
+
+  // One pane is visible at a time: configuration, service status or backup.
+  window.showSettingsPane = function (pane) {
+    syncStickyTop();
+    activePane = ['config', 'status', 'backup'].includes(pane) ? pane : 'config';
+    try { localStorage.setItem(PANE_STORAGE_KEY, activePane); } catch (_) { /* The pane still opens; it is just not remembered. */ }
+    document.querySelectorAll('#view-settings .settings-pane').forEach(node => { node.hidden = node.dataset.pane !== activePane; });
+    syncNav();
+  };
+  function syncNav() {
+    const query = el('settings-search')?.value.trim();
+    el('settings-nav')?.querySelectorAll('button').forEach(button => {
+      const active = button.dataset.pane ? activePane === button.dataset.pane
+        : activePane === 'config' && (query ? button.dataset.group === '' : button.dataset.group === activeGroup);
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
     });
-    const search = el('settings-search')?.closest('.settings-search-wrap');
-    const content = root.querySelector('.settings-content');
-    if (search && content && search.parentElement !== content) content.prepend(search);
+    // On narrow screens the categories become a horizontal strip; keep the current one in view.
+    const nav = el('settings-nav'), current = nav?.querySelector('.is-active');
+    if (nav && current && nav.scrollWidth > nav.clientWidth) nav.scrollLeft += current.getBoundingClientRect().left - nav.getBoundingClientRect().left - 12;
   }
   const normalize = text => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   const showMessage = (text, tone = '') => { const node = el('settings-message'); if (node) { node.textContent = text; node.dataset.tone = tone; } };
@@ -84,33 +122,61 @@
     const button = el('settings-save'); if (button) button.disabled = saving || Object.keys(changedValues()).length === 0;
     const restartButton = el('settings-save-restart'); if (restartButton) restartButton.disabled = saving;
     const count = Object.keys(changedValues()).length;
-    if (el('settings-dirty-count')) { el('settings-dirty-count').textContent = count ? `${count} thay đổi chưa lưu` : 'Đã đồng bộ'; el('settings-dirty-count').classList.toggle('is-dirty', count > 0); }
+    if (el('settings-dirty-count')) { el('settings-dirty-count').textContent = count ? `${count} thay đổi chưa lưu` : 'Không có thay đổi chưa lưu'; el('settings-dirty-count').classList.toggle('is-dirty', count > 0); }
+    document.querySelector('#view-settings .settings-savebar')?.classList.toggle('is-dirty', count > 0);
+    if (el('settings-discard')) el('settings-discard').hidden = count === 0 || saving;
+  }
+
+  window.discardSettingsChanges = function () {
+    document.querySelectorAll('#view-settings .settings-input').forEach(control => {
+      if (control.type === 'checkbox') control.checked = control.dataset.initial === 'true'; else control.value = control.dataset.initial;
+    });
+    updateDirtyState();
+  };
+
+  // The sidebar shows the Qdrant result as a coloured dot, so the status is visible from any pane.
+  function updateQdrantNav() {
+    const button = el('settings-nav')?.querySelector('[data-pane="status"]');
+    if (!button) return;
+    const state = document.querySelector('#view-settings .settings-qdrant-card')?.dataset.state || '';
+    let dot = button.querySelector('.settings-nav-status');
+    if (!dot) { dot = document.createElement('span'); dot.className = 'settings-nav-status'; dot.setAttribute('role', 'img'); button.append(dot); }
+    dot.dataset.state = state;
+    dot.title = { online: 'Đã kết nối', offline: 'Mất kết nối', disabled: 'Không sử dụng', checking: 'Đang kiểm tra' }[state] || 'Chưa kiểm tra';
+    dot.setAttribute('aria-label', dot.title);
   }
 
   function renderSettings(data) {
-    initializePanels();
     currentRevision = data.revision;
-    const groups = [...new Set(data.fields.map(field => field.group))];
+    const known = NAV_SECTIONS.flatMap(([, items]) => items.map(([name]) => name));
+    const present = new Set(data.fields.map(field => field.group));
+    const groups = [...known.filter(group => present.has(group)), ...[...present].filter(group => !known.includes(group))];
     if (!groups.includes(activeGroup)) activeGroup = groups[0] || '';
     const nav = el('settings-nav');
     if (nav) {
-      nav.replaceChildren();
-      const label = document.createElement('small'); label.textContent = 'DANH MỤC CẤU HÌNH'; nav.appendChild(label);
-      for (const group of ['', ...groups]) {
-        const button = document.createElement('button'); button.type = 'button'; button.dataset.group = group;
-        const title = document.createElement('span'); title.textContent = group || 'Tất cả thuộc tính';
-        const count = document.createElement('span'); count.className = 'settings-nav-count'; count.textContent = group ? data.fields.filter(field => field.group === group).length : data.fields.length;
-        button.append(title, count); button.onclick = () => { activeGroup = group; el('settings-search').value = ''; window.filterSettings(''); el('settings-fields').scrollTop = 0; }; nav.appendChild(button);
+      const openGroup = group => () => { activeGroup = group; el('settings-search').value = ''; window.showSettingsPane('config'); window.filterSettings(''); };
+      const countOf = group => data.fields.filter(field => field.group === group).length;
+      nav.replaceChildren(navButton({ label: 'Tất cả thuộc tính', icon: 'fa-list-ul', count: data.fields.length, onClick: openGroup(''), dataset: { group: '' } }));
+      const sections = [...NAV_SECTIONS.map(([title, items]) => [title, items.map(([name]) => name).filter(name => present.has(name))]),
+        ['Khác', groups.filter(group => !known.includes(group))]];
+      for (const [title, items] of sections) {
+        if (!items.length) continue;
+        nav.append(navHeading(title), ...items.map(group => navButton({ label: group, icon: groupIcon(group), count: countOf(group), onClick: openGroup(group), dataset: { group } })));
       }
+      nav.append(navHeading('Vận hành'),
+        navButton({ label: 'Trạng thái Qdrant', icon: 'fa-heart-pulse', onClick: () => window.showSettingsPane('status'), dataset: { pane: 'status' } }),
+        navButton({ label: 'Sao lưu & khôi phục', icon: 'fa-box-archive', onClick: () => window.showSettingsPane('backup'), dataset: { pane: 'backup' } }));
+      updateQdrantNav();
     }
-    el('settings-total').textContent = `${data.fields.length} thuộc tính`;
     const root = el('settings-fields');
     root.replaceChildren();
     groups.forEach(group => {
       const groupFields = data.fields.filter(field => field.group === group);
       const section = document.createElement('section'); section.className = 'settings-section'; section.dataset.group = group;
-      const header = document.createElement('header'); const heading = document.createElement('h3'); heading.textContent = group;
-      const summary = document.createElement('span'); summary.textContent = `${groupFields.length} thuộc tính cấu hình`;
+      const header = document.createElement('header'); const heading = document.createElement('h3');
+      const icon = document.createElement('i'); icon.className = `fa-solid ${groupIcon(group)}`; icon.setAttribute('aria-hidden', 'true');
+      heading.append(icon, document.createTextNode(group));
+      const summary = document.createElement('span'); summary.textContent = `${groupFields.length} thuộc tính`;
       header.append(heading, summary); section.append(header);
       const list = document.createElement('div'); list.className = 'settings-list'; section.append(list);
       panelToggle(section, header, [list]);
@@ -135,6 +201,9 @@
     });
     filterSettings(el('settings-search').value);
     updateDirtyState();
+    let remembered = 'config';
+    try { remembered = localStorage.getItem(PANE_STORAGE_KEY) || 'config'; } catch (_) { /* Default pane. */ }
+    window.showSettingsPane(remembered);
   }
 
   window.fetchSettings = async function (force = false) {
@@ -152,13 +221,20 @@
 
   window.filterSettings = function (value) {
     const query = normalize(value.trim());
-    document.querySelectorAll('.settings-section').forEach(section => {
+    if (query && activePane !== 'config') window.showSettingsPane('config');
+    let matches = 0;
+    document.querySelectorAll('#view-settings .settings-section').forEach(section => {
       section.querySelectorAll('.settings-property').forEach(item => { item.hidden = Boolean(query) && !item.dataset.search.includes(query); });
       section.hidden = (!query && Boolean(activeGroup) && section.dataset.group !== activeGroup) || !section.querySelector('.settings-property:not([hidden])');
+      if (!section.hidden) matches += section.querySelectorAll('.settings-property:not([hidden])').length;
       if (query && !section.hidden && section.classList.contains('is-collapsed')) section.querySelector('.settings-panel-toggle')?.click();
     });
-    el('settings-nav')?.querySelectorAll('button').forEach(button => { const active = query ? button.dataset.group === '' : button.dataset.group === activeGroup; button.classList.toggle('is-active', active); button.setAttribute('aria-current', active ? 'true' : 'false'); });
-    el('settings-empty').hidden = Boolean(document.querySelector('.settings-section:not([hidden])'));
+    // A single group shows its title in the pane header, so its own section header would repeat it.
+    el('settings-form')?.classList.toggle('is-single-group', !query && Boolean(activeGroup));
+    if (el('settings-pane-title')) el('settings-pane-title').textContent = query ? 'Kết quả tìm kiếm' : activeGroup || 'Tất cả thuộc tính';
+    if (el('settings-total')) el('settings-total').textContent = `${matches} thuộc tính`;
+    syncNav();
+    el('settings-empty').hidden = Boolean(document.querySelector('#view-settings .settings-section:not([hidden])'));
   };
   window.reloadSettings = () => window.fetchSettings(true);
 
@@ -227,7 +303,7 @@
     const button = el('settings-check'); const card = document.querySelector('.settings-qdrant-card');
     if (!button || !card || button.disabled) return;
     const buttonIcon = button.querySelector('i'); const buttonLabel = button.querySelector('span');
-    button.disabled = true; card.dataset.state = 'checking';
+    button.disabled = true; card.dataset.state = 'checking'; updateQdrantNav();
     if (buttonIcon) buttonIcon.className = 'fa-solid fa-spinner fa-spin';
     if (buttonLabel) buttonLabel.textContent = 'Đang kiểm tra';
     el('settings-qdrant-state').textContent = 'Đang kiểm tra'; el('settings-qdrant-message').textContent = 'Đang kết nối tới Qdrant theo cấu hình của tiến trình hiện tại.';
@@ -248,7 +324,7 @@
       el('settings-qdrant-collection').textContent = '—'; el('settings-qdrant-points').textContent = '—';
       el('settings-qdrant-message').textContent = error.name === 'AbortError' ? 'Qdrant không phản hồi sau 10 giây.' : `Không thể kiểm tra Qdrant: ${error.message}`;
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(timeout); updateQdrantNav();
       const checkedAt = el('settings-qdrant-checked-at');
       if (checkedAt) checkedAt.textContent = `Cập nhật ${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date())}`;
       button.disabled = false;
