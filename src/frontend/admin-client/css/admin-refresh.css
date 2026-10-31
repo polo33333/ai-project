@@ -1,0 +1,487 @@
+/* Admin refresh: one deep purple on cool grey, Be Vietnam Pro, quiet shell.
+   Loaded last so it settles the tokens that earlier stylesheets layered up. */
+:root {
+  --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ink-radius: 12px;
+}
+:root:not([data-theme="dark"]) {
+  --bg-app: #f2f3f7;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-hover: #f1f2f7;
+  --text-primary: #161a2e;
+  --text-secondary: #5b6178;
+  --text-muted: #6b7088;
+  --border-color: #e3e5ee;
+  --primary: #4b3fd6;
+  --primary-light: #eeecfb;
+  --primary-gradient: linear-gradient(180deg, #5245dc, #4538cb);
+  --signal: #c2410c;
+  --ui-focus: #4b3fd6;
+  --ui-focus-halo: #4b3fd626;
+  --shadow-sm: 0 1px 2px #161a2e0a;
+  --shadow-md: 0 1px 2px #161a2e0a, 0 4px 14px #161a2e08;
+}
+:root[data-theme="dark"] { --signal: #f0a374; }
+
+body { font-feature-settings: "cv11"; letter-spacing: -.005em; }
+::selection { background: #dcd8fb; color: #241c7a; }
+
+/* Sidebar */
+#app-sidebar { border-right: 1px solid var(--border-color); box-shadow: none; }
+#app-sidebar .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+#app-sidebar .brand-logo { box-shadow: none; }
+
+/* The assistant entry is the sidebar's single strong colour: solid, no looping shine. */
+#app-sidebar .btn-copilot {
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--primary);
+  animation: none;
+  box-shadow: none;
+  transition: background-color .15s ease;
+}
+#app-sidebar .btn-copilot::before,
+#app-sidebar .btn-copilot::after { display: none; animation: none; }
+#app-sidebar .btn-copilot:hover { background: #3f33c2; box-shadow: none; }
+:root[data-theme="dark"] #app-sidebar .btn-copilot { background: #5b4fe0; }
+:root[data-theme="dark"] #app-sidebar .btn-copilot:hover { background: #6a5ff0; }
+#app-sidebar .copilot-btn-icon { animation: none; background: #ffffff1f; box-shadow: none; }
+#app-sidebar .copilot-title { font-size: 13px; font-weight: 600; }
+#app-sidebar .copilot-subtitle { font-size: 11px; opacity: .78; }
+
+/* Group names read as plain sentence-case captions, not shouted labels. */
+#app-sidebar .nav-section-title {
+  padding: 0 12px 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+}
+#app-sidebar .nav-section { margin-bottom: 18px; }
+#app-sidebar .nav-section + .nav-section::before { display: none; }
+/* Same family, size and weight as the page's body text; only the active item is heavier. */
+#app-sidebar .nav-item a {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  transition: background-color .12s ease, color .12s ease;
+}
+#app-sidebar .nav-icon { color: #868ba0; font-size: 13px; }
+#app-sidebar .nav-item a:hover { background: var(--bg-hover); color: var(--text-primary); }
+#app-sidebar .nav-item a:hover .nav-icon { color: var(--text-primary); }
+#app-sidebar .nav-item.active a {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 500;
+  box-shadow: none;
+}
+#app-sidebar .nav-item.active .nav-icon { color: var(--primary); }
+:root[data-theme="dark"] #app-sidebar .nav-item.active a { background: #2a2552 !important; color: #c9c0ff; }
+:root[data-theme="dark"] #app-sidebar :is(.nav-icon) { color: #8e9ab0; }
+
+/* Top bar: the same white surface as the sidebar, so the shell reads as one frame around the grey workspace. */
+#main-content header.top-bar {
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 6px 16px -10px #161a2e1f;
+}
+:root[data-theme="dark"] #main-content header.top-bar { background: #111a2af2; box-shadow: 0 6px 16px -10px #0008; }
+:root:not([data-theme="dark"]) #main-content .header-notification-btn { background: var(--bg-app); border-color: transparent; }
+:root:not([data-theme="dark"]) #main-content .header-notification-btn:hover { background: var(--primary-light); color: var(--primary); }
+#main-content .page-title-group h1 { font-size: 21px; font-weight: 700; letter-spacing: -.025em; }
+#main-content .dashboard-heading-subtitle { font-size: 13px; color: var(--text-secondary); }
+#main-content .search-input-wrapper input { border-radius: 9px; }
+:root:not([data-theme="dark"]) #main-content .search-input-wrapper input { background: var(--bg-app); border: 1px solid transparent; }
+:root:not([data-theme="dark"]) #main-content .search-input-wrapper input:hover { border-color: var(--border-color); }
+:root:not([data-theme="dark"]) #main-content .search-input-wrapper input:focus { background: #ffffff; border-color: #a9a2ee; box-shadow: 0 0 0 3px var(--ui-focus-halo); }
+
+/* Cards: one radius, one hairline, almost no shadow. */
+#main-content .content-card {
+  border-radius: var(--ink-radius);
+  box-shadow: var(--shadow-sm);
+}
+#main-content .card-title { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+#main-content .card-title > i,
+#main-content .card-title .router-title-icon { color: var(--text-muted); font-size: 13px; background: none; }
+
+/* Overview figures sit in one ruled strip instead of four floating cards. */
+#main-content .metrics-grid {
+  flex-shrink: 0; /* overflow:hidden would otherwise let the flex column squash the strip */
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--ink-radius);
+  background: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+#main-content .metrics-grid > .metric-card {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  padding: 18px 22px 20px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-card) !important;
+  box-shadow: none;
+}
+#main-content .metrics-grid .metric-main-icon { display: none; }
+#main-content .metrics-grid .metric-icon {
+  top: 16px;
+  right: 18px;
+  width: auto;
+  height: auto;
+  background: none !important;
+  color: var(--text-muted) !important;
+  font-size: 13px;
+}
+#main-content .metrics-grid .metric-card-blue .metric-icon { color: #12a26b !important; font-size: 8px; top: 23px; }
+#main-content .metrics-grid .metric-header { margin-bottom: 10px; padding-right: 22px; }
+#main-content .metrics-grid .metric-title { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+#main-content .metrics-grid .metric-val {
+  margin-bottom: 8px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -.035em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#main-content .metrics-grid .metric-card-green .metric-val { color: var(--primary); }
+#main-content .metrics-grid .metric-sub { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+#main-content .metrics-grid .metric-sub.text-green { color: #0f7a52; }
+:root[data-theme="dark"] #main-content .metrics-grid .metric-sub.text-green { color: #70d8af; }
+#main-content .metrics-grid .metric-sub.text-purple { color: var(--text-muted); }
+
+/* The 53-week grid needs ~800px; scroll it inside its column instead of running under the stats. */
+#main-content .dashboard-activity-scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+
+/* Heatmap year panel follows the card palette. */
+:root:not([data-theme="dark"]) #main-content :is(.dashboard-activity-cell,.dashboard-activity-legend i)[data-level="1"] { background: #dcd8fa; }
+:root:not([data-theme="dark"]) #main-content :is(.dashboard-activity-cell,.dashboard-activity-legend i)[data-level="2"] { background: #ada4f0; }
+:root:not([data-theme="dark"]) #main-content :is(.dashboard-activity-cell,.dashboard-activity-legend i)[data-level="3"] { background: #7a6de4; }
+:root:not([data-theme="dark"]) #main-content :is(.dashboard-activity-cell,.dashboard-activity-legend i)[data-level="4"] { background: #4b3fd6; }
+
+/* ---- Shared screen components ---- */
+
+/* Page intros repeat the top bar title, so they lose the card, the gradient badge and the eyebrow
+   and read as a quiet lead-in with the page actions on the right. */
+#main-content .system-tools-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 2px 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+#main-content .system-tools-hero::after,
+#main-content .system-tools-hero > .system-tools-hero-icon,
+#main-content .system-tools-hero .system-tools-eyebrow,
+#main-content .system-tools-hero :is(h2,.card-title) > i { display: none; }
+#main-content .system-tools-hero :is(h2,.card-title) {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 17px !important;
+  font-weight: 600;
+  letter-spacing: -.015em;
+}
+#main-content .system-tools-hero p { max-width: 72ch; color: var(--text-secondary) !important; font-size: 13.5px; line-height: 1.55; }
+
+/* Summary figures share the overview's ruled strip; colour stays only where it carries meaning. */
+#main-content :is(.log-summary-grid,.workspace-kpi-grid) {
+  flex-shrink: 0;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--ink-radius);
+  background: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+#main-content :is(.log-stat-card,.workspace-stat-card) {
+  min-height: 0;
+  padding: 16px 20px 18px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-card) !important;
+  box-shadow: none !important;
+}
+#main-content .log-stat-card { align-items: flex-start; }
+#main-content .log-stat-card span,
+#main-content .workspace-stat-heading {
+  color: var(--text-secondary) !important;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#main-content .log-stat-card div div,
+#main-content .workspace-stat-value {
+  color: var(--text-primary);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+#main-content .log-stat-card div div span { display: inline; margin: 0; font: inherit; color: inherit !important; }
+#main-content .log-stat-card > i,
+#main-content .workspace-stat-heading > i {
+  width: auto;
+  height: auto;
+  background: none !important;
+  color: var(--text-muted) !important;
+  font-size: 13px;
+}
+#main-content .log-stat-card.success div div { color: #0f7a52; }
+#main-content .log-stat-card.error div div { color: #b42318; }
+#main-content .log-stat-card.warn div div { color: var(--signal); }
+:root[data-theme="dark"] #main-content .log-stat-card.success div div { color: #70d8af !important; }
+:root[data-theme="dark"] #main-content .log-stat-card.error div div { color: #f49dab !important; }
+:root[data-theme="dark"] #main-content .log-stat-card.warn div div { color: var(--signal) !important; }
+
+/* Buttons: solid fill, no glow. */
+:root:not([data-theme="dark"]) .btn-primary {
+  background: var(--primary);
+  box-shadow: none;
+  transition: background-color .15s ease;
+}
+:root:not([data-theme="dark"]) .btn-primary:hover:not(:disabled) { background: #3f33c2; filter: none; }
+
+/* Table headings: sentence case, muted, on a faint band. */
+:root:not([data-theme="dark"]) :is(.custom-table,.data-table) th,
+:root:not([data-theme="dark"]) .audit-page .custom-table thead th {
+  background: #f6f7fa;
+  color: var(--text-secondary);
+  border-bottom-color: var(--border-color);
+  box-shadow: none;
+}
+:is(.custom-table,.data-table) th { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+@container main-content (max-width: 760px) {
+  #main-content .system-tools-hero { grid-template-columns: minmax(0, 1fr); }
+  #main-content .system-tools-hero > :nth-child(3) { justify-self: start; }
+}
+
+/* Eyebrow labels above headings restate the heading; the heading carries the meaning alone. */
+#main-content :is(.system-tools-eyebrow,.module-section-kicker,.settings-governance-kicker,.api-card-kicker,.api-eyebrow,.training-eyebrow),
+#main-content .settings-qdrant-main > span:first-child,
+#main-content .settings-backup-heading > div > span:first-child,
+#main-content .skill-editor-heading > div > span:first-child { display: none; }
+
+/* Small labels stay in sentence case: Vietnamese diacritics read poorly in tracked capitals. */
+#main-content :is(.dg-table thead th,.api-keys-table-wrap th,.analytics-kpi-card p,.active-provider-label,.dashboard-log-stat span,.chat-payload-label,.dictionary-section-label,.dg-node-kind,.system-tool-tags span),
+#main-content .dg-table:not(.dg-matrix) td[data-label]::before {
+  text-transform: none;
+  letter-spacing: 0;
+}
+#main-content :is(.dg-table thead th,.api-keys-table-wrap th) { font-size: 12px; }
+
+/* SQL sources: the actions heading lines up with its right-aligned buttons. */
+#sql-sources-table .sql-source-actions-head { text-align: right; }
+
+/* API page intro follows the other page intros; its capability notes stay as plain inline facts. */
+#main-content .api-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 2px 2px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#main-content .api-hero::after,
+#main-content .api-hero > .api-hero-icon { display: none; }
+#main-content .api-hero h2 { margin: 0 0 4px; color: var(--text-primary); font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+#main-content .api-hero p { color: var(--text-secondary); font-size: 13.5px; line-height: 1.55; }
+#main-content .api-hero-badges { gap: 6px 16px; margin-top: 8px; }
+#main-content .api-hero-badges span { padding: 0; border: 0; background: none !important; color: var(--text-secondary) !important; font-size: 12.5px; font-weight: 500; }
+#main-content .api-hero-badges i { color: #0f7a52; }
+:root[data-theme="dark"] #main-content .api-hero-badges i { color: #70d8af; }
+#main-content .api-create-key-btn { box-shadow: none; }
+
+/* Status tags hold one short word; never split it across lines. */
+#main-content :is(.log-level-tag,.chat-status-tag) { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+
+/* Status tags hold one short word; never split it across lines. */
+#main-content :is(.log-level-tag,.chat-status-tag) { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+
+/* Usage totals join the same ruled strip as the other summaries. */
+#main-content .ai-usage-summary:not(:empty) {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--ink-radius);
+  background: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+#main-content .ai-usage-stat { padding: 16px 20px 18px; border: 0; border-radius: 0; background: var(--bg-card) !important; }
+#main-content .ai-usage-stat i { width: auto; height: auto; background: none !important; color: var(--text-muted) !important; font-size: 13px; }
+#main-content .ai-usage-stat span { font-size: 13px; }
+#main-content .ai-usage-stat strong { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+/* The period picker is narrow: a tighter chevron inset keeps "/ tháng" readable. */
+#main-content .ai-usage-limit-inputs select { padding-inline: 8px 24px !important; background-position: right 8px center !important; }
+@container main-content (max-width: 760px) {
+  #main-content .api-hero { grid-template-columns: minmax(0, 1fr); }
+  #main-content .api-hero > .api-create-key-btn { justify-self: start; }
+}
+/* Five totals: pair them up on narrower screens and let the last one span the row, so no blank cell shows. */
+@media (max-width: 1100px) {
+  #main-content .ai-usage-summary:not(:empty) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #main-content .ai-usage-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  #main-content .ai-usage-stat { grid-template-columns: minmax(0, 1fr); padding: 14px 14px 16px; }
+  #main-content .ai-usage-stat i { display: none; }
+  #main-content .ai-usage-stat strong { font-size: 18px; white-space: nowrap; }
+}
+
+/* Schema and agent-operation totals use the shared ruled strip too. */
+#main-content :is(.dictionary-overview-strip,.dg-operations-overview .operations-summary) {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--ink-radius);
+  background: var(--border-color);
+}
+#main-content .dictionary-overview-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex-shrink: 0; }
+#main-content .dictionary-overview-strip > div,
+#main-content .dg-operations-overview .operations-stat {
+  min-width: 0;
+  padding: 12px 16px 14px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-card) !important;
+  box-shadow: none !important;
+}
+#main-content .dictionary-overview-strip > div { display: flex; flex-direction: column-reverse; justify-content: flex-end; align-items: flex-start; gap: 6px; text-align: left; }
+#main-content .dictionary-overview-icon { display: none; }
+#main-content .dictionary-overview-strip small { margin: 0; color: var(--text-secondary); font-size: 13px; }
+#main-content .dictionary-overview-strip strong { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+#main-content .dg-operations-overview .operations-stat-icon { width: auto; height: auto; background: none !important; color: var(--text-muted) !important; }
+#main-content .dg-operations-overview .operations-summary dt { color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+#main-content .dg-operations-overview .operations-stat-hint { color: var(--text-muted); font-size: 11.5px; }
+
+/* Source detail dialog: height follows its content (capped by the viewport) instead of a fixed 760px. */
+#dg-drawer { height: auto; }
+#dg-drawer > form { height: auto; max-height: calc(100dvh - 40px); }
+#dg-drawer-body { flex: 1 1 auto; }
+
+/* Report headline figures: four across in one ruled strip; the coloured icon tiles go. */
+#main-content .analytics-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--ink-radius);
+  background: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+#main-content .analytics-kpi-card { padding: 16px 20px 18px; border: 0; border-radius: 0; background: var(--bg-card) !important; box-shadow: none !important; }
+#main-content .analytics-kpi-card .metric-icon { display: none; }
+#main-content .analytics-kpi-card p { color: var(--text-secondary) !important; font-size: 13px; font-weight: 500; }
+#main-content .analytics-kpi-card strong { margin: 6px 0; font-size: 26px; font-weight: 700; letter-spacing: -.03em; }
+#main-content .analytics-kpi-card small { color: var(--text-muted) !important; font-size: 12px; line-height: 1.5; }
+@container main-content (max-width: 1100px) { #main-content .analytics-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container main-content (max-width: 560px) { #main-content .analytics-kpi-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Notification category reads as a quiet caption. */
+.notification-category { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
+/* Seven operation totals: below 1200px the grid drops to 4 or 2 columns; the last tile fills the gap so no blank cell shows. */
+@media (max-width: 1200px) {
+  #main-content .dg-operations-overview .operations-stat:last-child { grid-column: span 2; }
+}
+
+/* Workflows: the page intro sits outside the card like every other page; the designer and history are the cards. */
+#view-workflows > #workflow-plugin-panel { padding: 0; border: 0; border-radius: 0; background: transparent !important; box-shadow: none !important; }
+#view-workflows #workflow-plugin-panel > .module-section-heading { margin: 0 0 16px; padding: 2px 2px 0; border: 0; }
+#view-workflows #workflow-plugin-panel > .module-section-heading h3 { margin: 0 0 4px; color: var(--text-primary); font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+#view-workflows #workflow-plugin-panel > .module-section-heading p { max-width: 72ch; margin: 0; color: var(--text-secondary) !important; font-size: 13.5px; line-height: 1.55; }
+#view-workflows #workflow-plugin-panel > :is(#wp-drafts-section, .wp-history) {
+  padding: 20px 22px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--ink-radius);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+#view-workflows #workflow-plugin-panel > .wp-history { margin-top: 16px; }
+#view-workflows #wp-drafts-section > .wp-section-heading h3 { color: var(--text-primary) !important; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+#view-workflows #wp-drafts-section > .wp-section-heading p { color: var(--text-secondary); font-size: 13px; }
+
+/* Template cards: regular-weight body, semibold titles, brand purple for the main action and draft badge. */
+#view-workflows #wp-packages .wp-template-card h3 { color: var(--text-primary); font-weight: 600; }
+#view-workflows #workflow-plugin-panel #wp-packages :is(.wp-template-description,.wp-template-stats) { color: var(--text-secondary); }
+#view-workflows #wp-packages .workflow-card-actions .btn-secondary-sm { font-weight: 500; }
+#view-workflows #wp-packages .workflow-card-actions > .wp-edit-primary { background: var(--primary); font-weight: 600; }
+#view-workflows #wp-packages .workflow-card-actions > .wp-edit-primary:hover { background: #3f33c2; }
+:root[data-theme="dark"] #view-workflows #wp-packages .workflow-card-actions > .wp-edit-primary { background: #5b4fe0; }
+:root:not([data-theme="dark"]) #view-workflows .wp-publication-badge { background: var(--primary-light); color: var(--primary); }
+#view-workflows .wp-publication-badge { font-weight: 500; }
+:root:not([data-theme="dark"]) #view-workflows #wp-toolbar .wp-create-template { background: var(--primary); border-color: var(--primary); box-shadow: none; }
+:root:not([data-theme="dark"]) #view-workflows #wp-toolbar .wp-create-template:hover { background: #3f33c2; }
+
+/* A table that follows its search/filter row directly needs breathing room above its header. */
+#main-content .accounts-toolbar + .accounts-table-wrap { margin-top: 12px; }
+
+/* The top bar already names the page; intros keep only their description and actions. */
+#main-content .system-tools-hero :is(h2,.card-title),
+#main-content .api-hero h2,
+#view-workflows #workflow-plugin-panel > .module-section-heading h3 { display: none; }
+#main-content :is(.system-tools-hero,.api-hero) { align-items: center; min-height: 36px; }
+
+/* Accounts list: the identity column keeps room for name and email; role and scope tags may wrap instead. */
+#view-accounts .accounts-table :is(th,td) { padding-inline: 12px; }
+#view-accounts .accounts-table .accounts-identity-cell { min-width: 170px; }
+#view-accounts .accounts-table td:is(:nth-child(3),:nth-child(4)) { min-width: 104px; }
+#view-accounts .accounts-table td:is(:nth-child(3),:nth-child(4)) .accounts-badge { white-space: normal; line-height: 1.4; }
+#view-accounts .accounts-table .accounts-row-actions { flex-wrap: wrap; gap: 6px; }
+#view-accounts .accounts-table .accounts-row-actions > * { white-space: nowrap; }
+
+/* Figures carry colour by meaning: brand for volume, blue for time, green for health,
+   amber for something to check, red for failures. All pass 5:1 on their surface. */
+:root { --tone-brand: #4b3fd6; --tone-info: #1d64b8; --tone-good: #0f7a52; --tone-warn: #b45309; --tone-bad: #b42318; }
+:root[data-theme="dark"] { --tone-brand: #b3a9ff; --tone-info: #8cc4f5; --tone-good: #70d8af; --tone-warn: #ebc577; --tone-bad: #f49dab; }
+
+/* Agent operations (Quản lý dữ liệu) */
+#main-content .operations-stat.tone-indigo { --tone: var(--tone-brand); }
+#main-content .operations-stat.tone-blue { --tone: var(--tone-info); }
+#main-content .operations-stat.tone-amber { --tone: var(--tone-warn); }
+#main-content .operations-stat.tone-red { --tone: var(--tone-bad); }
+#main-content .operations-stat[class*="tone-"] > dd:not(.operations-stat-unavailable) { color: var(--tone) !important; }
+#main-content .dg-operations-overview .operations-stat[class*="tone-"] .operations-stat-icon { color: var(--tone) !important; }
+
+/* Usage totals (Hạn mức sử dụng) */
+#main-content .ai-usage-stat.tone-brand { --tone: var(--tone-brand); }
+#main-content .ai-usage-stat.tone-warn { --tone: var(--tone-warn); }
+#main-content .ai-usage-stat.tone-bad { --tone: var(--tone-bad); }
+#main-content .ai-usage-stat[class*="tone-"] :is(strong, i) { color: var(--tone) !important; }
+
+/* Report headline (Báo cáo & Metrics): cost stays ink, latency blue, calls brand, SQL guard green. */
+#main-content .analytics-kpi-grid > :nth-child(2) strong { color: var(--tone-info) !important; }
+#main-content .analytics-kpi-grid > :nth-child(3) strong { color: var(--tone-brand) !important; }
+#main-content .analytics-kpi-grid > :nth-child(4) strong { color: var(--tone-good) !important; }
+
+/* Overview strip: active tables green, vectors blue; the Text-to-SQL count keeps the brand colour. */
+#main-content .metrics-grid .metric-card-purple .metric-val { color: var(--tone-good); }
+#main-content .metrics-grid .metric-card-orange .metric-val { color: var(--tone-info); }
+:root[data-theme="dark"] #main-content .metrics-grid .metric-card-purple .metric-val { color: var(--tone-good) !important; }
+:root[data-theme="dark"] #main-content .metrics-grid .metric-card-orange .metric-val { color: var(--tone-info) !important; }
+:root[data-theme="dark"] #main-content .metrics-grid .metric-card-green .metric-val { color: var(--tone-brand) !important; }
+
+/* Schema strip (Lược đồ CSDL): enabled tables green, business domains brand. */
+#main-content #dict-stat-active { color: var(--tone-good); }
+#main-content #dict-stat-domains { color: var(--tone-brand); }
+
+/* Heatmap totals on the overview */
+#main-content #dashboard-activity-total-tokens, #main-content #dashboard-activity-total-queries { color: var(--tone-brand); }
+#main-content #dashboard-activity-success-rate { color: var(--tone-good); }
+
+/* Watch-folder cards already name an accent per card; let the figure use it. */
+#main-content .workspace-stat-value { color: var(--stat-accent, var(--text-primary)); }
+
+/* Chat history and system logs: totals in brand alongside the existing green/red/amber. */
+#main-content .log-stat-card.total div div { color: var(--tone-brand); }
+:root[data-theme="dark"] #main-content .log-stat-card.total div div { color: var(--tone-brand) !important; }

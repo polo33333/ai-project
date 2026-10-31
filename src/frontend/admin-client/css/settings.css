@@ -301,7 +301,7 @@ main.main-content.settings-workspace { display:block; overflow-y:auto; overscrol
 .settings-workspace { display:grid; grid-template-columns:225px minmax(0,1fr); gap:24px; padding:8px 20px 24px; }
 .settings-nav { position:sticky; top:78px; align-self:start; display:grid; gap:4px; padding:8px 0; }
 .settings-nav > small { padding:0 12px 12px; font-size:10px; letter-spacing:.08em; font-weight:600; color:var(--text-muted,#94a3b8); }
-.settings-nav button { display:flex; align-items:center; justify-content:space-between; gap:10px; border:0; border-radius:8px; padding:11px 12px; background:transparent; color:var(--text-secondary,#64748b); font:500 12px/1.5 Inter,system-ui,sans-serif; text-align:left; cursor:pointer; }
+.settings-nav button { display:flex; align-items:center; justify-content:space-between; gap:10px; border:0; border-radius:8px; padding:11px 12px; background:transparent; color:var(--text-secondary,#64748b); font:500 12px/1.5 var(--font-sans); text-align:left; cursor:pointer; }
 .settings-nav button:hover { background:var(--bg-hover,#f5f7fb); color:var(--text-primary,#334155); }
 .settings-nav button.is-active { background:#f0edfc; color:#6b51c7; }
 .settings-nav-count { display:grid; place-items:center; min-width:21px; height:21px; padding:0 3px; border-radius:5px; background:rgb(148 163 184 / 10%); font-size:10px; font-variant-numeric:tabular-nums; }

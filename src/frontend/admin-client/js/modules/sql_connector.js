@@ -97,7 +97,7 @@ function renderDbSourcesTable() {
       <td class="sql-source-index">${pagination.start + index + 1}</td>
       <td style="vertical-align: middle; padding: 14px;">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #ffffff; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;">
+          <span style="background: var(--primary-light); color: var(--primary); width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;">
             <i class="fa-solid fa-database"></i>
           </span>
           <div>
@@ -111,11 +111,11 @@ function renderDbSourcesTable() {
         <span class="metric-tag purple" style="font-size: 11px;"><i class="fa-solid fa-network-wired" style="margin-right: 4px;"></i> ${escapeDbSourceHtml(src.type || 'Direct Live Connection')}</span>
       </td>
       <td style="vertical-align: middle; padding: 14px;">
-        <code style="background: #eff6ff; color: #1e40af; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; font-family: monospace;">${escapeDbSourceHtml(src.host || '-')}</code>
+        <code style="background: var(--bg-hover); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap;">${escapeDbSourceHtml(src.host || '-')}</code>
       </td>
       <td style="vertical-align: middle; padding: 14px;">
-        <strong style="font-size: 13px; color: var(--text-primary);">${Number(src.tablesCount || 0)} Bảng Schema</strong>
-        <div style="font-size: 11px; color: var(--text-muted);">${Number(src.columnsCount || 0)} Cột thuộc tính</div>
+        <strong style="font-size: 13px; color: var(--text-primary);">${Number(src.tablesCount || 0).toLocaleString('vi-VN')} bảng</strong>
+        <div style="font-size: 11px; color: var(--text-muted);">${Number(src.columnsCount || 0).toLocaleString('vi-VN')} cột</div>
       </td>
       <td style="vertical-align: middle; padding: 14px;">
         <span class="metric-tag green" style="font-size: 11.5px;">
@@ -127,11 +127,11 @@ function renderDbSourcesTable() {
       </td>
       <td style="vertical-align: middle; padding: 14px; text-align: right;">
         <div style="display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap;">
-          <button class="btn-primary" style="padding: 5px 12px; font-size: 11.5px; white-space: nowrap;" onclick="switchMainTab('dictionary')"><i class="fa-solid fa-book-atlas"></i> Dict</button>
-          ${isDefault ? '' : `<button class="btn-secondary-sm" style="padding: 5px 10px; font-size: 11.5px; white-space: nowrap;" onclick="setDefaultDbSource('${sourceId}')" title="Đặt làm nguồn được AI sử dụng mặc định"><i class="fa-solid fa-star"></i> Mặc định</button>`}
-          <button class="icon-action-btn" onclick="editDbSource('${sourceId}')" title="Chỉnh sửa kết nối"><i class="fa-solid fa-pen"></i></button>
-          <button class="btn-secondary-sm" style="padding: 5px 10px; font-size: 11.5px; white-space: nowrap;" onclick="testDbConnection('${sourceId}')"><i class="fa-solid fa-bolt"></i> Ping</button>
-          <button class="icon-action-btn danger-soft" onclick="deleteDbSource('${sourceId}')" title="Xóa nguồn CSDL">
+          <button class="btn-primary" style="padding: 5px 12px; font-size: 12px; white-space: nowrap;" onclick="switchMainTab('dictionary')"><i class="fa-solid fa-book-atlas"></i> Lược đồ</button>
+          ${isDefault ? '' : `<button class="icon-action-btn" onclick="setDefaultDbSource('${sourceId}')" title="Đặt làm nguồn mặc định cho AI" aria-label="Đặt ${escapeDbSourceHtml(src.dbName)} làm nguồn mặc định"><i class="fa-solid fa-star"></i></button>`}
+          <button class="icon-action-btn" onclick="testDbConnection('${sourceId}')" title="Kiểm tra kết nối" aria-label="Kiểm tra kết nối ${escapeDbSourceHtml(src.dbName)}"><i class="fa-solid fa-bolt"></i></button>
+          <button class="icon-action-btn" onclick="editDbSource('${sourceId}')" title="Chỉnh sửa kết nối" aria-label="Chỉnh sửa kết nối ${escapeDbSourceHtml(src.dbName)}"><i class="fa-solid fa-pen"></i></button>
+          <button class="icon-action-btn danger-soft" onclick="deleteDbSource('${sourceId}')" title="Xóa nguồn CSDL" aria-label="Xóa nguồn ${escapeDbSourceHtml(src.dbName)}">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>

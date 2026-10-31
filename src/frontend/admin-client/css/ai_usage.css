@@ -12,12 +12,12 @@
 #view-ai-usage { box-sizing:border-box; width:100%; min-width:0; }
 .ai-usage-page > .system-tools-card { box-sizing:border-box; width:100%; min-width:0; }
 .ai-usage-page .accounts-table-wrap, .ai-usage-page .accounts-toolbar { box-sizing:border-box; width:100%; min-width:0; }
-.ai-usage-page .ai-usage-table { table-layout:fixed; width:100%; min-width:1080px; }
-.ai-usage-table th:first-child { width:22%; }
-.ai-usage-table th:nth-child(2), .ai-usage-table th:nth-child(3), .ai-usage-table th:nth-child(4) { width:13%; white-space:nowrap; }
+.ai-usage-page .ai-usage-table { table-layout:fixed; width:100%; min-width:1020px; }
+.ai-usage-table th:first-child { width:20%; }
+.ai-usage-table th:nth-child(2), .ai-usage-table th:nth-child(3), .ai-usage-table th:nth-child(4) { width:10%; }
 .ai-usage-table th:nth-child(5) { width:236px; } /* compact: number + period + meter */
-.ai-usage-table th:nth-child(6) { width:150px; }
-.ai-usage-table th:nth-child(7) { width:170px; } /* Lưu + Đặt lại */
+.ai-usage-table th:nth-child(6) { width:124px; }
+.ai-usage-table th:nth-child(7) { width:164px; } /* Lưu + Đặt lại */
 .ai-usage-table th, .ai-usage-table td { box-sizing:border-box; }
 .ai-usage-table td { vertical-align:middle; }
 .ai-usage-name { overflow-wrap:anywhere; }

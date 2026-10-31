@@ -52,7 +52,7 @@
 .api-page-card { padding: 0; overflow: hidden; border: 0; background: transparent; box-shadow: none; }
 .api-hero { position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 18px; padding: 24px 26px; overflow: hidden; border: 1px solid #dbe4f0; border-radius: 16px; background: linear-gradient(135deg,#fff 0%,#f5f7ff 58%,#f3e8ff 100%); box-shadow: 0 8px 30px rgba(79,70,229,.08); }
 .api-hero::after { content:""; position:absolute; right:-55px; top:-90px; width:230px; height:230px; border-radius:50%; background:radial-gradient(circle,rgba(168,85,247,.18),transparent 68%); pointer-events:none; }
-.api-hero-icon { display:grid; place-items:center; width:58px; height:58px; border-radius:16px; color:#fff; background:linear-gradient(135deg,#4f46e5,#a855f7); box-shadow:0 12px 24px rgba(79,70,229,.25); font-size:23px; }
+.api-hero-icon { display:grid; place-items:center; width:58px; height:58px; border-radius:16px; color:#fff; background:#4b3fd6; box-shadow:0 12px 24px rgba(79,70,229,.25); font-size:23px; }
 .api-hero-content { position:relative; z-index:1; min-width:0; }
 .api-eyebrow { color:#6366f1; font-size:10px; font-weight:900; letter-spacing:.14em; }
 .api-hero h2 { margin:3px 0 5px; color:#172033; font-size:23px; line-height:1.2; }
@@ -60,7 +60,7 @@
 .api-hero-badges { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
 .api-hero-badges span { display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border:1px solid #dbe4f0; border-radius:999px; color:#475569; background:rgba(255,255,255,.72); font-size:10.5px; font-weight:700; }
 .api-hero-badges i { color:#10b981; }
-.api-create-key-btn { position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border:0; border-radius:10px; color:#fff; background:linear-gradient(135deg,#4f46e5,#7c3aed); box-shadow:0 8px 18px rgba(79,70,229,.22); font-size:12px; font-weight:800; cursor:pointer; }
+.api-create-key-btn { position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border:0; border-radius:10px; color:#fff; background:#4b3fd6; box-shadow:0 8px 18px rgba(79,70,229,.22); font-size:12px; font-weight:800; cursor:pointer; }
 .api-create-key-btn:hover { transform:translateY(-1px); box-shadow:0 11px 22px rgba(79,70,229,.28); }
 .api-keys-section,.api-integration-section,.api-embed-admin-section { margin-top:16px; padding:20px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; box-shadow:0 5px 20px rgba(15,23,42,.05); }
 .api-section-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:14px; }

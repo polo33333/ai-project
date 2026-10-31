@@ -24,6 +24,12 @@
   `;
   document.head.appendChild(transitionStyles);
   try { preference = localStorage.getItem(key); } catch { /* Follow device appearance. */ }
+  // Chart series colours per theme (validated as a pair for colour-blind separation and 3:1 contrast).
+  const seriesColors = {
+    light: { local: '#12966a', thirdParty: '#4b3fd6', error: '#d92d20' },
+    dark: { local: '#199e70', thirdParty: '#9085e9', error: '#e66767' }
+  };
+  window.khSeriesColor = role => seriesColors[document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'][role];
   function updateCharts(dark) {
     if (!window.Chart) return;
     const text = dark ? '#b8c4d8' : '#64748b', grid = dark ? '#344158' : '#e2e8f0';
@@ -44,6 +50,12 @@
           borderColor: tooltipBorder, borderWidth: 1
         });
       }
+      chart.data.datasets.forEach(dataset => {
+        const color = seriesColors[dark ? 'dark' : 'light'][dataset.khRole];
+        if (!color) return;
+        dataset.borderColor = color;
+        if (dataset.khFill || dataset.backgroundColor) dataset.backgroundColor = color;
+      });
       chart.update('none');
     });
   }

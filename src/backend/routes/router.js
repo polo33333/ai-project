@@ -199,8 +199,8 @@ function tableAccessNotice(tableId, tableName) {
     const access = source && require('../governance/scope').tableAccess(source, table.tableId);
     if (!access || access.open) return null;
     const LEVEL = { full: 'Đầy đủ', lookup: 'Tra cứu' };
-    if (access.hidden) return { level: 'warning', message: `Bảng “${access.table}” đang ẩn khỏi AI: không vai trò nào truy vấn được. Bỏ ẩn tại Quản trị dữ liệu → Nguồn dữ liệu → Gói bảng.` };
-    if (access.orphan) return { level: 'warning', message: `Bảng “${access.table}” chưa thuộc gói bảng nào nên chỉ admin truy vấn được. Gán gói tại Quản trị dữ liệu → Nguồn dữ liệu → Gói bảng.` };
+    if (access.hidden) return { level: 'warning', message: `Bảng “${access.table}” đang ẩn khỏi AI: không vai trò nào truy vấn được. Bỏ ẩn tại Quản lý dữ liệu → Nguồn dữ liệu → Gói bảng.` };
+    if (access.orphan) return { level: 'warning', message: `Bảng “${access.table}” chưa thuộc gói bảng nào nên chỉ admin truy vấn được. Gán gói tại Quản lý dữ liệu → Nguồn dữ liệu → Gói bảng.` };
     if (!access.roles.length) return { level: 'warning', message: `Bảng thuộc gói “${access.packageName}” nhưng chưa vai trò nào được cấp gói này; hiện chỉ admin truy vấn được.` };
     return { level: 'info', message: `Bảng thuộc gói “${access.packageName}”, mở cho: ${access.roles.map(role => `${role.name} (${LEVEL[role.level]})`).join(', ')}.` };
   } catch { return null; }

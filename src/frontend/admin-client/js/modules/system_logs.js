@@ -67,10 +67,10 @@ function highlightLogJson(json) {
 
 function getLogMeta(log) {
   const level = String(log.level || log.type || 'INFO').toUpperCase();
-  if (level === 'ERROR') return { level, cls: 'red', icon: 'fa-circle-xmark' };
-  if (level === 'WARN' || level === 'WARNING') return { level: 'WARN', cls: 'yellow', icon: 'fa-triangle-exclamation' };
-  if (level === 'SUCCESS') return { level, cls: 'green', icon: 'fa-circle-check' };
-  return { level: 'INFO', cls: 'purple', icon: 'fa-circle-info' };
+  if (level === 'ERROR') return { level, label: 'Lỗi', cls: 'red', icon: 'fa-circle-xmark' };
+  if (level === 'WARN' || level === 'WARNING') return { level: 'WARN', label: 'Cảnh báo', cls: 'yellow', icon: 'fa-triangle-exclamation' };
+  if (level === 'SUCCESS') return { level, label: 'Thành công', cls: 'green', icon: 'fa-circle-check' };
+  return { level: 'INFO', label: 'Thông tin', cls: 'purple', icon: 'fa-circle-info' };
 }
 
 function renderLogStats(logs) {
@@ -172,7 +172,7 @@ function renderLogsTable() {
       <td>
         <span class="metric-tag ${meta.cls} log-level-tag">
           <i class="fa-solid ${meta.icon}"></i>
-          ${escapeLogHtml(meta.level)}
+          ${escapeLogHtml(meta.label)}
         </span>
       </td>
       <td><div class="log-module">${escapeLogHtml(moduleName)}</div></td>

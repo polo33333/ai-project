@@ -85,9 +85,9 @@
     if (summary) {
       const total = bucket => state.providers.reduce((sum, item) => sum + (item.usage[bucket] || 0), 0);
       const locked = all.filter(item => item.limit?.locked).length, over = all.filter(item => (ratio(item) ?? 0) >= 1).length;
-      summary.innerHTML = [['fa-sun', 'Token hôm nay', format(total('day'))], ['fa-calendar-week', 'Token tuần này', format(total('week'))], ['fa-calendar', 'Token tháng này', format(total('month'))],
-        ['fa-lock', 'Đang khóa', format(locked)], ['fa-triangle-exclamation', 'Đã hết hạn mức', format(over)]]
-        .map(([symbol, label, value]) => `<div class="ai-usage-stat"><i class="fa-solid ${symbol}" aria-hidden="true"></i><span>${label}</span><strong>${value}</strong></div>`).join('');
+      summary.innerHTML = [['fa-sun', 'Token hôm nay', format(total('day')), 'brand'], ['fa-calendar-week', 'Token tuần này', format(total('week')), 'brand'], ['fa-calendar', 'Token tháng này', format(total('month')), 'brand'],
+        ['fa-lock', 'Đang khóa', format(locked), locked ? 'warn' : ''], ['fa-triangle-exclamation', 'Đã hết hạn mức', format(over), over ? 'bad' : '']]
+        .map(([symbol, label, value, tone]) => `<div class="ai-usage-stat${tone ? ` tone-${tone}` : ''}"><i class="fa-solid ${symbol}" aria-hidden="true"></i><span>${label}</span><strong>${value}</strong></div>`).join('');
     }
   };
 

@@ -23,7 +23,7 @@
 }
 
 .ai-provider-hero-icon {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  background: #4b3fd6;
 }
 
 .analytics-hero-icon {
@@ -226,7 +226,7 @@
   place-items: center;
   flex: 0 0 auto;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: #4b3fd6;
   box-shadow: 0 8px 18px rgba(99, 102, 241, 0.18);
 }
 

@@ -29,7 +29,7 @@ async function fetchGlossaryData() {
     renderGlossaryTable();
   } catch (err) {
     console.error('Lỗi nạp Business Glossary:', err);
-    if (typeof showToast === 'function') showToast('Không thể nạp Business Glossary.', 'error');
+    if (typeof showToast === 'function') showToast('Không tải được từ điển thuật ngữ. Hãy tải lại trang.', 'error');
     return false;
   }
 }

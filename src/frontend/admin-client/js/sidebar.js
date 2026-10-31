@@ -29,7 +29,7 @@
     sparkles: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5ZM20 2v4m-2-2h4"/>',
     database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>'
   };
-  const outlineIcon = paths => `<svg class="sidebar-outline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+  const outlineIcon = paths => `<svg class="sidebar-outline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
   sidebar.querySelectorAll('.nav-item').forEach(item => {
     const paths = iconPaths[item.id.replace('nav-', '')];
     if (paths) item.querySelector('.nav-icon').innerHTML = outlineIcon(paths);
@@ -65,7 +65,8 @@
     const label = collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng';
     toggle.setAttribute('aria-label', label);
     toggle.dataset.tooltip = label;
-    toggle.innerHTML = outlineIcon(`<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m${collapsed ? '4-11 3 3-3 3' : '7-11-3 3 3 3'}"/>`);
+    // Same panel glyph as the chat client's sidebar toggle; the label says which way it goes.
+    toggle.innerHTML = outlineIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M5.8 8h.4M5.8 11h.4"/>');
   }
 
   function closeDrawer(restoreFocus = false) {

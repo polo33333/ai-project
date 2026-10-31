@@ -7,16 +7,16 @@
   <title>KnowledgeHub AI</title>
   <link rel="icon" href="/favicon.svg?v=20260906" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest?v=20260906-desktop-icon">
-  <meta name="theme-color" content="#5b50e6">
+  <meta name="theme-color" content="#4b3fd6">
   <meta name="application-name" content="KnowledgeHub AI">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <script src="js/theme.js?v=20261026-smooth-theme"></script>
+  <script src="js/theme.js?v=20261031-series-colors"></script>
 
-  <!-- Google Fonts: Inter UTF-8 Vietnamese Standard -->
+  <!-- Google Fonts: Be Vietnam Pro, drawn for Vietnamese diacritics -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
     rel="stylesheet">
 
   <!-- Font Awesome 6 Pro Icons -->
@@ -29,28 +29,29 @@
   <link rel="stylesheet" type="text/css" href="/vendor/toastify.min.css?v=1.12.0">
   <script defer src="/vendor/toastify.js?v=1.12.0"></script>
 
-  <link rel="stylesheet" href="css/styles.css?v=20261030-busy-buttons">
+  <link rel="stylesheet" href="css/styles.css?v=20261031-one-font">
   <link rel="stylesheet" href="css/dashboard.css?v=20260906-balanced-card-ratio">
-  <link rel="stylesheet" href="css/audit-logs.css?v=20261030-busy-buttons">
-  <link rel="stylesheet" href="css/provider-management.css">
-  <link rel="stylesheet" href="css/knowledge-library.css?v=20260913-preview-inner-scroll">
-  <link rel="stylesheet" href="css/relationship-diagram.css">
-  <link rel="stylesheet" href="css/dictionary-graph.css?v=20260912-dark-overview-icons">
+  <link rel="stylesheet" href="css/audit-logs.css?v=20261031-history-fit4">
+  <link rel="stylesheet" href="css/provider-management.css?v=20261031-solid-purple">
+  <link rel="stylesheet" href="css/knowledge-library.css?v=20261031-one-font">
+  <link rel="stylesheet" href="css/relationship-diagram.css?v=20261031-solid-purple">
+  <link rel="stylesheet" href="css/dictionary-graph.css?v=20261031-solid-purple">
   <link rel="stylesheet" href="css/dictionary-quality.css?v=20261020-verify-progress">
-  <link rel="stylesheet" href="css/api-docs.css?v=20260904-left-align-api-keys">
-  <link rel="stylesheet" href="css/system-tools.css?v=20261025-catalog-spacing">
+  <link rel="stylesheet" href="css/api-docs.css?v=20261031-solid-purple">
+  <link rel="stylesheet" href="css/system-tools.css?v=20261031-solid-purple">
   <link rel="stylesheet" href="css/responsive.css?v=20260906-dynamic-header-search">
   <link rel="stylesheet" href="css/workspace.css?v=20261024-page-scroll-header">
   <link rel="stylesheet" href="css/module-workspaces.css?v=20261024-account-operations-theme">
   <link rel="stylesheet" href="css/notifications.css?v=1.0.1">
   <link rel="stylesheet" href="css/theme.css?v=20261030-busy-buttons">
-  <link rel="stylesheet" href="css/settings.css?v=20261026-policy-save-status">
+  <link rel="stylesheet" href="css/settings.css?v=20261031-one-font">
   <link rel="stylesheet" href="css/data-governance.css?v=20261030-busy-buttons">
   <link rel="stylesheet" href="css/memory.css?v=20261012-agent-memory-ui">
   <link rel="stylesheet" href="css/ui-foundation.css?v=20261015-composer-focus">
-  <link rel="stylesheet" href="css/chat-conversation.css?v=20261029-token-row">
+  <link rel="stylesheet" href="css/chat-conversation.css?v=20261031-one-font">
   <link rel="stylesheet" href="css/dictionary-workspace.css?v=20261023-column-alignment">
   <link rel="stylesheet" href="/css/tab_loading.css?v=20261024-first-paint-skeleton">
+  <link rel="stylesheet" href="css/admin-refresh.css?v=20261031-tones">
 </head>
 
 <body>
@@ -88,7 +89,7 @@
 
       <nav class="sidebar-nav" aria-label="Chức năng" tabindex="0">
         <div class="nav-section">
-          <div class="nav-section-title">KHÔNG GIAN LÀM VIỆC</div>
+          <div class="nav-section-title">Không gian làm việc</div>
           <ul class="nav-list">
             <li class="nav-item active" id="nav-dashboard">
               <a href="#" onclick="switchMainTab('overview'); return false;" title="Tổng quan">
@@ -119,7 +120,7 @@
         </div>
 
         <div class="nav-section">
-          <div class="nav-section-title">DỮ LIỆU & TRI THỨC</div>
+          <div class="nav-section-title">Dữ liệu & tri thức</div>
           <ul class="nav-list">
             <li class="nav-item" id="nav-sql-connector">
               <a href="#" onclick="switchMainTab('sql'); return false;" title="Kết nối CSDL">
@@ -150,7 +151,7 @@
         </div>
 
         <div class="nav-section">
-          <div class="nav-section-title">CẤU HÌNH AGENT</div>
+          <div class="nav-section-title">Cấu hình agent</div>
           <ul class="nav-list">
             <li class="nav-item" id="nav-ai-providers">
               <a href="#" onclick="switchMainTab('ai-providers'); return false;" title="Nhà cung cấp AI">
@@ -166,7 +167,7 @@
         </div>
 
         <div class="nav-section">
-          <div class="nav-section-title">CHẤT LƯỢNG & GIÁM SÁT</div>
+          <div class="nav-section-title">Chất lượng & giám sát</div>
           <ul class="nav-list">
             <li class="nav-item" id="nav-cost-tracker">
               <a href="#" onclick="switchMainTab('analytics'); return false;" title="Báo cáo & Metrics">
@@ -192,7 +193,7 @@
         </div>
 
         <div class="nav-section">
-          <div class="nav-section-title">TÍCH HỢP & PHÁT TRIỂN</div>
+          <div class="nav-section-title">Tích hợp & phát triển</div>
           <ul class="nav-list">
             <li class="nav-item" id="nav-mcp-sources">
               <a href="#" onclick="switchMainTab('mcp-sources'); return false;" title="Nguồn MCP Server">
@@ -208,7 +209,7 @@
         </div>
 
         <div class="nav-section" id="nav-administration-section" hidden>
-          <div class="nav-section-title">QUẢN TRỊ & PHÂN QUYỀN</div>
+          <div class="nav-section-title">Quản trị & phân quyền</div>
           <ul class="nav-list">
             <li class="nav-item" id="nav-accounts" hidden>
               <a href="#" onclick="switchMainTab('accounts'); return false;" title="Quản lý tài khoản"><span class="nav-icon"><i class="fa-solid fa-users-gear"></i></span><span class="nav-label">Quản lý tài khoản</span></a>
@@ -274,7 +275,7 @@
             <div class="notification-panel-heading"><h2 id="notification-heading">Thông báo</h2><button type="button" id="notification-close" aria-label="Đóng thông báo"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
             <article class="notification-item is-unread" id="beta-notification">
               <span class="notification-item-icon"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i></span>
-              <div><span class="notification-category">CẬP NHẬT HỆ THỐNG</span><h3>Phiên bản Beta 1.1.0</h3><p>KnowledgeHub AI hiện đang ở phiên bản thử nghiệm Beta 1.1.0.</p><span class="notification-read-status" id="notification-read-status">Chưa đọc</span></div>
+              <div><span class="notification-category">Cập nhật hệ thống</span><h3>Phiên bản Beta 1.1.0</h3><p>KnowledgeHub AI hiện đang ở phiên bản thử nghiệm Beta 1.1.0.</p><span class="notification-read-status" id="notification-read-status">Chưa đọc</span></div>
             </article>
             <div class="notification-panel-footer"><button type="button" id="notification-mark-read">Đánh dấu đã đọc</button><span>Beta · v1.1.0</span></div>
           </section>
@@ -500,7 +501,7 @@
       </aside>
       <div class="account-settings-content">
         <section data-account-panel="profile">
-          <div class="account-panel-heading"><span class="account-panel-eyebrow">HỒ SƠ CÁ NHÂN</span><h2>Tài khoản</h2><p>Quản lý thông tin hiển thị và liên hệ của bạn.</p></div>
+          <div class="account-panel-heading"><h2>Tài khoản</h2><p>Quản lý thông tin hiển thị và liên hệ của bạn.</p></div>
           <div class="account-profile-summary">
             <div class="account-detail-row"><span>Tên người dùng</span><strong id="account-profile-username"></strong></div>
             <div class="account-detail-row"><span>Vai trò</span><strong id="account-profile-role"></strong></div>
@@ -579,44 +580,45 @@
   <script defer src="js/modules/ai_providers.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/dictionary.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/dictionary-graph.js?v=20261022-graph-cards"></script>
-  <script defer src="js/modules/glossary.js?v=20261015-training-loading"></script>
+  <script defer src="js/modules/glossary.js?v=20261031-vi-title"></script>
   <link rel="stylesheet" href="css/answer_status.css?v=20261012-hide-partial">
   <script defer src="js/answer_ui.js?v=20261012-hide-partial"></script>
-  <script defer src="js/chat_tool_ui.js?v=20261013-tool-typography"></script>
+  <script defer src="js/chat_tool_ui.js?v=20261031-one-font"></script>
   <script defer src="js/chat_reasoning_ui.js?v=20261025-workflow-pending-2"></script>
   <script defer src="embed/chat-attachments.js?v=20261024-session-files"></script>
   <script defer src="embed/chat-stream.js?v=20261024-readable-pace"></script>
   <script defer src="js/modules/voice_input.js?v=20261025-full-transcript"></script>
   <script defer src="js/modules/answer_speech.js?v=20261025-tts-tables-2"></script>
-  <script defer src="js/modules/page_chat.js?v=20261029-token-row"></script>
-  <script defer src="js/modules/sql_connector.js?v=20261022-tab-performance"></script>
-  <script defer src="js/modules/system_logs.js?v=20260906-summary-only"></script>
-  <script defer src="js/modules/chat_history.js?v=20261030-busy-buttons"></script>
+  <script defer src="js/modules/page_chat.js?v=20261031-one-font"></script>
+  <script defer src="js/modules/sql_connector.js?v=20261031-compact-actions"></script>
+  <script defer src="js/modules/system_logs.js?v=20261031-vi-status"></script>
+  <script defer src="js/modules/chat_history.js?v=20261031-vi-status"></script>
   <script defer src="js/modules/chat_feedback.js?v=20261022-compact-list"></script>
   <script defer src="js/modules/training_core.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/mcp_api.js?v=20261030-busy-buttons"></script>
-  <script defer src="js/modules/analytics.js?v=20261024-real-dashboard-shell"></script>
+  <script defer src="js/modules/analytics.js?v=20261031-no-vectors"></script>
   <script defer src="js/modules/library.js?v=20261028-ai-badge"></script>
   <script defer src="js/modules/watchfolder.js?v=20261028-policy"></script>
   <script defer src="js/modules/system_tools.js?v=20261015-catalog-hero"></script>
-  <script defer src="js/modules/governance.js?v=20261030-busy-buttons"></script>
+  <script defer src="js/modules/governance.js?v=20261031-tones"></script>
   <script defer src="js/modules/governance_groups.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/usage_banner.js?v=20261025-usage-countdown"></script>
-  <script defer src="js/modules/ai_usage.js?v=20261030-busy-buttons"></script>
-  <link rel="stylesheet" href="css/ai_usage.css?v=20261025-usage-narrow">
+  <script defer src="js/modules/ai_usage.js?v=20261031-tones"></script>
+  <link rel="stylesheet" href="css/ai_usage.css?v=20261031-fit-laptop">
   <script defer src="js/modules/accounts.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/memory.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/settings.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/workflows.js?v=20261030-busy-buttons"></script>
   <script defer src="js/modules/workflow_plugins.js?v=20261030-busy-buttons"></script>
-  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261025-workflow-pending">
+  <link rel="stylesheet" href="css/workflow_plugins.css?v=20261031-one-font">
   <!-- Main App Router Script -->
-  <script defer src="js/sidebar.js?v=20260906-null-safe-footer"></script>
+  <script defer src="js/sidebar.js?v=20261031-chat-toggle-icon"></script>
   <script defer src="js/notifications.js?v=1.0.1"></script>
+  <script defer src="js/stat_count_up.js?v=20261031-count-up3"></script>
   <script defer src="js/core/tab_data.js?v=20261015-training-loading"></script>
   <script defer src="js/core/view_loader.js?v=20261025-ai-usage"></script>
-  <script defer src="js/core/main_tabs.js?v=20261025-admin-path"></script>
-  <script defer src="js/app.js?v=20261030-busy-buttons"></script>
+  <script defer src="js/core/main_tabs.js?v=20261031-titles"></script>
+  <script defer src="js/app.js?v=20261031-nav-names"></script>
   <script defer src="js/tab_loading.js?v=20261024-first-paint-skeleton"></script>
 </body>
 </html>

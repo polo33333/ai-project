@@ -198,7 +198,7 @@ function renderChatHistoryTable() {
       <td>
         <span class="metric-tag ${isError ? 'red' : 'green'} chat-status-tag">
           <i class="fa-solid ${isError ? 'fa-circle-xmark' : 'fa-shield-halved'}"></i>
-          ${escapeHtml(status)}
+          ${isError ? 'Lỗi' : 'Thành công'}
         </span>
       </td>
       <td>

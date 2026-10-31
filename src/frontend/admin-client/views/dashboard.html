@@ -13,7 +13,7 @@
         <div class="metric-card metric-card-blue">
           <span class="metric-main-icon blue"><i class="fa-solid fa-share-nodes"></i></span>
           <div class="metric-content">
-            <div class="metric-header"><span class="metric-title">Database đang active</span></div>
+            <div class="metric-header"><span class="metric-title">CSDL đang dùng</span></div>
             <div class="metric-val metric-db-name" id="val-connectors">Chưa chọn DB</div>
             <div class="metric-sub text-green" id="val-connectors-detail">Nguồn mặc định cho AI</div>
           </div>
@@ -23,7 +23,7 @@
         <div class="metric-card metric-card-purple">
           <span class="metric-main-icon purple"><i class="fa-solid fa-database"></i></span>
           <div class="metric-content">
-            <div class="metric-header"><span class="metric-title">Bảng đang active</span></div>
+            <div class="metric-header"><span class="metric-title">Bảng đang bật</span></div>
             <div class="metric-val" id="val-tables">0</div>
             <div class="metric-sub text-purple" id="val-tables-detail">Thuộc database đang active</div>
           </div>
@@ -33,9 +33,9 @@
         <div class="metric-card metric-card-green">
           <span class="metric-main-icon green"><i class="fa-solid fa-comment-dots"></i></span>
           <div class="metric-content">
-            <div class="metric-header"><span class="metric-title">Text-to-SQL AI Queries</span></div>
+            <div class="metric-header"><span class="metric-title">Câu hỏi Text-to-SQL</span></div>
             <div class="metric-val" id="val-queries">0</div>
-            <div class="metric-sub text-green"><i class="fa-solid fa-arrow-up"></i> 100% &nbsp; SELECT ONLY</div>
+            <div class="metric-sub text-green">Chỉ chạy lệnh đọc (SELECT)</div>
           </div>
           <span class="metric-icon green"><i class="fa-solid fa-chart-line"></i></span>
         </div>
@@ -43,8 +43,8 @@
         <div class="metric-card metric-card-orange">
           <span class="metric-main-icon orange"><i class="fa-solid fa-database"></i></span>
           <div class="metric-content">
-            <div class="metric-header"><span class="metric-title">Qdrant Vector DB</span></div>
-            <div class="metric-val" id="val-qdrant">0 vectors</div>
+            <div class="metric-header"><span class="metric-title">Kho vector Qdrant</span></div>
+            <div class="metric-val" id="val-qdrant">0</div>
             <div class="metric-sub text-muted" id="val-qdrant-detail">Đang kiểm tra kết nối</div>
           </div>
           <span class="metric-icon orange"><i class="fa-solid fa-cubes-stacked"></i></span>
@@ -115,11 +115,11 @@
 
       <section class="dashboard-router-section">
         <div class="content-card router-status-card">
-          <div class="card-header"><div class="card-title"><span class="router-title-icon"><i class="fa-solid fa-route"></i></span><span>Multi-LLM Router Status</span></div></div>
+          <div class="card-header"><div class="card-title"><span class="router-title-icon"><i class="fa-solid fa-route"></i></span><span>Định tuyến mô hình AI</span></div></div>
           <div style="font-size: 13px; line-height: 1.8; color: var(--text-secondary);">
-            <div><span><i class="fa-solid fa-robot" style="color: #4f46e5;"></i> Primary LLM:</span><strong style="color: var(--primary);" id="dash-router-primary">Đang tải...</strong></div>
-            <div><span><i class="fa-solid fa-network-wired"></i> Fallback LLM:</span><strong id="dash-router-fallback">Chưa kích hoạt</strong></div>
-            <div><span><i class="fa-solid fa-bolt" style="color: #059669;"></i> Active Vector DB:</span><strong style="color: #059669;" id="dash-router-vector">Qdrant (6333)</strong></div>
+            <div><span><i class="fa-solid fa-robot"></i> Mô hình chính</span><strong style="color: var(--primary);" id="dash-router-primary">Đang tải...</strong></div>
+            <div><span><i class="fa-solid fa-network-wired"></i> Mô hình dự phòng</span><strong id="dash-router-fallback">Chưa kích hoạt</strong></div>
+            <div><span><i class="fa-solid fa-bolt"></i> Kho vector</span><strong id="dash-router-vector">Qdrant (6333)</strong></div>
           </div>
         </div>
       </section>

@@ -587,3 +587,10 @@ html[data-theme=dark] .theme-switch button[aria-pressed=true]{background:transpa
 html[data-theme=dark] .carousel-motion{background:#1c283b;border-color:#2c3950;color:#a8b6cd}
 html[data-theme=dark] .dots button{background:#40506a}
 html[data-theme=dark] .dots button[aria-pressed=true]{background:#a99bff}
+/* Admin refresh: same type and single deep purple as the admin workspace; headings carry no one-word colour accent. */
+body,button,input{font-family:'Be Vietnam Pro','Segoe UI',Arial,sans-serif}
+.accent,html[data-theme=dark] .accent{color:inherit}
+.submit,html[data-theme=dark] .submit{background:#4b3fd6;box-shadow:none}
+.submit:hover{filter:none;translate:none;background:#3f33c2}
+html[data-theme=dark] .submit{background:#5b4fe0}
+html[data-theme=dark] .submit:hover{background:#6a5ff0}

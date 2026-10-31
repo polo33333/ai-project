@@ -427,12 +427,14 @@
         ['Kết quả một phần', count(data.statuses.PARTIAL || 0), 'Chưa hoàn tất toàn bộ yêu cầu', 'circle-half-stroke', 'amber'],
         ['Lượt lỗi', count((data.statuses.ERROR || 0) + (data.statuses.FAILED || 0)), 'Trạng thái lỗi hoặc thất bại', 'circle-exclamation', 'red'],
         ['Thiếu tiêu chí', count(data.missingCriteria), 'Chưa đáp ứng đủ tiêu chí kiểm tra', 'list-check', 'amber'],
-        ['Độ trễ P50', measured(data.latency.p50Ms), '50% lượt có độ trễ không vượt mức này', 'gauge', 'indigo'],
-        ['Độ trễ P95', measured(data.latency.p95Ms), '95% lượt có độ trễ không vượt mức này', 'stopwatch', 'indigo'],
+        ['Độ trễ P50', measured(data.latency.p50Ms), '50% lượt có độ trễ không vượt mức này', 'gauge', 'blue'],
+        ['Độ trễ P95', measured(data.latency.p95Ms), '95% lượt có độ trễ không vượt mức này', 'stopwatch', 'blue'],
         ['Chi phí (USD)', data.cost.total == null ? 'Chưa đủ dữ liệu' : (Number(data.cost.total) / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 6 }), 'Tính từ mức sử dụng và bảng giá', 'coins', 'indigo']
       ];
       el('operations-summary').replaceChildren(...summary.map(([name, value, hint, icon, tone], index) => {
-        const card = document.createElement('div'); card.className = `operations-stat ${index >= 4 ? 'operations-stat-secondary' : ''}`;
+        // Warning and error tones colour the figure only when there is something to flag.
+        const flagged = !['amber', 'red'].includes(tone) || String(value) !== '0';
+        const card = document.createElement('div'); card.className = `operations-stat ${index >= 4 ? 'operations-stat-secondary' : ''} ${flagged ? `tone-${tone}` : ''}`;
         const label = document.createElement('dt'), detail = document.createElement('dd'), note = document.createElement('span');
         const symbol = document.createElement('i'); symbol.className = `fa-solid fa-${icon}`; symbol.setAttribute('aria-hidden', 'true');
         const iconBadge = document.createElement('span'); iconBadge.className = `operations-stat-icon ${tone}`; iconBadge.append(symbol);

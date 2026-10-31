@@ -1093,7 +1093,7 @@ function renderChartSpec(canvasId, chartSpec) {
     const isRadialChart = ['pie', 'doughnut', 'polarArea'].includes(chartSpec.type);
     const readableFont = (font = {}, size = 13, weight = '600') => ({
       ...font,
-      family: 'Inter, system-ui, sans-serif',
+      family: getComputedStyle(document.body).fontFamily,
       size: Math.max(size, Number(font.size) || 0),
       weight: font.weight || weight
     });

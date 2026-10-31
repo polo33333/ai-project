@@ -21,7 +21,7 @@
 .relationship-edge-edit circle { stroke: #6366f1; }.relationship-edge-edit text { fill: #4f46e5; font-size: 11px; }.relationship-edge-edit:hover circle { fill: #eef2ff; }
 .relationship-table-node { position: absolute; z-index: 2; height: auto; overflow: visible; border: 1px solid #c7d2fe; border-radius: 11px; background: #fff; box-shadow: 0 8px 20px rgba(79, 70, 229, 0.1); transition: box-shadow .15s ease; }
 .relationship-table-node.dragging { z-index: 5; box-shadow: 0 16px 32px rgba(79, 70, 229, 0.24); user-select: none; }
-.relationship-table-node header { display: flex; align-items: center; gap: 8px; padding: 9px 11px; color: #fff; background: linear-gradient(135deg, #4f46e5, #6366f1); }
+.relationship-table-node header { display: flex; align-items: center; gap: 8px; padding: 9px 11px; color: #fff; background: #4b3fd6; }
 .relationship-node-drag-handle { cursor: grab; touch-action: none; border-radius: 10px 10px 0 0; }
 .relationship-table-node.dragging .relationship-node-drag-handle { cursor: grabbing; }
 .relationship-table-node header strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }

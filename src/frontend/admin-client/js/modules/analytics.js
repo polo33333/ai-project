@@ -3,6 +3,8 @@
  */
 
 window.khCharts = window.khCharts || {};
+if (window.Chart) Chart.defaults.font.family = "'Be Vietnam Pro', system-ui, sans-serif";
+const seriesColor = role => (window.khSeriesColor ? window.khSeriesColor(role) : '#4b3fd6');
 
 const DASHBOARD_RANGE_VALUES = ['today', '7d', '30d', '12m'];
 const DASHBOARD_ANALYTICS_RANGE_KEY = 'knowledgehub.dashboard.analyticsRange';
@@ -383,27 +385,33 @@ function renderDashboardChart(history, providers = window.dashboardAnalyticsProv
       datasets: [
         {
           label: 'AI local',
+          khRole: 'local',
           data: buckets.map(b => b.localQueries),
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.10)',
+          borderColor: seriesColor('local'),
+          backgroundColor: seriesColor('local'),
+          borderWidth: 2,
           fill: false,
-          tension: 0.35
+          cubicInterpolationMode: 'monotone'
         },
         {
           label: 'AI bên thứ ba',
+          khRole: 'thirdParty',
           data: buckets.map(b => b.thirdPartyQueries),
-          borderColor: '#4f46e5',
-          backgroundColor: 'rgba(79, 70, 229, 0.12)',
+          borderColor: seriesColor('thirdParty'),
+          backgroundColor: seriesColor('thirdParty'),
+          borderWidth: 2,
           fill: false,
-          tension: 0.35
+          cubicInterpolationMode: 'monotone'
         },
         {
           label: 'Lỗi',
+          khRole: 'error',
           data: buckets.map(b => b.errors),
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+          borderColor: seriesColor('error'),
+          backgroundColor: seriesColor('error'),
+          borderWidth: 2,
           borderDash: [6, 4],
-          tension: 0.35
+          cubicInterpolationMode: 'monotone'
         }
       ]
     },
@@ -422,7 +430,7 @@ function renderDashboardChart(history, providers = window.dashboardAnalyticsProv
         },
         radius: { duration: 500, easing: 'easeOutBack', from: 0 }
       },
-      plugins: { legend: { position: 'bottom' } },
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 16 } } },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
@@ -471,7 +479,7 @@ function renderDashboardFeedbackChart(feedback = []) {
       const ctx = chartInstance.ctx;
       ctx.save();
       ctx.fillStyle = '#ffffff';
-      ctx.font = '700 10.5px Inter, sans-serif';
+      ctx.font = '700 10.5px "Be Vietnam Pro", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(15,23,42,.28)';
@@ -501,10 +509,10 @@ function renderDashboardFeedbackChart(feedback = []) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = primaryColor;
-      ctx.font = '700 18px Inter, sans-serif';
+      ctx.font = '700 18px "Be Vietnam Pro", sans-serif';
       ctx.fillText(`${satisfaction}%`, arc.x, arc.y - 8);
       ctx.fillStyle = secondaryColor;
-      ctx.font = '500 12px Inter, sans-serif';
+      ctx.font = '500 12px "Be Vietnam Pro", sans-serif';
       ctx.fillText(total ? 'Hài lòng' : 'Chưa có dữ liệu', arc.x, arc.y + 13);
       ctx.restore();
     }
@@ -627,7 +635,7 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
     const upper = chart.isDatasetVisible(1) && buckets[index]?.thirdPartyQueries > 0;
     const top = context.datasetIndex === 1 || !upper;
     const bottom = context.datasetIndex === 0 || !lower;
-    return { topLeft: top ? 999 : 0, topRight: top ? 999 : 0, bottomLeft: bottom ? 999 : 0, bottomRight: bottom ? 999 : 0 };
+    return { topLeft: top ? 4 : 0, topRight: top ? 4 : 0, bottomLeft: 0, bottomRight: 0 };
   };
   destroyChart('pageAnalyticsChart');
   window.khCharts.pageAnalyticsChart = new Chart(canvas, {
@@ -638,8 +646,10 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
         {
           type: 'bar',
           label: 'AI local',
+          khRole: 'local',
+          khFill: true,
           data: buckets.map(b => b.localQueries),
-          backgroundColor: 'rgba(16, 185, 129, 0.78)',
+          backgroundColor: seriesColor('local'),
           order: 1,
           borderRadius: pillRadius,
           borderSkipped: false,
@@ -653,8 +663,10 @@ function renderAnalyticsChart(history, providers, year, month = 0) {
         {
           type: 'bar',
           label: 'AI bên thứ ba',
+          khRole: 'thirdParty',
+          khFill: true,
           data: buckets.map(b => b.thirdPartyQueries),
-          backgroundColor: 'rgba(79, 70, 229, 0.78)',
+          backgroundColor: seriesColor('thirdParty'),
           order: 1,
           borderRadius: pillRadius,
           borderSkipped: false,
@@ -772,7 +784,7 @@ function updateMetricText(data) {
 
   renderDashboardSqlMetrics(data.sources || [], dictionary);
   setText('val-queries', String(history.length));
-  setText('val-qdrant', qdrant.pending ? 'Đang kiểm tra…' : qdrant.connected ? `${Number(qdrant.pointsCount || 0).toLocaleString('vi-VN')} vectors` : 'Ngoại tuyến');
+  setText('val-qdrant', qdrant.pending ? 'Đang kiểm tra…' : qdrant.connected ? Number(qdrant.pointsCount || 0).toLocaleString('vi-VN') : 'Ngoại tuyến');
   setText('val-qdrant-detail', qdrant.pending ? 'Đang kết nối Qdrant' : qdrant.connected
     ? `${qdrant.collectionName || 'Collection'} · ${qdrant.status || 'Đã kết nối'}`
     : 'Không thể kết nối Qdrant');

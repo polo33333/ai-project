@@ -92,7 +92,7 @@ function assertEgress(providerId, local = false) {
     const error = denied('MODEL_DESTINATION_DENIED');
     error.message = destination.rejectInternalData
       ? `AI “${destination.name}” đang bật “Không nhận dữ liệu nội bộ”, nên không xử lý được nguồn ${typeLabel(type)} “${label(resource)}”. Hãy chọn AI khác hoặc đổi cấu hình tại AI Providers.`
-      : `Nguồn ${typeLabel(type)} “${label(resource)}” đang đặt “${LEVEL_LABEL[policy.aiSharing.level]}”, nên không gửi được tới “${destination.name}”. Quản trị viên đổi tại Quản trị dữ liệu → Nguồn dữ liệu.`;
+      : `Nguồn ${typeLabel(type)} “${label(resource)}” đang đặt “${LEVEL_LABEL[policy.aiSharing.level]}”, nên không gửi được tới “${destination.name}”. Quản trị viên đổi tại Quản lý dữ liệu → Nguồn dữ liệu.`;
     error.resourceId = resource.id; error.resourceType = type; error.destinationId = providerId;
     throw error;
   }
