@@ -13,524 +13,52 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/login.css?v=20261031-admin-refresh">
+  <link rel="stylesheet" href="css/login.css?v=20261101-admin-panel-art">
 </head>
 <body class="login-page">
-<div class="glass-rain" aria-hidden="true" inert>
-<i style="--x:4%;--size:24px;--duration:23s;--delay:-7s;--drift:55px"></i>
-<i style="--x:13%;--size:14px;--duration:29s;--delay:-20s;--drift:-35px"></i>
-<i style="--x:23%;--size:32px;--duration:26s;--delay:-12s;--drift:70px"></i>
-<i style="--x:32%;--size:18px;--duration:31s;--delay:-3s;--drift:-45px"></i>
-<i style="--x:42%;--size:22px;--duration:25s;--delay:-18s;--drift:40px"></i>
-<i style="--x:52%;--size:12px;--duration:28s;--delay:-9s;--drift:-55px"></i>
-<i style="--x:61%;--size:28px;--duration:32s;--delay:-25s;--drift:45px"></i>
-<i style="--x:69%;--size:16px;--duration:27s;--delay:-15s;--drift:-30px"></i>
-<i style="--x:77%;--size:21px;--duration:30s;--delay:-5s;--drift:50px"></i>
-<i style="--x:85%;--size:13px;--duration:24s;--delay:-19s;--drift:-40px"></i>
-<i style="--x:93%;--size:26px;--duration:33s;--delay:-11s;--drift:25px"></i>
-</div>
 <main class="page">
-<section class="story">
+<section class="story" aria-label="Giới thiệu trang quản trị">
+<svg class="story-art" viewBox="0 0 600 560" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+<g class="art-rings"><circle cx="300" cy="280" r="96"/><circle cx="300" cy="280" r="150"/><circle cx="300" cy="280" r="214"/></g>
+<g class="art-links">
+<path d="M126 110C210 110 214 262 252 274"/><path d="M126 280H252"/><path d="M126 450C210 450 214 298 252 286"/>
+<path d="M348 274C386 262 390 120 474 120"/><path d="M348 280H474"/><path d="M348 286C386 298 390 440 474 440"/>
+</g>
+<g class="art-flow"><path d="M126 110C210 110 214 262 252 274"/><path d="M348 280H474"/><path d="M348 286C386 298 390 440 474 440"/></g>
+<g class="art-nodes">
+<g transform="translate(92 110)"><ellipse cx="0" cy="-20" rx="34" ry="10"/><path d="M-34-20v40c0 5.5 15.2 10 34 10s34-4.5 34-10v-40M-34 0c0 5.5 15.2 10 34 10S34 5.5 34 0"/></g>
+<g transform="translate(92 280)"><ellipse cx="0" cy="-20" rx="34" ry="10"/><path d="M-34-20v40c0 5.5 15.2 10 34 10s34-4.5 34-10v-40M-34 0c0 5.5 15.2 10 34 10S34 5.5 34 0"/></g>
+<g transform="translate(92 450)"><ellipse cx="0" cy="-20" rx="34" ry="10"/><path d="M-34-20v40c0 5.5 15.2 10 34 10s34-4.5 34-10v-40M-34 0c0 5.5 15.2 10 34 10S34 5.5 34 0"/></g>
+<g transform="translate(508 120)"><path d="M-22-30h28l16 16v44h-44Z"/><path d="M6-30v16h16M-12-2h22M-12 10h22M-12 22h14"/></g>
+<g transform="translate(508 280)"><circle cx="0" cy="-12" r="11"/><path d="M-22 24c0-12 10-20 22-20s22 8 22 20"/></g>
+<g transform="translate(508 440)"><path d="M0-30l24 9v17c0 16-11 27-24 32-13-5-24-16-24-32v-17Z"/><path d="m-9 0 6 6 12-12"/></g>
+</g>
+<g class="art-hub"><rect x="252" y="232" width="96" height="96" rx="26"/><path d="M286 268a14 14 0 0 1 28 0c0 8-6 12-14 12s-14-4-14-12Zm0 24h28"/></g>
+<g class="art-dots"><circle cx="252" cy="274" r="3"/><circle cx="252" cy="280" r="3"/><circle cx="252" cy="286" r="3"/><circle cx="348" cy="274" r="3"/><circle cx="348" cy="280" r="3"/><circle cx="348" cy="286" r="3"/></g>
+</svg>
 <div class="brand">
 <img src="/favicon.svg?v=20260908-brand-sync" alt="">
 <div>
-<b>KnowledgeHub <span class="accent">AI</span>
-</b>
-<small>Không gian quản lý hệ thống</small>
+<b>KnowledgeHub AI</b>
+<small>Trang quản trị</small>
 </div>
 </div>
 <div class="intro">
-<h1>Quản lý tập trung,<br>vận hành <span class="accent">chủ động.</span>
-</h1>
-<p>Thiết lập nguồn dữ liệu, quản lý kho tri thức,<br class="wide-break"> phân quyền người dùng và theo dõi hoạt động AI<br class="wide-break"> trong một không gian quản lý thống nhất.</p>
-</div>
-<div class="features">
-<div class="feature">
-<span class="purple">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<ellipse cx="12" cy="5" rx="8" ry="3"/>
-<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
-</svg>
-</span>
-<div>
-<b>Nguồn dữ liệu</b>
-<p>Thiết lập kết nối,<br>quản lý nguồn dữ liệu</p>
-</div>
-</div>
-<div class="feature">
-<span class="blue">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
-</svg>
-</span>
-<div>
-<b>Kho tri thức</b>
-<p>Quản lý tài liệu,<br>cập nhật tri thức</p>
-</div>
-</div>
-<div class="feature">
-<span class="green">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>
-</span>
-<div>
-<b>Người dùng</b>
-<p>Quản lý tài khoản,<br>vai trò và quyền hạn</p>
-</div>
-</div>
-<div class="feature">
-<span class="orange">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
-</svg>
-</span>
-<div>
-<b>Giám sát</b>
-<p>Theo dõi hoạt động,<br>kiểm soát truy cập</p>
-</div>
-</div>
-</div>
-<div class="illustration" id="illustration" role="region" aria-roledescription="carousel" aria-label="Khám phá KnowledgeHub AI">
-<div class="carousel-track">
-<section class="art-slide" role="group" aria-roledescription="slide" aria-label="1 / 3" aria-hidden="false">
-<svg class="landscape" viewBox="0 0 1000 500" preserveAspectRatio="none" fill="none" aria-hidden="true">
-<defs>
-<linearGradient id="wave" x1="200" y1="100" x2="800" y2="500" gradientUnits="userSpaceOnUse">
-<stop stop-color="#c2b8ff" stop-opacity=".07"/>
-<stop offset=".6" stop-color="#b4c5ff" stop-opacity=".42"/>
-<stop offset="1" stop-color="#d8c8ff" stop-opacity=".12"/>
-</linearGradient>
-</defs>
-<path d="M0 50C120-35 180 210 390 180S570 190 700 100 870-70 1000 10V500H0Z" fill="url(#wave)"/>
-<path d="M0 290c200 150 260-95 480-70s340-10 520 80v200H0Z" fill="#afbfff" opacity=".18"/>
-<path d="M0 430c180-90 200-170 450-170s360 160 550 65v175H0Z" fill="#d1c4ff" opacity=".3"/>
-<path d="M-100 420C150 300 230 290 460 350S760 450 1100 250" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 424C150 303 230 295 460 353S760 452 1100 258" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 428C150 306 230 300 460 356S760 454 1100 266" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 432C150 309 230 305 460 359S760 456 1100 274" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 436C150 312 230 310 460 362S760 458 1100 282" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 440C150 315 230 315 460 365S760 460 1100 290" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 444C150 318 230 320 460 368S760 462 1100 298" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 448C150 321 230 325 460 371S760 464 1100 306" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 452C150 324 230 330 460 374S760 466 1100 314" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 456C150 327 230 335 460 377S760 468 1100 322" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 460C150 330 230 340 460 380S760 470 1100 330" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 464C150 333 230 345 460 383S760 472 1100 338" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 468C150 336 230 350 460 386S760 474 1100 346" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 472C150 339 230 355 460 389S760 476 1100 354" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 476C150 342 230 360 460 392S760 478 1100 362" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 480C150 345 230 365 460 395S760 480 1100 370" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-</svg>
-<div class="art-glow">
-</div>
-<div class="ground">
-</div>
-<div class="ring r2">
-</div>
-<div class="ring">
-</div>
-<div class="decor doc">
-<i>
-</i>
-<i>
-</i>
-<i>
-</i>
-<i>
-</i>
-</div>
-<div class="decor chart">
-<i style="height:35%">
-</i>
-<i style="height:65%">
-</i>
-<i style="height:45%">
-</i>
-<i style="height:85%">
-</i>
-</div>
-<div class="decor shield">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
-</svg>
-</div>
-<div class="decor tiny">
-<i style="height:35%">
-</i>
-<i style="height:55%">
-</i>
-<i style="height:65%">
-</i>
-<i style="height:90%">
-</i>
-</div>
-<div class="dashboard">
-<div class="dash-brand">
-<img src="/favicon.svg?v=20260908-brand-sync" alt="">
-<span>KnowledgeHub <span class="accent">AI</span>
-</span>
-</div>
-<div class="dash-body">
-<div class="dash-sidebar">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<rect x="4" y="4" width="6" height="6" rx="1"/>
-<rect x="14" y="4" width="6" height="6" rx="1"/>
-<rect x="4" y="14" width="6" height="6" rx="1"/>
-<rect x="14" y="14" width="6" height="6" rx="1"/>
-</svg>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<ellipse cx="12" cy="5" rx="8" ry="3"/>
-<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
-</svg>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
-</svg>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>
-</svg>
-</div>
-<div class="dash-main">
-<div class="ask">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>
-<span id="demo-question">Tổng quan quản lý hệ thống</span>
-<span>×</span>
-</div>
-<div class="tiles">
-<div class="tile">
-<span class="purple">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<ellipse cx="12" cy="5" rx="8" ry="3"/>
-<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
-</svg>
-</span>
-<b>Cơ sở dữ liệu</b>
-</div>
-<div class="tile">
-<span class="blue">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
-</svg>
-</span>
-<b>Tri thức nội bộ</b>
-</div>
-<div class="tile">
-<span class="green">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>
-</span>
-<b>Người dùng</b>
-</div>
-<div class="tile">
-<span class="purple">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>
-</svg>
-</span>
-<b>Cấu hình AI</b>
-</div>
-</div>
-<div class="dash-skeleton">
-<div>
-</div>
-<div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="float-card one">
-<span>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>
-</span>
-<div>
-<b id="demo-title">Phân quyền truy cập</b>
-<small id="demo-description">Quản lý vai trò và tài khoản</small>
-</div>
-</div>
-<div class="float-card two">
-<span>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<ellipse cx="12" cy="5" rx="8" ry="3"/>
-<path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>
-</svg>
-</span>
-<div>
-<b>Kết nối dữ liệu</b>
-<small>Cấu hình nguồn dữ liệu</small>
-</div>
-</div>
-<div class="float-card three">
-<span>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
-</svg>
-</span>
-<div>
-<b>Nhật ký hệ thống</b>
-<small>Theo dõi và kiểm tra hoạt động</small>
-</div>
-</div>
-</section>
-<section class="art-slide" role="group" aria-roledescription="slide" aria-label="2 / 3" aria-hidden="true">
-<svg class="landscape" viewBox="0 0 1000 500" preserveAspectRatio="none" fill="none" aria-hidden="true">
-<defs>
-<linearGradient id="wave" x1="200" y1="100" x2="800" y2="500" gradientUnits="userSpaceOnUse">
-<stop stop-color="#c2b8ff" stop-opacity=".07"/>
-<stop offset=".6" stop-color="#b4c5ff" stop-opacity=".42"/>
-<stop offset="1" stop-color="#d8c8ff" stop-opacity=".12"/>
-</linearGradient>
-</defs>
-<path d="M0 50C120-35 180 210 390 180S570 190 700 100 870-70 1000 10V500H0Z" fill="url(#wave)"/>
-<path d="M0 290c200 150 260-95 480-70s340-10 520 80v200H0Z" fill="#afbfff" opacity=".18"/>
-<path d="M0 430c180-90 200-170 450-170s360 160 550 65v175H0Z" fill="#d1c4ff" opacity=".3"/>
-<path d="M-100 420C150 300 230 290 460 350S760 450 1100 250" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 424C150 303 230 295 460 353S760 452 1100 258" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 428C150 306 230 300 460 356S760 454 1100 266" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 432C150 309 230 305 460 359S760 456 1100 274" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 436C150 312 230 310 460 362S760 458 1100 282" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 440C150 315 230 315 460 365S760 460 1100 290" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 444C150 318 230 320 460 368S760 462 1100 298" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 448C150 321 230 325 460 371S760 464 1100 306" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 452C150 324 230 330 460 374S760 466 1100 314" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 456C150 327 230 335 460 377S760 468 1100 322" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 460C150 330 230 340 460 380S760 470 1100 330" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 464C150 333 230 345 460 383S760 472 1100 338" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 468C150 336 230 350 460 386S760 474 1100 346" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 472C150 339 230 355 460 389S760 476 1100 354" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 476C150 342 230 360 460 392S760 478 1100 362" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 480C150 345 230 365 460 395S760 480 1100 370" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-</svg>
-<div class="art-glow">
-</div>
-<div class="ground">
-</div>
-<div class="ring r2">
-</div>
-<div class="ring">
-</div>
-<div class="document-board">
-<div class="scene-heading">
-<img src="/favicon.svg?v=20260908-brand-sync" alt="">
-<b>Quản lý kho tri thức</b>
-<span class="scene-badge">Tài liệu nội bộ</span>
-</div>
-<div class="doc-search">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>Tìm quy trình và hướng dẫn...</div>
-<div class="doc-tags">
-<span>Hướng dẫn</span>
-<span>Quy trình</span>
-<span>Chính sách</span>
-</div>
-<div class="doc-list">
-<div>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
-</svg>
-<span>
-<b>Hướng dẫn sử dụng hệ thống</b>
-<small>Bắt đầu từ những điều cơ bản</small>
-</span>
-<em>↗</em>
-</div>
-<div>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<rect x="4" y="4" width="6" height="6" rx="1"/>
-<rect x="14" y="4" width="6" height="6" rx="1"/>
-<rect x="4" y="14" width="6" height="6" rx="1"/>
-<rect x="14" y="14" width="6" height="6" rx="1"/>
-</svg>
-<span>
-<b>Quy trình làm việc</b>
-<small>Thông tin theo từng bước</small>
-</span>
-<em>↗</em>
-</div>
-<div>
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<rect x="5" y="10" width="14" height="11" rx="3"/>
-<path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>
-</svg>
-<span>
-<b>Chính sách nội bộ</b>
-<small>Tra cứu tại một nơi</small>
-</span>
-<em>↗</em>
-</div>
-</div>
-</div>
-<div class="scene-note docs-note">
-<span class="green">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/>
-</svg>
-</span>
-<div>
-<b>Quản lý nguồn tri thức</b>
-<small>Cập nhật và tổ chức tài liệu</small>
-<div class="source-tags">
-<span>[1] Hướng dẫn</span>
-<span>[2] Quy trình</span>
-</div>
-</div>
-</div>
-<div class="scene-chip">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m5 12 4 4L19 6"/>
-</svg>Kết nối tri thức của tổ chức</div>
-</section>
-<section class="art-slide" role="group" aria-roledescription="slide" aria-label="3 / 3" aria-hidden="true">
-<svg class="landscape" viewBox="0 0 1000 500" preserveAspectRatio="none" fill="none" aria-hidden="true">
-<defs>
-<linearGradient id="wave" x1="200" y1="100" x2="800" y2="500" gradientUnits="userSpaceOnUse">
-<stop stop-color="#c2b8ff" stop-opacity=".07"/>
-<stop offset=".6" stop-color="#b4c5ff" stop-opacity=".42"/>
-<stop offset="1" stop-color="#d8c8ff" stop-opacity=".12"/>
-</linearGradient>
-</defs>
-<path d="M0 50C120-35 180 210 390 180S570 190 700 100 870-70 1000 10V500H0Z" fill="url(#wave)"/>
-<path d="M0 290c200 150 260-95 480-70s340-10 520 80v200H0Z" fill="#afbfff" opacity=".18"/>
-<path d="M0 430c180-90 200-170 450-170s360 160 550 65v175H0Z" fill="#d1c4ff" opacity=".3"/>
-<path d="M-100 420C150 300 230 290 460 350S760 450 1100 250" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 424C150 303 230 295 460 353S760 452 1100 258" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 428C150 306 230 300 460 356S760 454 1100 266" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 432C150 309 230 305 460 359S760 456 1100 274" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 436C150 312 230 310 460 362S760 458 1100 282" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 440C150 315 230 315 460 365S760 460 1100 290" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 444C150 318 230 320 460 368S760 462 1100 298" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 448C150 321 230 325 460 371S760 464 1100 306" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 452C150 324 230 330 460 374S760 466 1100 314" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 456C150 327 230 335 460 377S760 468 1100 322" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 460C150 330 230 340 460 380S760 470 1100 330" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 464C150 333 230 345 460 383S760 472 1100 338" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 468C150 336 230 350 460 386S760 474 1100 346" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 472C150 339 230 355 460 389S760 476 1100 354" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 476C150 342 230 360 460 392S760 478 1100 362" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-<path d="M-100 480C150 345 230 365 460 395S760 480 1100 370" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
-</svg>
-<div class="art-glow">
-</div>
-<div class="ground">
-</div>
-<div class="ring r2">
-</div>
-<div class="ring">
-</div>
-<div class="analysis-board">
-<div class="scene-heading">
-<img src="/favicon.svg?v=20260908-brand-sync" alt="">
-<b>Giám sát hoạt động AI</b>
-<span class="scene-badge">Minh họa</span>
-</div>
-<div class="chart-kpis">
-<div>
-<small>Truy vấn</small>
-<b>Đúng phạm vi</b>
-</div>
-<div>
-<small>Thông tin</small>
-<b>Dễ đối chiếu</b>
-</div>
-<div>
-<small>Kết quả</small>
-<b>Trực quan</b>
-</div>
-</div>
-<div class="scene-chart">
-<div class="chart-title">Lượt sử dụng theo thời gian <span>Dữ liệu minh họa</span>
-</div>
-<div class="chart-bars">
-<div>
-<i style="height:32%">
-</i>
-<small>T1</small>
-</div>
-<div>
-<i style="height:52%">
-</i>
-<small>T2</small>
-</div>
-<div>
-<i style="height:43%">
-</i>
-<small>T3</small>
-</div>
-<div>
-<i style="height:65%">
-</i>
-<small>T4</small>
-</div>
-<div>
-<i style="height:58%">
-</i>
-<small>T5</small>
-</div>
-<div>
-<i style="height:80%">
-</i>
-<small>T6</small>
-</div>
-<div>
-<i style="height:71%">
-</i>
-<small>T7</small>
-</div>
-<div>
-<i style="height:93%">
-</i>
-<small>T8</small>
-</div>
-</div>
-</div>
-</div>
-<div class="scene-note chart-note">
-<span class="blue">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/>
-</svg>
-</span>
-<div>
-<b>Kiểm soát vận hành</b>
-<small>Theo dõi mức sử dụng và nhật ký</small>
-<div class="source-tags">
-<span>Biểu đồ</span>
-<span>Bảng dữ liệu</span>
-</div>
-</div>
-</div>
-<div class="scene-chip">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>
-</svg>Theo dõi hoạt động trong toàn hệ thống</div>
-</section>
-</div>
+<h1>Quản trị KnowledgeHub AI</h1>
+<p>Nơi quản trị viên kết nối dữ liệu, quản lý tri thức, phân quyền và theo dõi hoạt động của trợ lý AI.</p>
+<dl class="areas">
+<div><dt>Dữ liệu &amp; tri thức</dt><dd>Kết nối CSDL, lược đồ, thư viện tài liệu, thuật ngữ</dd></div>
+<div><dt>Cấu hình agent</dt><dd>Nhà cung cấp AI, công cụ hệ thống, mẫu nghiệp vụ</dd></div>
+<div><dt>Chất lượng &amp; giám sát</dt><dd>Báo cáo sử dụng, nhật ký hệ thống, đánh giá câu trả lời</dd></div>
+<div><dt>Quản trị &amp; phân quyền</dt><dd>Tài khoản, hạn mức sử dụng, quyền truy cập dữ liệu</dd></div>
+</dl>
 </div>
 <footer class="storyfoot">
-<span>
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm0 5v7m-3-4 3-3 3 3"/>
-</svg>Quản lý dữ liệu, quyền truy cập và hoạt động hệ thống</span>
-<div class="carousel-controls">
-<button type="button" id="carousel-motion" class="carousel-motion" aria-label="Tạm dừng trình chiếu" aria-pressed="false"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g class="motion-pause"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></g><path class="motion-play" d="M8 5v14l11-7Z"/></svg></button>
-<div class="dots" aria-label="Khám phá tính năng">
-<button type="button" aria-label="Quản lý hệ thống" aria-pressed="true" data-slide="0">
-</button>
-<button type="button" aria-label="Quản lý tri thức" aria-pressed="false" data-slide="1">
-</button>
-<button type="button" aria-label="Giám sát hoạt động" aria-pressed="false" data-slide="2">
-</button>
-</div>
-</div>
+<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/>
+<path d="m9 12 2 2 4-4"/>
+</svg>
+<span>Mỗi lần đăng nhập được ghi vào nhật ký hệ thống.</span>
 </footer>
 </section>
 <section class="login" aria-labelledby="login-title">
@@ -607,8 +135,6 @@
 </section>
 </main>
   <script src="js/login.js?v=20261025-admin-path">
-</script>
-  <script src="js/login_carousel.js?v=20261026-admin-management">
 </script>
 </body>
 </html>
