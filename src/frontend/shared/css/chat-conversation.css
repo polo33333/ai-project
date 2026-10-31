@@ -612,3 +612,36 @@ main.main-content.chat-workspace-page {
 /* Chat input locked by the usage limit */
 :is(#page-chat-user-input,#chat-user-input)[data-usage-locked]{cursor:not-allowed}
 :is(#page-chat-send-button,#copilot-send-button,[data-voice-target],button[onclick^="retryPageChatAnswer"],button[onclick^="editPageChatQuestion"])[data-usage-locked]{opacity:.4;cursor:not-allowed}
+
+/* Page chat type scale: one family, five sizes and the three weights Be Vietnam Pro is loaded
+   with for UI text (400/500/600). Saved answers keep inline font sizes in their stored HTML,
+   so the sizes and weights here are !important. */
+#view-page_chat {
+  --chat-type-title: 17px;  /* headings inside an answer */
+  --chat-type-body: 15px;   /* messages, composer, panel headings */
+  --chat-type-ui: 14px;     /* conversation titles */
+  --chat-type-small: 13px;  /* tables, previews, chips, controls */
+  --chat-type-meta: 12px;   /* times, counts, token usage, notes */
+}
+#view-page_chat :is(.chat-ai-message-bubble,.chat-ai-answer,.chat-user-message-bubble,.chat-user-message-content,#page-chat-user-input) { font-size:var(--chat-type-body) !important; }
+#page-chat-messages-container .chat-ai-answer { line-height:1.7; }
+#view-page_chat :is(.chat-user-message-content,#page-chat-user-input) { line-height:1.55; }
+#view-page_chat .chat-ai-answer :is(p,li,blockquote) { max-width:72ch; }
+#view-page_chat .chat-ai-answer :is(strong,b) { font-weight:600 !important; }
+#view-page_chat .chat-ai-answer :is(h1,h2) { margin:1.2em 0 .5em; font-size:var(--chat-type-title) !important; font-weight:600 !important; line-height:1.4; }
+#view-page_chat .chat-ai-answer :is(h3,h4,h5,h6) { margin:1.1em 0 .4em; font-size:var(--chat-type-body) !important; font-weight:600 !important; line-height:1.45; }
+#view-page_chat .chat-history-heading strong { font-size:var(--chat-type-body) !important; font-weight:600 !important; }
+
+#view-page_chat .chat-session-title { font-size:var(--chat-type-ui) !important; font-weight:500 !important; }
+#view-page_chat .chat-session-item.is-current .chat-session-title { font-weight:600 !important; }
+
+#view-page_chat :is(.chat-ai-answer,.chat-tool-result) :is(th,td) { font-size:var(--chat-type-small) !important; font-variant-numeric:tabular-nums; }
+#view-page_chat :is(.chat-ai-answer,.chat-tool-result) th { font-weight:600 !important; }
+#view-page_chat :is(.chat-ai-answer,.chat-tool-result) td { font-weight:400 !important; }
+#view-page_chat :is(.chat-session-preview,.chat-files-hint,#chat-history-search,.chat-selected-mode) { font-size:var(--chat-type-small) !important; font-weight:400 !important; }
+#view-page_chat :is(.chat-technical-details > summary,#quick-prompts-bar button,.chat-selected-model,.chat-clear-sessions-btn,.chat-load-older) { font-size:var(--chat-type-small) !important; font-weight:500 !important; }
+#view-page_chat .chat-tool-result-title { font-size:var(--chat-type-small) !important; font-weight:600 !important; }
+
+#view-page_chat :is(.chat-token-usage,.chat-token-usage span,.chat-answer-time-menu,.chat-answer-time-menu span,.chat-conversation-time-marker,.page-chat-disclaimer,.chat-session-item time,.chat-message-time,.chat-ai-role,.chat-user-message-stamp) { font-size:var(--chat-type-meta) !important; font-weight:400 !important; }
+#view-page_chat :is(.chat-token-usage strong,.chat-session-group-title) { font-size:var(--chat-type-meta) !important; font-weight:600 !important; }
+#view-page_chat :is(.chat-process-total,.chat-session-group-count,.chat-technical-content .metric-tag) { font-size:var(--chat-type-meta) !important; font-weight:500 !important; }
