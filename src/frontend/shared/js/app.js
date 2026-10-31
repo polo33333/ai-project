@@ -1387,12 +1387,29 @@ function initCopilotSloganRotation() {
 // The full-screen chat page (/chat) reuses this file for shared helpers and starts itself.
 const isStandaloneChatPage = document.documentElement.dataset.page === 'chat';
 
+// Pointing at a sidebar item starts loading that tab's template, so the click opens it sooner.
+function initNavViewPrefetch() {
+  const nav = document.querySelector('.nav-list');
+  if (!nav) return;
+  const prefetch = event => {
+    const tabKey = normalizeMainTabKey(event.target.closest?.('a')?.getAttribute('onclick')?.match(/switchMainTab\('([^']+)'\)/)?.[1]);
+    if (!tabKey || tabKey === 'overview' || !window.canAccessMainTab?.(tabKey)) return;
+    loadViewComponents(tabKey).catch(() => {});
+  };
+  nav.addEventListener('pointerover', prefetch);
+  nav.addEventListener('focusin', prefetch);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
   if (isStandaloneChatPage) return;
   initCopilotSloganRotation();
   initAccountMenu();
   initPwaInstall();
+  initNavViewPrefetch();
+  // Fetch the opening tab's template while the account loads; switchMainTab reuses the request.
+  const startTab = getRememberedMainTab();
+  if (startTab !== 'overview') loadViewComponents(startTab).catch(() => {});
   await loadCurrentAccount();
   if(window.canAccessMainTab('page-chat')) {
     window.loadChatProviders?.().catch(() => {});

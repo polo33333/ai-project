@@ -21,6 +21,7 @@ const authService = require('../services/auth_service');
 const settingsService = require('../services/settings_service').createSettingsService();
 const backupAdmin = require('../services/backup_admin_service');
 const embedChatService = require('../services/embed_chat_service');
+const httpAssets = require('../services/http_assets');
 const { memoryService: conversationMemoryService } = require('../memory');
 const knowledgeCore = require('../knowledge');
 const { selectUserFacingSqlExecutions } = require('../utils/chat_result_selector');
@@ -322,6 +323,7 @@ function isPublicPath(pathname) {
   return pathname === '/login' || pathname === '/login.html' || pathname === '/login/'
     || pathname === '/manifest.webmanifest'
     || pathname === '/service-worker.js'
+    || pathname === '/offline.html'
     || pathname === '/favicon.svg'
     || pathname === '/embed/knowledgehub-chat.js'
     || pathname === '/embed/chat-attachments.js'
@@ -2600,6 +2602,7 @@ async function handleGovernedRequest(req, res) {
   const isChatPage = req.khClient === 'chat' && req.method === 'GET' && pathname === '/';
   const isChatLogin = req.khClient === 'chat' && isLoginRoute;
   const isAdminPage = req.khClient === 'admin' && isFrontendRoute;
+  const isOfflinePage = ['GET', 'HEAD'].includes(req.method) && pathname === '/offline.html';
   // Read the embed settings here, inside the request: app storage is not available in the file callback.
   const chatFramePolicy = isChatPage || isChatLogin ? `frame-ancestors ${chatFrameAncestors(parsedUrl)}` : '';
   const filePath = isLoginRoute ? path.join(CLIENT_DIRS[req.khClient], 'login.html')
@@ -2608,6 +2611,7 @@ async function handleGovernedRequest(req, res) {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
+  const isPage = isLoginRoute || isChatPage || isAdminPage || isOfflinePage;
   fs.readFile(filePath, (err, content) => {
     if (err) {
       if (err.code === 'ENOENT') {
@@ -2634,15 +2638,24 @@ async function handleGovernedRequest(req, res) {
       if (isAdminPage) {
         content = require('../services/dashboard_shell').render(content.toString('utf8'), pathname);
       }
-      if (/\.(?:html|js|css)$/i.test(filePath)) {
-        headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      if (!isPage) {
+        fs.stat(filePath, (statError, stats) => {
+          if (statError) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=UTF-8' }); res.end(`Server Error: ${statError.code}`); return; }
+          httpAssets.sendStaticFile(req, res, { filePath, content, stats, contentType, version: parsedUrl.searchParams.get('v'), headers });
+        });
+        return;
       }
-      res.writeHead(200, headers);
-      res.end(content);
+      // Pages stay uncached (they depend on the session); their assets get fingerprinted URLs instead.
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      const html = httpAssets.injectConnectionGuard(httpAssets.versionAssetLinks(content.toString('utf8'), url => resolveStaticFile(req.khClient, url)));
+      httpAssets.sendPage(req, res, html, headers);
     }
   });
 }
 
 module.exports = {
-  handleRequest: (req, res) => require('../governance/context').run(() => handleGovernedRequest(req, res))
+  handleRequest: (req, res) => {
+    httpAssets.compressJsonResponses(req, res);
+    return require('../governance/context').run(() => handleGovernedRequest(req, res));
+  }
 };
