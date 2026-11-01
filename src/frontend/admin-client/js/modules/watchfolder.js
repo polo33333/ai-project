@@ -5,22 +5,33 @@ function escapeWatchFolderHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+let watchFolderSnapshot = '';
+
+// Re-renders only when the server data changed, so polling does not rebuild identical tables.
+async function loadWatchFolderData() {
+  const [foldersResponse, logsResponse] = await Promise.all([
+    fetch('/api/watchfolder'),
+    fetch('/api/watchfolder/logs')
+  ]);
+  const folders = await foldersResponse.json();
+  const logs = await logsResponse.json();
+  if (!foldersResponse.ok) throw new Error(folders.message || `HTTP ${foldersResponse.status}`);
+  if (!logsResponse.ok) throw new Error(logs.message || `HTTP ${logsResponse.status}`);
+  const snapshot = JSON.stringify([folders, logs]);
+  if (snapshot === watchFolderSnapshot) return;
+  watchFolderSnapshot = snapshot;
+  window.watchFoldersData = Array.isArray(folders) ? folders : [];
+  window.watchFolderLogs = Array.isArray(logs) ? logs : [];
+  renderWatchFolders();
+  renderWatchFolderLogs();
+}
+
 async function fetchWatchFolderData() {
   const tbody = document.getElementById('watchfolder-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="watchfolder-state-cell"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải dữ liệu...</td></tr>';
+  watchFolderSnapshot = '';
   try {
-    const [foldersResponse, logsResponse] = await Promise.all([
-      fetch('/api/watchfolder'),
-      fetch('/api/watchfolder/logs')
-    ]);
-    const folders = await foldersResponse.json();
-    const logs = await logsResponse.json();
-    if (!foldersResponse.ok) throw new Error(folders.message || `HTTP ${foldersResponse.status}`);
-    if (!logsResponse.ok) throw new Error(logs.message || `HTTP ${logsResponse.status}`);
-    window.watchFoldersData = Array.isArray(folders) ? folders : [];
-    window.watchFolderLogs = Array.isArray(logs) ? logs : [];
-    renderWatchFolders();
-    renderWatchFolderLogs();
+    await loadWatchFolderData();
   } catch (error) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="watchfolder-state-cell error"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeWatchFolderHtml(error.message)}</td></tr>`;
     if (typeof showToast === 'function') showToast('Không thể tải cấu hình Watch Folder.', 'error');
@@ -36,12 +47,13 @@ function renderWatchFolders() {
   } else {
     tbody.innerHTML = window.watchFoldersData.map(folder => {
       const active = folder.status === 'Active' && folder.runtimeStatus === 'Watching';
+      const failed = folder.status === 'Active' && folder.runtimeStatus === 'Error';
       const filters = Array.isArray(folder.filters) ? folder.filters : [];
       return `<tr>
         <td><div class="watchfolder-path"><i class="fa-solid fa-folder-tree"></i><code title="${escapeWatchFolderHtml(folder.path)}">${escapeWatchFolderHtml(folder.path)}</code></div></td>
         <td><div class="watchfolder-filter-list">${filters.map(filter => `<span>${escapeWatchFolderHtml(filter)}</span>`).join('') || '<span>—</span>'}</div></td>
         <td><strong>${Number(folder.scannedFiles || 0).toLocaleString('vi-VN')}</strong> tệp</td>
-        <td><span class="watchfolder-status ${active ? 'active' : 'paused'}" title="${escapeWatchFolderHtml(folder.error || '')}"><i class="fa-solid ${active ? 'fa-circle-play' : folder.runtimeStatus === 'Error' ? 'fa-circle-exclamation' : 'fa-circle-pause'}"></i> ${active ? 'Đang theo dõi' : folder.runtimeStatus === 'Error' ? 'Lỗi watcher' : 'Tạm dừng'}</span></td>
+        <td><span class="watchfolder-status ${active ? 'active' : 'paused'}" title="${escapeWatchFolderHtml(folder.error || '')}"><i class="fa-solid ${active ? 'fa-circle-play' : folder.runtimeStatus === 'Error' ? 'fa-circle-exclamation' : 'fa-circle-pause'}"></i> ${active ? 'Đang theo dõi' : folder.runtimeStatus === 'Error' ? 'Lỗi watcher' : 'Tạm dừng'}</span>${failed ? `<small class="watchfolder-error">${escapeWatchFolderHtml(folder.error || 'Không rõ nguyên nhân.')} Hệ thống đang tự thử chạy lại.</small>` : ''}</td>
         <td>${escapeWatchFolderHtml(folder.lastScan || 'Chưa quét')}</td>
         <td><div class="library-row-actions"><button class="library-action-btn" title="Chính sách dữ liệu cho tài liệu của thư mục" aria-label="Chính sách dữ liệu của thư mục" onclick="openGovernanceSource('watchfolder', '${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid fa-shield-halved"></i></button><button class="library-action-btn" title="${active ? 'Tạm dừng' : 'Tiếp tục'}" onclick="toggleWatchFolder('${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid ${active ? 'fa-pause' : 'fa-play'}"></i></button><button class="library-action-btn danger" title="Xóa" onclick="deleteWatchFolder('${escapeWatchFolderHtml(folder.id)}')"><i class="fa-solid fa-trash"></i></button></div></td>
       </tr>`;
@@ -160,7 +172,11 @@ async function deleteWatchFolder(id) {
 
 Object.assign(window, { fetchWatchFolderData, renderWatchFolders, renderWatchFolderLogs, openAddWatchFolderModal, closeWatchFolderModal, handleWatchFolderModalBackdrop, submitWatchFolder, toggleWatchFolder, deleteWatchFolder });
 
+// Background refresh: no loading state, and a failed poll keeps the current tables (the next one retries).
+let watchFolderPolling = false;
 setInterval(() => {
   const view = document.getElementById('view-watchfolder');
-  if (view && view.style.display !== 'none' && !document.hidden) fetchWatchFolderData();
+  if (!view || view.style.display === 'none' || document.hidden || watchFolderPolling) return;
+  watchFolderPolling = true;
+  loadWatchFolderData().catch(() => {}).finally(() => { watchFolderPolling = false; });
 }, 5000);

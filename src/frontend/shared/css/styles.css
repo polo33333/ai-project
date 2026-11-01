@@ -1889,6 +1889,7 @@ code {
 }
 
 .watchfolder-path code {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1904,6 +1905,7 @@ code {
 
 .watchfolder-filter-list span,
 .watchfolder-event {
+  white-space: nowrap;
   padding: 4px 7px;
   border-radius: 6px;
   background: #f1f5f9;
@@ -1931,6 +1933,37 @@ code {
 .watchfolder-status.paused {
   background: #fff7ed;
   color: #c2410c;
+}
+
+/* Fixed columns keep badges and times whole; a narrow panel scrolls the table instead of squeezing it. */
+.watchfolder-table {
+  min-width: 940px;
+}
+
+#watchfolder-tbody td:nth-child(5),
+#watchfolder-logs-tbody td:nth-child(5) {
+  white-space: nowrap;
+}
+
+.watchfolder-folders-table th:nth-child(2) { width: 210px; }
+.watchfolder-folders-table th:nth-child(3) { width: 100px; }
+.watchfolder-folders-table th:nth-child(4) { width: 160px; }
+.watchfolder-folders-table th:nth-child(5) { width: 160px; }
+.watchfolder-folders-table th:nth-child(6) { width: 120px; }
+.watchfolder-logs-table th:nth-child(2) { width: 220px; }
+.watchfolder-logs-table th:nth-child(3) { width: 200px; }
+.watchfolder-logs-table th:nth-child(4) { width: 130px; }
+.watchfolder-logs-table th:nth-child(5) { width: 160px; }
+#watchfolder-logs-tbody td:nth-child(2) code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.watchfolder-error {
+  display: block;
+  max-width: 320px;
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .watchfolder-modal-dialog {

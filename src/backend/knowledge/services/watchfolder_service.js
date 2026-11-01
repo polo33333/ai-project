@@ -5,6 +5,9 @@ const StorageHelper = require('../../utils/storage_helper');
 const storage = require('../../storage');
 const libraryService = require('./library_service');
 
+// A failed watcher is restarted after these delays; the last one repeats until it recovers.
+const RESTART_DELAYS_MS = [5000, 15000, 60000, 300000];
+
 class WatchFolderService {
   constructor() {
     StorageHelper.bind(this, 'folders', 'watchfolders.json', []);
@@ -12,6 +15,7 @@ class WatchFolderService {
     this.watchers = new Map();
     this.processing = new Set();
     this.debounceTimers = new Map();
+    this.restarts = new Map();
   }
 
   persist() { StorageHelper.saveJson('watchfolders.json', this.folders); StorageHelper.saveJson('watchfolder_logs.json', this.logs); }
@@ -129,22 +133,56 @@ class WatchFolderService {
         const filePath = path.join(folder.path, String(filename));
         if (eventType === 'rename' || eventType === 'change') this.scheduleFile(folder, filePath, eventType === 'rename' ? 'Tệp mới' : 'Tệp cập nhật');
       }));
-      this.watchers.get(folder.id).on('error', storage.detach(error => {
-        storage.run(() => {
-          const current = this.folders.find(item => item.id === folder.id);
-          if (current) { current.runtimeStatus = 'Error'; current.error = error.message; this.persist(); }
-        }).catch(failure => console.error('[Watchfolder] Failed:', failure.code || failure.name));
-      }));
-      this.persist();
+      this.watchers.get(folder.id).on('error', storage.detach(error => this.handleWatcherError(folder.id, error)));
+      const recovered = this.restarts.has(folder.id);
+      this.cancelRestart(folder.id);
+      if (recovered) this.addLog(folder, folder.path, 'Watcher chạy lại', 0, null);
+      else this.persist();
       if (importExisting) for (const filePath of existing) await this.processFile(folder, filePath, 'Quét ban đầu');
-    } catch (error) { folder.runtimeStatus = 'Error'; folder.error = error.message; this.persist(); }
+    } catch (error) { this.markFolderError(folder, error); }
     return folder;
   }
 
+  handleWatcherError(id, error) {
+    this.stopFolder(id);
+    storage.run(() => {
+      const current = this.folders.find(item => item.id === id);
+      if (current?.status === 'Active') this.markFolderError(current, error);
+    }).catch(failure => { console.error('[Watchfolder] Failed:', failure.code || failure.name); this.scheduleRestart(id); });
+  }
+
+  // Logs the first failure of an episode only; retries that fail again just refresh the message.
+  markFolderError(folder, error) {
+    const message = error?.message || String(error);
+    folder.runtimeStatus = 'Error';
+    folder.error = message;
+    console.error(`[Watchfolder] ${folder.path}: ${message}`);
+    if (this.restarts.has(folder.id)) this.persist();
+    else this.addLog(folder, folder.path, 'Lỗi watcher', 0, message);
+    this.scheduleRestart(folder.id);
+  }
+
+  scheduleRestart(id) {
+    const previous = this.restarts.get(id);
+    clearTimeout(previous?.timer);
+    const attempt = previous?.attempt || 0;
+    const timer = setTimeout(storage.detach(() => {
+      storage.run(async () => {
+        const current = this.folders.find(item => item.id === id);
+        if (current?.status !== 'Active') return this.cancelRestart(id);
+        await this.startFolder(current, false);
+      }).catch(error => { console.error('[Watchfolder] Restart failed:', error.code || error.name); this.scheduleRestart(id); });
+    }), RESTART_DELAYS_MS[Math.min(attempt, RESTART_DELAYS_MS.length - 1)]);
+    timer.unref?.();
+    this.restarts.set(id, { attempt: attempt + 1, timer });
+  }
+
+  cancelRestart(id) { clearTimeout(this.restarts.get(id)?.timer); this.restarts.delete(id); }
   stopFolder(id) { const watcher = this.watchers.get(id); if (watcher) watcher.close(); this.watchers.delete(id); }
   async start() { for (const folder of this.folders.filter(item => item.status === 'Active')) await this.startFolder(folder, true); }
   async stop() {
     for (const id of [...this.watchers.keys()]) this.stopFolder(id);
+    for (const id of [...this.restarts.keys()]) this.cancelRestart(id);
     for (const timer of this.debounceTimers.values()) clearTimeout(timer);
     const deadline = Date.now() + 30000;
     while (this.processing.size) {
@@ -160,8 +198,8 @@ class WatchFolderService {
     this.folders.unshift(folder); this.persist(); await this.startFolder(folder, true); return folder;
   }
 
-  deleteFolder(id) { this.stopFolder(id); const before = this.folders.length; this.folders = this.folders.filter(item => item.id !== id); this.persist(); return this.folders.length < before; }
-  async toggleFolderStatus(id) { const folder = this.folders.find(item => item.id === id); if (!folder) return null; if (folder.status === 'Active') { folder.status = 'Paused'; folder.runtimeStatus = 'Paused'; this.stopFolder(id); } else { folder.status = 'Active'; await this.startFolder(folder, false); } this.persist(); return folder; }
+  deleteFolder(id) { this.stopFolder(id); this.cancelRestart(id); const before = this.folders.length; this.folders = this.folders.filter(item => item.id !== id); this.persist(); return this.folders.length < before; }
+  async toggleFolderStatus(id) { const folder = this.folders.find(item => item.id === id); if (!folder) return null; if (folder.status === 'Active') { folder.status = 'Paused'; folder.runtimeStatus = 'Paused'; this.stopFolder(id); this.cancelRestart(id); } else { folder.status = 'Active'; await this.startFolder(folder, false); } this.persist(); return folder; }
 }
 
 module.exports = new WatchFolderService();

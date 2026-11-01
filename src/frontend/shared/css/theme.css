@@ -165,6 +165,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 }
 :root[data-theme="dark"] .watchfolder-status.active { color: #86e4bd !important; background: #14382e !important; }
 :root[data-theme="dark"] .watchfolder-status.paused { color: #f0c985 !important; background: #3e321d !important; }
+:root[data-theme="dark"] .watchfolder-error { color: #fca5a5; }
 :root[data-theme="dark"] #watchfolder-add-modal .watchfolder-filter-fieldset {
   background: #172337;
   border-color: #3b4a62;
