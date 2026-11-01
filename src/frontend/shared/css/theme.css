@@ -111,7 +111,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 
 /* Fields, tabs, filters and secondary controls */
 :root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-:root[data-theme="dark"] :is(select,textarea,.form-control,.system-tools-search,.training-filters label,.chat-input-wrapper) {
+:root[data-theme="dark"] :is(select,textarea,.form-control,.training-filters label,.chat-input-wrapper) {
   background: var(--dark-input) !important; color: var(--text-primary) !important; border-color: #40506b !important;
 }
 :root[data-theme="dark"] :is(input,textarea)::placeholder { color: #8e9db7 !important; opacity: 1; }
@@ -227,7 +227,7 @@ html[data-theme="dark"] .account-menu .theme-toggle .theme-moon { display: block
 :root[data-theme="dark"] .embed-status-toggle input:not(:checked) + .embed-toggle-track { background: #465671; }
 :root[data-theme="dark"] .embed-status-toggle input:checked ~ .embed-status-text::after { color: #75dcb5; }
 :root[data-theme="dark"] :is(.chat-prompt,.chat-time,.system-log-message,.training-case-main > strong,.training-stat strong,.log-stat-card div div,.analytics-kpi-card strong,.system-tools-summary strong,.workflow-run-row strong,.library-document-name strong,.library-card-title strong,.active-provider-meta code,.active-provider-meta strong,.analytics-health-card strong,.pagination-summary strong,.login-default-note strong) { color: var(--text-primary) !important; }
-:root[data-theme="dark"] :is(.log-stat-card span,.analytics-kpi-card p,.analytics-kpi-card small,.training-stat span,.training-issue-row b,.system-tools-summary span,.system-tool-item > p,.system-tool-head div > span,.system-tool-foot span,.system-tool-schema span,.system-tool-schema p,.workflow-manager-card > p,.workflow-run-row small,.analytics-health-card p,.api-card-description,.api-card-note,.api-option-grid small,.notification-read-status,.library-empty,.training-empty,.chat-history-empty) { color: var(--text-secondary) !important; }
+:root[data-theme="dark"] :is(.log-stat-card span,.analytics-kpi-card p,.analytics-kpi-card small,.training-stat span,.training-issue-row b,.system-tools-summary span,.system-tool-item > p,.system-tool-head div > span,.system-tool-foot span:not(.system-tool-state.is-available),.system-tool-schema span,.system-tool-schema p,.workflow-manager-card > p,.workflow-run-row small,.analytics-health-card p,.api-card-description,.api-card-note,.api-option-grid small,.notification-read-status,.library-empty,.training-empty,.chat-history-empty) { color: var(--text-secondary) !important; }
 :root[data-theme="dark"] :is(.metric-tag.green,.health-status-tag.online,.system-tool-status,.training-status.like,.api-ready-badge,.library-status-badge) { background: #14382e; color: #75dcb5; }
 :root[data-theme="dark"] :is(.metric-tag.red,.health-status-tag.offline,.training-status.dislike) { background: #402633; color: #f49dab; }
 :root[data-theme="dark"] :is(.metric-tag.yellow,.metric-tag.orange,.training-failure-chip,.training-status) { background: #3e321d; color: #ebc577; }

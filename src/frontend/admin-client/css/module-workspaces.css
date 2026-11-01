@@ -194,7 +194,6 @@
 /* Tool catalogue: a search surface and readable per-tool parameter panels. */
 #view-system-tools > .system-tools-card { padding: 22px; }
 
-#view-system-tools .system-tools-search { background: #fff; border-color: #d6dfec; }
 .system-tools-filters { gap: 7px; }
 .system-tools-filters button { font-weight: 500; }
 .system-tools-filters button.active { background: #ebe8fa; border-color: #c9c1ee; color: #5144a6; }

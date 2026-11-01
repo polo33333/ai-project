@@ -40,7 +40,6 @@ button { touch-action:manipulation; }
   #view-system-tools .system-tools-catalog-header { align-items:flex-start; }
   #view-system-tools .system-tools-filters { width:100%; flex-wrap:nowrap; overflow-x:auto; }
   #view-system-tools .system-tools-filters button { flex:none; white-space:nowrap; }
-  #view-system-tools .system-tools-search { flex-basis:100%; }
 }
 @media(max-width:700px) {
   :is(#page-chat-user-input,#chat-user-input) { font-size:16px !important; }
