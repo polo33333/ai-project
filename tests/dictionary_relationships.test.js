@@ -344,3 +344,77 @@ test('incomplete profiling results cannot become uniqueness evidence', async t =
   assert.equal(relation.evidence, undefined);
   assert.equal(relation.revision, 1);
 });
+
+test('refresh does not stale relations when stored keys come back in another key order', () => {
+  const service = serviceFixture();
+  const [employees, departments] = service.tablesStore;
+  const keys = [{ name: 'PK_Departments', isPrimaryKey: true, isDisabled: false, hasFilter: false, columnNames: ['DepartmentID'] }];
+  service.saveDictionaryItems([{ ...departments, uniqueConstraints: keys }]);
+  service.tableRelationships = [service.normalizeRelationship({ id: 'manual', sourceTableId: employees.tableId,
+    targetTableId: departments.tableId, columnPairs: [{ sourceColumn: 'DepartmentID', targetColumn: 'DepartmentID' }],
+    origin: 'manual', status: 'verified', verifiedBy: 'admin', revision: 3 })];
+  // jsonb returns object keys sorted by length, not in insertion order.
+  departments.uniqueConstraints = [{ name: 'PK_Departments', hasFilter: false, isDisabled: false, columnNames: ['DepartmentID'], isPrimaryKey: true }];
+  service.saveDictionaryItems([{ ...departments, uniqueConstraints: keys }]);
+  assert.equal(service.tableRelationships[0].status, 'verified');
+  delete departments.uniqueConstraints; // Saved before key inventories existed.
+  service.saveDictionaryItems([{ ...departments, uniqueConstraints: keys }]);
+  assert.equal(service.tableRelationships[0].status, 'verified');
+  service.saveDictionaryItems([{ ...departments, uniqueConstraints: [] }]);
+  assert.equal(service.tableRelationships[0].status, 'stale');
+});
+
+test('editing a live connection keeps its id, governance policy and metrics', async t => {
+  const originals = { sources: sqlConnector.dbSources, schemas: sqlConnector.schemas,
+    query: sqlConnector.queryLiveInformationSchema, persist: sqlConnector.persist };
+  t.after(() => Object.assign(sqlConnector, { dbSources: originals.sources, schemas: originals.schemas,
+    queryLiveInformationSchema: originals.query, persist: originals.persist }));
+  const governedPolicy = { schemaVersion: 2, revision: 4 }, governedMetrics = [{ metricId: 'revenue', version: 2 }];
+  sqlConnector.dbSources = [{ id: 'src-1', dbName: 'ERP', host: 'old:1433', user: 'sa', password: 'old',
+    mode: 'live', isDefault: true, governedPolicy, governedMetrics }];
+  sqlConnector.schemas = [];
+  sqlConnector.persist = () => {};
+  const seen = [];
+  sqlConnector.queryLiveInformationSchema = async opts => { seen.push(opts); return [{ tableName: 'T', schemaName: 'dbo', dbName: 'ERP', columns: [] }]; };
+  const tables = await sqlConnector.addLiveSource({ sourceId: 'src-1', host: 'new,1500', dbName: 'ERP', user: 'sa', password: 'new' });
+  assert.deepEqual([seen[0].port, seen[0].password], [1500, 'new']);
+  assert.equal(tables[0].dbSourceId, 'src-1');
+  const [edited] = sqlConnector.dbSources;
+  assert.deepEqual([edited.id, edited.host, edited.isDefault], ['src-1', 'new:1500', true]);
+  assert.deepEqual([edited.governedPolicy, edited.governedMetrics], [governedPolicy, governedMetrics]);
+  // Connecting the same DB again without the edit button replaces it in place.
+  await sqlConnector.addLiveSource({ host: 'other', dbName: 'ERP', user: 'sa', password: 'x' });
+  assert.equal(sqlConnector.dbSources.length, 1);
+  assert.equal(sqlConnector.dbSources[0].id, 'src-1');
+  assert.equal(sqlConnector.dbSources[0].governedPolicy, governedPolicy);
+});
+
+test('editing port or password only probes the connection and keeps the schema', async t => {
+  const originals = { sources: sqlConnector.dbSources, schemas: sqlConnector.schemas,
+    query: sqlConnector.queryLiveInformationSchema, persist: sqlConnector.persist };
+  t.after(() => Object.assign(sqlConnector, { dbSources: originals.sources, schemas: originals.schemas,
+    queryLiveInformationSchema: originals.query, persist: originals.persist }));
+  const governedPolicy = { schemaVersion: 2, revision: 4 };
+  sqlConnector.dbSources = [{ id: 'src-1', dbName: 'ERP', host: 'db:1433', user: 'sa', password: 'old', mode: 'live',
+    isDefault: true, tablesCount: 12, columnsCount: 90, lastSync: 'Hôm qua', governedPolicy }];
+  sqlConnector.schemas = [];
+  sqlConnector.persist = () => {};
+  const seen = [];
+  sqlConnector.queryLiveInformationSchema = async opts => { seen.push(opts); return opts.probeOnly ? []
+    : [{ tableName: 'T', schemaName: 'dbo', dbName: opts.dbName, columns: [] }]; };
+  const update = await sqlConnector.updateLiveConnection({ sourceId: 'src-1', host: 'db,1500', dbName: 'ERP', user: 'sa', password: 'new' });
+  assert.equal(update.reloaded, false);
+  assert.deepEqual([seen[0].probeOnly, seen[0].port, seen[0].password], [true, 1500, 'new']);
+  assert.equal(sqlConnector.schemas.length, 0);
+  const [source] = sqlConnector.dbSources;
+  assert.deepEqual([source.host, source.password, source.tablesCount, source.lastSync, source.governedPolicy],
+    ['db:1500', 'new', 12, 'Hôm qua', governedPolicy]);
+  // An empty password keeps the saved one.
+  await sqlConnector.updateLiveConnection({ sourceId: 'src-1', host: 'db,1600', dbName: 'ERP', user: 'sa', password: '' });
+  assert.equal(seen[1].password, 'new');
+  // Pointing the source at another database is a schema change and reloads it.
+  const other = await sqlConnector.updateLiveConnection({ sourceId: 'src-1', host: 'db', dbName: 'HR', user: 'sa', password: '' });
+  assert.equal(other.reloaded, true);
+  assert.equal(other.tables[0].dbSourceId, 'src-1');
+  await assert.rejects(sqlConnector.updateLiveConnection({ sourceId: 'missing', dbName: 'ERP' }), /không tồn tại/);
+});

@@ -15,6 +15,10 @@ const editableRelationship = data => Object.fromEntries(relationshipFields
   .filter(field => Object.hasOwn(data, field)).map(field => [field, data[field]]));
 const relationshipStructure = relation => JSON.stringify([relation.sourceTableId, relation.targetTableId,
   relation.columnPairs, relation.cardinality]);
+// PostgreSQL jsonb reorders object keys, so key groups are compared by value, never by stored text.
+// A table saved without a key inventory cannot prove that its keys changed.
+const keySignature = keys => Array.isArray(keys) ? JSON.stringify(keys.map(key => [key.name || null,
+  !!key.isPrimaryKey, !!key.isDisabled, !!key.hasFilter, key.columnNames || []])) : null;
 
 function invalidateRelationship(relation) {
   if (relation.status === 'verified') relation.status = 'stale';
@@ -58,14 +62,14 @@ class DictionaryService {
 
       if (existing) {
         const priorColumns = existing.columns || [];
-        const priorKeys = JSON.stringify(existing.uniqueConstraints);
+        const priorKeys = keySignature(existing.uniqueConstraints);
         Object.assign(existing, withIdentity({ ...existing, ...identified, columns: formattedCols }));
         existing.dbName = t.dbName || existing.dbName;
         if (t.domain !== undefined) existing.domain = this.normalizeDomain(t.domain);
         if (existing.defaultMetric && !formattedCols.some(column => column.columnName === existing.defaultMetric)) delete existing.defaultMetric;
         if (existing.defaultTimeColumn && !formattedCols.some(column => column.columnName === existing.defaultTimeColumn)) delete existing.defaultTimeColumn;
         this.markChangedRelationshipsStale(existing.tableId, priorColumns, formattedCols,
-          priorKeys !== JSON.stringify(existing.uniqueConstraints));
+          priorKeys !== null && priorKeys !== keySignature(existing.uniqueConstraints));
         delete existing.schemaMissing;
       } else {
         this.tablesStore.push(withIdentity({

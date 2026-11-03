@@ -711,7 +711,16 @@ async function handleGovernedRequest(req, res) {
     let config = {};
     try {
       config = await readJsonBody(req);
-      const liveTables = await sqlConnector.addLiveSource(config);
+      // Editing a source only re-checks the connection; the schema reload is its own action.
+      const update = config.sourceId ? await sqlConnector.updateLiveConnection(config)
+        : { reloaded: true, tables: await sqlConnector.addLiveSource(config) };
+      if (!update.reloaded) {
+        loggerService.addLog('SUCCESS', 'SQL Connector', `Đã cập nhật kết nối '${update.source.host}/${update.source.dbName}', giữ nguyên lược đồ.`);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ status: 'success', reloaded: false, tablesCount: update.source.tablesCount || 0 }));
+        return;
+      }
+      const liveTables = update.tables;
       dictionaryService.saveDictionaryItems(liveTables, { completeSourceId: liveTables[0]?.dbSourceId });
       await dictionaryService.syncToQdrant();
 
@@ -721,7 +730,7 @@ async function handleGovernedRequest(req, res) {
         'Content-Type': 'application/json; charset=UTF-8',
         'Access-Control-Allow-Origin': '*'
       });
-      res.end(JSON.stringify({ status: 'success', tablesCount: liveTables.length }));
+      res.end(JSON.stringify({ status: 'success', reloaded: true, tablesCount: liveTables.length }));
     } catch (err) {
       loggerService.addLog('ERROR', 'SQL Connector', `Lỗi kết nối SQL Server (${config.host || 'unknown'}): ${err.message}`);
 

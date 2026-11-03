@@ -174,21 +174,14 @@ class SqlConnector {
   }
 
   /**
-   * Connect Live SQL Server and extract real INFORMATION_SCHEMA
+   * Smart parsing for SQL Server Host strings:
+   * e.g. "103.226.248.147,1433\sqlexpress" -> host: "103.226.248.147", port: 1433, instance: "sqlexpress"
    */
-  async addLiveSource(config) {
-    const sourceId = config.sourceId || null;
-    const currentSource = sourceId ? this.dbSources.find(source => source.id === sourceId) : null;
-    if (sourceId && !currentSource) throw new Error('Nguồn CSDL cần chỉnh sửa không tồn tại.');
-    let rawHost = (config.host || 'localhost').trim();
-    const dbName = config.dbName || config.database || 'master';
-    const user = config.user || 'sa';
-    const password = config.password || currentSource?.password || '';
+  parseLiveHost(value) {
+    let rawHost = (value || 'localhost').trim();
     let port = 1433;
     let instanceName = undefined;
 
-    // Smart parsing for SQL Server Host strings:
-    // e.g. "103.226.248.147,1433\sqlexpress" -> host: "103.226.248.147", port: 1433, instance: "sqlexpress"
     if (rawHost.includes('\\')) {
       const parts = rawHost.split('\\');
       rawHost = parts[0].trim();
@@ -210,71 +203,99 @@ class SqlConnector {
       if (!isNaN(parsedPort)) port = parsedPort;
     }
 
+    return { host: rawHost, port, instanceName, label: `${rawHost}${instanceName ? '\\' + instanceName : ''}:${port}` };
+  }
+
+  // Attempt 1: direct TCP (fast & works when the port is open).
+  // Attempt 2: SQL Browser instance discovery, when an instance name was provided.
+  async queryLiveTarget(target, opts) {
+    try {
+      return await this.queryLiveInformationSchema({ ...opts, host: target.host, port: target.port, instanceName: undefined });
+    } catch (tcpErr) {
+      if (!target.instanceName) throw tcpErr;
+      try {
+        return await this.queryLiveInformationSchema({ ...opts, host: target.host, port: undefined, instanceName: target.instanceName });
+      } catch (instErr) {
+        throw new Error(`Không thể kết nối SQL Server '${target.host}' (Thử cả TCP Port ${target.port} lẫn Instance '${target.instanceName}'). Lỗi: ${tcpErr.message}`);
+      }
+    }
+  }
+
+  // Keep governance policy, metrics and other settings: only the given fields change.
+  saveLiveSource(currentSource, fields) {
+    const source = {
+      ...(currentSource || {}),
+      ...fields,
+      type: "Direct Live Connection",
+      status: "Live Read-Only",
+      mode: "live",
+      isDefault: currentSource ? !!currentSource.isDefault : this.dbSources.length === 0
+    };
+    // Replace the edited source (or an older connection with the same DB name).
+    this.dbSources = this.dbSources.filter(s => s.id !== source.id && s.dbName !== source.dbName);
+    this.dbSources.unshift(source);
+    this.ensureSingleDefault(source.isDefault ? source.id : null);
+    this.persist();
+    return source;
+  }
+
+  /**
+   * Connect Live SQL Server and extract real INFORMATION_SCHEMA
+   */
+  async addLiveSource(config) {
+    const sourceId = config.sourceId || null;
+    const dbName = config.dbName || config.database || 'master';
+    // Re-adding a DB that is already connected replaces it, so it keeps the same id:
+    // tables, relationships and their verification are keyed by that id.
+    const currentSource = sourceId ? this.dbSources.find(source => source.id === sourceId)
+      : this.dbSources.find(source => source.dbName === dbName) || null;
+    if (sourceId && !currentSource) throw new Error('Nguồn CSDL cần chỉnh sửa không tồn tại.');
+    const target = this.parseLiveHost(config.host);
+    const user = config.user || 'sa';
+    const password = config.password || currentSource?.password || '';
+
     const resolvedSourceId = currentSource?.id || crypto.randomUUID();
     let liveTables = [];
 
-    if (Connection) {
-      // Attempt 1: Try Direct TCP Connection (Fast & works when port 1433 is open)
-      try {
-        liveTables = await this.queryLiveInformationSchema({
-          host: rawHost,
-          port: port,
-          instanceName: undefined, // Force TCP port direct
-          dbName,
-          user,
-          password
-        });
-      } catch (tcpErr) {
-        // Attempt 2: If Direct TCP failed and instance name was provided, try SQL Browser Instance discovery
-        if (instanceName) {
-          try {
-            liveTables = await this.queryLiveInformationSchema({
-              host: rawHost,
-              port: undefined,
-              instanceName: instanceName,
-              dbName,
-              user,
-              password
-            });
-          } catch (instErr) {
-            throw new Error(`Không thể kết nối SQL Server '${rawHost}' (Thử cả TCP Port ${port} lẫn Instance '${instanceName}'). Lỗi: ${tcpErr.message}`);
-          }
-        } else {
-          throw tcpErr;
-        }
-      }
-    }
+    if (Connection) liveTables = await this.queryLiveTarget(target, { dbName, user, password });
 
     if (!liveTables || liveTables.length === 0) {
-      throw new Error(`Cơ sở dữ liệu '${dbName}' trên SQL Server (${rawHost}) không trả về bảng dữ liệu nào.`);
+      throw new Error(`Cơ sở dữ liệu '${dbName}' trên SQL Server (${target.host}) không trả về bảng dữ liệu nào.`);
     }
 
-    let totalCols = liveTables.reduce((acc, t) => acc + t.columns.length, 0);
-
-    const newSrc = {
+    this.saveLiveSource(currentSource, {
       id: resolvedSourceId,
       dbName: dbName,
-      type: "Direct Live Connection",
-      host: `${rawHost}${instanceName ? '\\' + instanceName : ''}:${port}`,
+      host: target.label,
       tablesCount: liveTables.length,
-      columnsCount: totalCols,
+      columnsCount: liveTables.reduce((acc, t) => acc + t.columns.length, 0),
       user: user,
       password: password,
-      status: "Live Read-Only",
-      mode: "live",
-      isDefault: currentSource ? !!currentSource.isDefault : this.dbSources.length === 0,
       lastSync: "Vừa xong"
-    };
-
-    // Replace the edited source (or an older connection with the same DB name).
-    this.dbSources = this.dbSources.filter(s => s.id !== newSrc.id && s.dbName !== dbName);
-    this.dbSources.unshift(newSrc);
-    this.ensureSingleDefault(newSrc.isDefault ? newSrc.id : null);
+    });
     liveTables = liveTables.map(table => ({ ...table, dbSourceId: resolvedSourceId }));
     this.schemas.push(...liveTables);
-    this.persist();
 
     return liveTables;
+  }
+
+  /**
+   * Save edited connection details. A new host, port, account or password is only
+   * checked with a probe query, so tables and verified relationships stay as they are;
+   * the schema is reloaded only when the edit points the source at another database.
+   */
+  async updateLiveConnection(config) {
+    const currentSource = this.dbSources.find(source => source.id === config.sourceId);
+    if (!currentSource) throw new Error('Nguồn CSDL cần chỉnh sửa không tồn tại.');
+    const dbName = config.dbName || config.database || 'master';
+    if (dbName !== currentSource.dbName) return { reloaded: true, tables: await this.addLiveSource(config) };
+    if (!Connection) throw new Error("Chưa tải được driver SQL Server ('tedious').");
+    const target = this.parseLiveHost(config.host);
+    const user = config.user || 'sa';
+    const password = config.password || currentSource.password || '';
+    await this.queryLiveTarget(target, { dbName, user, password, probeOnly: true });
+    const source = this.saveLiveSource(currentSource, { host: target.label, user, password });
+    return { reloaded: false, source };
   }
 
   async refreshLiveSource(id) {
@@ -331,7 +352,7 @@ class SqlConnector {
           return reject(new Error(`Lỗi đăng nhập / kết nối SQL Server (${opts.host}): ${err.message}`));
         }
 
-        const sqlQuery = `
+        const sqlQuery = opts.probeOnly ? 'SELECT 1 AS ConnectionHealth' : `
           SELECT s.name AS TABLE_SCHEMA, t.name AS TABLE_NAME, c.name AS COLUMN_NAME,
             ty.name AS DATA_TYPE, c.is_nullable AS IS_NULLABLE, c.column_id AS ORDINAL_POSITION,
             (SELECT i.name AS name, i.is_primary_key AS isPrimaryKey,
@@ -385,6 +406,7 @@ class SqlConnector {
         });
 
         request.on('row', (columns) => {
+          if (opts.probeOnly) return;
           const row = {};
           columns.forEach(col => {
             row[col.metadata.colName] = col.value;

@@ -47,4 +47,7 @@ test('live catalog preserves composite keys, excludes INCLUDE columns and does n
   assert.deepEqual(table.foreignKeys[0].columnPairs.map(p => p.sourceColumn), ['A', 'B']);
   assert.match(query, /ic\.key_ordinal>0 AND ic\.is_included_column=0/);
   assert.doesNotMatch(query, /\) uq ON/);
+  // A connection edit only probes the login; it never reads or builds a schema.
+  assert.equal((await context.module.exports.queryLiveInformationSchema({ dbName: 'ERP', probeOnly: true })).length, 0);
+  assert.equal(query, 'SELECT 1 AS ConnectionHealth');
 });

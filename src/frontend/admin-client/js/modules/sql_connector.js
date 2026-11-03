@@ -130,6 +130,7 @@ function renderDbSourcesTable() {
           <button class="btn-primary" style="padding: 5px 12px; font-size: 12px; white-space: nowrap;" onclick="switchMainTab('dictionary')"><i class="fa-solid fa-book-atlas"></i> Lược đồ</button>
           ${isDefault ? '' : `<button class="icon-action-btn" onclick="setDefaultDbSource('${sourceId}')" title="Đặt làm nguồn mặc định cho AI" aria-label="Đặt ${escapeDbSourceHtml(src.dbName)} làm nguồn mặc định"><i class="fa-solid fa-star"></i></button>`}
           <button class="icon-action-btn" onclick="testDbConnection('${sourceId}')" title="Kiểm tra kết nối" aria-label="Kiểm tra kết nối ${escapeDbSourceHtml(src.dbName)}"><i class="fa-solid fa-bolt"></i></button>
+          <button class="icon-action-btn" onclick="reloadDbSourceSchema('${sourceId}')" title="Nạp lại lược đồ" aria-label="Nạp lại lược đồ ${escapeDbSourceHtml(src.dbName)}"><i class="fa-solid fa-rotate"></i></button>
           <button class="icon-action-btn" onclick="editDbSource('${sourceId}')" title="Chỉnh sửa kết nối" aria-label="Chỉnh sửa kết nối ${escapeDbSourceHtml(src.dbName)}"><i class="fa-solid fa-pen"></i></button>
           <button class="icon-action-btn danger-soft" onclick="deleteDbSource('${sourceId}')" title="Xóa nguồn CSDL" aria-label="Xóa nguồn ${escapeDbSourceHtml(src.dbName)}">
             <i class="fa-solid fa-trash-can"></i>
@@ -176,7 +177,7 @@ function editDbSource(id) {
   const password = document.getElementById('page-live-pass');
   if (password) password.placeholder = 'Để trống để giữ nguyên mật khẩu';
   const label = document.getElementById('page-live-submit-label');
-  if (label) label.textContent = 'Cập nhật & nạp lại lược đồ';
+  if (label) label.textContent = 'Kiểm tra & lưu kết nối';
   const cancel = document.getElementById('page-live-cancel-edit');
   if (cancel) cancel.style.display = '';
   document.querySelector('.sql-ingest-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -210,6 +211,29 @@ async function testDbConnection(id) {
     showToast(`Kết nối ${source.dbName} thành công (${Number(data.latencyMs || 0)} ms).`, 'success');
   } catch (err) {
     showToast(`Không thể kết nối ${source.dbName}: ${err.message}`, 'error');
+  }
+}
+
+async function reloadDbSourceSchema(id) {
+  const source = (window.dbSourcesData || []).find(item => item.id === id);
+  if (!source) return;
+  const message = `Đọc lại toàn bộ bảng, cột và khóa của "${source.dbName}" từ SQL Server? Quan hệ đã xác minh vẫn giữ nguyên, trừ quan hệ có cột hoặc khóa thực sự thay đổi; bảng không còn trong CSDL sẽ bị tắt.`;
+  if (!await showUiConfirm(message, { title: 'Nạp lại lược đồ', confirmText: 'Nạp lại' })) return;
+  try {
+    if (typeof showToast === 'function') showToast(`Đang nạp lại lược đồ ${source.dbName}.`, 'info');
+    const res = await fetch('/api/sql/refresh-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (!res.ok || data.status !== 'success') throw new Error(data.message || `HTTP ${res.status}`);
+    window.invalidateRelatedTabData?.('sql');
+    await fetchDbSources();
+    if (typeof fetchDataDictionary === 'function') await fetchDataDictionary({ force: true });
+    if (typeof showToast === 'function') showToast(`Đã nạp lại ${data.tablesCount || 0} bảng từ ${source.dbName}.`, 'success');
+  } catch (err) {
+    if (typeof showToast === 'function') showToast(`Không thể nạp lại lược đồ: ${err.message}`, 'error');
   }
 }
 
@@ -260,13 +284,15 @@ async function submitPageSchemaIngestion() {
     window.invalidateRelatedTabData?.('sql');
     await fetchDbSources();
     if (typeof fetchDataDictionary === 'function') await fetchDataDictionary();
-    if (typeof showToast === 'function') showToast(`Đã nạp ${data.tablesCount || 0} bảng từ ${config.dbName}.`, 'success', 'Kết nối thành công');
+    if (typeof showToast === 'function') showToast(data.reloaded === false
+      ? `Đã lưu kết nối ${config.dbName}. Lược đồ và quan hệ giữ nguyên; bấm "Nạp lại lược đồ" khi cấu trúc CSDL thay đổi.`
+      : `Đã nạp ${data.tablesCount || 0} bảng từ ${config.dbName}.`, 'success', 'Kết nối thành công');
   } catch (err) {
     if (typeof showToast === 'function') showToast(err.message, 'error', 'Không thể kết nối SQL Server');
   } finally {
     if (button) {
       button.disabled = false;
-      button.innerHTML = `<i class="fa-solid fa-plug-circle-check"></i> <span id="page-live-submit-label">${window.editingDbSourceId ? 'Cập nhật & nạp lại lược đồ' : 'Kết nối & nạp lược đồ'}</span>`;
+      button.innerHTML = `<i class="fa-solid fa-plug-circle-check"></i> <span id="page-live-submit-label">${window.editingDbSourceId ? 'Kiểm tra & lưu kết nối' : 'Kết nối & nạp lược đồ'}</span>`;
     }
   }
 }
@@ -277,6 +303,7 @@ window.renderDbSourcesTable = renderDbSourcesTable;
 window.submitPageSchemaIngestion = submitPageSchemaIngestion;
 window.testDbConnection = testDbConnection;
 window.deleteDbSource = deleteDbSource;
+window.reloadDbSourceSchema = reloadDbSourceSchema;
 window.setDefaultDbSource = setDefaultDbSource;
 window.editDbSource = editDbSource;
 window.cancelEditDbSource = cancelEditDbSource;
