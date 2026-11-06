@@ -244,18 +244,23 @@ function renderPageChatAttachments() {
   if (!preview) return;
   preview.classList.toggle('has-files', window.pageChatAttachments.length > 0);
   window.ChatAttachments.render(preview,window.pageChatAttachments,{onRemove:removePageChatAttachment});
-  if (window.pageChatAttachments.some(file => file.carried)) {
+  const carriedCount = window.pageChatAttachments.filter(file => file.carried).length;
+  if (carriedCount) {
     const note = document.createElement('p');
     note.className = 'page-chat-carry-note';
     // The file row scrolls sideways, so the note sits first in the row as a compact label.
-    note.title = 'Các tệp này được giữ từ câu hỏi trước. Bấm × trên từng tệp hoặc “Bỏ” để không dùng nữa.';
+    note.title = 'Tệp này được giữ từ câu hỏi trước. Bấm × để không dùng nữa.';
     note.innerHTML = '<i class="fa-solid fa-link" aria-hidden="true"></i><span>Tệp câu trước</span>';
-    const clear = document.createElement('button');
-    clear.type = 'button';
-    clear.textContent = 'Bỏ';
-    clear.setAttribute('aria-label', 'Bỏ các tệp giữ từ câu trước');
-    clear.onclick = () => dropCarriedPageChatAttachments();
-    note.append(clear);
+    // One file already has its own ×; a second one here would do the same thing.
+    if (carriedCount > 1) {
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.textContent = '×';
+      clear.title = 'Bỏ tất cả tệp giữ từ câu trước';
+      clear.setAttribute('aria-label', clear.title);
+      clear.onclick = () => dropCarriedPageChatAttachments();
+      note.append(clear);
+    }
     preview.append(note);
   }
   renderChatKnowledgeChip();
@@ -1225,7 +1230,7 @@ function renderPageChatDownloadAction(downloadUrl, renderedAnswer = '', details 
   const html = ['HTML','HTM'].includes(extension);
   const icon = spreadsheet ? 'fa-file-excel' : html ? 'fa-globe' : extension === 'PDF' ? 'fa-file-pdf' : 'fa-file-lines';
   const kind = spreadsheet ? 'Bảng tính' : html ? 'Mã' : 'Tài liệu';
-  return `<div class="page-chat-download-card"><span class="page-chat-download-icon" aria-hidden="true"><i class="fa-solid ${icon}"></i></span><span class="page-chat-download-info"><span class="page-chat-download-name" title="${escapeChatMarkdown(filename)}">${escapeChatMarkdown(details.label || filename)}</span><span class="page-chat-download-meta">${details.summary ? escapeChatMarkdown(details.summary) + ' · ' : ''}${kind} · ${extension}</span></span><a class="page-chat-download-button" href="${escapeChatMarkdown(url)}" download aria-label="Tải xuống ${escapeChatMarkdown(filename)}">Tải xuống</a></div>`;
+  return `<div class="page-chat-download-card"><span class="page-chat-download-icon" aria-hidden="true"><i class="fa-solid ${icon}"></i></span><span class="page-chat-download-info"><span class="page-chat-download-name" title="${escapeChatMarkdown(filename)}">${escapeChatMarkdown(details.label || filename)}</span><span class="page-chat-download-meta"${details.summary ? ` title="${escapeChatMarkdown(details.summary)}"` : ''}>${details.summary ? escapeChatMarkdown(details.summary) + ' · ' : ''}${kind} · ${extension}</span></span><a class="page-chat-download-button" href="${escapeChatMarkdown(url)}" download aria-label="Tải xuống ${escapeChatMarkdown(filename)}">Tải xuống</a></div>`;
 }
 
 function typeThinkingText(element, value, streamKey = null) {
