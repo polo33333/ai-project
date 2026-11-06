@@ -92,7 +92,7 @@
         <div class="chat-input-wrapper page-chat-composer">
           <div class="page-chat-input-line">
           <button id="page-chat-web-inline" class="page-chat-web-inline" type="button" hidden onclick="togglePageChatWebSearch(event)" title="Tắt tìm kiếm web" aria-label="Tìm kiếm trên mạng đang bật. Nhấn để tắt."><i class="fa-solid fa-globe" aria-hidden="true"></i><span>Tìm kiếm trên mạng</span></button>
-          <textarea id="page-chat-user-input" rows="1" aria-label="Nhập yêu cầu cho KAI"
+          <textarea id="page-chat-user-input" rows="1" aria-label="Nhập yêu cầu cho KAI" spellcheck="false"
             placeholder="Hỏi KAI…"
             maxlength="4000" oninput="updatePageChatCharacterCount(this.value); resizeChatComposerInput(this)"
             onkeydown="handlePageChatKeyPress(event)"></textarea>

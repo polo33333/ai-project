@@ -1190,8 +1190,20 @@ window.handleChatKeyPress = function handleChatKeyPress(e) {
 
 window.resizeChatComposerInput = function resizeChatComposerInput(element) {
   if (!element) return;
+  const composer = element.closest?.('.page-chat-composer');
+  const scrollTop = element.scrollTop;
+  element.style.overflowY = 'hidden';
+  // Always decide from the compact layout: the wider stacked layout could fit the text on one line and flip back.
+  composer?.classList.remove('is-multiline');
   element.style.height = 'auto';
+  if (composer) {
+    const style = getComputedStyle(element);
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const wraps = element.scrollHeight > padding + parseFloat(style.lineHeight) * 1.5;
+    composer.classList.toggle('is-multiline', wraps || element.value.includes('\n'));
+  }
   element.style.height = `${Math.min(element.scrollHeight, 140)}px`;
+  element.scrollTop = scrollTop;
   element.style.overflowY = element.scrollHeight > 140 ? 'auto' : 'hidden';
 };
 

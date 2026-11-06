@@ -48,7 +48,7 @@
   <link rel="stylesheet" href="css/data-governance.css?v=20261030-busy-buttons">
   <link rel="stylesheet" href="css/memory.css?v=20261012-agent-memory-ui">
   <link rel="stylesheet" href="css/ui-foundation.css?v=20261101-shared-search">
-  <link rel="stylesheet" href="css/chat-conversation.css?v=20261031-one-font">
+  <link rel="stylesheet" href="css/chat-conversation.css?v=20261106-composer-stack">
   <link rel="stylesheet" href="css/dictionary-workspace.css?v=20261023-column-alignment">
   <link rel="stylesheet" href="/css/tab_loading.css?v=20261024-first-paint-skeleton">
   <link rel="stylesheet" href="css/admin-refresh.css?v=20261031-tones">
@@ -329,7 +329,7 @@
 
       <div class="copilot-chat-input-area">
         <div class="chat-input-wrapper copilot-chat-composer">
-          <textarea class="chat-input" id="chat-user-input" rows="1" aria-label="Nhập yêu cầu cho Trợ lý AI"
+          <textarea class="chat-input" id="chat-user-input" rows="1" aria-label="Nhập yêu cầu cho Trợ lý AI" spellcheck="false"
             placeholder="Nhập câu hỏi, yêu cầu SQL... (Enter để gửi · Shift+Enter xuống dòng)" maxlength="4000"
             oninput="updateCopilotCharacterCount(this.value); resizeChatComposerInput(this)"
             onkeydown="handleChatKeyPress(event)"></textarea>
@@ -618,7 +618,7 @@
   <script defer src="js/core/tab_data.js?v=20261015-training-loading"></script>
   <script defer src="js/core/view_loader.js?v=20261025-ai-usage"></script>
   <script defer src="js/core/main_tabs.js?v=20261031-titles"></script>
-  <script defer src="js/app.js?v=20261031-nav-names"></script>
+  <script defer src="js/app.js?v=20261106-composer-stack"></script>
   <script defer src="js/tab_loading.js?v=20261024-first-paint-skeleton"></script>
 </body>
 </html>

@@ -420,3 +420,8 @@ html[data-page="chat"], .kh-chat-standalone { height:100%; }
 .kh-chat-standalone .chat-token-usage, .kh-chat-embedded .chat-token-usage { display:none !important; }
 /* Rating lives in the action row; a block left with hidden token usage only would draw an empty rule. */
 :is(.kh-chat-standalone,.kh-chat-embedded) .chat-feedback:not(:has(> :not(.chat-token-usage))) { display:none !important; }
+
+/* Embedded chat: same stacked composer once the prompt wraps; attachments stay in the row under the text. */
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-composer.is-multiline .page-chat-input-line { grid-area:1 / 1 / 2 / -1 !important; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-composer.is-multiline .page-chat-add-wrap { grid-area:4 / 1 / 5 / 2 !important; }
+.kh-chat-standalone.kh-chat-embedded #view-page_chat .page-chat-composer.is-multiline .page-chat-composer-actions { grid-area:4 / 3 / 5 / 4 !important; }
